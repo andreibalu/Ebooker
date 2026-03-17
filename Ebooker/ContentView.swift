@@ -29,6 +29,8 @@ struct ContentView: View {
     @State private var isPlayerPresented = false
     @State private var isSettingsPresented = false
     @State private var deleteCandidate: Audiobook?
+    @State private var renameCandidate: Audiobook?
+    @State private var renameTitleInput: String = ""
     @State private var alertMessage = ""
     @State private var isShowingAlert = false
 
@@ -93,6 +95,22 @@ struct ContentView: View {
             }
         } message: {
             Text("This removes the audiobook from your library and deletes its imported audio files.")
+        }
+        .alert("Rename Audiobook", isPresented: Binding(
+            get: { renameCandidate != nil },
+            set: { if !$0 { renameCandidate = nil } }
+        )) {
+            TextField("Book title", text: $renameTitleInput)
+            Button("Save") {
+                let trimmed = renameTitleInput.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    renameCandidate?.title = trimmed
+                }
+                renameCandidate = nil
+            }
+            Button("Cancel", role: .cancel) {
+                renameCandidate = nil
+            }
         }
         .alert("Something Went Wrong", isPresented: $isShowingAlert) {
             Button("OK", role: .cancel) {}
@@ -262,6 +280,11 @@ struct ContentView: View {
 
                             Button(audiobook.isFavorite ? "Unfavorite" : "Favorite", systemImage: audiobook.isFavorite ? "heart.slash" : "heart") {
                                 audiobook.isFavorite.toggle()
+                            }
+
+                            Button("Rename", systemImage: "pencil") {
+                                renameTitleInput = audiobook.title
+                                renameCandidate = audiobook
                             }
 
                             Button(role: .destructive) {

@@ -18,22 +18,29 @@ struct PlayerView: View {
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
     @State private var momentSaved = false
+    @State private var pendingMomentTime: Double?
+    @State private var momentNameInput: String = "Saved Moment"
 
     private let supportedRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 32) {
+            VStack(spacing: 0) {
+                VStack(spacing: 16) {
                     cover
                     titleSection
                     progressSection
                     controlsSection
-                    quickActionsSection
                 }
                 .padding(.horizontal, 28)
-                .padding(.top, 8)
-                .padding(.bottom, 32)
+                .padding(.top, 6)
+
+                Spacer(minLength: 0)
+
+                quickActionsSection
+                    .padding(.horizontal, 28)
+                    .padding(.top, 20)
+                    .padding(.bottom, 24)
             }
             .background(Color.cream.ignoresSafeArea())
             .navigationTitle(player.currentAudiobook?.title ?? "Player")
@@ -48,6 +55,20 @@ struct PlayerView: View {
             }
         }
         .presentationDetents([.large])
+        .alert("Name this Moment", isPresented: Binding(
+            get: { pendingMomentTime != nil },
+            set: { if !$0 { pendingMomentTime = nil } }
+        )) {
+            TextField("Moment name", text: $momentNameInput)
+            Button("Save") {
+                commitMoment()
+            }
+            Button("Cancel", role: .cancel) {
+                pendingMomentTime = nil
+            }
+        } message: {
+            Text("Give this moment a name so you can find it later.")
+        }
         .onAppear {
             scrubValue = player.currentTime
         }
@@ -70,7 +91,7 @@ struct PlayerView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: 34, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [.indigo, .purple, .blue],
@@ -80,15 +101,14 @@ struct PlayerView: View {
                     )
                     .overlay {
                         Image(systemName: "books.vertical.fill")
-                            .font(.system(size: 90))
+                            .font(.system(size: 44))
                             .foregroundStyle(.white.opacity(0.95))
                     }
             }
         }
-        .frame(maxWidth: 340)
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: 30, x: 0, y: 20)
+        .frame(width: 140, height: 140)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
     }
 
     // MARK: - Title
@@ -253,12 +273,20 @@ struct PlayerView: View {
     }
 
     private func saveMoment() {
-        guard let audiobook = player.currentAudiobook else { return }
+        guard player.currentAudiobook != nil else { return }
         let savedTime = max(player.currentTime - momentBacktrackSeconds, 0)
-        let trackTitle = player.currentTrack?.title ?? "Track \(player.currentTrackIndex + 1)"
-        let label = "\(trackTitle) · \(TimeFormatter.clockString(seconds: savedTime))"
+        momentNameInput = "Saved Moment"
+        pendingMomentTime = savedTime
+    }
+
+    private func commitMoment() {
+        guard let audiobook = player.currentAudiobook,
+              let savedTime = pendingMomentTime else { return }
+        let name = momentNameInput.trimmingCharacters(in: .whitespaces)
+        let label = name.isEmpty ? "Saved Moment" : name
         let moment = Moment(trackIndex: player.currentTrackIndex, time: savedTime, label: label, audiobook: audiobook)
         modelContext.insert(moment)
+        pendingMomentTime = nil
         withAnimation(.spring(duration: 0.2)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.spring(duration: 0.3)) { momentSaved = false }

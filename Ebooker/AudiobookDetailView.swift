@@ -59,7 +59,11 @@ struct AudiobookDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
-                Spacer(minLength: 8)
+                Text(currentTimestampLabel)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 4)
 
                 // Slim progress capsule
                 GeometryReader { geo in
@@ -234,12 +238,6 @@ struct AudiobookDetailView: View {
     private var resumeAnchorRow: some View {
         if let progressTrackIndex = audiobook.progressTrackIndex,
            let progressTime = audiobook.progressTime {
-            let trackTitle: String = {
-                let tracks = audiobook.sortedTracks
-                guard tracks.indices.contains(progressTrackIndex) else { return "Track \(progressTrackIndex + 1)" }
-                return tracks[progressTrackIndex].title
-            }()
-
             Button {
                 Task {
                     await player.playTrack(at: progressTrackIndex, in: audiobook, time: progressTime)
@@ -258,7 +256,7 @@ struct AudiobookDetailView: View {
                             .foregroundStyle(.primary)
 
                         let subtitle: String = {
-                            var parts = "\(trackTitle) · \(TimeFormatter.clockString(seconds: progressTime))"
+                            var parts = TimeFormatter.clockString(seconds: progressTime)
                             if let updatedAt = audiobook.progressUpdatedAt {
                                 parts += " · \(TimeFormatter.relativeDateString(for: updatedAt))"
                             }
@@ -318,6 +316,16 @@ struct AudiobookDetailView: View {
 
     // MARK: - Helpers
 
+    private var currentTimestampLabel: String {
+        let currentTime: Double
+        if player.currentAudiobook?.id == audiobook.id {
+            currentTime = player.currentTime
+        } else {
+            currentTime = audiobook.currentTime
+        }
+        return "at \(TimeFormatter.clockString(seconds: currentTime))"
+    }
+
     private var progressSummary: String {
         if audiobook.isFinished { return "Finished" }
         let pct = Int((audiobook.progress * 100).rounded())
@@ -335,6 +343,8 @@ private struct MomentRow: View {
     let onDelete: () -> Void
 
     @EnvironmentObject private var player: AudioPlayerManager
+    @State private var isRenaming = false
+    @State private var renameInput = ""
 
     var body: some View {
         Button {
@@ -373,11 +383,25 @@ private struct MomentRow: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            Button("Rename", systemImage: "pencil") {
+                renameInput = moment.label
+                isRenaming = true
+            }
             Button(role: .destructive) {
                 onDelete()
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .alert("Rename Moment", isPresented: $isRenaming) {
+            TextField("Moment name", text: $renameInput)
+            Button("Save") {
+                let trimmed = renameInput.trimmingCharacters(in: .whitespaces)
+                if !trimmed.isEmpty {
+                    moment.label = trimmed
+                }
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 }
