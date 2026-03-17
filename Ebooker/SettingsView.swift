@@ -12,10 +12,40 @@ struct SettingsView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
+    @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
+
+    private var isSmartNamingAvailable: Bool {
+        AppleIntelligenceCapability.isSmartNamingAvailable
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Toggle(isOn: $useSmartMomentNaming) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Use Smart Moment Naming")
+                                .font(.body)
+                            Text("Use Apple Intelligence to suggest names for saved moments based on the audio")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .disabled(!isSmartNamingAvailable)
+                    if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
+                        Text(reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Smart Moment Naming")
+                } footer: {
+                    if isSmartNamingAvailable {
+                        Text("Requires Apple Intelligence and a compatible device. The suggested name can always be edited before saving.")
+                    }
+                }
+
                 Section {
                     Picker(selection: $resumeBacktrackSeconds) {
                         ForEach(ResumeBacktrackOption.allCases) { option in

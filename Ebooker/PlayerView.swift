@@ -3,6 +3,7 @@
 //  Ebooker
 //
 
+import Speech
 import SwiftData
 import SwiftUI
 
@@ -14,12 +15,20 @@ struct PlayerView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
+    @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
 
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
     @State private var momentSaved = false
     @State private var pendingMomentTime: Double?
+    @State private var pendingMomentTranscript: String?
+    @State private var pendingMomentAiGenerated = false
     @State private var momentNameInput: String = "Saved Moment"
+    @State private var isProcessingSmartSave = false
+
+    private var useSmartSave: Bool {
+        useSmartMomentNaming && AppleIntelligenceCapability.isSmartNamingAvailable
+    }
 
     private let supportedRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]
 
@@ -264,19 +273,86 @@ struct PlayerView: View {
             } label: {
                 quickActionChip(
                     icon: momentSaved ? "checkmark" : "bookmark.fill",
-                    text: momentSaved ? "Saved!" : "Save Moment",
+                    text: momentSaved ? "Saved!" : (useSmartSave ? "Smart Save Moment" : "Save Moment"),
                     filled: momentSaved
                 )
             }
-            .disabled(player.currentAudiobook == nil)
+            .disabled(player.currentAudiobook == nil || isProcessingSmartSave)
         }
     }
 
     private func saveMoment() {
-        guard player.currentAudiobook != nil else { return }
+        guard let audiobook = player.currentAudiobook else { return }
         let savedTime = max(player.currentTime - momentBacktrackSeconds, 0)
-        momentNameInput = "Saved Moment"
-        pendingMomentTime = savedTime
+
+        if useSmartSave {
+            Task { await performSmartSave(savedTime: savedTime) }
+        } else {
+            momentNameInput = "Saved Moment"
+            pendingMomentTranscript = nil
+            pendingMomentAiGenerated = false
+            pendingMomentTime = savedTime
+        }
+    }
+
+    private func performSmartSave(savedTime: Double) async {
+        guard let audiobook = player.currentAudiobook,
+              let track = player.currentTrack else { return }
+
+        let authStatus = await TranscriptionService.requestAuthorization()
+        guard authStatus == .authorized else {
+            await MainActor.run {
+                momentNameInput = "Saved Moment"
+                pendingMomentTranscript = nil
+                pendingMomentAiGenerated = false
+                pendingMomentTime = max(player.currentTime - momentBacktrackSeconds, 0)
+            }
+            return
+        }
+
+        isProcessingSmartSave = true
+        defer { Task { @MainActor in isProcessingSmartSave = false } }
+
+        do {
+            let fileURL = try LibraryImportService.fileURL(for: track, in: audiobook)
+            let audioURL = try await AudioExtractionService.extractSegment(
+                from: fileURL,
+                currentTime: player.currentTime,
+                duration: player.duration
+            )
+            defer { try? FileManager.default.removeItem(at: audioURL) }
+
+            let transcript = try await TranscriptionService.transcribe(audioURL: audioURL)
+            let suggestedName: String
+            let aiGenerated: Bool
+            if transcript.isEmpty {
+                suggestedName = "Saved Moment"
+                aiGenerated = false
+            } else if let name = try? await MomentNamingService.generateMomentName(
+                transcript: transcript,
+                audiobookTitle: audiobook.title
+            ) {
+                suggestedName = name
+                aiGenerated = true
+            } else {
+                suggestedName = "Saved Moment"
+                aiGenerated = false
+            }
+
+            await MainActor.run {
+                momentNameInput = suggestedName
+                pendingMomentTranscript = transcript.isEmpty ? nil : transcript
+                pendingMomentAiGenerated = aiGenerated
+                pendingMomentTime = savedTime
+            }
+        } catch {
+            await MainActor.run {
+                momentNameInput = "Saved Moment"
+                pendingMomentTranscript = nil
+                pendingMomentAiGenerated = false
+                pendingMomentTime = savedTime
+            }
+        }
     }
 
     private func commitMoment() {
@@ -284,9 +360,17 @@ struct PlayerView: View {
               let savedTime = pendingMomentTime else { return }
         let name = momentNameInput.trimmingCharacters(in: .whitespaces)
         let label = name.isEmpty ? "Saved Moment" : name
-        let moment = Moment(trackIndex: player.currentTrackIndex, time: savedTime, label: label, audiobook: audiobook)
+        let moment = Moment(
+            trackIndex: player.currentTrackIndex,
+            time: savedTime,
+            label: label,
+            audiobook: audiobook,
+            transcript: pendingMomentTranscript,
+            aiGeneratedName: pendingMomentAiGenerated
+        )
         modelContext.insert(moment)
         pendingMomentTime = nil
+        pendingMomentTranscript = nil
         withAnimation(.spring(duration: 0.2)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.spring(duration: 0.3)) { momentSaved = false }

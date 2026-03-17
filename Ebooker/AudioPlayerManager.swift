@@ -82,9 +82,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         audiobook.currentTrackIndex = 0
         audiobook.currentTime = 0
         audiobook.isFinished = false
-        audiobook.progressTrackIndex = nil
-        audiobook.progressTime = nil
-        audiobook.progressUpdatedAt = nil
+        // Preserve progressTrackIndex/progressTime/progressUpdatedAt so "Your Progress" remains
         try? modelContext?.save()
         await load(audiobook: audiobook, trackIndex: 0, time: 0, autoplay: true)
     }

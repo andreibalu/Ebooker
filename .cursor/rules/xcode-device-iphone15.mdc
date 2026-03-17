@@ -1,0 +1,23 @@
+---
+description: Always build and run on physical iPhone 15
+alwaysApply: true
+---
+
+# Xcode Build & Run: Physical iPhone 15
+
+When building or running the Ebooker app:
+
+1. **Use device tools, not simulator**  
+   Prefer `build_run_device` or `build_device` from XcodeBuildMCP over simulator tools.
+
+2. **Target iPhone 15**  
+   Before the first build/run in a session, call `session_set_defaults` with:
+   - `projectPath`: Path to `Ebooker.xcodeproj` (e.g. `Ebooker.xcodeproj` from project root)
+   - `scheme`: `Ebooker`
+   - `platform`: `iOS`
+   - `deviceId`: UDID of the connected iPhone 15 (call `list_devices` to get it; match by name "iPhone 15")
+
+3. **Run flow**  
+   After defaults are set, use `build_run_device` to build, install, and launch on the physical iPhone 15.
+
+**Note:** Device workflows must be enabled in XcodeBuildMCP. See [CONFIGURATION.md](https://github.com/getsentry/XcodeBuildMCP/blob/main/docs/CONFIGURATION.md) if device tools are unavailable.

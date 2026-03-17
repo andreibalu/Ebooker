@@ -3,6 +3,7 @@
 //  Ebooker
 //
 
+import PhotosUI
 import SwiftData
 import SwiftUI
 
@@ -19,6 +20,9 @@ struct AudiobookDetailView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var selectedTab: DetailTab = .tracks
+    @State private var selectedCoverItem: PhotosPickerItem?
+    @State private var pendingCropImage: UIImage?
+    @State private var showCropSheet = false
 
     var body: some View {
         ScrollView {
@@ -32,6 +36,22 @@ struct AudiobookDetailView: View {
         .background(Color.cream.ignoresSafeArea())
         .navigationTitle(audiobook.title)
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showCropSheet) {
+            if let img = pendingCropImage {
+                CoverCropView(
+                    uiImage: img,
+                    onConfirm: { cropped in
+                        audiobook.coverArtData = cropped.jpegData(compressionQuality: 0.85)
+                        showCropSheet = false
+                        pendingCropImage = nil
+                    },
+                    onCancel: {
+                        showCropSheet = false
+                        pendingCropImage = nil
+                    }
+                )
+            }
+        }
         .toolbar {
             if player.currentAudiobook?.id == audiobook.id {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -241,30 +261,72 @@ struct AudiobookDetailView: View {
     // MARK: - Cover
 
     private var cover: some View {
-        Group {
-            if let coverArtData = audiobook.coverArtData, let image = UIImage(data: coverArtData) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.indigo, .purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+        PhotosPicker(
+            selection: $selectedCoverItem,
+            matching: .images
+        ) {
+            Group {
+                if let coverArtData = audiobook.coverArtData, let image = UIImage(data: coverArtData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .clipped()
+                } else {
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [.indigo, .purple, .blue],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
                         )
-                    )
-                    .overlay {
-                        Image(systemName: "book.pages.fill")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.white)
-                    }
+                        .overlay {
+                            Image(systemName: "book.pages.fill")
+                                .font(.system(size: 48))
+                                .foregroundStyle(.white)
+                        }
+                }
+            }
+            .frame(width: 130, height: 130)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            .overlay(alignment: .bottom) {
+                Text("Change cover")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(8)
             }
         }
-        .frame(width: 130, height: 130)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        .buttonStyle(.plain)
+        .onChange(of: selectedCoverItem) { _, newItem in
+            Task {
+                await loadSelectedCover(newItem)
+            }
+        }
+        .contextMenu {
+            if audiobook.coverArtData != nil {
+                Button(role: .destructive) {
+                    audiobook.coverArtData = nil
+                } label: {
+                    Label("Remove cover", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func loadSelectedCover(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard let image = UIImage(data: data) else { return }
+
+        await MainActor.run {
+            selectedCoverItem = nil
+            pendingCropImage = image
+            showCropSheet = true
+        }
     }
 
     // MARK: - Helpers

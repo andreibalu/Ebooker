@@ -131,10 +131,16 @@ enum LibraryImportService {
         return audiobook
     }
 
-    static func deleteAudiobook(_ audiobook: Audiobook, modelContext: ModelContext) throws {
-        let folderURL = try storageFolderURL(for: audiobook.folderName)
-        if FileManager.default.fileExists(atPath: folderURL.path()) {
-            try FileManager.default.removeItem(at: folderURL)
+    static func deleteAudiobook(
+        _ audiobook: Audiobook,
+        deleteFiles: Bool,
+        modelContext: ModelContext
+    ) throws {
+        if deleteFiles {
+            let folderURL = try storageFolderURL(for: audiobook.folderName)
+            if FileManager.default.fileExists(atPath: folderURL.path()) {
+                try FileManager.default.removeItem(at: folderURL)
+            }
         }
 
         modelContext.delete(audiobook)

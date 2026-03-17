@@ -86,15 +86,18 @@ struct ContentView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
         }
-        .alert("Delete Audiobook?", isPresented: deleteConfirmationBinding) {
-            Button("Delete", role: .destructive) {
-                deleteAudiobook()
+        .alert("Remove Audiobook?", isPresented: deleteConfirmationBinding) {
+            Button("Remove from App", role: .destructive) {
+                deleteAudiobook(alsoDeleteFiles: false)
+            }
+            Button("Also Delete Files", role: .destructive) {
+                deleteAudiobook(alsoDeleteFiles: true)
             }
             Button("Cancel", role: .cancel) {
                 deleteCandidate = nil
             }
         } message: {
-            Text("This removes the audiobook from your library and deletes its imported audio files.")
+            Text("Choose whether to remove this audiobook from Ebooker only, or also delete its imported audio files from local storage.")
         }
         .alert("Rename Audiobook", isPresented: Binding(
             get: { renameCandidate != nil },
@@ -414,10 +417,14 @@ struct ContentView: View {
         releaseSecurityScopedAccess()
     }
 
-    private func deleteAudiobook() {
+    private func deleteAudiobook(alsoDeleteFiles: Bool) {
         guard let deleteCandidate else { return }
         do {
-            try LibraryImportService.deleteAudiobook(deleteCandidate, modelContext: modelContext)
+            try LibraryImportService.deleteAudiobook(
+                deleteCandidate,
+                deleteFiles: alsoDeleteFiles,
+                modelContext: modelContext
+            )
             self.deleteCandidate = nil
         } catch {
             presentAlert(message: error.localizedDescription)
