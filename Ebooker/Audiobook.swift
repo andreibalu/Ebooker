@@ -31,6 +31,17 @@ final class Audiobook: Identifiable {
         set { _isFavorite = newValue }
     }
 
+    // High-water mark: the furthest point the user has reached through listening.
+    // Nullable for lightweight migration (same pattern as _isFavorite).
+    private var _progressTrackIndex: Int?
+    private var _progressTime: Double?
+    private var _progressUpdatedAt: Date?
+
+    var progressTrackIndex: Int? { get { _progressTrackIndex } set { _progressTrackIndex = newValue } }
+    var progressTime: Double? { get { _progressTime } set { _progressTime = newValue } }
+    var progressUpdatedAt: Date? { get { _progressUpdatedAt } set { _progressUpdatedAt = newValue } }
+    var hasProgressPosition: Bool { _progressTrackIndex != nil && _progressTime != nil }
+
     @Relationship(deleteRule: .cascade, inverse: \AudioTrack.audiobook)
     var tracks: [AudioTrack]
 
@@ -85,6 +96,14 @@ final class Audiobook: Identifiable {
     var progress: Double {
         guard totalDuration > 0 else { return 0 }
         return listenedDuration / totalDuration
+    }
+
+    var progressListenedDuration: Double {
+        guard let trackIdx = progressTrackIndex, let time = progressTime else { return 0 }
+        let completed = sortedTracks
+            .filter { $0.orderIndex < trackIdx }
+            .reduce(0) { $0 + $1.duration }
+        return min(completed + time, totalDuration)
     }
 
     var remainingDuration: Double {

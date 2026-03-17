@@ -230,49 +230,61 @@ struct AudiobookDetailView: View {
         }
     }
 
+    @ViewBuilder
     private var resumeAnchorRow: some View {
-        let trackTitle: String = {
-            let tracks = audiobook.sortedTracks
-            guard tracks.indices.contains(audiobook.currentTrackIndex) else { return "Track \(audiobook.currentTrackIndex + 1)" }
-            return tracks[audiobook.currentTrackIndex].title
-        }()
+        if let progressTrackIndex = audiobook.progressTrackIndex,
+           let progressTime = audiobook.progressTime {
+            let trackTitle: String = {
+                let tracks = audiobook.sortedTracks
+                guard tracks.indices.contains(progressTrackIndex) else { return "Track \(progressTrackIndex + 1)" }
+                return tracks[progressTrackIndex].title
+            }()
 
-        return Button {
-            Task {
-                await player.playTrack(at: audiobook.currentTrackIndex, in: audiobook, time: audiobook.currentTime)
-                openPlayer()
-            }
-        } label: {
-            HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "bookmark.fill")
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .frame(width: 24)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Last Stopped")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text("\(trackTitle) · \(TimeFormatter.clockString(seconds: audiobook.currentTime))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            Button {
+                Task {
+                    await player.playTrack(at: progressTrackIndex, in: audiobook, time: progressTime)
+                    openPlayer()
                 }
+            } label: {
+                HStack(alignment: .center, spacing: 14) {
+                    Image(systemName: "bookmark.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .frame(width: 24)
 
-                Spacer()
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Your Progress")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
 
-                Image(systemName: "play.circle.fill")
-                    .foregroundStyle(.primary)
-                    .font(.title3)
+                        let subtitle: String = {
+                            var parts = "\(trackTitle) · \(TimeFormatter.clockString(seconds: progressTime))"
+                            if let updatedAt = audiobook.progressUpdatedAt {
+                                parts += " · \(TimeFormatter.relativeDateString(for: updatedAt))"
+                            }
+                            return parts
+                        }()
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "play.circle.fill")
+                        .foregroundStyle(.primary)
+                        .font(.title3)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                )
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-            )
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Cover

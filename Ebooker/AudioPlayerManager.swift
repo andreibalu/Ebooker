@@ -32,6 +32,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var skipForwardSeconds: Double = SkipIntervalOption.thirty.rawValue
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
+    // Seconds of continuous listening required after a seek/jump before progress can advance.
+    private static let progressSeekPenalty: Double = 180
+    private var seekPenaltyRemaining: Double = 0
+
+    private var backgroundObserver: NSObjectProtocol?
 
     override init() {
         super.init()
@@ -39,6 +44,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         addPeriodicTimeObserver()
         observeTrackEnd()
         configureRemoteCommands()
+
+        backgroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.updateProgressMarkerIfNeeded()
+                self.persistPlayback(force: true)
+            }
+        }
     }
 
     func configure(modelContext: ModelContext) {
@@ -65,6 +82,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         audiobook.currentTrackIndex = 0
         audiobook.currentTime = 0
         audiobook.isFinished = false
+        audiobook.progressTrackIndex = nil
+        audiobook.progressTime = nil
+        audiobook.progressUpdatedAt = nil
         try? modelContext?.save()
         await load(audiobook: audiobook, trackIndex: 0, time: 0, autoplay: true)
     }
@@ -87,11 +107,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     func pause() {
         player.pause()
         isPlaying = false
+        updateProgressMarkerIfNeeded()
         persistPlayback(force: true)
         updateNowPlayingInfo()
     }
 
     func seek(to seconds: Double) {
+        seekPenaltyRemaining = Self.progressSeekPenalty
         let boundedTime = max(0, min(seconds, duration))
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
         player.seek(to: target) { [weak self] finished in
@@ -187,6 +209,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard audiobook.sortedTracks.indices.contains(trackIndex) else { return }
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
 
+        seekPenaltyRemaining = Self.progressSeekPenalty
         isLoadingItem = true
         activateAudioSession()
 
@@ -248,6 +271,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 }
 
                 self.isPlaying = self.player.timeControlStatus == .playing
+                if self.isPlaying, self.seekPenaltyRemaining > 0 {
+                    self.seekPenaltyRemaining = max(0, self.seekPenaltyRemaining - 1)
+                }
+                self.updateProgressMarkerIfNeeded()
                 self.persistPlayback()
                 self.updateNowPlayingInfo()
             }
@@ -270,6 +297,20 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                     self.markCurrentBookFinished()
                 }
             }
+        }
+    }
+
+    private func updateProgressMarkerIfNeeded() {
+        guard let audiobook = currentAudiobook else { return }
+        guard seekPenaltyRemaining == 0 else { return }
+
+        let currentOverall = audiobook.listenedDuration
+        let storedOverall = audiobook.progressListenedDuration
+
+        if currentOverall > storedOverall {
+            audiobook.progressTrackIndex = currentTrackIndex
+            audiobook.progressTime = min(currentTime, duration)
+            audiobook.progressUpdatedAt = .now
         }
     }
 
@@ -301,6 +342,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         audiobook.isFinished = true
         audiobook.currentTrackIndex = max(audiobook.sortedTracks.count - 1, 0)
         audiobook.currentTime = duration
+        audiobook.progressTrackIndex = audiobook.currentTrackIndex
+        audiobook.progressTime = duration
+        audiobook.progressUpdatedAt = .now
         currentTime = duration
         do {
             try modelContext?.save()
