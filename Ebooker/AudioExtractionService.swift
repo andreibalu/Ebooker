@@ -6,11 +6,11 @@
 import AVFoundation
 import Foundation
 
-/// Extracts a 60-second audio segment (30s before + 30s after) from a track for transcription.
+/// Extracts a 100-second audio segment (50s before + 50s after) from a track for transcription.
 enum AudioExtractionService {
-    private static let segmentDuration: Double = 30
+    private static let segmentDuration: Double = 50
 
-    /// Extracts a 60-second segment centered on the given time.
+    /// Extracts a 100-second segment centered on the given time.
     /// - Parameters:
     ///   - fileURL: URL of the audio file
     ///   - currentTime: Center point in seconds
