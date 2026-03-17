@@ -22,7 +22,7 @@ struct ContentView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
 
-    @State private var selectedTab: LibraryTab = .allBooks
+    @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
     @State private var pendingImport: PendingImportSelection?
     @State private var urlsHoldingSecurityAccess: [URL] = []
@@ -172,9 +172,6 @@ struct ContentView: View {
                 Text("My Library")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text("\(audiobooks.count) audiobook\(audiobooks.count == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             Spacer()

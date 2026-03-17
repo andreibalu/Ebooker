@@ -25,7 +25,6 @@ struct AudiobookDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 actionButtons
-                metaChips
                 tabSection
             }
             .padding(20)
@@ -123,52 +122,6 @@ struct AudiobookDetailView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    // MARK: - Meta Chips (replaces 4 stat tiles)
-
-    private var metaChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let lastPlayed = audiobook.lastPlayedAt {
-                    chip(
-                        icon: "clock",
-                        text: "Last opened \(TimeFormatter.relativeDateString(for: lastPlayed))"
-                    )
-                }
-
-                chip(
-                    icon: "timer",
-                    text: TimeFormatter.durationSummary(seconds: audiobook.remainingDuration) + " remaining"
-                )
-
-                chip(
-                    icon: "speedometer",
-                    text: "\(audiobook.playbackRate.formatted(.number.precision(.fractionLength(0...2))))×"
-                )
-
-                chip(
-                    icon: "doc.text",
-                    text: "\(audiobook.sortedTracks.count) file\(audiobook.sortedTracks.count == 1 ? "" : "s")"
-                )
-            }
-            .padding(.horizontal, 1)
-        }
-    }
-
-    private func chip(icon: String, text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(text)
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.cardWhite, in: Capsule())
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 1)
     }
 
     // MARK: - Tab Section
@@ -365,7 +318,7 @@ private struct MomentRow: View {
                         .font(.subheadline)
                         .multilineTextAlignment(.leading)
 
-                    Text(moment.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    Text(TimeFormatter.clockString(seconds: moment.time))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

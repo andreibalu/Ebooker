@@ -14,9 +14,16 @@ struct AudiobookCardView: View {
             ZStack(alignment: .topTrailing) {
                 cover
 
-                // Currently-playing badge
+                // Status badge (top trailing of cover)
                 if isCurrentlyPlaying {
                     Label("Playing", systemImage: "waveform")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(10)
+                } else if let last = audiobook.lastPlayedAt {
+                    Text(TimeFormatter.relativeDateString(for: last))
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
@@ -70,11 +77,6 @@ struct AudiobookCardView: View {
                 }
             }
             .frame(height: 4)
-
-            Text(statusText)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
         }
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -104,9 +106,4 @@ struct AudiobookCardView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    private var statusText: String {
-        if audiobook.isFinished { return "Finished" }
-        if audiobook.lastPlayedAt == nil { return "Ready to start" }
-        return "Resume at \(TimeFormatter.clockString(seconds: audiobook.currentTime))"
-    }
 }
