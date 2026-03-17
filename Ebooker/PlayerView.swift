@@ -24,6 +24,7 @@ struct PlayerView: View {
     @State private var pendingMomentTranscript: String?
     @State private var pendingMomentAiGenerated = false
     @State private var momentNameInput: String = "Saved Moment"
+    @State private var momentNoteInput: String = ""
     @State private var isProcessingSmartSave = false
 
     private var useSmartSave: Bool {
@@ -64,19 +65,18 @@ struct PlayerView: View {
             }
         }
         .presentationDetents([.large])
-        .alert("Name this Moment", isPresented: Binding(
+        .sheet(isPresented: Binding(
             get: { pendingMomentTime != nil },
             set: { if !$0 { pendingMomentTime = nil } }
         )) {
-            TextField("Moment name", text: $momentNameInput)
-            Button("Save") {
-                commitMoment()
-            }
-            Button("Cancel", role: .cancel) {
-                pendingMomentTime = nil
-            }
-        } message: {
-            Text("Give this moment a name so you can find it later.")
+            MomentEditSheet(
+                title: "Name this Moment",
+                isAiGenerated: pendingMomentAiGenerated,
+                nameInput: $momentNameInput,
+                noteInput: $momentNoteInput,
+                onSave: { commitMoment() },
+                onCancel: { pendingMomentTime = nil }
+            )
         }
         .onAppear {
             scrubValue = player.currentTime
@@ -271,24 +271,29 @@ struct PlayerView: View {
             Button {
                 saveMoment()
             } label: {
-                quickActionChip(
-                    icon: momentSaved ? "checkmark" : "bookmark.fill",
-                    text: momentSaved ? "Saved!" : (useSmartSave ? "Smart Save Moment" : "Save Moment"),
-                    filled: momentSaved
-                )
+                if isProcessingSmartSave {
+                    smartSaveLoadingChip
+                } else {
+                    quickActionChip(
+                        icon: momentSaved ? "checkmark" : "bookmark.fill",
+                        text: momentSaved ? "Saved!" : (useSmartSave ? "Smart Save Moment" : "Save Moment"),
+                        filled: momentSaved
+                    )
+                }
             }
             .disabled(player.currentAudiobook == nil || isProcessingSmartSave)
         }
     }
 
     private func saveMoment() {
-        guard let audiobook = player.currentAudiobook else { return }
+        guard player.currentAudiobook != nil else { return }
         let savedTime = max(player.currentTime - momentBacktrackSeconds, 0)
 
         if useSmartSave {
             Task { await performSmartSave(savedTime: savedTime) }
         } else {
             momentNameInput = "Saved Moment"
+            momentNoteInput = ""
             pendingMomentTranscript = nil
             pendingMomentAiGenerated = false
             pendingMomentTime = savedTime
@@ -324,23 +329,28 @@ struct PlayerView: View {
 
             let transcript = try await TranscriptionService.transcribe(audioURL: audioURL)
             let suggestedName: String
+            let suggestedNote: String
             let aiGenerated: Bool
             if transcript.isEmpty {
                 suggestedName = "Saved Moment"
+                suggestedNote = ""
                 aiGenerated = false
-            } else if let name = try? await MomentNamingService.generateMomentName(
+            } else if let result = try? await MomentNamingService.generateMomentName(
                 transcript: transcript,
                 audiobookTitle: audiobook.title
             ) {
-                suggestedName = name
+                suggestedName = result.name
+                suggestedNote = result.note
                 aiGenerated = true
             } else {
                 suggestedName = "Saved Moment"
+                suggestedNote = ""
                 aiGenerated = false
             }
 
             await MainActor.run {
                 momentNameInput = suggestedName
+                momentNoteInput = suggestedNote
                 pendingMomentTranscript = transcript.isEmpty ? nil : transcript
                 pendingMomentAiGenerated = aiGenerated
                 pendingMomentTime = savedTime
@@ -348,6 +358,7 @@ struct PlayerView: View {
         } catch {
             await MainActor.run {
                 momentNameInput = "Saved Moment"
+                momentNoteInput = ""
                 pendingMomentTranscript = nil
                 pendingMomentAiGenerated = false
                 pendingMomentTime = savedTime
@@ -360,21 +371,45 @@ struct PlayerView: View {
               let savedTime = pendingMomentTime else { return }
         let name = momentNameInput.trimmingCharacters(in: .whitespaces)
         let label = name.isEmpty ? "Saved Moment" : name
+        let noteText = momentNoteInput.trimmingCharacters(in: .whitespaces)
         let moment = Moment(
             trackIndex: player.currentTrackIndex,
             time: savedTime,
             label: label,
             audiobook: audiobook,
             transcript: pendingMomentTranscript,
-            aiGeneratedName: pendingMomentAiGenerated
+            aiGeneratedName: pendingMomentAiGenerated,
+            notes: noteText.isEmpty ? nil : noteText
         )
         modelContext.insert(moment)
         pendingMomentTime = nil
         pendingMomentTranscript = nil
+        momentNoteInput = ""
         withAnimation(.spring(duration: 0.2)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.spring(duration: 0.3)) { momentSaved = false }
         }
+    }
+
+    private var smartSaveLoadingChip: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .scaleEffect(0.8)
+                .tint(.primary)
+            Text("Analyzing…")
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 13)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .foregroundStyle(.secondary)
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
 
     private func quickActionChip(icon: String, text: String, filled: Bool) -> some View {

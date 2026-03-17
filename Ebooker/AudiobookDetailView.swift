@@ -358,65 +358,82 @@ private struct MomentRow: View {
     let onDelete: () -> Void
 
     @EnvironmentObject private var player: AudioPlayerManager
-    @State private var isRenaming = false
-    @State private var renameInput = ""
+    @State private var isEditing = false
+    @State private var editNameInput = ""
+    @State private var editNoteInput = ""
 
     var body: some View {
-        Button {
-            Task {
-                await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
-                openPlayer()
-            }
-        } label: {
-            HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "flag.fill")
-                    .font(.caption.weight(.medium))
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "flag.fill")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(moment.label)
+                    .foregroundStyle(.primary)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.leading)
+
+                Text(TimeFormatter.clockString(seconds: moment.time))
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(moment.label)
-                        .foregroundStyle(.primary)
-                        .font(.subheadline)
-                        .multilineTextAlignment(.leading)
-
-                    Text(TimeFormatter.clockString(seconds: moment.time))
+                if let note = moment.notes, !note.isEmpty {
+                    Text(note)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.top, 1)
                 }
-
-                Spacer()
-
-                Image(systemName: "play.circle")
-                    .foregroundStyle(.secondary)
-                    .font(.title3)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+
+            Spacer()
+
+            Image(systemName: "play.circle")
+                .foregroundStyle(.secondary)
+                .font(.title3)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+        .onTapGesture {
+            editNameInput = moment.label
+            editNoteInput = moment.notes ?? ""
+            isEditing = true
+        }
         .contextMenu {
-            Button("Rename", systemImage: "pencil") {
-                renameInput = moment.label
-                isRenaming = true
-            }
             Button(role: .destructive) {
                 onDelete()
             } label: {
                 Label("Delete", systemImage: "trash")
             }
         }
-        .alert("Rename Moment", isPresented: $isRenaming) {
-            TextField("Moment name", text: $renameInput)
-            Button("Save") {
-                let trimmed = renameInput.trimmingCharacters(in: .whitespaces)
-                if !trimmed.isEmpty {
-                    moment.label = trimmed
+        .sheet(isPresented: $isEditing) {
+            MomentEditSheet(
+                title: "Edit Moment",
+                isAiGenerated: moment.aiGeneratedName,
+                nameInput: $editNameInput,
+                noteInput: $editNoteInput,
+                onSave: {
+                    let trimmedName = editNameInput.trimmingCharacters(in: .whitespaces)
+                    if !trimmedName.isEmpty {
+                        moment.label = trimmedName
+                    }
+                    let trimmedNote = editNoteInput.trimmingCharacters(in: .whitespaces)
+                    moment.notes = trimmedNote.isEmpty ? nil : trimmedNote
+                    isEditing = false
+                },
+                onCancel: { isEditing = false },
+                onPlay: {
+                    Task {
+                        await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
+                        isEditing = false
+                        openPlayer()
+                    }
                 }
-            }
-            Button("Cancel", role: .cancel) {}
+            )
         }
     }
 }
