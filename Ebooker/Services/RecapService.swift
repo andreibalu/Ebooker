@@ -7,14 +7,14 @@ import Foundation
 import FoundationModels
 
 /// Uses the on-device foundation model to generate a brief recap of recent audiobook events.
-enum RecapService {
+struct RecapService: RecapProviding {
     @Generable(description: "A brief recap of recent audiobook events")
     struct RecapSuggestion {
         @Guide(description: "2-sentence summary of what happened recently in the audiobook")
         var recap: String
     }
 
-    private static let instructions = Instructions(
+    private let instructions = Instructions(
         "You are an assistant that helps audiobook listeners remember where they left off. " +
         "Given a transcript of the most recent audio, write a 2-sentence summary of what just happened. " +
         "Focus on key events, character actions, and plot developments. Be concise and spoiler-aware."
@@ -25,7 +25,7 @@ enum RecapService {
     ///   - transcript: Transcribed audio text from the recent listening segment
     ///   - audiobookTitle: Optional book title for context
     /// - Returns: A 2-sentence recap string
-    static func generateRecap(
+    func generateRecap(
         transcript: String,
         audiobookTitle: String? = nil
     ) async throws -> String {

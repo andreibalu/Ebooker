@@ -4,8 +4,6 @@
 //
 
 import PhotosUI
-import Speech
-import SwiftData
 import SwiftUI
 
 private enum DetailTab: String, CaseIterable {
@@ -20,21 +18,18 @@ struct AudiobookDetailView: View {
     @EnvironmentObject private var player: AudioPlayerManager
     @Environment(\.modelContext) private var modelContext
 
+    @State private var viewModel: AudiobookDetailViewModel
     @State private var selectedTab: DetailTab = .tracks
     @State private var selectedCoverItem: PhotosPickerItem?
     @State private var pendingCropImage: UIImage?
     @State private var showCropSheet = false
-
-    // Filter state
-    @State private var filterCategories: Set<MomentCategory> = []
-    @State private var filterCharacters: Set<String> = []
-    @State private var filterMoods: Set<MomentMood> = []
     @State private var showFilterSheet = false
 
-    // Recap state
-    @State private var isLoadingRecap = false
-    @State private var recapText: String?
-    @State private var recapError: String?
+    init(audiobook: Audiobook, openPlayer: @escaping () -> Void) {
+        self.audiobook = audiobook
+        self.openPlayer = openPlayer
+        self._viewModel = State(initialValue: AudiobookDetailViewModel(audiobook: audiobook))
+    }
 
     var body: some View {
         ScrollView {
@@ -96,7 +91,6 @@ struct AudiobookDetailView: View {
 
                 Spacer(minLength: 4)
 
-                // Slim progress capsule
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
@@ -170,7 +164,7 @@ struct AudiobookDetailView: View {
                     AudiobookTrackRow(audiobook: audiobook, track: track, openPlayer: openPlayer)
                 }
             } else {
-                if hasAiAnalyzedMoments {
+                if viewModel.hasAiAnalyzedMoments {
                     filterChipBar
                 }
                 momentsSection
@@ -208,7 +202,7 @@ struct AudiobookDetailView: View {
 
     private var momentsSection: some View {
         VStack(spacing: 10) {
-            let saved = filteredMoments
+            let saved = viewModel.filteredMoments
             if audiobook.moments.isEmpty {
                 Text("Tap the bookmark in the player to save a moment")
                     .font(.caption)
@@ -221,9 +215,7 @@ struct AudiobookDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Button("Clear Filters") {
-                        filterCategories.removeAll()
-                        filterCharacters.removeAll()
-                        filterMoods.removeAll()
+                        viewModel.clearFilters()
                     }
                     .font(.caption.weight(.medium))
                 }
@@ -237,23 +229,6 @@ struct AudiobookDetailView: View {
                 }
             }
         }
-    }
-
-    private var filteredMoments: [Moment] {
-        let sorted = audiobook.moments.sorted { $0.createdAt > $1.createdAt }
-        guard !filterCategories.isEmpty || !filterCharacters.isEmpty || !filterMoods.isEmpty else {
-            return sorted
-        }
-        return sorted.filter { moment in
-            let matchesCategory = filterCategories.isEmpty || !filterCategories.isDisjoint(with: moment.categories)
-            let matchesCharacter = filterCharacters.isEmpty || !filterCharacters.isDisjoint(with: Set(moment.characters.map { $0.lowercased() }))
-            let matchesMood = filterMoods.isEmpty || (moment.mood.map { filterMoods.contains($0) } ?? false)
-            return matchesCategory && matchesCharacter && matchesMood
-        }
-    }
-
-    private var hasAiAnalyzedMoments: Bool {
-        audiobook.moments.contains { !$0.categories.isEmpty || $0.mood != nil || !$0.characters.isEmpty }
     }
 
     // MARK: - Resume Anchor Row
@@ -289,13 +264,13 @@ struct AudiobookDetailView: View {
                     Spacer()
 
                     if AppleIntelligenceCapability.isSmartNamingAvailable {
-                        if isLoadingRecap {
+                        if viewModel.isLoadingRecap {
                             ProgressView()
                                 .progressViewStyle(.circular)
                                 .scaleEffect(0.7)
-                        } else if recapText == nil {
+                        } else if viewModel.recapText == nil {
                             Button {
-                                Task { await loadRecap(trackIndex: progressTrackIndex, progressTime: progressTime) }
+                                Task { await viewModel.loadRecap(trackIndex: progressTrackIndex, progressTime: progressTime) }
                             } label: {
                                 Image(systemName: "sparkles")
                                     .foregroundStyle(.primary)
@@ -325,7 +300,7 @@ struct AudiobookDetailView: View {
                         .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
                 )
 
-                if let recap = recapText {
+                if let recap = viewModel.recapText {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Where Was I?", systemImage: "sparkles")
                             .font(.caption.weight(.semibold))
@@ -339,58 +314,12 @@ struct AudiobookDetailView: View {
                     .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
-                if let error = recapError {
+                if let error = viewModel.recapError {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
             }
-        }
-    }
-
-    private func loadRecap(trackIndex: Int, progressTime: Double) async {
-        isLoadingRecap = true
-        defer { Task { @MainActor in isLoadingRecap = false } }
-
-        do {
-            let tracks = audiobook.sortedTracks
-            guard tracks.indices.contains(trackIndex) else { return }
-            let track = tracks[trackIndex]
-            let fileURL = try LibraryImportService.fileURL(for: track, in: audiobook)
-
-            let startSeconds = max(0, progressTime - 200)
-            let endSeconds = progressTime
-            guard endSeconds > startSeconds else { return }
-
-            let audioURL = try await AudioExtractionService.extractSegment(
-                from: fileURL,
-                startSeconds: startSeconds,
-                endSeconds: endSeconds
-            )
-            defer { try? FileManager.default.removeItem(at: audioURL) }
-
-            let authStatus = await TranscriptionService.requestAuthorization()
-            guard authStatus == .authorized else {
-                await MainActor.run { recapError = "Speech recognition not authorized." }
-                return
-            }
-
-            let transcript = try await TranscriptionService.transcribe(audioURL: audioURL)
-            guard !transcript.isEmpty else {
-                await MainActor.run { recapError = "Could not transcribe audio." }
-                return
-            }
-
-            let recap = try await RecapService.generateRecap(
-                transcript: transcript,
-                audiobookTitle: audiobook.title
-            )
-            await MainActor.run {
-                recapText = recap
-                recapError = nil
-            }
-        } catch {
-            await MainActor.run { recapError = error.localizedDescription }
         }
     }
 
@@ -404,30 +333,30 @@ struct AudiobookDetailView: View {
                 } label: {
                     Image(systemName: "line.3.horizontal.decrease.circle")
                         .font(.subheadline)
-                        .foregroundStyle(hasActiveFilters ? .primary : .secondary)
+                        .foregroundStyle(viewModel.hasActiveFilters ? .primary : .secondary)
                 }
                 .buttonStyle(.plain)
 
-                ForEach(Array(filterCategories), id: \.self) { cat in
+                ForEach(Array(viewModel.filterCategories), id: \.self) { cat in
                     filterChip(text: cat.displayName) {
-                        filterCategories.remove(cat)
+                        viewModel.filterCategories.remove(cat)
                     }
                 }
-                ForEach(Array(filterMoods), id: \.self) { mood in
+                ForEach(Array(viewModel.filterMoods), id: \.self) { mood in
                     filterChip(text: mood.displayName) {
-                        filterMoods.remove(mood)
+                        viewModel.filterMoods.remove(mood)
                     }
                 }
-                ForEach(Array(filterCharacters).sorted(), id: \.self) { char in
+                ForEach(Array(viewModel.filterCharacters).sorted(), id: \.self) { char in
                     filterChip(text: char) {
-                        filterCharacters.remove(char)
+                        viewModel.filterCharacters.remove(char)
                     }
                 }
             }
             .padding(.vertical, 4)
         }
         .sheet(isPresented: $showFilterSheet) {
-            filterSheet
+            MomentFilterSheet(audiobook: audiobook, viewModel: viewModel)
         }
     }
 
@@ -444,111 +373,6 @@ struct AudiobookDetailView: View {
         .padding(.vertical, 6)
         .background(Color.primary.opacity(0.1), in: Capsule())
         .foregroundStyle(.primary)
-    }
-
-    private var hasActiveFilters: Bool {
-        !filterCategories.isEmpty || !filterCharacters.isEmpty || !filterMoods.isEmpty
-    }
-
-    private var filterSheet: some View {
-        NavigationStack {
-            List {
-                let availableCategories = Set(audiobook.moments.flatMap(\.categories))
-                if !availableCategories.isEmpty {
-                    Section("Categories") {
-                        ForEach(availableCategories.sorted(by: { $0.rawValue < $1.rawValue })) { category in
-                            Button {
-                                if filterCategories.contains(category) {
-                                    filterCategories.remove(category)
-                                } else {
-                                    filterCategories.insert(category)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(category.displayName)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if filterCategories.contains(category) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let availableCharacters = audiobook.castList
-                if !availableCharacters.isEmpty {
-                    Section("Characters") {
-                        ForEach(availableCharacters, id: \.self) { character in
-                            let key = character.lowercased()
-                            Button {
-                                if filterCharacters.contains(key) {
-                                    filterCharacters.remove(key)
-                                } else {
-                                    filterCharacters.insert(key)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(character)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if filterCharacters.contains(key) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                let availableMoods = Set(audiobook.moments.compactMap(\.mood))
-                if !availableMoods.isEmpty {
-                    Section("Moods") {
-                        ForEach(availableMoods.sorted(by: { $0.rawValue < $1.rawValue })) { mood in
-                            Button {
-                                if filterMoods.contains(mood) {
-                                    filterMoods.remove(mood)
-                                } else {
-                                    filterMoods.insert(mood)
-                                }
-                            } label: {
-                                HStack {
-                                    Text(mood.displayName)
-                                        .foregroundStyle(.primary)
-                                    Spacer()
-                                    if filterMoods.contains(mood) {
-                                        Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if hasActiveFilters {
-                    Section {
-                        Button("Clear All", role: .destructive) {
-                            filterCategories.removeAll()
-                            filterCharacters.removeAll()
-                            filterMoods.removeAll()
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Filter Moments")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { showFilterSheet = false }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 
     // MARK: - Cover
@@ -639,152 +463,5 @@ struct AudiobookDetailView: View {
         let pct = Int((audiobook.progress * 100).rounded())
         let remaining = TimeFormatter.durationSummary(seconds: audiobook.remainingDuration)
         return "\(pct)% · \(remaining) remaining"
-    }
-}
-
-// MARK: - Moment Row
-
-private struct MomentRow: View {
-    let audiobook: Audiobook
-    let moment: Moment
-    let openPlayer: () -> Void
-    let onDelete: () -> Void
-
-    @EnvironmentObject private var player: AudioPlayerManager
-    @State private var isEditing = false
-    @State private var editNameInput = ""
-    @State private var editNoteInput = ""
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "flag.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(moment.label)
-                    .foregroundStyle(.primary)
-                    .font(.subheadline)
-                    .multilineTextAlignment(.leading)
-
-                Text(TimeFormatter.clockString(seconds: moment.time))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let note = moment.notes, !note.isEmpty {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.top, 1)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "play.circle")
-                .foregroundStyle(.secondary)
-                .font(.title3)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-        .onTapGesture {
-            editNameInput = moment.label
-            editNoteInput = moment.notes ?? ""
-            isEditing = true
-        }
-        .contextMenu {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .sheet(isPresented: $isEditing) {
-            MomentEditSheet(
-                title: "Edit Moment",
-                isAiGenerated: moment.aiGeneratedName,
-                nameInput: $editNameInput,
-                noteInput: $editNoteInput,
-                categories: moment.categories,
-                quoteLine: moment.quoteLine,
-                characters: moment.characters,
-                mood: moment.mood,
-                onSave: {
-                    let trimmedName = editNameInput.trimmingCharacters(in: .whitespaces)
-                    if !trimmedName.isEmpty {
-                        moment.label = trimmedName
-                    }
-                    let trimmedNote = editNoteInput.trimmingCharacters(in: .whitespaces)
-                    moment.notes = trimmedNote.isEmpty ? nil : trimmedNote
-                    isEditing = false
-                },
-                onCancel: { isEditing = false },
-                onPlay: {
-                    Task {
-                        await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
-                        isEditing = false
-                        openPlayer()
-                    }
-                }
-            )
-        }
-    }
-}
-
-// MARK: - Track Row
-
-private struct AudiobookTrackRow: View {
-    let audiobook: Audiobook
-    let track: AudioTrack
-    let openPlayer: () -> Void
-
-    @EnvironmentObject private var player: AudioPlayerManager
-
-    var body: some View {
-        Button {
-            Task {
-                await player.playTrack(at: track.orderIndex, in: audiobook)
-                openPlayer()
-            }
-        } label: {
-            HStack(alignment: .center, spacing: 14) {
-                Text("\(track.orderIndex + 1)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(track.title)
-                        .foregroundStyle(.primary)
-                        .font(.subheadline)
-                        .multilineTextAlignment(.leading)
-
-                    Text(TimeFormatter.clockString(seconds: track.duration))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if player.currentAudiobook?.id == audiobook.id, player.currentTrackIndex == track.orderIndex {
-                    Image(systemName: "waveform")
-                        .foregroundStyle(.primary)
-                        .font(.subheadline)
-                } else {
-                    Image(systemName: "play.circle")
-                        .foregroundStyle(.secondary)
-                        .font(.title3)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-        }
-        .buttonStyle(.plain)
     }
 }

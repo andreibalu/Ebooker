@@ -22,17 +22,11 @@ struct ContentView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
 
+    @State private var viewModel = LibraryViewModel()
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
-    @State private var pendingImport: PendingImportSelection?
-    @State private var urlsHoldingSecurityAccess: [URL] = []
     @State private var isPlayerPresented = false
     @State private var isSettingsPresented = false
-    @State private var deleteCandidate: Audiobook?
-    @State private var renameCandidate: Audiobook?
-    @State private var renameTitleInput: String = ""
-    @State private var alertMessage = ""
-    @State private var isShowingAlert = false
 
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
@@ -69,14 +63,14 @@ struct ContentView: View {
             allowedContentTypes: [.audio],
             allowsMultipleSelection: true
         ) { result in
-            handleImportSelection(result)
+            viewModel.handleImportSelection(result)
         }
-        .sheet(item: $pendingImport, onDismiss: {
-            releaseSecurityScopedAccess()
-            pendingImport = nil
+        .sheet(item: $viewModel.pendingImport, onDismiss: {
+            viewModel.releaseSecurityScopedAccess()
+            viewModel.pendingImport = nil
         }) { pending in
             ImportAudiobookSheet(pending: pending) { title, author in
-                try importAudiobook(pending, title: title, author: author)
+                try viewModel.importAudiobook(pending, title: title, author: author, modelContext: modelContext)
             }
         }
         .sheet(isPresented: $isPlayerPresented) {
@@ -88,37 +82,33 @@ struct ContentView: View {
         }
         .alert("Remove Audiobook?", isPresented: deleteConfirmationBinding) {
             Button("Remove from App", role: .destructive) {
-                deleteAudiobook(alsoDeleteFiles: false)
+                viewModel.deleteAudiobook(alsoDeleteFiles: false, modelContext: modelContext)
             }
             Button("Also Delete Files", role: .destructive) {
-                deleteAudiobook(alsoDeleteFiles: true)
+                viewModel.deleteAudiobook(alsoDeleteFiles: true, modelContext: modelContext)
             }
             Button("Cancel", role: .cancel) {
-                deleteCandidate = nil
+                viewModel.deleteCandidate = nil
             }
         } message: {
             Text("Choose whether to remove this audiobook from Ebooker only, or also delete its imported audio files from local storage.")
         }
         .alert("Rename Audiobook", isPresented: Binding(
-            get: { renameCandidate != nil },
-            set: { if !$0 { renameCandidate = nil } }
+            get: { viewModel.renameCandidate != nil },
+            set: { if !$0 { viewModel.renameCandidate = nil } }
         )) {
-            TextField("Book title", text: $renameTitleInput)
+            TextField("Book title", text: $viewModel.renameTitleInput)
             Button("Save") {
-                let trimmed = renameTitleInput.trimmingCharacters(in: .whitespaces)
-                if !trimmed.isEmpty {
-                    renameCandidate?.title = trimmed
-                }
-                renameCandidate = nil
+                viewModel.commitRename()
             }
             Button("Cancel", role: .cancel) {
-                renameCandidate = nil
+                viewModel.renameCandidate = nil
             }
         }
-        .alert("Something Went Wrong", isPresented: $isShowingAlert) {
+        .alert("Something Went Wrong", isPresented: $viewModel.isShowingAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(alertMessage)
+            Text(viewModel.alertMessage)
         }
         .onAppear {
             player.configure(modelContext: modelContext)
@@ -151,7 +141,7 @@ struct ContentView: View {
         }
         .onChange(of: player.playerErrorMessage) { _, newValue in
             guard let newValue else { return }
-            presentAlert(message: newValue)
+            viewModel.presentAlert(message: newValue)
             player.playerErrorMessage = nil
         }
     }
@@ -160,7 +150,6 @@ struct ContentView: View {
 
     private var libraryHeader: some View {
         HStack(alignment: .center, spacing: 14) {
-            // Book count badge
             ZStack {
                 Circle()
                     .fill(Color.primary)
@@ -170,7 +159,6 @@ struct ContentView: View {
                     .foregroundStyle(Color.cream)
             }
 
-            // Title + subtitle
             VStack(alignment: .leading, spacing: 2) {
                 Text("My Library")
                     .font(.title2.weight(.semibold))
@@ -179,7 +167,6 @@ struct ContentView: View {
 
             Spacer()
 
-            // Toolbar buttons: Sort | Settings | Add
             HStack(spacing: 6) {
                 Menu {
                     Picker("Sort by", selection: $sortOptionRawValue) {
@@ -283,12 +270,11 @@ struct ContentView: View {
                             }
 
                             Button("Rename", systemImage: "pencil") {
-                                renameTitleInput = audiobook.title
-                                renameCandidate = audiobook
+                                viewModel.beginRename(audiobook)
                             }
 
                             Button(role: .destructive) {
-                                deleteCandidate = audiobook
+                                viewModel.deleteCandidate = audiobook
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -311,39 +297,14 @@ struct ContentView: View {
         } else {
             base = Array(audiobooks)
         }
-        return sorted(base)
-    }
-
-    private func sorted(_ books: [Audiobook]) -> [Audiobook] {
-        switch LibrarySortOption(rawValue: sortOptionRawValue) ?? .recent {
-        case .recent:
-            books.sorted {
-                let lhs = $0.lastPlayedAt ?? $0.createdAt
-                let rhs = $1.lastPlayedAt ?? $1.createdAt
-                return lhs > rhs
-            }
-        case .title:
-            books.sorted {
-                $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending
-            }
-        case .author:
-            books.sorted {
-                let left = $0.author.isEmpty ? $0.title : $0.author
-                let right = $1.author.isEmpty ? $1.title : $1.author
-                return left.localizedCaseInsensitiveCompare(right) == .orderedAscending
-            }
-        case .duration:
-            books.sorted { $0.totalDuration > $1.totalDuration }
-        case .dateAdded:
-            books.sorted { $0.createdAt > $1.createdAt }
-        }
+        return viewModel.sorted(base, by: sortOptionRawValue)
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
         Binding(
-            get: { deleteCandidate != nil },
+            get: { viewModel.deleteCandidate != nil },
             set: { newValue in
-                if !newValue { deleteCandidate = nil }
+                if !newValue { viewModel.deleteCandidate = nil }
             }
         )
     }
@@ -370,69 +331,5 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
             }
         }
-    }
-
-    // MARK: - Import / Delete
-
-    private func handleImportSelection(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            let audioURLs = urls
-                .filter { !$0.hasDirectoryPath }
-                .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
-            guard !audioURLs.isEmpty else {
-                presentAlert(message: "Choose at least one audio file.")
-                return
-            }
-            let accessed: [URL] = audioURLs.filter { $0.startAccessingSecurityScopedResource() }
-            urlsHoldingSecurityAccess = accessed
-            Task {
-                do {
-                    pendingImport = try await LibraryImportService.prepareImport(from: audioURLs)
-                } catch {
-                    releaseSecurityScopedAccess()
-                    presentAlert(message: error.localizedDescription)
-                }
-            }
-        case .failure(let error):
-            presentAlert(message: error.localizedDescription)
-        }
-    }
-
-    private func releaseSecurityScopedAccess() {
-        for url in urlsHoldingSecurityAccess {
-            url.stopAccessingSecurityScopedResource()
-        }
-        urlsHoldingSecurityAccess = []
-    }
-
-    private func importAudiobook(_ pending: PendingImportSelection, title: String, author: String) throws {
-        _ = try LibraryImportService.importAudiobook(
-            from: pending,
-            title: title,
-            author: author,
-            modelContext: modelContext
-        )
-        pendingImport = nil
-        releaseSecurityScopedAccess()
-    }
-
-    private func deleteAudiobook(alsoDeleteFiles: Bool) {
-        guard let deleteCandidate else { return }
-        do {
-            try LibraryImportService.deleteAudiobook(
-                deleteCandidate,
-                deleteFiles: alsoDeleteFiles,
-                modelContext: modelContext
-            )
-            self.deleteCandidate = nil
-        } catch {
-            presentAlert(message: error.localizedDescription)
-        }
-    }
-
-    private func presentAlert(message: String) {
-        alertMessage = message
-        isShowingAlert = true
     }
 }

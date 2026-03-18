@@ -7,8 +7,8 @@ import AVFoundation
 import Foundation
 
 /// Extracts audio segments from a track for transcription.
-enum AudioExtractionService {
-    private static let segmentDuration: Double = 50
+struct AudioExtractionService: AudioExtracting {
+    private let segmentDuration: Double = 50
 
     /// Extracts an audio segment between two absolute time points.
     /// - Parameters:
@@ -16,7 +16,7 @@ enum AudioExtractionService {
     ///   - startSeconds: Start time in seconds
     ///   - endSeconds: End time in seconds
     /// - Returns: URL of a temporary audio file
-    static func extractSegment(
+    func extractSegment(
         from fileURL: URL,
         startSeconds: Double,
         endSeconds: Double
@@ -66,7 +66,7 @@ enum AudioExtractionService {
     ///   - currentTime: Center point in seconds
     ///   - duration: Total track duration in seconds
     /// - Returns: URL of a temporary audio file
-    static func extractSegment(
+    func extractSegment(
         from fileURL: URL,
         currentTime: Double,
         duration: Double

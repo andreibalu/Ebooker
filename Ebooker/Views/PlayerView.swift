@@ -3,8 +3,6 @@
 //  Ebooker
 //
 
-import Speech
-import SwiftData
 import SwiftUI
 
 struct PlayerView: View {
@@ -17,21 +15,10 @@ struct PlayerView: View {
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
 
+    @State private var viewModel = PlayerViewModel()
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
-    @State private var momentSaved = false
-    @State private var progressMarked = false
     @State private var showProgressConfirmation = false
-    @State private var pendingMomentTime: Double?
-    @State private var pendingMomentTranscript: String?
-    @State private var pendingMomentAiGenerated = false
-    @State private var momentNameInput: String = "Saved Moment"
-    @State private var momentNoteInput: String = ""
-    @State private var isProcessingSmartSave = false
-    @State private var pendingCategories: [MomentCategory] = []
-    @State private var pendingQuoteLine: String?
-    @State private var pendingCharacters: [String] = []
-    @State private var pendingMood: MomentMood?
 
     private var useSmartSave: Bool {
         useSmartMomentNaming && AppleIntelligenceCapability.isSmartNamingAvailable
@@ -72,20 +59,20 @@ struct PlayerView: View {
         }
         .presentationDetents([.large])
         .sheet(isPresented: Binding(
-            get: { pendingMomentTime != nil },
-            set: { if !$0 { pendingMomentTime = nil } }
+            get: { viewModel.pendingMomentTime != nil },
+            set: { if !$0 { viewModel.pendingMomentTime = nil } }
         )) {
             MomentEditSheet(
                 title: "Name this Moment",
-                isAiGenerated: pendingMomentAiGenerated,
-                nameInput: $momentNameInput,
-                noteInput: $momentNoteInput,
-                categories: pendingCategories,
-                quoteLine: pendingQuoteLine,
-                characters: pendingCharacters,
-                mood: pendingMood,
-                onSave: { commitMoment() },
-                onCancel: { pendingMomentTime = nil }
+                isAiGenerated: viewModel.pendingMomentAiGenerated,
+                nameInput: $viewModel.momentNameInput,
+                noteInput: $viewModel.momentNoteInput,
+                categories: viewModel.pendingCategories,
+                quoteLine: viewModel.pendingQuoteLine,
+                characters: viewModel.pendingCharacters,
+                mood: viewModel.pendingMood,
+                onSave: { viewModel.commitMoment(player: player, modelContext: modelContext) },
+                onCancel: { viewModel.pendingMomentTime = nil }
             )
         }
         .onAppear {
@@ -282,9 +269,9 @@ struct PlayerView: View {
                 showProgressConfirmation = true
             } label: {
                 quickActionChip(
-                    icon: progressMarked ? "checkmark" : "flag.fill",
-                    text: progressMarked ? "Progress Marked!" : "Mark Progress Here",
-                    filled: progressMarked
+                    icon: viewModel.progressMarked ? "checkmark" : "flag.fill",
+                    text: viewModel.progressMarked ? "Progress Marked!" : "Mark Progress Here",
+                    filled: viewModel.progressMarked
                 )
             }
             .disabled(player.currentAudiobook == nil)
@@ -293,11 +280,7 @@ struct PlayerView: View {
                 isPresented: $showProgressConfirmation,
                 actions: {
                     Button("Mark Progress", role: .destructive) {
-                        player.setProgressMarker()
-                        withAnimation(.spring(duration: 0.2)) { progressMarked = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            withAnimation(.spring(duration: 0.3)) { progressMarked = false }
-                        }
+                        viewModel.markProgress(player: player)
                     }
                     Button("Cancel", role: .cancel) { }
                 },
@@ -307,158 +290,23 @@ struct PlayerView: View {
             )
 
             Button {
-                saveMoment()
+                viewModel.saveMoment(
+                    player: player,
+                    useSmartSave: useSmartSave,
+                    momentBacktrackSeconds: momentBacktrackSeconds
+                )
             } label: {
-                if isProcessingSmartSave {
+                if viewModel.isProcessingSmartSave {
                     smartSaveLoadingChip
                 } else {
                     quickActionChip(
-                        icon: momentSaved ? "checkmark" : "bookmark.fill",
-                        text: momentSaved ? "Saved!" : (useSmartSave ? "Smart Save Moment" : "Save Moment"),
-                        filled: momentSaved
+                        icon: viewModel.momentSaved ? "checkmark" : "bookmark.fill",
+                        text: viewModel.momentSaved ? "Saved!" : (useSmartSave ? "Smart Save Moment" : "Save Moment"),
+                        filled: viewModel.momentSaved
                     )
                 }
             }
-            .disabled(player.currentAudiobook == nil || isProcessingSmartSave)
-        }
-    }
-
-    private func saveMoment() {
-        guard player.currentAudiobook != nil else { return }
-        let savedTime = max(player.currentTime - momentBacktrackSeconds, 0)
-
-        if useSmartSave {
-            Task { await performSmartSave(savedTime: savedTime) }
-        } else {
-            momentNameInput = "Saved Moment"
-            momentNoteInput = ""
-            pendingMomentTranscript = nil
-            pendingMomentAiGenerated = false
-            pendingCategories = []
-            pendingQuoteLine = nil
-            pendingCharacters = []
-            pendingMood = nil
-            pendingMomentTime = savedTime
-        }
-    }
-
-    private func performSmartSave(savedTime: Double) async {
-        guard let audiobook = player.currentAudiobook,
-              let track = player.currentTrack else { return }
-
-        let authStatus = await TranscriptionService.requestAuthorization()
-        guard authStatus == .authorized else {
-            await MainActor.run {
-                momentNameInput = "Saved Moment"
-                pendingMomentTranscript = nil
-                pendingMomentAiGenerated = false
-                pendingCategories = []
-                pendingQuoteLine = nil
-                pendingCharacters = []
-                pendingMood = nil
-                pendingMomentTime = max(player.currentTime - momentBacktrackSeconds, 0)
-            }
-            return
-        }
-
-        isProcessingSmartSave = true
-        defer { Task { @MainActor in isProcessingSmartSave = false } }
-
-        do {
-            let fileURL = try LibraryImportService.fileURL(for: track, in: audiobook)
-            let audioURL = try await AudioExtractionService.extractSegment(
-                from: fileURL,
-                currentTime: player.currentTime,
-                duration: player.duration
-            )
-            defer { try? FileManager.default.removeItem(at: audioURL) }
-
-            let transcript = try await TranscriptionService.transcribe(audioURL: audioURL)
-            if transcript.isEmpty {
-                await MainActor.run {
-                    momentNameInput = "Saved Moment"
-                    momentNoteInput = ""
-                    pendingMomentTranscript = nil
-                    pendingMomentAiGenerated = false
-                    pendingCategories = []
-                    pendingQuoteLine = nil
-                    pendingCharacters = []
-                    pendingMood = nil
-                    pendingMomentTime = savedTime
-                }
-            } else if let analysis = try? await MomentNamingService.analyzeMoment(
-                transcript: transcript,
-                audiobookTitle: audiobook.title
-            ) {
-                await MainActor.run {
-                    momentNameInput = analysis.name
-                    momentNoteInput = analysis.note
-                    pendingMomentTranscript = transcript
-                    pendingMomentAiGenerated = true
-                    pendingCategories = analysis.categories
-                    pendingQuoteLine = analysis.quoteLine
-                    pendingCharacters = analysis.characters
-                    pendingMood = analysis.mood
-                    pendingMomentTime = savedTime
-                }
-            } else {
-                await MainActor.run {
-                    momentNameInput = "Saved Moment"
-                    momentNoteInput = ""
-                    pendingMomentTranscript = transcript
-                    pendingMomentAiGenerated = false
-                    pendingCategories = []
-                    pendingQuoteLine = nil
-                    pendingCharacters = []
-                    pendingMood = nil
-                    pendingMomentTime = savedTime
-                }
-            }
-        } catch {
-            await MainActor.run {
-                momentNameInput = "Saved Moment"
-                momentNoteInput = ""
-                pendingMomentTranscript = nil
-                pendingMomentAiGenerated = false
-                pendingCategories = []
-                pendingQuoteLine = nil
-                pendingCharacters = []
-                pendingMood = nil
-                pendingMomentTime = savedTime
-            }
-        }
-    }
-
-    private func commitMoment() {
-        guard let audiobook = player.currentAudiobook,
-              let savedTime = pendingMomentTime else { return }
-        let name = momentNameInput.trimmingCharacters(in: .whitespaces)
-        let label = name.isEmpty ? "Saved Moment" : name
-        let noteText = momentNoteInput.trimmingCharacters(in: .whitespaces)
-        let moment = Moment(
-            trackIndex: player.currentTrackIndex,
-            time: savedTime,
-            label: label,
-            audiobook: audiobook,
-            transcript: pendingMomentTranscript,
-            aiGeneratedName: pendingMomentAiGenerated,
-            notes: noteText.isEmpty ? nil : noteText,
-            categories: pendingCategories,
-            quoteLine: pendingQuoteLine,
-            characters: pendingCharacters,
-            mood: pendingMood
-        )
-        modelContext.insert(moment)
-        pendingMomentTime = nil
-        pendingMomentTranscript = nil
-        momentNoteInput = ""
-        pendingCategories = []
-        pendingQuoteLine = nil
-        pendingCharacters = []
-        pendingMood = nil
-        withAnimation(.spring(duration: 0.2)) { momentSaved = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.spring(duration: 0.3)) { momentSaved = false }
+            .disabled(player.currentAudiobook == nil || viewModel.isProcessingSmartSave)
         }
     }
 

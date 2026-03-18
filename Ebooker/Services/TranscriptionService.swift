@@ -7,9 +7,9 @@ import Foundation
 import Speech
 
 /// Transcribes audio files using the Speech framework.
-enum TranscriptionService {
+struct TranscriptionService: TranscriptionProviding {
     /// Requests speech recognition authorization. Call before transcribing.
-    static func requestAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
+    func requestAuthorization() async -> SFSpeechRecognizerAuthorizationStatus {
         await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
                 continuation.resume(returning: status)
@@ -20,7 +20,7 @@ enum TranscriptionService {
     /// Transcribes the given audio file to text.
     /// - Parameter audioURL: URL of an audio file (e.g. m4a)
     /// - Returns: Transcribed text, or empty string if transcription fails
-    static func transcribe(audioURL: URL) async throws -> String {
+    func transcribe(audioURL: URL) async throws -> String {
         let recognizer = SFSpeechRecognizer(locale: Locale.current)
         guard let recognizer, recognizer.isAvailable else {
             throw TranscriptionError.recognizerUnavailable
