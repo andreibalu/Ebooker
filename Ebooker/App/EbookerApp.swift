@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct EbookerApp: App {
     @StateObject private var audioPlayer = AudioPlayerManager()
+    @StateObject private var whisperKitService = WhisperKitService()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -38,6 +39,7 @@ struct EbookerApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(audioPlayer)
+                .environmentObject(whisperKitService)
         }
         .modelContainer(sharedModelContainer)
     }

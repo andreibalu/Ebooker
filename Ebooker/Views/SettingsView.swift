@@ -7,6 +7,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var whisperKit: WhisperKitService
 
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
@@ -18,9 +19,60 @@ struct SettingsView: View {
         AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
+    @ViewBuilder
+    private var whisperKitStatusRow: some View {
+        switch whisperKit.modelState {
+        case .notDownloaded:
+            Button("Download Model (~140 MB)") {
+                Task { await whisperKit.downloadModel() }
+            }
+        case .downloading(let progress):
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Downloading… \(Int(progress * 100))%")
+                    .font(.subheadline)
+                ProgressView(value: progress)
+                    .tint(Color.accentColor)
+            }
+            .padding(.vertical, 4)
+        case .ready:
+            HStack {
+                Label("Model Ready", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                Spacer()
+                Button("Delete") {
+                    whisperKit.deleteModel()
+                }
+                .foregroundStyle(.red)
+                .buttonStyle(.plain)
+                .font(.subheadline)
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Download Failed", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Retry") {
+                    Task { await whisperKit.downloadModel() }
+                }
+                .padding(.top, 2)
+            }
+            .padding(.vertical, 4)
+        }
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    whisperKitStatusRow
+                } header: {
+                    Text("Lyrics (WhisperKit)")
+                } footer: {
+                    Text("Downloads a speech recognition model (~140 MB) to generate synced lyrics from your audiobooks. Runs entirely on-device.")
+                }
+
                 Section {
                     Toggle(isOn: $useSmartMomentNaming) {
                         VStack(alignment: .leading, spacing: 3) {

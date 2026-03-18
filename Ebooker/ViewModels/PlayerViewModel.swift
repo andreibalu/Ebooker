@@ -9,6 +9,14 @@ import SwiftData
 @MainActor
 @Observable
 final class PlayerViewModel {
+    // MARK: - Lyrics state
+
+    var showLyrics = false
+    var lyricsStatus: LyricsStatus = .modelNotReady
+    var trackLyrics: TrackLyrics?
+
+    private var lyricsTask: Task<Void, Never>?
+
     // MARK: - Moment creation state
 
     var pendingMomentTime: Double?
@@ -158,6 +166,67 @@ final class PlayerViewModel {
         withAnimation(.spring(duration: 0.2)) { progressMarked = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.spring(duration: 0.3)) { self.progressMarked = false }
+        }
+    }
+
+    // MARK: - Lyrics
+
+    func loadLyrics(whisperKit: WhisperKitService, player: AudioPlayerManager) {
+        lyricsTask?.cancel()
+
+        // Sync model state first
+        if whisperKit.modelState != .ready {
+            lyricsStatus = .modelNotReady
+            trackLyrics = nil
+            return
+        }
+
+        guard let track = player.currentTrack,
+              let audiobook = player.currentAudiobook else {
+            lyricsStatus = .modelNotReady
+            trackLyrics = nil
+            return
+        }
+
+        // Load from cache if available
+        if let cached = whisperKit.loadCachedLyrics(for: track, in: audiobook) {
+            trackLyrics = cached
+            lyricsStatus = .ready
+            return
+        }
+
+        // Otherwise start transcription automatically
+        startTranscription(whisperKit: whisperKit, track: track, audiobook: audiobook)
+    }
+
+    func retryLyrics(whisperKit: WhisperKitService, player: AudioPlayerManager) {
+        guard let track = player.currentTrack,
+              let audiobook = player.currentAudiobook else { return }
+        whisperKit.deleteCachedLyrics(for: track, in: audiobook)
+        trackLyrics = nil
+        loadLyrics(whisperKit: whisperKit, player: player)
+    }
+
+    private func startTranscription(
+        whisperKit: WhisperKitService,
+        track: AudioTrack,
+        audiobook: Audiobook
+    ) {
+        lyricsStatus = .transcribing(0)
+        lyricsTask = Task {
+            do {
+                let lyrics = try await whisperKit.transcribeTrack(track, in: audiobook) { progress in
+                    self.lyricsStatus = .transcribing(progress)
+                }
+                if !Task.isCancelled {
+                    self.trackLyrics = lyrics
+                    self.lyricsStatus = .ready
+                }
+            } catch {
+                if !Task.isCancelled {
+                    self.lyricsStatus = .failed(error.localizedDescription)
+                }
+            }
         }
     }
 

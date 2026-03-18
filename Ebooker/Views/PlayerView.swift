@@ -9,6 +9,7 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
+    @EnvironmentObject private var whisperKit: WhisperKitService
 
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
@@ -30,7 +31,11 @@ struct PlayerView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
-                    cover
+                    if viewModel.showLyrics {
+                        lyricsArea
+                    } else {
+                        cover
+                    }
                     titleSection
                     progressSection
                     controlsSection
@@ -49,12 +54,26 @@ struct PlayerView: View {
             .navigationTitle(player.currentAudiobook?.title ?? "Player")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        viewModel.showLyrics.toggle()
+                    } label: {
+                        Image(systemName: viewModel.showLyrics ? "text.book.closed" : "text.quote")
+                            .foregroundStyle(viewModel.showLyrics ? Color.primary : Color.secondary)
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
                     }
                     .fontWeight(.medium)
                 }
+            }
+            .task(id: player.currentTrack?.id) {
+                viewModel.loadLyrics(whisperKit: whisperKit, player: player)
+            }
+            .onChange(of: whisperKit.modelState) { _, _ in
+                viewModel.loadLyrics(whisperKit: whisperKit, player: player)
             }
         }
         .presentationDetents([.large])
@@ -115,6 +134,21 @@ struct PlayerView: View {
         .frame(width: 140, height: 140)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 8)
+    }
+
+    // MARK: - Lyrics area
+
+    private var lyricsArea: some View {
+        LyricsView(
+            status: viewModel.lyricsStatus,
+            segments: viewModel.trackLyrics?.segments ?? [],
+            currentTime: isScrubbing ? scrubValue : player.currentTime,
+            onRetry: {
+                viewModel.retryLyrics(whisperKit: whisperKit, player: player)
+            }
+        )
+        .frame(height: 260)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     // MARK: - Title

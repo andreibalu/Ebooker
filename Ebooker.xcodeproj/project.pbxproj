@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		BC74D9022F6986AC0070910C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BC74D9012F6986AC0070910C /* WhisperKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		BC74D7F62F6986AD0070910C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +56,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BC74D9022F6986AC0070910C /* WhisperKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +117,7 @@
 			);
 			name = Ebooker;
 			packageProductDependencies = (
+				BC74D9012F6986AC0070910C /* WhisperKit */,
 			);
 			productName = Ebooker;
 			productReference = BC74D7E62F6986AC0070910C /* Ebooker.app */;
@@ -197,6 +203,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BC74D7E72F6986AC0070910C /* Products */;
+			packageReferences = (
+				BC74D9002F6986AC0070910C /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -267,6 +276,25 @@
 			targetProxy = BC74D8002F6986AD0070910C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		BC74D9002F6986AC0070910C /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		BC74D9012F6986AC0070910C /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BC74D9002F6986AC0070910C /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin XCBuildConfiguration section */
 		BC74D8072F6986AD0070910C /* Debug */ = {
