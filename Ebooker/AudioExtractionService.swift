@@ -6,24 +6,22 @@
 import AVFoundation
 import Foundation
 
-/// Extracts a 100-second audio segment (50s before + 50s after) from a track for transcription.
+/// Extracts audio segments from a track for transcription.
 enum AudioExtractionService {
     private static let segmentDuration: Double = 50
 
-    /// Extracts a 100-second segment centered on the given time.
+    /// Extracts an audio segment between two absolute time points.
     /// - Parameters:
     ///   - fileURL: URL of the audio file
-    ///   - currentTime: Center point in seconds
-    ///   - duration: Total track duration in seconds
-    /// - Returns: URL of a temporary audio file, or nil if extraction fails
+    ///   - startSeconds: Start time in seconds
+    ///   - endSeconds: End time in seconds
+    /// - Returns: URL of a temporary audio file
     static func extractSegment(
         from fileURL: URL,
-        currentTime: Double,
-        duration: Double
+        startSeconds: Double,
+        endSeconds: Double
     ) async throws -> URL {
-        let startTime = max(0, currentTime - segmentDuration)
-        let endTime = min(duration, currentTime + segmentDuration)
-        let segmentLength = endTime - startTime
+        let segmentLength = endSeconds - startSeconds
 
         guard segmentLength > 0 else {
             throw AudioExtractionError.invalidRange
@@ -46,7 +44,7 @@ enum AudioExtractionService {
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .m4a
         exportSession.timeRange = CMTimeRange(
-            start: CMTime(seconds: startTime, preferredTimescale: 600),
+            start: CMTime(seconds: startSeconds, preferredTimescale: 600),
             duration: CMTime(seconds: segmentLength, preferredTimescale: 600)
         )
 
@@ -60,6 +58,22 @@ enum AudioExtractionService {
         }
 
         return outputURL
+    }
+
+    /// Extracts a segment centered on the given time (convenience wrapper).
+    /// - Parameters:
+    ///   - fileURL: URL of the audio file
+    ///   - currentTime: Center point in seconds
+    ///   - duration: Total track duration in seconds
+    /// - Returns: URL of a temporary audio file
+    static func extractSegment(
+        from fileURL: URL,
+        currentTime: Double,
+        duration: Double
+    ) async throws -> URL {
+        let startTime = max(0, currentTime - segmentDuration)
+        let endTime = min(duration, currentTime + segmentDuration)
+        return try await extractSegment(from: fileURL, startSeconds: startTime, endSeconds: endTime)
     }
 }
 

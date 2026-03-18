@@ -26,6 +26,10 @@ struct PlayerView: View {
     @State private var momentNameInput: String = "Saved Moment"
     @State private var momentNoteInput: String = ""
     @State private var isProcessingSmartSave = false
+    @State private var pendingCategories: [MomentCategory] = []
+    @State private var pendingQuoteLine: String?
+    @State private var pendingCharacters: [String] = []
+    @State private var pendingMood: MomentMood?
 
     private var useSmartSave: Bool {
         useSmartMomentNaming && AppleIntelligenceCapability.isSmartNamingAvailable
@@ -74,6 +78,10 @@ struct PlayerView: View {
                 isAiGenerated: pendingMomentAiGenerated,
                 nameInput: $momentNameInput,
                 noteInput: $momentNoteInput,
+                categories: pendingCategories,
+                quoteLine: pendingQuoteLine,
+                characters: pendingCharacters,
+                mood: pendingMood,
                 onSave: { commitMoment() },
                 onCancel: { pendingMomentTime = nil }
             )
@@ -296,6 +304,10 @@ struct PlayerView: View {
             momentNoteInput = ""
             pendingMomentTranscript = nil
             pendingMomentAiGenerated = false
+            pendingCategories = []
+            pendingQuoteLine = nil
+            pendingCharacters = []
+            pendingMood = nil
             pendingMomentTime = savedTime
         }
     }
@@ -310,6 +322,10 @@ struct PlayerView: View {
                 momentNameInput = "Saved Moment"
                 pendingMomentTranscript = nil
                 pendingMomentAiGenerated = false
+                pendingCategories = []
+                pendingQuoteLine = nil
+                pendingCharacters = []
+                pendingMood = nil
                 pendingMomentTime = max(player.currentTime - momentBacktrackSeconds, 0)
             }
             return
@@ -328,32 +344,45 @@ struct PlayerView: View {
             defer { try? FileManager.default.removeItem(at: audioURL) }
 
             let transcript = try await TranscriptionService.transcribe(audioURL: audioURL)
-            let suggestedName: String
-            let suggestedNote: String
-            let aiGenerated: Bool
             if transcript.isEmpty {
-                suggestedName = "Saved Moment"
-                suggestedNote = ""
-                aiGenerated = false
-            } else if let result = try? await MomentNamingService.generateMomentName(
+                await MainActor.run {
+                    momentNameInput = "Saved Moment"
+                    momentNoteInput = ""
+                    pendingMomentTranscript = nil
+                    pendingMomentAiGenerated = false
+                    pendingCategories = []
+                    pendingQuoteLine = nil
+                    pendingCharacters = []
+                    pendingMood = nil
+                    pendingMomentTime = savedTime
+                }
+            } else if let analysis = try? await MomentNamingService.analyzeMoment(
                 transcript: transcript,
                 audiobookTitle: audiobook.title
             ) {
-                suggestedName = result.name
-                suggestedNote = result.note
-                aiGenerated = true
+                await MainActor.run {
+                    momentNameInput = analysis.name
+                    momentNoteInput = analysis.note
+                    pendingMomentTranscript = transcript
+                    pendingMomentAiGenerated = true
+                    pendingCategories = analysis.categories
+                    pendingQuoteLine = analysis.quoteLine
+                    pendingCharacters = analysis.characters
+                    pendingMood = analysis.mood
+                    pendingMomentTime = savedTime
+                }
             } else {
-                suggestedName = "Saved Moment"
-                suggestedNote = ""
-                aiGenerated = false
-            }
-
-            await MainActor.run {
-                momentNameInput = suggestedName
-                momentNoteInput = suggestedNote
-                pendingMomentTranscript = transcript.isEmpty ? nil : transcript
-                pendingMomentAiGenerated = aiGenerated
-                pendingMomentTime = savedTime
+                await MainActor.run {
+                    momentNameInput = "Saved Moment"
+                    momentNoteInput = ""
+                    pendingMomentTranscript = transcript
+                    pendingMomentAiGenerated = false
+                    pendingCategories = []
+                    pendingQuoteLine = nil
+                    pendingCharacters = []
+                    pendingMood = nil
+                    pendingMomentTime = savedTime
+                }
             }
         } catch {
             await MainActor.run {
@@ -361,6 +390,10 @@ struct PlayerView: View {
                 momentNoteInput = ""
                 pendingMomentTranscript = nil
                 pendingMomentAiGenerated = false
+                pendingCategories = []
+                pendingQuoteLine = nil
+                pendingCharacters = []
+                pendingMood = nil
                 pendingMomentTime = savedTime
             }
         }
@@ -379,12 +412,20 @@ struct PlayerView: View {
             audiobook: audiobook,
             transcript: pendingMomentTranscript,
             aiGeneratedName: pendingMomentAiGenerated,
-            notes: noteText.isEmpty ? nil : noteText
+            notes: noteText.isEmpty ? nil : noteText,
+            categories: pendingCategories,
+            quoteLine: pendingQuoteLine,
+            characters: pendingCharacters,
+            mood: pendingMood
         )
         modelContext.insert(moment)
         pendingMomentTime = nil
         pendingMomentTranscript = nil
         momentNoteInput = ""
+        pendingCategories = []
+        pendingQuoteLine = nil
+        pendingCharacters = []
+        pendingMood = nil
         withAnimation(.spring(duration: 0.2)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
             withAnimation(.spring(duration: 0.3)) { momentSaved = false }

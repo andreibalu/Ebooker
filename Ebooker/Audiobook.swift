@@ -118,4 +118,20 @@ final class Audiobook: Identifiable {
     var displayAuthor: String {
         author.isEmpty ? "Unknown author" : author
     }
+
+    /// Deduplicated, case-insensitive, first-seen order list of character names from all moments.
+    var castList: [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for moment in moments {
+            for character in moment.characters {
+                let key = character.lowercased()
+                if !seen.contains(key) {
+                    seen.insert(key)
+                    result.append(character)
+                }
+            }
+        }
+        return result
+    }
 }
