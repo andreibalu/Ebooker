@@ -312,6 +312,15 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
     }
 
+    func setProgressMarker() {
+        guard let audiobook = currentAudiobook else { return }
+        audiobook.progressTrackIndex = currentTrackIndex
+        audiobook.progressTime = min(currentTime, duration)
+        audiobook.progressUpdatedAt = .now
+        seekPenaltyRemaining = 0  // let normal tracking resume
+        try? modelContext?.save()
+    }
+
     private func persistPlayback(force: Bool = false) {
         guard !isLoadingItem else { return }
         guard let audiobook = currentAudiobook else { return }

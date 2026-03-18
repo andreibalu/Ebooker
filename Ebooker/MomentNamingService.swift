@@ -20,7 +20,7 @@ enum MomentNamingService {
         @Guide(description: "1-3 categories from: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance")
         var categories: [String]
 
-        @Guide(description: "The single most memorable or quotable line from the transcript, verbatim")
+        @Guide(description: "The single most memorable or quotable line from the transcript, verbatim (approximately 50 words max)")
         var quoteLine: String
 
         @Guide(description: "Character names mentioned or speaking in the transcript")
@@ -45,7 +45,7 @@ enum MomentNamingService {
         "1) A concise 3–5 word title-case name. " +
         "2) A 3–4 sentence note describing what is happening, what led up to it, and why it matters. " +
         "3) 1–3 categories from: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance. " +
-        "4) The single most memorable or quotable line from the transcript, verbatim. If none stands out, use an empty string. " +
+        "4) The single most memorable or quotable line from the transcript, verbatim, approximately 50 words max. If none stands out, use an empty string. " +
         "5) Character names mentioned or speaking. If none, use an empty array. " +
         "6) The overall mood: tense, funny, sad, romantic, inspirational, mysterious, peaceful, or dramatic."
     )

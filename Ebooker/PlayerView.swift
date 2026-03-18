@@ -20,6 +20,8 @@ struct PlayerView: View {
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
     @State private var momentSaved = false
+    @State private var progressMarked = false
+    @State private var showProgressConfirmation = false
     @State private var pendingMomentTime: Double?
     @State private var pendingMomentTranscript: String?
     @State private var pendingMomentAiGenerated = false
@@ -275,6 +277,34 @@ struct PlayerView: View {
                     )
                 }
             }
+
+            Button {
+                showProgressConfirmation = true
+            } label: {
+                quickActionChip(
+                    icon: progressMarked ? "checkmark" : "flag.fill",
+                    text: progressMarked ? "Progress Marked!" : "Mark Progress Here",
+                    filled: progressMarked
+                )
+            }
+            .disabled(player.currentAudiobook == nil)
+            .confirmationDialog(
+                "Mark Progress",
+                isPresented: $showProgressConfirmation,
+                actions: {
+                    Button("Mark Progress", role: .destructive) {
+                        player.setProgressMarker()
+                        withAnimation(.spring(duration: 0.2)) { progressMarked = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation(.spring(duration: 0.3)) { progressMarked = false }
+                        }
+                    }
+                    Button("Cancel", role: .cancel) { }
+                },
+                message: {
+                    Text("This will update your progress marker to the current playback position.")
+                }
+            )
 
             Button {
                 saveMoment()
