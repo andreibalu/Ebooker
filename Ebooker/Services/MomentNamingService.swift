@@ -8,7 +8,7 @@ import FoundationModels
 
 /// Uses the foundational local model (SystemLanguageModel.default) to generate
 /// a concise moment name from an audiobook transcript.
-enum MomentNamingService {
+struct MomentNamingService: MomentAnalyzing {
     @Generable(description: "Analysis of an audiobook moment bookmark")
     struct MomentNameSuggestion {
         @Guide(description: "3–5 word phrase capturing the key concept or event from the transcript")
@@ -39,7 +39,7 @@ enum MomentNamingService {
         let mood: MomentMood?
     }
 
-    private static let instructions = Instructions(
+    private let instructions = Instructions(
         "You are an assistant that analyzes audiobook bookmarks. " +
         "Given a transcript excerpt, produce: " +
         "1) A concise 3–5 word title-case name. " +
@@ -55,7 +55,7 @@ enum MomentNamingService {
     ///   - transcript: The transcribed audio text
     ///   - audiobookTitle: Optional context for the model
     /// - Returns: A tuple of (name: String, note: String)
-    static func generateMomentName(
+    func generateMomentName(
         transcript: String,
         audiobookTitle: String? = nil
     ) async throws -> (name: String, note: String) {
@@ -64,7 +64,7 @@ enum MomentNamingService {
     }
 
     /// Full analysis of an audiobook moment including categories, quote, characters, and mood.
-    static func analyzeMoment(
+    func analyzeMoment(
         transcript: String,
         audiobookTitle: String? = nil
     ) async throws -> MomentAnalysis {
