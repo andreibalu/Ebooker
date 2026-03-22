@@ -3,6 +3,7 @@
 //  Ebooker
 //
 
+import Foundation
 import SwiftData
 
 /// Handles progress tracking and SwiftData persistence for playback state.

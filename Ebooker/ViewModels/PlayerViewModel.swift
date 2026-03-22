@@ -4,7 +4,9 @@
 //
 
 import Foundation
+import Speech
 import SwiftData
+import SwiftUI
 
 @MainActor
 @Observable
@@ -34,13 +36,13 @@ final class PlayerViewModel {
     private let audioExtractor: any AudioExtracting
 
     init(
-        transcription: any TranscriptionProviding = TranscriptionService(),
-        momentAnalyzer: any MomentAnalyzing = MomentNamingService(),
-        audioExtractor: any AudioExtracting = AudioExtractionService()
+        transcription: (any TranscriptionProviding)? = nil,
+        momentAnalyzer: (any MomentAnalyzing)? = nil,
+        audioExtractor: (any AudioExtracting)? = nil
     ) {
-        self.transcription = transcription
-        self.momentAnalyzer = momentAnalyzer
-        self.audioExtractor = audioExtractor
+        self.transcription = transcription ?? TranscriptionService()
+        self.momentAnalyzer = momentAnalyzer ?? MomentNamingService()
+        self.audioExtractor = audioExtractor ?? AudioExtractionService()
     }
 
     // MARK: - Moment save workflow

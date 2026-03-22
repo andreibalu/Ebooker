@@ -4,6 +4,7 @@
 //
 
 import PhotosUI
+import SwiftData
 import SwiftUI
 
 private enum DetailTab: String, CaseIterable {

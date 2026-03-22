@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import Speech
 
 @MainActor
 @Observable
@@ -30,14 +31,14 @@ final class AudiobookDetailViewModel {
 
     init(
         audiobook: Audiobook,
-        transcription: any TranscriptionProviding = TranscriptionService(),
-        audioExtractor: any AudioExtracting = AudioExtractionService(),
-        recapProvider: any RecapProviding = RecapService()
+        transcription: (any TranscriptionProviding)? = nil,
+        audioExtractor: (any AudioExtracting)? = nil,
+        recapProvider: (any RecapProviding)? = nil
     ) {
         self.audiobook = audiobook
-        self.transcription = transcription
-        self.audioExtractor = audioExtractor
-        self.recapProvider = recapProvider
+        self.transcription = transcription ?? TranscriptionService()
+        self.audioExtractor = audioExtractor ?? AudioExtractionService()
+        self.recapProvider = recapProvider ?? RecapService()
     }
 
     // MARK: - Computed properties
