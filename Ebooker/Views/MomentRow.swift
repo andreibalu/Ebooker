@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct MomentRow: View {
     let audiobook: Audiobook
@@ -15,47 +16,48 @@ struct MomentRow: View {
     @State private var isEditing = false
     @State private var editNameInput = ""
     @State private var editNoteInput = ""
+    @State private var dragOffset: CGFloat = 0
+    @State private var isDraggingSwipe = false
+    @State private var swipeBaseOffset: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+
+    /// Width of the exposed delete action (Mail-style).
+    private let revealWidth: CGFloat = 82
+    private let springOpen = Animation.spring(response: 0.38, dampingFraction: 0.86)
+    private let springClose = Animation.spring(response: 0.4, dampingFraction: 0.88)
+
+    private var effectiveWidth: CGFloat {
+        max(containerWidth, 320)
+    }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "flag.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
+        ZStack(alignment: .trailing) {
+            deleteActionBackground
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(moment.label)
-                    .foregroundStyle(.primary)
-                    .font(.subheadline)
-                    .multilineTextAlignment(.leading)
-
-                Text(TimeFormatter.clockString(seconds: moment.time))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if let note = moment.notes, !note.isEmpty {
-                    Text(note)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.top, 1)
+            rowForeground
+                .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .offset(x: dragOffset)
+                .gesture(swipeGesture)
+                .onTapGesture {
+                    if isRevealed {
+                        withAnimation(springClose) {
+                            dragOffset = 0
+                        }
+                    } else {
+                        editNameInput = moment.label
+                        editNoteInput = moment.notes ?? ""
+                        isEditing = true
+                    }
                 }
-            }
-
-            Spacer()
-
-            Image(systemName: "play.circle")
-                .foregroundStyle(.secondary)
-                .font(.title3)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 14)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-        .onTapGesture {
-            editNameInput = moment.label
-            editNoteInput = moment.notes ?? ""
-            isEditing = true
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { updateWidth(geo.size.width) }
+                    .onChange(of: geo.size.width) { _, w in updateWidth(w) }
+            }
         }
         .contextMenu {
             Button(role: .destructive) {
@@ -93,5 +95,138 @@ struct MomentRow: View {
                 }
             )
         }
+    }
+
+    private var isRevealed: Bool {
+        dragOffset <= -revealWidth * 0.5
+    }
+
+    private var deleteActionBackground: some View {
+        Button {
+            commitDeleteAnimated()
+        } label: {
+            Text("Delete")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: revealWidth)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.red.opacity(0.92))
+        )
+        .accessibilityLabel("Delete moment")
+    }
+
+    private var rowForeground: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "flag.fill")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(moment.label)
+                    .foregroundStyle(.primary)
+                    .font(.subheadline)
+                    .multilineTextAlignment(.leading)
+
+                Text(TimeFormatter.clockString(seconds: moment.time))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let note = moment.notes, !note.isEmpty {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.top, 1)
+                }
+            }
+
+            Spacer()
+
+            Image(systemName: "play.circle")
+                .foregroundStyle(.secondary)
+                .font(.title3)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .contentShape(Rectangle())
+    }
+
+    private func updateWidth(_ w: CGFloat) {
+        guard w > 1 else { return }
+        if abs(containerWidth - w) > 0.5 {
+            containerWidth = w
+        }
+    }
+
+    private func commitDeleteAnimated() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let w = effectiveWidth
+        withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
+            dragOffset = -w - 24
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+            onDelete()
+        }
+    }
+
+    private var swipeGesture: some Gesture {
+        DragGesture(minimumDistance: 16, coordinateSpace: .local)
+            .onChanged { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+
+                if !isDraggingSwipe {
+                    let horizontalIntent = abs(dx) + 8 >= abs(dy) || dx < -12
+                    guard horizontalIntent || dragOffset < 0 else { return }
+                    isDraggingSwipe = true
+                    swipeBaseOffset = dragOffset
+                }
+
+                let w = effectiveWidth
+                let next = swipeBaseOffset + dx
+                // Allow a little rubber-band past full width; cap right at 0.
+                let minX = -w * 1.02
+                dragOffset = min(0, max(next, minX))
+            }
+            .onEnded { value in
+                isDraggingSwipe = false
+                let w = effectiveWidth
+                let current = swipeBaseOffset + value.translation.width
+                let predicted = swipeBaseOffset + value.predictedEndTranslation.width
+
+                // Full swipe should require a deliberate commit, not a tiny flick.
+                let deleteDistance = max(w * 0.72, revealWidth + 120)
+                let shouldFullDelete =
+                    current <= -deleteDistance
+                    || (current <= -w * 0.58 && predicted <= -w * 0.9)
+
+                if shouldFullDelete {
+                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
+                        dragOffset = -w - 24
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+                        onDelete()
+                    }
+                    return
+                }
+
+                // Partial swipe → snap open to show Delete, or close.
+                if current <= -revealWidth * 0.55 || predicted <= -revealWidth * 0.85 {
+                    withAnimation(springOpen) {
+                        dragOffset = -revealWidth
+                    }
+                } else {
+                    withAnimation(springClose) {
+                        dragOffset = 0
+                    }
+                }
+            }
     }
 }

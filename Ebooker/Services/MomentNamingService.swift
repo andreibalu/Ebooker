@@ -88,7 +88,7 @@ struct MomentNamingService: MomentAnalyzing {
         let name = content.momentName.trimmingCharacters(in: .whitespacesAndNewlines)
         let note = content.momentNote.trimmingCharacters(in: .whitespacesAndNewlines)
         let categories = content.categories.compactMap { MomentCategory(rawValue: $0) }
-        let quote = content.quoteLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        let quote = sanitizedQuoteLine(content.quoteLine, transcript: transcript)
         let characters = content.characters.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         let mood = MomentMood(rawValue: content.mood.trimmingCharacters(in: .whitespacesAndNewlines))
 
@@ -100,6 +100,49 @@ struct MomentNamingService: MomentAnalyzing {
             characters: characters,
             mood: mood
         )
+    }
+
+    private func sanitizedQuoteLine(_ rawQuote: String, transcript: String) -> String {
+        let normalized = rawQuote
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.init(charactersIn: "\"“”'")))
+
+        guard !normalized.isEmpty else { return "" }
+
+        let transcriptLength = max(transcript.count, 1)
+        let maxQuoteCharacters = 220
+        let transcriptRatio = Double(normalized.count) / Double(transcriptLength)
+
+        // If the model returns something transcript-sized, treat it as invalid.
+        if normalized.count > maxQuoteCharacters || transcriptRatio > 0.45 {
+            let candidate = firstSentence(in: normalized, maxLength: 140)
+            guard !candidate.isEmpty else { return "" }
+            return candidate
+        }
+
+        return normalized
+    }
+
+    private func firstSentence(in text: String, maxLength: Int) -> String {
+        let punctuation = CharacterSet(charactersIn: ".!?")
+        var sentence = ""
+
+        for scalar in text.unicodeScalars {
+            if sentence.count >= maxLength { break }
+            sentence.unicodeScalars.append(scalar)
+            if punctuation.contains(scalar) {
+                break
+            }
+        }
+
+        let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count >= 24 {
+            return trimmed
+        }
+
+        return String(text.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

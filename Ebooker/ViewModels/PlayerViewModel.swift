@@ -140,6 +140,7 @@ final class PlayerViewModel {
             mood: pendingMood
         )
         modelContext.insert(moment)
+        try? modelContext.save()
 
         pendingMomentTime = nil
         pendingMomentTranscript = nil

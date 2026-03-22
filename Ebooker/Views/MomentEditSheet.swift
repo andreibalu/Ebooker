@@ -80,6 +80,7 @@ struct MomentEditSheet: View {
                             .font(.subheadline)
                             .italic()
                             .foregroundStyle(.secondary)
+                            .lineLimit(6)
                     }
                 }
 

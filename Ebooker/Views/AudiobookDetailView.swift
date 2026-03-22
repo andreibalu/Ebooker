@@ -7,11 +7,6 @@ import PhotosUI
 import SwiftData
 import SwiftUI
 
-private enum DetailTab: String, CaseIterable {
-    case tracks = "Tracks"
-    case moments = "Moments"
-}
-
 struct AudiobookDetailView: View {
     let audiobook: Audiobook
     let openPlayer: () -> Void
@@ -20,11 +15,12 @@ struct AudiobookDetailView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var viewModel: AudiobookDetailViewModel
-    @State private var selectedTab: DetailTab = .tracks
     @State private var selectedCoverItem: PhotosPickerItem?
     @State private var pendingCropImage: UIImage?
     @State private var showCropSheet = false
     @State private var showFilterSheet = false
+    @State private var tracksExpanded = false
+    @State private var olderMomentsExpanded = false
 
     init(audiobook: Audiobook, openPlayer: @escaping () -> Void) {
         self.audiobook = audiobook
@@ -36,8 +32,9 @@ struct AudiobookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                actionButtons
-                tabSection
+                resumeAnchorRow
+                momentsSection
+                tracksDisclosureSection
             }
             .padding(20)
         }
@@ -69,29 +66,53 @@ struct AudiobookDetailView: View {
                 }
             }
         }
+        .sheet(isPresented: $showFilterSheet) {
+            MomentFilterSheet(audiobook: audiobook, viewModel: viewModel)
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 16) {
-            cover
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 16) {
+                cover
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text(audiobook.title)
-                    .font(.title3.weight(.semibold))
-                    .lineLimit(3)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(audiobook.title)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(3)
 
-                Text(audiobook.displayAuthor)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    Text(audiobook.displayAuthor)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
 
-                Text(currentTimestampLabel)
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    Text(currentTimestampLabel)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
 
-                Spacer(minLength: 4)
+                    Button {
+                        Task {
+                            await player.startPlayback(for: audiobook)
+                            openPlayer()
+                        }
+                    } label: {
+                        Label(
+                            audiobook.lastPlayedAt == nil ? "Play" : "Continue",
+                            systemImage: "play.fill"
+                        )
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(Color.primary, in: Capsule())
+                        .foregroundStyle(Color.cream)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
+            }
 
+            VStack(alignment: .leading, spacing: 8) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule()
@@ -108,102 +129,20 @@ struct AudiobookDetailView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(18)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 10, y: 3)
     }
 
-    // MARK: - Action Buttons
-
-    private var actionButtons: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                Button {
-                    Task {
-                        await player.startPlayback(for: audiobook)
-                        openPlayer()
-                    }
-                } label: {
-                    Label(audiobook.lastPlayedAt == nil ? "Play" : "Resume", systemImage: "play.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.primary, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .foregroundStyle(Color.cream)
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    Task {
-                        await player.restart(audiobook)
-                        openPlayer()
-                    }
-                } label: {
-                    Label("Restart", systemImage: "arrow.counterclockwise")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                        .foregroundStyle(.primary)
-                        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-                }
-                .buttonStyle(.plain)
-            }
-
-            resumeAnchorRow
-        }
-    }
-
-    // MARK: - Tab Section
-
-    private var tabSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            tabPicker
-            if selectedTab == .tracks {
-                ForEach(audiobook.sortedTracks) { track in
-                    AudiobookTrackRow(audiobook: audiobook, track: track, openPlayer: openPlayer)
-                }
-            } else {
-                if viewModel.hasAiAnalyzedMoments {
-                    filterChipBar
-                }
-                momentsSection
-            }
-        }
-    }
-
-    private var tabPicker: some View {
-        HStack(spacing: 0) {
-            ForEach(DetailTab.allCases, id: \.self) { tab in
-                Button {
-                    withAnimation(.spring(duration: 0.25)) { selectedTab = tab }
-                } label: {
-                    Text(tab.rawValue)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(selectedTab == tab ? .primary : .secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 9)
-                        .background(
-                            selectedTab == tab
-                                ? Color.primary.opacity(0.1)
-                                : Color.clear,
-                            in: Capsule()
-                        )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(4)
-        .background(Color.cardWhite, in: Capsule())
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 1)
-    }
-
     // MARK: - Moments Section
 
     private var momentsSection: some View {
-        VStack(spacing: 10) {
-            let saved = viewModel.filteredMoments
+        VStack(alignment: .leading, spacing: 10) {
+            momentsHeader
+
+            let saved = sortedFilteredMoments
             if audiobook.moments.isEmpty {
                 Text("Tap the bookmark in the player to save a moment")
                     .font(.caption)
@@ -223,13 +162,78 @@ struct AudiobookDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 12)
             } else {
-                ForEach(saved) { moment in
+                ForEach(Array(saved.prefix(3))) { moment in
                     MomentRow(audiobook: audiobook, moment: moment, openPlayer: openPlayer) {
                         modelContext.delete(moment)
                     }
                 }
+
+                if saved.count > 3 {
+                    DisclosureGroup(isExpanded: $olderMomentsExpanded) {
+                        VStack(spacing: 10) {
+                            ForEach(Array(saved.dropFirst(3))) { moment in
+                                MomentRow(audiobook: audiobook, moment: moment, openPlayer: openPlayer) {
+                                    modelContext.delete(moment)
+                                }
+                            }
+                        }
+                        .padding(.top, 6)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                            Text(olderMomentsLabel(count: saved.count - 3))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .tint(.primary.opacity(0.55))
+                    .padding(16)
+                    .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
+                }
             }
         }
+    }
+
+    // MARK: - Tracks
+
+    @ViewBuilder
+    private var tracksDisclosureSection: some View {
+        let tracks = audiobook.sortedTracks
+        if !tracks.isEmpty {
+            DisclosureGroup(isExpanded: $tracksExpanded) {
+                VStack(spacing: 10) {
+                    ForEach(tracks) { track in
+                        AudiobookTrackRow(audiobook: audiobook, track: track, openPlayer: openPlayer)
+                    }
+                }
+                .padding(.top, 6)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "list.bullet")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    Text(tracksLabel(count: tracks.count))
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 2)
+            }
+            .tint(.primary.opacity(0.55))
+            .padding(16)
+            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
+        }
+    }
+
+    private func tracksLabel(count: Int) -> String {
+        if count == 1 { return "1 track" }
+        return "\(count) tracks"
     }
 
     // MARK: - Resume Anchor Row
@@ -324,41 +328,100 @@ struct AudiobookDetailView: View {
         }
     }
 
-    // MARK: - Filter UI
+    // MARK: - Moments / filters
 
-    private var filterChipBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+    private var momentsHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if hasAiAnalyzedMoments {
                 Button {
                     showFilterSheet = true
                 } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
-                        .font(.subheadline)
-                        .foregroundStyle(viewModel.hasActiveFilters ? .primary : .secondary)
+                    HStack(spacing: 8) {
+                        Text("Moments")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+
+                        if viewModel.hasActiveFilters {
+                            Text("·")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                            Text("Filtered")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            } else {
+                Text("Moments")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
 
-                ForEach(Array(viewModel.filterCategories), id: \.self) { cat in
-                    filterChip(text: cat.displayName) {
-                        viewModel.filterCategories.remove(cat)
+            if viewModel.hasActiveFilters {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(viewModel.filterCategories), id: \.self) { cat in
+                            filterChip(text: cat.displayName) {
+                                viewModel.filterCategories.remove(cat)
+                            }
+                        }
+                        ForEach(Array(viewModel.filterMoods), id: \.self) { mood in
+                            filterChip(text: mood.displayName) {
+                                viewModel.filterMoods.remove(mood)
+                            }
+                        }
+                        ForEach(Array(viewModel.filterCharacters).sorted(), id: \.self) { char in
+                            filterChip(text: char) {
+                                viewModel.filterCharacters.remove(char)
+                            }
+                        }
                     }
-                }
-                ForEach(Array(viewModel.filterMoods), id: \.self) { mood in
-                    filterChip(text: mood.displayName) {
-                        viewModel.filterMoods.remove(mood)
-                    }
-                }
-                ForEach(Array(viewModel.filterCharacters).sorted(), id: \.self) { char in
-                    filterChip(text: char) {
-                        viewModel.filterCharacters.remove(char)
-                    }
+                    .padding(.vertical, 2)
                 }
             }
-            .padding(.vertical, 4)
         }
-        .sheet(isPresented: $showFilterSheet) {
-            MomentFilterSheet(audiobook: audiobook, viewModel: viewModel)
+    }
+
+    private var sortedFilteredMoments: [Moment] {
+        let sorted = audiobook.moments.sorted { lhs, rhs in
+            lhs.createdAt > rhs.createdAt
         }
+
+        guard viewModel.hasActiveFilters else { return sorted }
+
+        return sorted.filter { moment in
+            let matchesCategory =
+                viewModel.filterCategories.isEmpty
+                || !viewModel.filterCategories.isDisjoint(with: moment.categories)
+            let momentCharacters = Set(moment.characters.map { $0.lowercased() })
+            let matchesCharacter =
+                viewModel.filterCharacters.isEmpty
+                || !viewModel.filterCharacters.isDisjoint(with: momentCharacters)
+            let matchesMood =
+                viewModel.filterMoods.isEmpty
+                || (moment.mood.map { viewModel.filterMoods.contains($0) } ?? false)
+            return matchesCategory && matchesCharacter && matchesMood
+        }
+    }
+
+    private var hasAiAnalyzedMoments: Bool {
+        audiobook.moments.contains {
+            !$0.categories.isEmpty || $0.mood != nil || !$0.characters.isEmpty
+        }
+    }
+
+    private func olderMomentsLabel(count: Int) -> String {
+        if count == 1 { return "1 older moment" }
+        return "\(count) older moments"
     }
 
     private func filterChip(text: String, onRemove: @escaping () -> Void) -> some View {
