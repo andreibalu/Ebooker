@@ -42,6 +42,32 @@ final class Audiobook: Identifiable {
     var progressUpdatedAt: Date? { get { _progressUpdatedAt } set { _progressUpdatedAt = newValue } }
     var hasProgressPosition: Bool { _progressTrackIndex != nil && _progressTime != nil }
 
+    // Smart summary persisted until the progress marker moves (nullable for lightweight migration).
+    private var _progressRecapText: String?
+    private var _progressRecapHeadline: String?
+    private var _progressRecapAnchorTrackIndex: Int?
+    private var _progressRecapAnchorTime: Double?
+
+    var progressRecapText: String? {
+        get { _progressRecapText }
+        set { _progressRecapText = newValue }
+    }
+
+    var progressRecapHeadline: String? {
+        get { _progressRecapHeadline }
+        set { _progressRecapHeadline = newValue }
+    }
+
+    var progressRecapAnchorTrackIndex: Int? {
+        get { _progressRecapAnchorTrackIndex }
+        set { _progressRecapAnchorTrackIndex = newValue }
+    }
+
+    var progressRecapAnchorTime: Double? {
+        get { _progressRecapAnchorTime }
+        set { _progressRecapAnchorTime = newValue }
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \AudioTrack.audiobook)
     var tracks: [AudioTrack]
 
@@ -133,5 +159,39 @@ final class Audiobook: Identifiable {
             }
         }
         return result
+    }
+
+    // MARK: - Progress recap (smart summary)
+
+    /// Removes any persisted recap/headline and anchor.
+    func clearProgressRecap() {
+        _progressRecapText = nil
+        _progressRecapHeadline = nil
+        _progressRecapAnchorTrackIndex = nil
+        _progressRecapAnchorTime = nil
+    }
+
+    /// Stores recap output tied to the progress position it was generated for (sorted track index + time).
+    func storeProgressRecap(text: String, headline: String?, anchorTrackIndex: Int, anchorTime: Double) {
+        _progressRecapText = text
+        _progressRecapHeadline = headline
+        _progressRecapAnchorTrackIndex = anchorTrackIndex
+        _progressRecapAnchorTime = anchorTime
+    }
+
+    /// Drops persisted recap if it no longer matches the current high-water progress marker.
+    func discardProgressRecapIfAnchorMismatched() {
+        guard _progressRecapText != nil else { return }
+        guard let pt = _progressTrackIndex, let ptm = _progressTime else {
+            clearProgressRecap()
+            return
+        }
+        guard let at = _progressRecapAnchorTrackIndex, let atm = _progressRecapAnchorTime else {
+            clearProgressRecap()
+            return
+        }
+        if pt != at || ptm != atm {
+            clearProgressRecap()
+        }
     }
 }

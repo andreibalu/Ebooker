@@ -3,8 +3,9 @@
 //  EbookerTests
 //
 
-import Testing
 import Foundation
+import SwiftData
+import Testing
 @testable import Ebooker
 
 @MainActor
@@ -61,6 +62,7 @@ struct AudiobookDetailViewModelTests {
 
         #expect(vm.isLoadingRecap == false)
         #expect(vm.recapText == nil)
+        #expect(vm.recapProgressHeadline == nil)
         #expect(vm.recapError == nil)
     }
 
@@ -76,4 +78,141 @@ struct AudiobookDetailViewModelTests {
         // No moments on the audiobook, so filtered list should be empty
         #expect(vm.filteredMoments.isEmpty)
     }
+
+    // MARK: - Progress recap persistence
+
+    @Test func hydratesStoredRecapWhenAnchorMatchesProgressMarker() {
+        let book = makeAudiobook()
+        book.progressTrackIndex = 0
+        book.progressTime = 120
+        book.storeProgressRecap(
+            text: "Summary text",
+            headline: "Midnight chase",
+            anchorTrackIndex: 0,
+            anchorTime: 120
+        )
+        let vm = makeViewModel(audiobook: book)
+
+        #expect(vm.recapText == "Summary text")
+        #expect(vm.recapProgressHeadline == "Midnight chase")
+    }
+
+    @Test func doesNotHydrateStoredRecapWhenProgressMarkerMoved() {
+        let book = makeAudiobook()
+        book.progressTrackIndex = 0
+        book.progressTime = 300
+        book.storeProgressRecap(
+            text: "Stale",
+            headline: "Stale H",
+            anchorTrackIndex: 0,
+            anchorTime: 120
+        )
+        let vm = makeViewModel(audiobook: book)
+
+        #expect(vm.recapText == nil)
+        #expect(vm.recapProgressHeadline == nil)
+    }
+
+    @Test func reconcileStoredRecapClearsMismatchedPersistedRecap() throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "T", author: "", folderName: "reconcile-test", totalDuration: 600)
+        context.insert(book)
+        book.progressTrackIndex = 0
+        book.progressTime = 200
+        book.storeProgressRecap(text: "stale", headline: "old", anchorTrackIndex: 0, anchorTime: 100)
+
+        let vm = AudiobookDetailViewModel(
+            audiobook: book,
+            transcription: MockTranscriptionService(),
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: MockRecapService()
+        )
+        vm.reconcileStoredRecap(modelContext: context)
+
+        #expect(book.progressRecapText == nil)
+        #expect(vm.recapText == nil)
+    }
+
+    @Test func loadRecapStoresRecapOnAudiobook() async throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "T", author: "", folderName: "loadrecap-test", totalDuration: 600)
+        let track = AudioTrack(
+            title: "Ch1",
+            originalFileName: "a.m4a",
+            storedFileName: "a.m4a",
+            orderIndex: 0,
+            duration: 600,
+            audiobook: book
+        )
+        book.tracks.append(track)
+        context.insert(book)
+
+        let recap = MockRecapService()
+        recap.recapToReturn = "Generated body"
+        recap.progressHeadlineToReturn = "Short title line"
+
+        let vm = AudiobookDetailViewModel(
+            audiobook: book,
+            transcription: MockTranscriptionService(),
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: recap
+        )
+        await vm.loadRecap(
+            trackIndex: 0,
+            progressTime: 300,
+            includeProgressHeadline: true,
+            modelContext: context
+        )
+
+        #expect(book.progressRecapText == "Generated body")
+        #expect(book.progressRecapHeadline == "Short title line")
+        #expect(book.progressRecapAnchorTrackIndex == 0)
+        #expect(book.progressRecapAnchorTime == 300)
+        #expect(vm.recapText == "Generated body")
+    }
+
+    @Test func loadRecapWithoutHeadlineStoresNilHeadlineOnAudiobook() async throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "T2", author: "", folderName: "loadrecap-test-2", totalDuration: 600)
+        let track = AudioTrack(
+            title: "Ch1",
+            originalFileName: "b.m4a",
+            storedFileName: "b.m4a",
+            orderIndex: 0,
+            duration: 600,
+            audiobook: book
+        )
+        book.tracks.append(track)
+        context.insert(book)
+
+        let vm = AudiobookDetailViewModel(
+            audiobook: book,
+            transcription: MockTranscriptionService(),
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: MockRecapService()
+        )
+        await vm.loadRecap(
+            trackIndex: 0,
+            progressTime: 300,
+            includeProgressHeadline: false,
+            modelContext: context
+        )
+
+        #expect(book.progressRecapText != nil)
+        #expect(book.progressRecapHeadline == nil)
+        #expect(vm.recapProgressHeadline == nil)
+    }
 }
+

@@ -12,7 +12,10 @@ struct SettingsView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
+    @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
+    @AppStorage("useSmartSummary") private var useSmartSummary = false
+    @AppStorage("shortenSummary") private var shortenSummary = false
 
     private var isSmartNamingAvailable: Bool {
         AppleIntelligenceCapability.isSmartNamingAvailable
@@ -22,27 +25,80 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle(isOn: $useSmartMomentNaming) {
+                    Toggle(isOn: $useLocalAIFeatures) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Use Smart Moment Naming")
+                            Text("Use local AI features")
                                 .font(.body)
-                            Text("Use Apple Intelligence to suggest names for saved moments based on the audio")
+                            Text("Enable Apple Intelligence features for this app")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
                     }
                     .disabled(!isSmartNamingAvailable)
+
+                    if useLocalAIFeatures {
+                        Toggle(isOn: $useSmartMomentNaming) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Smart moment naming")
+                                    .font(.body)
+                                Text("Suggest names for saved moments based on the audio")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .disabled(!isSmartNamingAvailable)
+
+                        Toggle(isOn: $useSmartSummary) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Smart summary")
+                                    .font(.body)
+                                Text("Summarize where you left off on the book detail screen")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .disabled(!isSmartNamingAvailable)
+
+                        if useSmartSummary {
+                            Toggle(isOn: $shortenSummary) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Short progress headline")
+                                        .font(.body)
+                                    Text("Replace “Your progress” with a 3–4 word summary on one line")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .disabled(!isSmartNamingAvailable)
+                        }
+                    }
+
                     if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
                         Text(reason)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("Smart Moment Naming")
+                    Text("AI Features")
                 } footer: {
                     if isSmartNamingAvailable {
-                        Text("Requires Apple Intelligence and a compatible device. The suggested name can always be edited before saving.")
+                        Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
+                    }
+                }
+                .onChange(of: useLocalAIFeatures) { _, enabled in
+                    if !enabled {
+                        useSmartMomentNaming = false
+                        useSmartSummary = false
+                        shortenSummary = false
+                    }
+                }
+                .onChange(of: useSmartSummary) { _, enabled in
+                    if !enabled {
+                        shortenSummary = false
                     }
                 }
 

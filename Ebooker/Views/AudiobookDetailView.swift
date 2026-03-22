@@ -14,6 +14,10 @@ struct AudiobookDetailView: View {
     @EnvironmentObject private var player: AudioPlayerManager
     @Environment(\.modelContext) private var modelContext
 
+    @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
+    @AppStorage("useSmartSummary") private var useSmartSummary = false
+    @AppStorage("shortenSummary") private var shortenSummary = false
+
     @State private var viewModel: AudiobookDetailViewModel
     @State private var selectedCoverItem: PhotosPickerItem?
     @State private var pendingCropImage: UIImage?
@@ -68,6 +72,9 @@ struct AudiobookDetailView: View {
         }
         .sheet(isPresented: $showFilterSheet) {
             MomentFilterSheet(audiobook: audiobook, viewModel: viewModel)
+        }
+        .onAppear {
+            viewModel.reconcileStoredRecap(modelContext: modelContext)
         }
     }
 
@@ -250,9 +257,11 @@ struct AudiobookDetailView: View {
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Your Progress")
+                        Text(progressSectionTitle)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
 
                         let subtitle: String = {
                             var parts = TimeFormatter.clockString(seconds: progressTime)
@@ -268,14 +277,21 @@ struct AudiobookDetailView: View {
 
                     Spacer()
 
-                    if AppleIntelligenceCapability.isSmartNamingAvailable {
+                    if smartSummaryEnabled {
                         if viewModel.isLoadingRecap {
                             ProgressView()
                                 .progressViewStyle(.circular)
                                 .scaleEffect(0.7)
                         } else if viewModel.recapText == nil {
                             Button {
-                                Task { await viewModel.loadRecap(trackIndex: progressTrackIndex, progressTime: progressTime) }
+                                Task {
+                                    await viewModel.loadRecap(
+                                        trackIndex: progressTrackIndex,
+                                        progressTime: progressTime,
+                                        includeProgressHeadline: shortenSummary,
+                                        modelContext: modelContext
+                                    )
+                                }
                             } label: {
                                 Image(systemName: "sparkles")
                                     .foregroundStyle(.primary)
@@ -527,5 +543,16 @@ struct AudiobookDetailView: View {
         let pct = Int((audiobook.progress * 100).rounded())
         let remaining = TimeFormatter.durationSummary(seconds: audiobook.remainingDuration)
         return "\(pct)% · \(remaining) remaining"
+    }
+
+    private var smartSummaryEnabled: Bool {
+        useLocalAIFeatures && useSmartSummary && AppleIntelligenceCapability.isSmartNamingAvailable
+    }
+
+    private var progressSectionTitle: String {
+        if shortenSummary, let headline = viewModel.recapProgressHeadline, !headline.isEmpty {
+            return headline
+        }
+        return "Your Progress"
     }
 }

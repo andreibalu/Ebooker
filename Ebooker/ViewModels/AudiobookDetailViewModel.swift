@@ -5,6 +5,7 @@
 
 import Foundation
 import Speech
+import SwiftData
 
 @MainActor
 @Observable
@@ -21,6 +22,8 @@ final class AudiobookDetailViewModel {
 
     var isLoadingRecap = false
     var recapText: String?
+    /// Short headline for the progress row when Smart Summary + Short progress headline are enabled.
+    var recapProgressHeadline: String?
     var recapError: String?
 
     // MARK: - Dependencies
@@ -39,6 +42,7 @@ final class AudiobookDetailViewModel {
         self.transcription = transcription ?? TranscriptionService()
         self.audioExtractor = audioExtractor ?? AudioExtractionService()
         self.recapProvider = recapProvider ?? RecapService()
+        syncRecapFromAudiobook()
     }
 
     // MARK: - Computed properties
@@ -70,7 +74,33 @@ final class AudiobookDetailViewModel {
         filterMoods.removeAll()
     }
 
-    func loadRecap(trackIndex: Int, progressTime: Double) async {
+    /// Call when the detail screen appears so stale persisted recap is removed if the marker moved without a save path that cleared it.
+    func reconcileStoredRecap(modelContext: ModelContext) {
+        audiobook.discardProgressRecapIfAnchorMismatched()
+        syncRecapFromAudiobook()
+        try? modelContext.save()
+    }
+
+    private func syncRecapFromAudiobook() {
+        guard
+            let text = audiobook.progressRecapText,
+            !text.isEmpty,
+            let anchorTrack = audiobook.progressRecapAnchorTrackIndex,
+            let anchorTime = audiobook.progressRecapAnchorTime,
+            let progressTrack = audiobook.progressTrackIndex,
+            let progressT = audiobook.progressTime,
+            anchorTrack == progressTrack,
+            anchorTime == progressT
+        else {
+            recapText = nil
+            recapProgressHeadline = nil
+            return
+        }
+        recapText = text
+        recapProgressHeadline = audiobook.progressRecapHeadline
+    }
+
+    func loadRecap(trackIndex: Int, progressTime: Double, includeProgressHeadline: Bool, modelContext: ModelContext? = nil) async {
         isLoadingRecap = true
         defer { isLoadingRecap = false }
 
@@ -103,12 +133,21 @@ final class AudiobookDetailViewModel {
                 return
             }
 
-            let recap = try await recapProvider.generateRecap(
+            let result = try await recapProvider.generateRecap(
                 transcript: transcript,
-                audiobookTitle: audiobook.title
+                audiobookTitle: audiobook.title,
+                includeProgressHeadline: includeProgressHeadline
             )
-            recapText = recap
+            recapText = result.recap
+            recapProgressHeadline = result.progressHeadline
             recapError = nil
+            audiobook.storeProgressRecap(
+                text: result.recap,
+                headline: result.progressHeadline,
+                anchorTrackIndex: trackIndex,
+                anchorTime: progressTime
+            )
+            try? modelContext?.save()
         } catch {
             recapError = error.localizedDescription
         }

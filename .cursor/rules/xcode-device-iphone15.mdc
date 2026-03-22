@@ -1,23 +1,37 @@
 ---
-description: Always build and run on physical iPhone 15
+description: Always build and run on physical iPhone 15 only (no simulator)
 alwaysApply: true
 ---
 
-# Xcode Build & Run: Physical iPhone 15
+# Xcode Build & Run: Physical iPhone 15 only
 
-When building or running the Ebooker app:
+When building, testing, or running the Ebooker app, **use only the physical iPhone 15** (device name like **Andrei’s iPhone 15**). Do **not** use the iOS Simulator unless the user explicitly asks for it.
 
 1. **Use device tools, not simulator**  
-   Prefer `build_run_device` or `build_device` from XcodeBuildMCP over simulator tools.
+   Prefer `build_run_device` or `build_device` from XcodeBuildMCP over any simulator-based build or test.
 
-2. **Target iPhone 15**  
+2. **Target this iPhone 15**  
    Before the first build/run in a session, call `session_set_defaults` with:
    - `projectPath`: Path to `Ebooker.xcodeproj` (e.g. `Ebooker.xcodeproj` from project root)
    - `scheme`: `Ebooker`
    - `platform`: `iOS`
-   - `deviceId`: UDID of the connected iPhone 15 (call `list_devices` to get it; match by name "iPhone 15")
+   - `deviceId`: UDID from `list_devices` — pick the entry whose name matches **Andrei’s iPhone 15** / **iPhone 15** (not a simulator).
 
 3. **Run flow**  
-   After defaults are set, use `build_run_device` to build, install, and launch on the physical iPhone 15.
+   After defaults are set, use `build_run_device` to build, install, and launch on that device.
+
+4. **Command-line `xcodebuild` — always this iPhone 15**  
+   **Never** use `-destination` with `iOS Simulator` unless the user explicitly asks.  
+   Use **Andrei’s iPhone 15** by UDID (verify with `xcodebuild -scheme Ebooker -showdestinations` if builds fail after a restore):
+
+   ```bash
+   -destination 'platform=iOS,id=00008130-000471A80C81001C'
+   ```
+
+   Examples:
+   - Build: `xcodebuild -scheme Ebooker -destination 'platform=iOS,id=00008130-000471A80C81001C' build`
+   - Test: `xcodebuild -scheme Ebooker -destination 'platform=iOS,id=00008130-000471A80C81001C' test`
+
+   The phone must be **unlocked, connected via USB or trusted Wi‑Fi debugging**, and **selected for development** in Xcode.
 
 **Note:** Device workflows must be enabled in XcodeBuildMCP. See [CONFIGURATION.md](https://github.com/getsentry/XcodeBuildMCP/blob/main/docs/CONFIGURATION.md) if device tools are unavailable.

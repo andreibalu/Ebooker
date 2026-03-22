@@ -12,25 +12,23 @@ struct MiniPlayerBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Book-level progress strip
+            // Full-width progress strip flush at the very top
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.07))
-                        .frame(height: 3)
-                    Capsule()
-                        .fill(Color.primary.opacity(0.4))
-                        .frame(width: geo.size.width * (player.bookProgress), height: 3)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(height: 2)
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.45))
+                        .frame(width: geo.size.width * player.bookProgress, height: 2)
                 }
             }
-            .frame(height: 3)
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .frame(height: 2)
 
-            HStack(spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 miniCover
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(player.currentAudiobook?.title ?? "Nothing playing")
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
@@ -41,40 +39,35 @@ struct MiniPlayerBar: View {
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
+
+                AirPlayRoutePickerView()
+                    .frame(width: 32, height: 32)
+                    .padding(.trailing, 2)
 
                 Button {
                     player.togglePlayback()
                 } label: {
                     Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 36, height: 36)
+                        .font(.system(size: 18, weight: .semibold))
+                        .frame(width: 42, height: 42)
                         .background(Color.primary, in: Circle())
                         .foregroundStyle(Color.cardWhite)
                 }
                 .buttonStyle(.plain)
-
-                Button {
-                    player.nextTrack()
-                } label: {
-                    Image(systemName: "forward.end.fill")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .disabled(!player.canGoToNextTrack)
-                .opacity(player.canGoToNextTrack ? 1 : 0.35)
+                .padding(.trailing, 2)
             }
-            .padding(.horizontal, 14)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 16)
+            .padding(.top, 4)
+            .padding(.bottom, 0)
         }
+        // Sharp rectangle (YouTube Music–style); extends into home-indicator area
         .background(
             Color.cardWhite
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                .shadow(color: .black.opacity(0.10), radius: 18, y: -2)
+                .shadow(color: .black.opacity(0.12), radius: 10, y: -2)
+                .ignoresSafeArea(edges: .bottom)
         )
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(Rectangle())
         .onTapGesture(perform: openPlayer)
     }
 
@@ -88,7 +81,7 @@ struct MiniPlayerBar: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                Rectangle()
                     .fill(
                         LinearGradient(
                             colors: [.indigo, .purple],
@@ -102,7 +95,7 @@ struct MiniPlayerBar: View {
                     }
             }
         }
-        .frame(width: 46, height: 46)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .frame(width: 48, height: 48)
+        .clipped()
     }
 }

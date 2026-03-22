@@ -13,6 +13,7 @@ struct PlayerView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
+    @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
 
     @State private var viewModel = PlayerViewModel()
@@ -21,7 +22,7 @@ struct PlayerView: View {
     @State private var showProgressConfirmation = false
 
     private var useSmartSave: Bool {
-        useSmartMomentNaming && AppleIntelligenceCapability.isSmartNamingAvailable
+        useLocalAIFeatures && useSmartMomentNaming && AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
     private let supportedRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]
@@ -49,6 +50,10 @@ struct PlayerView: View {
             .navigationTitle(player.currentAudiobook?.title ?? "Player")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    AirPlayRoutePickerView()
+                        .frame(width: 32, height: 32)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
                         dismiss()
@@ -374,5 +379,21 @@ struct PlayerView: View {
         let supported = [15, 30, 45]
         let closest = supported.min(by: { abs($0 - secs) < abs($1 - secs) }) ?? 30
         return "goforward.\(closest)"
+    }
+}
+
+import AVKit
+
+struct AirPlayRoutePickerView: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let routePickerView = AVRoutePickerView()
+        routePickerView.backgroundColor = .clear
+        routePickerView.activeTintColor = .systemBlue
+        routePickerView.tintColor = .label
+        return routePickerView
+    }
+
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {
+        // No updates needed
     }
 }

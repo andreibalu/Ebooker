@@ -31,31 +31,30 @@ struct ContentView: View {
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                libraryHeader
-                    .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 16)
+        VStack(spacing: 0) {
+            NavigationStack {
+                VStack(spacing: 0) {
+                    libraryHeader
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 16)
 
-                tabPicker
-                    .padding(.horizontal, 20)
+                    tabPicker
+                        .padding(.horizontal, 20)
 
-                Divider()
-                    .padding(.horizontal, 20)
+                    Divider()
+                        .padding(.horizontal, 20)
 
-                libraryContent
+                    libraryContent
+                }
+                .background(Color.cream.ignoresSafeArea())
+                .navigationBarHidden(true)
             }
-            .background(Color.cream.ignoresSafeArea())
-            .navigationBarHidden(true)
-        }
-        .safeAreaInset(edge: .bottom) {
+
             if player.currentAudiobook != nil {
                 MiniPlayerBar {
                     isPlayerPresented = true
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
             }
         }
         .fileImporter(

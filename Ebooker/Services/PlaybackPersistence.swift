@@ -28,6 +28,7 @@ final class PlaybackPersistence {
         let storedOverall = audiobook.progressListenedDuration
 
         if currentOverall > storedOverall {
+            audiobook.clearProgressRecap()
             audiobook.progressTrackIndex = currentTrackIndex
             audiobook.progressTime = min(currentTime, duration)
             audiobook.progressUpdatedAt = .now
@@ -68,6 +69,7 @@ final class PlaybackPersistence {
         duration: Double,
         context: ModelContext?
     ) {
+        audiobook.clearProgressRecap()
         audiobook.isFinished = true
         audiobook.currentTrackIndex = trackIndex
         audiobook.currentTime = duration

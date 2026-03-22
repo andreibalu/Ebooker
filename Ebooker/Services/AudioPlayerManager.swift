@@ -201,8 +201,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func setProgressMarker() {
         guard let audiobook = currentAudiobook else { return }
-        audiobook.progressTrackIndex = currentTrackIndex
-        audiobook.progressTime = min(currentTime, duration)
+        let oldTrack = audiobook.progressTrackIndex
+        let oldTime = audiobook.progressTime
+        let newTrack = currentTrackIndex
+        let newTime = min(currentTime, duration)
+        let markerChanged =
+            oldTrack != newTrack
+            || oldTime.map { abs($0 - newTime) > 0.001 } ?? true
+        if markerChanged {
+            audiobook.clearProgressRecap()
+        }
+        audiobook.progressTrackIndex = newTrack
+        audiobook.progressTime = newTime
         audiobook.progressUpdatedAt = .now
         persistence.seekPenaltyRemaining = 0
         try? modelContext?.save()
