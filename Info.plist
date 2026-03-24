@@ -10,6 +10,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleDisplayName</key>
+	<string>Pageless</string>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
@@ -21,7 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Ebooker uses speech recognition to transcribe audio and suggest names for your saved moments.</string>
+	<string>Pageless uses speech recognition to transcribe audio and suggest names for your saved moments.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
