@@ -22,6 +22,19 @@ enum AppleIntelligenceCapability {
         model.availability
     }
 
+    /// Whether this device can buy the AI unlock (hardware supports Apple Intelligence).
+    /// Unlike `isSmartNamingAvailable`, this ignores Speech, Apple Intelligence being off, or the model still loading.
+    static var canPurchaseAIUnlockOnThisDevice: Bool {
+        switch model.availability {
+        case .available:
+            true
+        case .unavailable(.deviceNotEligible):
+            false
+        case .unavailable:
+            true
+        }
+    }
+
     /// Human-readable reason when Smart Naming is unavailable.
     static var unavailabilityReason: String? {
         guard !isSmartNamingAvailable else { return nil }

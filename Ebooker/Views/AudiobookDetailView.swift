@@ -12,6 +12,7 @@ struct AudiobookDetailView: View {
     let openPlayer: () -> Void
 
     @EnvironmentObject private var player: AudioPlayerManager
+    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
     @Environment(\.modelContext) private var modelContext
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
@@ -546,7 +547,10 @@ struct AudiobookDetailView: View {
     }
 
     private var smartSummaryEnabled: Bool {
-        useLocalAIFeatures && useSmartSummary && AppleIntelligenceCapability.isSmartNamingAvailable
+        aiEntitlement.isUnlocked
+            && useLocalAIFeatures
+            && useSmartSummary
+            && AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
     private var progressSectionTitle: String {

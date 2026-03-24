@@ -9,6 +9,7 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
+    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
 
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
@@ -22,7 +23,10 @@ struct PlayerView: View {
     @State private var showProgressConfirmation = false
 
     private var useSmartSave: Bool {
-        useLocalAIFeatures && useSmartMomentNaming && AppleIntelligenceCapability.isSmartNamingAvailable
+        aiEntitlement.isUnlocked
+            && useLocalAIFeatures
+            && useSmartMomentNaming
+            && AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
     private let supportedRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]

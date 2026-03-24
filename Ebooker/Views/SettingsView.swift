@@ -3,10 +3,12 @@
 //  Ebooker
 //
 
+import StoreKit
 import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
 
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
@@ -21,10 +23,21 @@ struct SettingsView: View {
         AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
+    private var canPurchaseOnDevice: Bool {
+        AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
+    }
+
+    /// AI toggles need an active purchase and a device/runtime where Apple Intelligence can run.
+    private var aiTogglesDisabled: Bool {
+        !aiEntitlement.isUnlocked || !isSmartNamingAvailable
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
+                    aiPurchaseBlock
+
                     Toggle(isOn: $useLocalAIFeatures) {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Use local AI features")
@@ -35,7 +48,7 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    .disabled(!isSmartNamingAvailable)
+                    .disabled(aiTogglesDisabled)
 
                     if useLocalAIFeatures {
                         Toggle(isOn: $useSmartMomentNaming) {
@@ -48,7 +61,7 @@ struct SettingsView: View {
                             }
                             .padding(.vertical, 4)
                         }
-                        .disabled(!isSmartNamingAvailable)
+                        .disabled(aiTogglesDisabled)
 
                         Toggle(isOn: $useSmartSummary) {
                             VStack(alignment: .leading, spacing: 3) {
@@ -60,7 +73,7 @@ struct SettingsView: View {
                             }
                             .padding(.vertical, 4)
                         }
-                        .disabled(!isSmartNamingAvailable)
+                        .disabled(aiTogglesDisabled)
 
                         if useSmartSummary {
                             Toggle(isOn: $shortenSummary) {
@@ -73,11 +86,15 @@ struct SettingsView: View {
                                 }
                                 .padding(.vertical, 4)
                             }
-                            .disabled(!isSmartNamingAvailable)
+                            .disabled(aiTogglesDisabled)
                         }
                     }
 
-                    if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
+                    if !aiEntitlement.isUnlocked {
+                        Text("Purchase the AI unlock to enable these options on a compatible device.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
                         Text(reason)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -85,8 +102,12 @@ struct SettingsView: View {
                 } header: {
                     Text("AI Features")
                 } footer: {
-                    if isSmartNamingAvailable {
-                        Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
+                    Group {
+                        if aiEntitlement.isUnlocked, isSmartNamingAvailable {
+                            Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
+                        } else if !aiEntitlement.isUnlocked {
+                            Text("Unlock once per Apple ID. Restore purchases if you reinstall or use a new device.")
+                        }
                     }
                 }
                 .onChange(of: useLocalAIFeatures) { _, enabled in
@@ -179,7 +200,101 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .task {
+                await aiEntitlement.loadProduct()
+            }
+            .alert(
+                "Purchase",
+                isPresented: Binding(
+                    get: { aiEntitlement.purchaseError != nil },
+                    set: { if !$0 { aiEntitlement.purchaseError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    aiEntitlement.purchaseError = nil
+                }
+            } message: {
+                Text(aiEntitlement.purchaseError ?? "")
+            }
+            .alert(
+                "Restore",
+                isPresented: Binding(
+                    get: { aiEntitlement.restoreError != nil },
+                    set: { if !$0 { aiEntitlement.restoreError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    aiEntitlement.restoreError = nil
+                }
+            } message: {
+                Text(aiEntitlement.restoreError ?? "")
+            }
         }
         .presentationDetents([.medium, .large])
     }
+
+    @ViewBuilder
+    private var aiPurchaseBlock: some View {
+        if aiEntitlement.isUnlocked {
+            Label("AI features unlocked", systemImage: "checkmark.circle.fill")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            restorePurchasesButton
+        } else if canPurchaseOnDevice {
+            Text("Unlock smart moment naming and progress summaries powered by on-device Apple Intelligence.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if aiEntitlement.isLoadingProduct {
+                ProgressView()
+                    .padding(.vertical, 4)
+            }
+
+            if let loadError = aiEntitlement.loadError {
+                Text(loadError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            Button {
+                Task { await aiEntitlement.purchase() }
+            } label: {
+                if let product = aiEntitlement.product {
+                    Text("Unlock — \(product.displayPrice)")
+                        .frame(maxWidth: .infinity)
+                } else {
+                    Text("Unlock")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(aiEntitlement.product == nil || aiEntitlement.isPurchasing || aiEntitlement.isLoadingProduct)
+
+            restorePurchasesButton
+        } else {
+            Text(
+                "On-device AI requires iOS 18 or later and a compatible device (for example iPhone 15 Pro or newer, or an iPad with an M-series chip). You can’t buy the AI unlock on this device."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text("If you already purchased on another device, use Restore purchases.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
+            restorePurchasesButton
+        }
+    }
+
+    private var restorePurchasesButton: some View {
+        Button("Restore purchases") {
+            Task { await aiEntitlement.restorePurchases() }
+        }
+        .font(.subheadline)
+    }
+}
+
+#Preview {
+    SettingsView()
+        .environmentObject(AIEntitlementStore())
 }

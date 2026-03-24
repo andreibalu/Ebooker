@@ -1,0 +1,37 @@
+{
+  "identifier" : "EbookerProducts",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "3.99",
+      "familyShareable" : false,
+      "internalID" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+      "localizations" : [
+        {
+          "description" : "Unlocks smart moment naming and smart progress summaries using on-device Apple Intelligence.",
+          "displayName" : "AI features unlock",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "andreibaludev.Ebooker.ai_unlock",
+      "referenceName" : "AI features unlock",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

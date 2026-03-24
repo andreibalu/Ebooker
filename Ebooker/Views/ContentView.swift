@@ -15,6 +15,7 @@ enum LibraryTab {
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
+    @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
     @Query private var audiobooks: [Audiobook]
 
     @AppStorage("librarySortOption") private var sortOptionRawValue = LibrarySortOption.recent.rawValue
@@ -75,9 +76,11 @@ struct ContentView: View {
         .sheet(isPresented: $isPlayerPresented) {
             PlayerView()
                 .environmentObject(player)
+                .environmentObject(aiEntitlementStore)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
+                .environmentObject(aiEntitlementStore)
         }
         .alert("Remove Audiobook?", isPresented: deleteConfirmationBinding) {
             Button("Remove from App", role: .destructive) {
