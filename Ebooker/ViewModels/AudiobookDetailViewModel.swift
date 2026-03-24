@@ -49,13 +49,18 @@ final class AudiobookDetailViewModel {
 
     var filteredMoments: [Moment] {
         let sorted = audiobook.moments.sorted { $0.createdAt > $1.createdAt }
-        guard hasActiveFilters else { return sorted }
-        return sorted.filter { moment in
-            let matchesCategory = filterCategories.isEmpty || !filterCategories.isDisjoint(with: moment.categories)
-            let matchesCharacter = filterCharacters.isEmpty || !filterCharacters.isDisjoint(with: Set(moment.characters.map { $0.lowercased() }))
-            let matchesMood = filterMoods.isEmpty || (moment.mood.map { filterMoods.contains($0) } ?? false)
-            return matchesCategory && matchesCharacter && matchesMood
+        let base: [Moment]
+        if hasActiveFilters {
+            base = sorted.filter { moment in
+                let matchesCategory = filterCategories.isEmpty || !filterCategories.isDisjoint(with: moment.categories)
+                let matchesCharacter = filterCharacters.isEmpty || !filterCharacters.isDisjoint(with: Set(moment.characters.map { $0.lowercased() }))
+                let matchesMood = filterMoods.isEmpty || (moment.mood.map { filterMoods.contains($0) } ?? false)
+                return matchesCategory && matchesCharacter && matchesMood
+            }
+        } else {
+            base = sorted
         }
+        return base.filter(\.isPinned) + base.filter { !$0.isPinned }
     }
 
     var hasAiAnalyzedMoments: Bool {

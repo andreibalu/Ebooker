@@ -79,6 +79,61 @@ struct AudiobookDetailViewModelTests {
         #expect(vm.filteredMoments.isEmpty)
     }
 
+    @Test func filteredMomentsPlacesPinnedBeforeUnpinnedPreservingCreatedAtOrder() throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "Pin Test", author: "", folderName: "pin-order-test", totalDuration: 600)
+        context.insert(book)
+
+        let older = Moment(trackIndex: 0, time: 10, label: "Old", audiobook: book)
+        older.createdAt = Date(timeIntervalSince1970: 1_000)
+        let newer = Moment(trackIndex: 0, time: 20, label: "New", audiobook: book)
+        newer.createdAt = Date(timeIntervalSince1970: 2_000)
+        older.isPinned = true
+
+        context.insert(older)
+        context.insert(newer)
+        book.moments.append(older)
+        book.moments.append(newer)
+
+        let vm = makeViewModel(audiobook: book)
+        let ordered = vm.filteredMoments
+
+        #expect(ordered.count == 2)
+        #expect(ordered[0].id == older.id)
+        #expect(ordered[1].id == newer.id)
+    }
+
+    @Test func filteredMomentsSortsPinnedByCreatedAtDescending() throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "Pin Sort", author: "", folderName: "pin-sort-test", totalDuration: 600)
+        context.insert(book)
+
+        let a = Moment(trackIndex: 0, time: 1, label: "A", audiobook: book)
+        a.createdAt = Date(timeIntervalSince1970: 1_000)
+        a.isPinned = true
+        let b = Moment(trackIndex: 0, time: 2, label: "B", audiobook: book)
+        b.createdAt = Date(timeIntervalSince1970: 3_000)
+        b.isPinned = true
+
+        context.insert(a)
+        context.insert(b)
+        book.moments.append(a)
+        book.moments.append(b)
+
+        let vm = makeViewModel(audiobook: book)
+        let ordered = vm.filteredMoments
+
+        #expect(ordered.map(\.id) == [b.id, a.id])
+    }
+
     // MARK: - Progress recap persistence
 
     @Test func hydratesStoredRecapWhenAnchorMatchesProgressMarker() {

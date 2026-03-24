@@ -36,6 +36,13 @@ struct MomentRow: View {
 
             rowForeground
                 .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(alignment: .leading) {
+                    if moment.isPinned {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color.primary.opacity(0.45))
+                            .frame(width: 3)
+                    }
+                }
                 .offset(x: dragOffset)
                 .gesture(swipeGesture)
                 .onTapGesture {
@@ -122,10 +129,23 @@ struct MomentRow: View {
 
     private var rowForeground: some View {
         HStack(alignment: .center, spacing: 14) {
-            Image(systemName: "flag.fill")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-                .frame(width: 24)
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                moment.isPinned.toggle()
+            } label: {
+                Image(systemName: moment.isPinned ? "pin.fill" : "flag.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(moment.isPinned ? Color.primary : Color.secondary)
+                    .frame(width: 24, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(moment.isPinned ? "Unpin moment" : "Pin moment")
+            .accessibilityHint(
+                moment.isPinned
+                    ? "Removes this moment from the top of the list"
+                    : "Keeps this moment at the top of the list"
+            )
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(moment.label)

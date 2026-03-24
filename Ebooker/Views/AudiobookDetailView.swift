@@ -25,7 +25,7 @@ struct AudiobookDetailView: View {
     @State private var showCropSheet = false
     @State private var showFilterSheet = false
     @State private var tracksExpanded = false
-    @State private var olderMomentsExpanded = false
+    @State private var momentsExpanded = false
 
     init(audiobook: Audiobook, openPlayer: @escaping () -> Void) {
         self.audiobook = audiobook
@@ -148,16 +148,16 @@ struct AudiobookDetailView: View {
 
     private var momentsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            momentsHeader
-
             let saved = sortedFilteredMoments
             if audiobook.moments.isEmpty {
+                momentsHeader
                 Text("Tap the bookmark in the player to save a moment")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 12)
             } else if saved.isEmpty {
+                momentsHeader
                 VStack(spacing: 8) {
                     Text("No moments match your filters")
                         .font(.subheadline)
@@ -170,39 +170,37 @@ struct AudiobookDetailView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, 12)
             } else {
-                ForEach(Array(saved.prefix(3))) { moment in
-                    MomentRow(audiobook: audiobook, moment: moment, openPlayer: openPlayer) {
-                        modelContext.delete(moment)
-                    }
-                }
-
-                if saved.count > 3 {
-                    DisclosureGroup(isExpanded: $olderMomentsExpanded) {
+                DisclosureGroup(isExpanded: $momentsExpanded) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        momentsFilterChipsRow
                         VStack(spacing: 10) {
-                            ForEach(Array(saved.dropFirst(3))) { moment in
+                            ForEach(saved) { moment in
                                 MomentRow(audiobook: audiobook, moment: moment, openPlayer: openPlayer) {
                                     modelContext.delete(moment)
                                 }
                             }
                         }
                         .padding(.top, 6)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "clock.arrow.circlepath")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                            Text(olderMomentsLabel(count: saved.count - 3))
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(.secondary)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 2)
                     }
-                    .tint(.primary.opacity(0.55))
-                    .padding(16)
-                    .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "bookmark.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(momentsDisclosureLabel(count: saved.count))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                        if momentsExpanded && hasAiAnalyzedMoments {
+                            filterSheetCapsuleButton
+                        }
+                    }
+                    .padding(.vertical, 2)
                 }
+                .tint(.primary.opacity(0.55))
+                .padding(16)
+                .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
             }
         }
     }
@@ -347,87 +345,84 @@ struct AudiobookDetailView: View {
 
     // MARK: - Moments / filters
 
-    private var momentsHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if hasAiAnalyzedMoments {
-                Button {
-                    showFilterSheet = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Moments")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-
-                        if viewModel.hasActiveFilters {
-                            Text("·")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.tertiary)
-                            Text("Filtered")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer(minLength: 0)
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            } else {
-                Text("Moments")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+    /// Opens the moment filter sheet; used in the disclosure header when expanded and in empty-state sections.
+    private var filterSheetCapsuleButton: some View {
+        Button {
+            showFilterSheet = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "line.3.horizontal.decrease.circle")
+                    .font(.caption.weight(.semibold))
+                Text("Filter")
+                    .font(.caption.weight(.semibold))
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.1), in: Capsule())
+            .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Filter moments")
+    }
 
-            if viewModel.hasActiveFilters {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(Array(viewModel.filterCategories), id: \.self) { cat in
-                            filterChip(text: cat.displayName) {
-                                viewModel.filterCategories.remove(cat)
-                            }
-                        }
-                        ForEach(Array(viewModel.filterMoods), id: \.self) { mood in
-                            filterChip(text: mood.displayName) {
-                                viewModel.filterMoods.remove(mood)
-                            }
-                        }
-                        ForEach(Array(viewModel.filterCharacters).sorted(), id: \.self) { char in
-                            filterChip(text: char) {
-                                viewModel.filterCharacters.remove(char)
-                            }
+    /// Active filter chips only (no Filter button). Sits under the “N moments” row when the list is expanded.
+    @ViewBuilder
+    private var momentsFilterChipsRow: some View {
+        if viewModel.hasActiveFilters {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(viewModel.filterCategories), id: \.self) { cat in
+                        filterChip(text: cat.displayName) {
+                            viewModel.filterCategories.remove(cat)
                         }
                     }
-                    .padding(.vertical, 2)
+                    ForEach(Array(viewModel.filterMoods), id: \.self) { mood in
+                        filterChip(text: mood.displayName) {
+                            viewModel.filterMoods.remove(mood)
+                        }
+                    }
+                    ForEach(Array(viewModel.filterCharacters).sorted(), id: \.self) { char in
+                        filterChip(text: char) {
+                            viewModel.filterCharacters.remove(char)
+                        }
+                    }
                 }
+                .padding(.vertical, 2)
             }
         }
     }
 
+    /// Empty states: still need the Filter control when AI metadata exists (no disclosure row).
+    private var momentsHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if hasAiAnalyzedMoments {
+                filterSheetCapsuleButton
+            }
+            momentsFilterChipsRow
+        }
+    }
+
     private var sortedFilteredMoments: [Moment] {
-        let sorted = audiobook.moments.sorted { lhs, rhs in
-            lhs.createdAt > rhs.createdAt
+        let sorted = audiobook.moments.sorted { $0.createdAt > $1.createdAt }
+        let base: [Moment]
+        if viewModel.hasActiveFilters {
+            base = sorted.filter { moment in
+                let matchesCategory =
+                    viewModel.filterCategories.isEmpty
+                    || !viewModel.filterCategories.isDisjoint(with: moment.categories)
+                let momentCharacters = Set(moment.characters.map { $0.lowercased() })
+                let matchesCharacter =
+                    viewModel.filterCharacters.isEmpty
+                    || !viewModel.filterCharacters.isDisjoint(with: momentCharacters)
+                let matchesMood =
+                    viewModel.filterMoods.isEmpty
+                    || (moment.mood.map { viewModel.filterMoods.contains($0) } ?? false)
+                return matchesCategory && matchesCharacter && matchesMood
+            }
+        } else {
+            base = sorted
         }
-
-        guard viewModel.hasActiveFilters else { return sorted }
-
-        return sorted.filter { moment in
-            let matchesCategory =
-                viewModel.filterCategories.isEmpty
-                || !viewModel.filterCategories.isDisjoint(with: moment.categories)
-            let momentCharacters = Set(moment.characters.map { $0.lowercased() })
-            let matchesCharacter =
-                viewModel.filterCharacters.isEmpty
-                || !viewModel.filterCharacters.isDisjoint(with: momentCharacters)
-            let matchesMood =
-                viewModel.filterMoods.isEmpty
-                || (moment.mood.map { viewModel.filterMoods.contains($0) } ?? false)
-            return matchesCategory && matchesCharacter && matchesMood
-        }
+        return base.filter(\.isPinned) + base.filter { !$0.isPinned }
     }
 
     private var hasAiAnalyzedMoments: Bool {
@@ -436,9 +431,17 @@ struct AudiobookDetailView: View {
         }
     }
 
-    private func olderMomentsLabel(count: Int) -> String {
-        if count == 1 { return "1 older moment" }
-        return "\(count) older moments"
+    private func momentsDisclosureLabel(count: Int) -> String {
+        var parts: [String] = []
+        if count == 1 {
+            parts.append("1 moment")
+        } else {
+            parts.append("\(count) moments")
+        }
+        if viewModel.hasActiveFilters {
+            parts.append("filtered")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func filterChip(text: String, onRemove: @escaping () -> Void) -> some View {

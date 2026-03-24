@@ -17,6 +17,7 @@ final class Moment {
     var transcript: String?
     var aiGeneratedName: Bool
     var notes: String?
+    var isPinned: Bool = false
 
     // Nullable backing fields for lightweight migration
     private var _categoriesRaw: String?
@@ -72,7 +73,8 @@ final class Moment {
         categories: [MomentCategory] = [],
         quoteLine: String? = nil,
         characters: [String] = [],
-        mood: MomentMood? = nil
+        mood: MomentMood? = nil,
+        isPinned: Bool = false
     ) {
         self.id = UUID()
         self.trackIndex = trackIndex
@@ -83,6 +85,7 @@ final class Moment {
         self.transcript = transcript
         self.aiGeneratedName = aiGeneratedName
         self.notes = notes
+        self.isPinned = isPinned
         self.categories = categories
         self.quoteLine = quoteLine
         self.characters = characters
