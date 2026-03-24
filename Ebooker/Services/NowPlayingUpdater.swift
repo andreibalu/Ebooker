@@ -14,11 +14,25 @@ struct NowPlayingUpdater {
     func configureCommands(
         play: @escaping CommandAction,
         pause: @escaping CommandAction,
-        next: @escaping CommandAction,
-        previous: @escaping CommandAction,
+        skipForwardInterval: Double,
+        skipForward: @escaping CommandAction,
+        skipBackwardInterval: Double,
+        skipBackward: @escaping CommandAction,
         seek: @escaping SeekAction
     ) {
         let commandCenter = MPRemoteCommandCenter.shared()
+        resetCommands(on: commandCenter)
+
+        commandCenter.playCommand.isEnabled = true
+        commandCenter.pauseCommand.isEnabled = true
+        commandCenter.changePlaybackPositionCommand.isEnabled = true
+        commandCenter.skipForwardCommand.isEnabled = skipForwardInterval > 0
+        commandCenter.skipBackwardCommand.isEnabled = skipBackwardInterval > 0
+        commandCenter.nextTrackCommand.isEnabled = false
+        commandCenter.previousTrackCommand.isEnabled = false
+
+        commandCenter.skipForwardCommand.preferredIntervals = [NSNumber(value: skipForwardInterval)]
+        commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: skipBackwardInterval)]
 
         commandCenter.playCommand.addTarget { _ in
             play()
@@ -30,13 +44,13 @@ struct NowPlayingUpdater {
             return .success
         }
 
-        commandCenter.nextTrackCommand.addTarget { _ in
-            next()
+        commandCenter.skipForwardCommand.addTarget { _ in
+            skipForward()
             return .success
         }
 
-        commandCenter.previousTrackCommand.addTarget { _ in
-            previous()
+        commandCenter.skipBackwardCommand.addTarget { _ in
+            skipBackward()
             return .success
         }
 
@@ -47,6 +61,16 @@ struct NowPlayingUpdater {
             seek(event.positionTime)
             return .success
         }
+    }
+
+    private func resetCommands(on commandCenter: MPRemoteCommandCenter) {
+        commandCenter.playCommand.removeTarget(nil)
+        commandCenter.pauseCommand.removeTarget(nil)
+        commandCenter.skipForwardCommand.removeTarget(nil)
+        commandCenter.skipBackwardCommand.removeTarget(nil)
+        commandCenter.nextTrackCommand.removeTarget(nil)
+        commandCenter.previousTrackCommand.removeTarget(nil)
+        commandCenter.changePlaybackPositionCommand.removeTarget(nil)
     }
 
     func update(

@@ -41,14 +41,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         player.automaticallyWaitsToMinimizeStalling = true
         addPeriodicTimeObserver()
         observeTrackEnd()
-
-        nowPlaying.configureCommands(
-            play: { [weak self] in Task { @MainActor in self?.play() } },
-            pause: { [weak self] in Task { @MainActor in self?.pause() } },
-            next: { [weak self] in Task { @MainActor in self?.nextTrack() } },
-            previous: { [weak self] in Task { @MainActor in self?.previousTrack() } },
-            seek: { [weak self] time in Task { @MainActor in self?.seek(to: time) } }
-        )
+        configureRemoteCommands()
 
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
@@ -71,6 +64,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         resumeBacktrackSeconds = resumeBacktrack
         skipBackSeconds = skipBack
         skipForwardSeconds = skipForward
+        configureRemoteCommands()
     }
 
     var bookProgress: Double {
@@ -375,6 +369,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             duration: duration,
             playbackRate: playbackRate,
             isPlaying: isPlaying
+        )
+    }
+
+    private func configureRemoteCommands() {
+        nowPlaying.configureCommands(
+            play: { [weak self] in Task { @MainActor in self?.play() } },
+            pause: { [weak self] in Task { @MainActor in self?.pause() } },
+            skipForwardInterval: skipForwardSeconds,
+            skipForward: { [weak self] in Task { @MainActor in self?.skipForward() } },
+            skipBackwardInterval: skipBackSeconds,
+            skipBackward: { [weak self] in Task { @MainActor in self?.skipBackward() } },
+            seek: { [weak self] time in Task { @MainActor in self?.seek(to: time) } }
         )
     }
 }
