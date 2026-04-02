@@ -50,13 +50,21 @@ final class PlayerViewModel {
     func saveMoment(
         player: AudioPlayerManager,
         useSmartSave: Bool,
-        momentBacktrackSeconds: Double
+        momentBacktrackSeconds: Double,
+        onSuccessfulSmartAI: (() -> Void)? = nil
     ) {
         guard player.currentAudiobook != nil else { return }
         let savedTime = max(player.currentTime - momentBacktrackSeconds, 0)
 
         if useSmartSave {
-            Task { await performSmartSave(player: player, savedTime: savedTime, momentBacktrackSeconds: momentBacktrackSeconds) }
+            Task {
+                await performSmartSave(
+                    player: player,
+                    savedTime: savedTime,
+                    momentBacktrackSeconds: momentBacktrackSeconds,
+                    onSuccessfulSmartAI: onSuccessfulSmartAI
+                )
+            }
         } else {
             resetMomentState()
             pendingMomentTime = savedTime
@@ -66,7 +74,8 @@ final class PlayerViewModel {
     private func performSmartSave(
         player: AudioPlayerManager,
         savedTime: Double,
-        momentBacktrackSeconds: Double
+        momentBacktrackSeconds: Double,
+        onSuccessfulSmartAI: (() -> Void)?
     ) async {
         guard let audiobook = player.currentAudiobook,
               let track = player.currentTrack else { return }
@@ -107,6 +116,7 @@ final class PlayerViewModel {
                 pendingCharacters = analysis.characters
                 pendingMood = analysis.mood
                 pendingMomentTime = savedTime
+                onSuccessfulSmartAI?()
             } else {
                 resetMomentState()
                 pendingMomentTranscript = transcript

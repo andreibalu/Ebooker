@@ -105,7 +105,13 @@ final class AudiobookDetailViewModel {
         recapProgressHeadline = audiobook.progressRecapHeadline
     }
 
-    func loadRecap(trackIndex: Int, progressTime: Double, includeProgressHeadline: Bool, modelContext: ModelContext? = nil) async {
+    func loadRecap(
+        trackIndex: Int,
+        progressTime: Double,
+        includeProgressHeadline: Bool,
+        modelContext: ModelContext? = nil,
+        onSuccessfulRecap: (() -> Void)? = nil
+    ) async {
         isLoadingRecap = true
         defer { isLoadingRecap = false }
 
@@ -153,6 +159,7 @@ final class AudiobookDetailViewModel {
                 anchorTime: progressTime
             )
             try? modelContext?.save()
+            onSuccessfulRecap?()
         } catch {
             recapError = error.localizedDescription
         }

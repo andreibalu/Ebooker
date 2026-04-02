@@ -288,7 +288,10 @@ struct AudiobookDetailView: View {
                                         trackIndex: progressTrackIndex,
                                         progressTime: progressTime,
                                         includeProgressHeadline: shortenSummary,
-                                        modelContext: modelContext
+                                        modelContext: modelContext,
+                                        onSuccessfulRecap: {
+                                            aiEntitlement.consumeTrialUse()
+                                        }
                                     )
                                 }
                             } label: {
@@ -550,7 +553,7 @@ struct AudiobookDetailView: View {
     }
 
     private var smartSummaryEnabled: Bool {
-        aiEntitlement.isUnlocked
+        aiEntitlement.canUseAIFeatures
             && useLocalAIFeatures
             && useSmartSummary
             && AppleIntelligenceCapability.isSmartNamingAvailable

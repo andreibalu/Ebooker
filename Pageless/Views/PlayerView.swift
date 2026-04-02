@@ -24,7 +24,7 @@ struct PlayerView: View {
     @State private var showProgressConfirmation = false
 
     private var useSmartSave: Bool {
-        aiEntitlement.isUnlocked
+        aiEntitlement.canUseAIFeatures
             && useLocalAIFeatures
             && useSmartMomentNaming
             && AppleIntelligenceCapability.isSmartNamingAvailable
@@ -303,7 +303,10 @@ struct PlayerView: View {
                 viewModel.saveMoment(
                     player: player,
                     useSmartSave: useSmartSave,
-                    momentBacktrackSeconds: momentBacktrackSeconds
+                    momentBacktrackSeconds: momentBacktrackSeconds,
+                    onSuccessfulSmartAI: {
+                        aiEntitlement.consumeTrialUse()
+                    }
                 )
             } label: {
                 if viewModel.isProcessingSmartSave {

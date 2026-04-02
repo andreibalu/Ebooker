@@ -3,7 +3,6 @@
 //  Pageless
 //
 
-import StoreKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -14,187 +13,117 @@ struct SettingsView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
-    @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
-    @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
-    @AppStorage("useSmartSummary") private var useSmartSummary = false
-    @AppStorage("shortenSummary") private var shortenSummary = false
-
-    private var isSmartNamingAvailable: Bool {
-        AppleIntelligenceCapability.isSmartNamingAvailable
-    }
 
     private var canPurchaseOnDevice: Bool {
         AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
-    }
-
-    /// AI toggles need an active purchase and a device/runtime where Apple Intelligence can run.
-    private var aiTogglesDisabled: Bool {
-        !aiEntitlement.isUnlocked || !isSmartNamingAvailable
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    aiPurchaseBlock
-
-                    Toggle(isOn: $useLocalAIFeatures) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Use local AI features")
-                                .font(.body)
-                            Text("Enable Apple Intelligence features for this app")
+                    if !canPurchaseOnDevice {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("AI Features")
+                            Text("Requires an Apple Intelligence–compatible device.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
-                    }
-                    .disabled(aiTogglesDisabled)
-
-                    if useLocalAIFeatures {
-                        Toggle(isOn: $useSmartMomentNaming) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Smart moment naming")
-                                    .font(.body)
-                                Text("Suggest names for saved moments based on the audio")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .disabled(aiTogglesDisabled)
-
-                        Toggle(isOn: $useSmartSummary) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text("Smart summary")
-                                    .font(.body)
-                                Text("Summarize where you left off on the book detail screen")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 4)
-                        }
-                        .disabled(aiTogglesDisabled)
-
-                        if useSmartSummary {
-                            Toggle(isOn: $shortenSummary) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Short progress headline")
-                                        .font(.body)
-                                    Text("Replace “Your progress” with a 3–4 word summary on one line")
+                    } else {
+                        NavigationLink {
+                            AISettingsView()
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("AI Features")
+                                    Text(aiTeaserSubline)
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(aiTeaserSublineAccent ? Color.orange : Color.secondary)
                                 }
-                                .padding(.vertical, 4)
+                                Spacer()
+                                if aiEntitlement.isUnlocked {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
                             }
-                            .disabled(aiTogglesDisabled)
+                            .padding(.vertical, 4)
                         }
-                    }
-
-                    if !aiEntitlement.isUnlocked {
-                        Text("Purchase the AI unlock to enable these options on a compatible device.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
-                        Text(reason)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } header: {
-                    Text("AI Features")
-                } footer: {
-                    Group {
-                        if aiEntitlement.isUnlocked, isSmartNamingAvailable {
-                            Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
-                        } else if !aiEntitlement.isUnlocked {
-                            Text("Unlock once per Apple ID. Restore purchases if you reinstall or use a new device.")
-                        }
-                    }
-                }
-                .onChange(of: useLocalAIFeatures) { _, enabled in
-                    if !enabled {
-                        useSmartMomentNaming = false
-                        useSmartSummary = false
-                        shortenSummary = false
-                    }
-                }
-                .onChange(of: useSmartSummary) { _, enabled in
-                    if !enabled {
-                        shortenSummary = false
                     }
                 }
 
                 Section {
-                    Picker(selection: $resumeBacktrackSeconds) {
-                        ForEach(ResumeBacktrackOption.allCases) { option in
-                            Text(option.title).tag(option.rawValue)
-                        }
+                    NavigationLink {
+                        SettingsDoubleOptionList(
+                            navigationTitle: "On Resume",
+                            selection: $resumeBacktrackSeconds,
+                            options: Array(ResumeBacktrackOption.allCases),
+                            rowTitle: \.title
+                        )
                     } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("On Resume")
-                                .font(.body)
-                            Text("Rewind a bit when you press play after a break")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                        playbackSettingRow(
+                            title: "On Resume",
+                            caption: "Rewind a bit when you press play after a break",
+                            valueTitle: ResumeBacktrackOption(rawValue: resumeBacktrackSeconds)?.title ?? ""
+                        )
                     }
-                    .pickerStyle(.navigationLink)
                 }
 
                 Section {
-                    Picker(selection: $momentBacktrackSeconds) {
-                        ForEach(MomentBacktrackOption.allCases) { option in
-                            Text(option.title).tag(option.rawValue)
-                        }
+                    NavigationLink {
+                        SettingsDoubleOptionList(
+                            navigationTitle: "Save Moment Offset",
+                            selection: $momentBacktrackSeconds,
+                            options: Array(MomentBacktrackOption.allCases),
+                            rowTitle: \.title
+                        )
                     } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Save Moment Offset")
-                                .font(.body)
-                            Text("How far back the timestamp is set when you save a moment")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                        playbackSettingRow(
+                            title: "Save Moment Offset",
+                            caption: "How far back the timestamp is set when you save a moment",
+                            valueTitle: MomentBacktrackOption(rawValue: momentBacktrackSeconds)?.title ?? ""
+                        )
                     }
-                    .pickerStyle(.navigationLink)
                 }
 
                 Section {
-                    Picker(selection: $skipBackSeconds) {
-                        ForEach(SkipIntervalOption.allCases) { option in
-                            Text(option.title).tag(option.rawValue)
-                        }
+                    NavigationLink {
+                        SettingsDoubleOptionList(
+                            navigationTitle: "Skip Backward",
+                            selection: $skipBackSeconds,
+                            options: Array(SkipIntervalOption.allCases),
+                            rowTitle: \.title
+                        )
                     } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Skip Backward")
-                                .font(.body)
-                            Text("How far the \u{21A9} button jumps back")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                        playbackSettingRow(
+                            title: "Skip Backward",
+                            caption: "How far the \u{21A9} button jumps back",
+                            valueTitle: SkipIntervalOption(rawValue: skipBackSeconds)?.title ?? ""
+                        )
                     }
-                    .pickerStyle(.navigationLink)
 
-                    Picker(selection: $skipForwardSeconds) {
-                        ForEach(SkipIntervalOption.allCases) { option in
-                            Text(option.title).tag(option.rawValue)
-                        }
+                    NavigationLink {
+                        SettingsDoubleOptionList(
+                            navigationTitle: "Skip Forward",
+                            selection: $skipForwardSeconds,
+                            options: Array(SkipIntervalOption.allCases),
+                            rowTitle: \.title
+                        )
                     } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Skip Forward")
-                                .font(.body)
-                            Text("How far the \u{21AA} button jumps ahead")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 4)
+                        playbackSettingRow(
+                            title: "Skip Forward",
+                            caption: "How far the \u{21AA} button jumps ahead",
+                            valueTitle: SkipIntervalOption(rawValue: skipForwardSeconds)?.title ?? ""
+                        )
                     }
-                    .pickerStyle(.navigationLink)
                 }
             }
-            .navigationTitle("Playback Settings")
+            .scrollContentBackground(.hidden)
+            .background(Color.cream.ignoresSafeArea())
+            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.cream, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -233,64 +162,76 @@ struct SettingsView: View {
         .presentationDetents([.medium, .large])
     }
 
-    @ViewBuilder
-    private var aiPurchaseBlock: some View {
+    private var aiTeaserSubline: String {
         if aiEntitlement.isUnlocked {
-            Label("AI features unlocked", systemImage: "checkmark.circle.fill")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            restorePurchasesButton
-        } else if canPurchaseOnDevice {
-            Text("Unlock smart moment naming and progress summaries powered by on-device Apple Intelligence.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if aiEntitlement.isLoadingProduct {
-                ProgressView()
-                    .padding(.vertical, 4)
-            }
-
-            if let loadError = aiEntitlement.loadError {
-                Text(loadError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Button {
-                Task { await aiEntitlement.purchase() }
-            } label: {
-                if let product = aiEntitlement.product {
-                    Text("Unlock — \(product.displayPrice)")
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Unlock")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(aiEntitlement.product == nil || aiEntitlement.isPurchasing || aiEntitlement.isLoadingProduct)
-
-            restorePurchasesButton
-        } else {
-            Text(
-                "On-device AI requires iOS 18 or later and a compatible device (for example iPhone 15 Pro or newer, or an iPad with an M-series chip). You can’t buy the AI unlock on this device."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            Text("If you already purchased on another device, use Restore purchases.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-
-            restorePurchasesButton
+            return "Unlocked"
         }
+        let price = aiEntitlement.unlockPriceDisplay
+        if aiEntitlement.trialUsesRemaining > 0 {
+            return "\(aiEntitlement.trialUsesRemaining) free tries left · Unlock for \(price)"
+        }
+        return "Free tries used up · Unlock for \(price)"
     }
 
-    private var restorePurchasesButton: some View {
-        Button("Restore purchases") {
-            Task { await aiEntitlement.restorePurchases() }
+    private var aiTeaserSublineAccent: Bool {
+        !aiEntitlement.isUnlocked && aiEntitlement.trialUsesRemaining == 0
+    }
+
+    private func playbackSettingRow(title: String, caption: String, valueTitle: String) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.body)
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            Text(valueTitle)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
         }
-        .font(.subheadline)
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - Cream-styled option list (replaces system navigationLink picker sheet)
+
+private struct SettingsDoubleOptionList<Option: Identifiable & RawRepresentable>: View
+    where Option.RawValue == Double {
+    let navigationTitle: String
+    @Binding var selection: Double
+    let options: [Option]
+    let rowTitle: KeyPath<Option, String>
+
+    var body: some View {
+        List {
+            ForEach(options) { option in
+                Button {
+                    selection = option.rawValue
+                } label: {
+                    HStack {
+                        Text(option[keyPath: rowTitle])
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        if selection == option.rawValue {
+                            Image(systemName: "checkmark")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.tint)
+                        }
+                    }
+                }
+                .listRowBackground(Color.cardWhite)
+            }
+        }
+        .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.cream.ignoresSafeArea())
+        .navigationTitle(navigationTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.cream, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
     }
 }
 
