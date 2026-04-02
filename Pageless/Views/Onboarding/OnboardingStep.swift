@@ -35,7 +35,7 @@ enum OnboardingStep: String, CaseIterable {
         case .p1AIPage:
             "Toggle individual features here. A free trial is included so you can try before unlocking."
         case .p2Progress:
-            "Your listening spot is saved automatically. Tap the sparkle for an AI recap of where you left off."
+            "Tap Play to start listening. Your progress is saved automatically — once you've listened a bit, a sparkle button appears here for an AI recap of where you left off."
         case .p2Moments:
             "Bookmark moments while listening. AI adds categories and mood — use filters to find exactly what you need."
         }

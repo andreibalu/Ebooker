@@ -38,8 +38,8 @@ struct AudiobookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                resumeAnchorRow
                     .spotlightTarget(.p2Progress)
+                resumeAnchorRow
                 momentsSection
                     .spotlightTarget(.p2Moments)
                 tracksDisclosureSection
@@ -79,6 +79,7 @@ struct AudiobookDetailView: View {
         }
         .onAppear {
             viewModel.reconcileStoredRecap(modelContext: modelContext)
+            onboarding.notifyBookImported()
         }
     }
 

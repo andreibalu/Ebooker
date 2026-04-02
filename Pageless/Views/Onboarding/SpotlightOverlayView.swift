@@ -102,9 +102,10 @@ struct SpotlightOverlayView: View {
 
     private func tooltipCard(screenSize: CGSize) -> some View {
         let isAbove = paddedFrame.midY > screenSize.height / 2
+        let gap: CGFloat = 24
         let tooltipY: CGFloat = isAbove
-            ? paddedFrame.minY - 12
-            : paddedFrame.maxY + 12
+            ? paddedFrame.minY - gap
+            : paddedFrame.maxY + gap
 
         return VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
@@ -161,7 +162,7 @@ struct SpotlightOverlayView: View {
         .animation(.easeInOut(duration: 0.35), value: highlightFrame)
     }
 
-    private var tooltipEstimatedHeight: CGFloat { 110 }
+    private var tooltipEstimatedHeight: CGFloat { 160 }
 
     private func clamp(_ value: CGFloat, min minVal: CGFloat, max maxVal: CGFloat) -> CGFloat {
         Swift.max(minVal, Swift.min(maxVal, value))
