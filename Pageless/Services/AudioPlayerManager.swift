@@ -263,7 +263,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             updateNowPlayingInfo()
         } catch {
             isLoadingItem = false
-            playerErrorMessage = "Pageless could not open this audio file."
+            playerErrorMessage = "Unpaged could not open this audio file."
         }
     }
 

@@ -5,15 +5,15 @@ alwaysApply: true
 
 # Xcode Build & Run: Physical iPhone 15 only
 
-When building, testing, or running the Ebooker app, **use only the physical iPhone 15** (device name like **Andrei’s iPhone 15**). Do **not** use the iOS Simulator unless the user explicitly asks for it.
+When building, testing, or running the Pageless app, **use only the physical iPhone 15** (device name like **Andrei’s iPhone 15**). Do **not** use the iOS Simulator unless the user explicitly asks for it.
 
 1. **Use device tools, not simulator**  
    Prefer `build_run_device` or `build_device` from XcodeBuildMCP over any simulator-based build or test.
 
 2. **Target this iPhone 15**  
    Before the first build/run in a session, call `session_set_defaults` with:
-   - `projectPath`: Path to `Ebooker.xcodeproj` (e.g. `Ebooker.xcodeproj` from project root)
-   - `scheme`: `Ebooker`
+   - `projectPath`: Path to `Pageless.xcodeproj` (e.g. `Pageless.xcodeproj` from project root)
+   - `scheme`: `Pageless`
    - `platform`: `iOS`
    - `deviceId`: UDID from `list_devices` — pick the entry whose name matches **Andrei’s iPhone 15** / **iPhone 15** (not a simulator).
 
@@ -22,15 +22,15 @@ When building, testing, or running the Ebooker app, **use only the physical iPho
 
 4. **Command-line `xcodebuild` — always this iPhone 15**  
    **Never** use `-destination` with `iOS Simulator` unless the user explicitly asks.  
-   Use **Andrei’s iPhone 15** by UDID (verify with `xcodebuild -scheme Ebooker -showdestinations` if builds fail after a restore):
+   Use **Andrei’s iPhone 15** by UDID (verify with `xcodebuild -scheme Pageless -showdestinations` if builds fail after a restore):
 
    ```bash
    -destination 'platform=iOS,id=00008130-000471A80C81001C'
    ```
 
    Examples:
-   - Build: `xcodebuild -scheme Ebooker -destination 'platform=iOS,id=00008130-000471A80C81001C' build`
-   - Test: `xcodebuild -scheme Ebooker -destination 'platform=iOS,id=00008130-000471A80C81001C' test`
+   - Build: `xcodebuild -scheme Pageless -destination 'platform=iOS,id=00008130-000471A80C81001C' build`
+   - Test: `xcodebuild -scheme Pageless -destination 'platform=iOS,id=00008130-000471A80C81001C' test`
 
    The phone must be **unlocked, connected via USB or trusted Wi‑Fi debugging**, and **selected for development** in Xcode.
 

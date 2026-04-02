@@ -93,7 +93,7 @@ struct ContentView: View {
                 viewModel.deleteCandidate = nil
             }
         } message: {
-            Text("Choose whether to remove this audiobook from Pageless only, or also delete its imported audio files from local storage.")
+            Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
         }
         .alert("Rename Audiobook", isPresented: Binding(
             get: { viewModel.renameCandidate != nil },
