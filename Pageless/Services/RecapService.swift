@@ -72,7 +72,7 @@ struct RecapService: RecapProviding {
     }
 
     /// Keeps at most four words for a single-line UI label.
-    private static func sanitizeHeadline(_ raw: String) -> String {
+    static func sanitizeHeadline(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let words = trimmed.split(whereSeparator: \.isWhitespace)
         guard !words.isEmpty else { return trimmed }

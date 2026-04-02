@@ -14,8 +14,9 @@ struct AudiobookTests {
     }
 
     @Test func progressComputesCorrectly() {
-        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100, currentTime: 50)
-        // No tracks, so listenedDuration = min(0 + 50, 100) = 50
+        let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 100)
+        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100, currentTime: 50, tracks: [track])
+        // listenedDuration = min(0 + 50, 100) = 50
         #expect(book.progress == 0.5)
     }
 
@@ -25,7 +26,8 @@ struct AudiobookTests {
     }
 
     @Test func remainingDurationComputesCorrectly() {
-        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100, currentTime: 30)
+        let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 100)
+        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100, currentTime: 30, tracks: [track])
         #expect(book.remainingDuration == 70)
     }
 

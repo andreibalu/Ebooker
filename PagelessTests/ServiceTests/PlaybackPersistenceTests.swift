@@ -16,7 +16,10 @@ struct PlaybackPersistenceTests {
 
     @Test func updateProgressAdvancesWhenPenaltyIsZero() {
         let persistence = PlaybackPersistence()
-        let book = makeAudiobook()
+        let track = AudioTrack(title: "Ch1", originalFileName: "a", storedFileName: "a", orderIndex: 0, duration: 300)
+        let book = makeAudiobook(tracks: [track])
+        book.currentTrackIndex = 0
+        book.currentTime = 100
         persistence.seekPenaltyRemaining = 0
 
         persistence.updateProgressIfNeeded(

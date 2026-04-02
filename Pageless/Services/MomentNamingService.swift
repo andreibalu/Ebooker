@@ -107,7 +107,7 @@ struct MomentNamingService: MomentAnalyzing {
         )
     }
 
-    private func sanitizedQuoteLine(_ rawQuote: String, transcript: String) -> String {
+    func sanitizedQuoteLine(_ rawQuote: String, transcript: String) -> String {
         let normalized = rawQuote
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
@@ -130,7 +130,7 @@ struct MomentNamingService: MomentAnalyzing {
         return normalized
     }
 
-    private func firstSentence(in text: String, maxLength: Int) -> String {
+    func firstSentence(in text: String, maxLength: Int) -> String {
         let punctuation = CharacterSet(charactersIn: ".!?")
         var sentence = ""
 

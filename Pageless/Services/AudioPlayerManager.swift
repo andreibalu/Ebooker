@@ -62,6 +62,21 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         self.modelContext = modelContext
     }
 
+    /// Seeds audiobook/track index/time for unit tests without loading media.
+    func seedUnitTestPlaybackState(
+        audiobook: Audiobook?,
+        track: AudioTrack?,
+        trackIndex: Int,
+        currentTime: Double,
+        duration: Double = 60
+    ) {
+        currentAudiobook = audiobook
+        currentTrack = track
+        currentTrackIndex = trackIndex
+        self.currentTime = currentTime
+        self.duration = duration
+    }
+
     func applyPlaybackDefaults(resumeBacktrack: Double, skipBack: Double, skipForward: Double) {
         resumeBacktrackSeconds = resumeBacktrack
         skipBackSeconds = skipBack
