@@ -14,6 +14,7 @@ struct AudiobookDetailView: View {
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(OnboardingManager.self) private var onboarding
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartSummary") private var useSmartSummary = false
@@ -38,7 +39,9 @@ struct AudiobookDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                 resumeAnchorRow
+                    .spotlightTarget(.p2Progress)
                 momentsSection
+                    .spotlightTarget(.p2Moments)
                 tracksDisclosureSection
             }
             .padding(20)

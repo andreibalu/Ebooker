@@ -11,6 +11,7 @@ import SwiftUI
 struct PagelessApp: App {
     @StateObject private var audioPlayer = AudioPlayerManager()
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
+    @State private var onboardingManager = OnboardingManager()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -40,6 +41,7 @@ struct PagelessApp: App {
             ContentView()
                 .environmentObject(audioPlayer)
                 .environmentObject(aiEntitlementStore)
+                .environment(onboardingManager)
         }
         .modelContainer(sharedModelContainer)
     }
