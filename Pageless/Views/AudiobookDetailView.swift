@@ -302,7 +302,7 @@ struct AudiobookDetailView: View {
 
                     Button {
                         Task {
-                            await player.playTrack(at: progressTrackIndex, in: audiobook, time: progressTime)
+                            await player.playProgressBookmark(at: progressTrackIndex, in: audiobook, time: progressTime)
                             openPlayer()
                         }
                     } label: {

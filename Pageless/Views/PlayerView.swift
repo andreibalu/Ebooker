@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 
 struct PlayerView: View {

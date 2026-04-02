@@ -29,6 +29,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var resumeBacktrackSeconds: Double = ResumeBacktrackOption.oneMinute.rawValue
     private var skipBackSeconds: Double = SkipIntervalOption.thirty.rawValue
     private var skipForwardSeconds: Double = SkipIntervalOption.thirty.rawValue
+    /// When true, the next Continue / library Resume / progress bookmark play may apply On Resume backtrack. Resets each app launch.
+    private var resumeBacktrackAvailableThisLaunch = true
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
     private var backgroundObserver: NSObjectProtocol?
@@ -72,8 +74,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func startPlayback(for audiobook: Audiobook, autoplay: Bool = true) async {
-        let resumeTime = audiobook.isFinished ? 0 : max(audiobook.currentTime - resumeBacktrackSeconds, 0)
         let trackIndex = audiobook.isFinished ? 0 : audiobook.currentTrackIndex
+        let baseTime = audiobook.isFinished ? 0 : audiobook.currentTime
+        let applyBacktrack = resumeBacktrackAvailableThisLaunch && !audiobook.isFinished
+        let resumeTime = max(baseTime - (applyBacktrack ? resumeBacktrackSeconds : 0), 0)
+        resumeBacktrackAvailableThisLaunch = false
         await load(audiobook: audiobook, trackIndex: trackIndex, time: resumeTime, autoplay: autoplay)
     }
 
@@ -87,6 +92,14 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func playTrack(at index: Int, in audiobook: Audiobook, time: Double = 0, autoplay: Bool = true) async {
         await load(audiobook: audiobook, trackIndex: index, time: time, autoplay: autoplay)
+    }
+
+    /// Like `playTrack`, but shares session-scoped On Resume backtrack with `startPlayback` (Your progress row).
+    func playProgressBookmark(at index: Int, in audiobook: Audiobook, time: Double, autoplay: Bool = true) async {
+        let back = resumeBacktrackAvailableThisLaunch ? resumeBacktrackSeconds : 0
+        let t = max(time - back, 0)
+        resumeBacktrackAvailableThisLaunch = false
+        await load(audiobook: audiobook, trackIndex: index, time: t, autoplay: autoplay)
     }
 
     func togglePlayback() {

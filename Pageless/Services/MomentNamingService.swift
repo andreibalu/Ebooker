@@ -39,16 +39,20 @@ struct MomentNamingService: MomentAnalyzing {
         let mood: MomentMood?
     }
 
-    private let instructions = Instructions(
-        "You are an assistant that analyzes audiobook bookmarks. " +
-        "Given a transcript excerpt, produce: " +
-        "1) A concise 3–5 word title-case name. " +
-        "2) A 3–4 sentence note describing what is happening, what led up to it, and why it matters. " +
-        "3) 1–3 categories from: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance. " +
-        "4) The single most memorable or quotable line from the transcript, verbatim, approximately 50 words max. If none stands out, use an empty string. " +
-        "5) Character names mentioned or speaking. If none, use an empty array. " +
-        "6) The overall mood: tense, funny, sad, romantic, inspirational, mysterious, peaceful, or dramatic."
-    )
+    private static let instructionPrompt: String = {
+        let parts = [
+            "You are an assistant that analyzes audiobook bookmarks. Given a transcript excerpt, produce: ",
+            "1) A concise 3–5 word title-case name. ",
+            "2) A 3–4 sentence note describing what is happening, what led up to it, and why it matters. ",
+            "3) 1–3 categories from: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance. ",
+            "4) The single most memorable or quotable line from the transcript, verbatim, approximately 50 words max. If none stands out, use an empty string. ",
+            "5) Character names mentioned or speaking. If none, use an empty array. ",
+            "6) The overall mood: tense, funny, sad, romantic, inspirational, mysterious, peaceful, or dramatic.",
+        ]
+        return parts.joined()
+    }()
+
+    private let instructions = Instructions(Self.instructionPrompt)
 
     /// Generates a moment name and note from the transcript using the on-device foundation model.
     /// - Parameters:
@@ -85,12 +89,13 @@ struct MomentNamingService: MomentAnalyzing {
         )
 
         let content = response.content
-        let name = content.momentName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let note = content.momentNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimSet = CharacterSet.whitespacesAndNewlines
+        let name = content.momentName.trimmingCharacters(in: trimSet)
+        let note = content.momentNote.trimmingCharacters(in: trimSet)
         let categories = content.categories.compactMap { MomentCategory(rawValue: $0) }
         let quote = sanitizedQuoteLine(content.quoteLine, transcript: transcript)
-        let characters = content.characters.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-        let mood = MomentMood(rawValue: content.mood.trimmingCharacters(in: .whitespacesAndNewlines))
+        let characters = content.characters.map { $0.trimmingCharacters(in: trimSet) }.filter { !$0.isEmpty }
+        let mood = MomentMood(rawValue: content.mood.trimmingCharacters(in: trimSet))
 
         return MomentAnalysis(
             name: name.isEmpty ? "Saved Moment" : name,
