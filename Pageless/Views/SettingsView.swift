@@ -7,7 +7,12 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+
+    @State private var navigateToAI = false
+    @State private var selectedDetent: PresentationDetent = .medium
+    @State private var showResetConfirmation = false
 
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
@@ -31,12 +36,13 @@ struct SettingsView: View {
                         }
                         .padding(.vertical, 4)
                     } else {
-                        NavigationLink {
-                            AISettingsView()
+                        Button {
+                            navigateToAI = true
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("AI Features")
+                                        .foregroundStyle(.primary)
                                     Text(aiTeaserSubline)
                                         .font(.caption)
                                         .foregroundStyle(aiTeaserSublineAccent ? Color.orange : Color.secondary)
@@ -46,13 +52,17 @@ struct SettingsView: View {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundStyle(.green)
                                 }
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
                             }
                             .padding(.vertical, 4)
                         }
+                        .spotlightTarget(.p1AILink)
                     }
                 }
 
-                Section {
+                Section("Playback") {
                     NavigationLink {
                         SettingsDoubleOptionList(
                             navigationTitle: "On Resume",
@@ -117,9 +127,28 @@ struct SettingsView: View {
                         )
                     }
                 }
+
+                Section {
+                    Button("Reset Onboarding") {
+                        showResetConfirmation = true
+                    }
+                    .foregroundStyle(.secondary)
+                    .confirmationDialog("Reset Onboarding?", isPresented: $showResetConfirmation) {
+                        Button("Reset", role: .destructive) {
+                            onboarding.resetOnboarding()
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("The onboarding walkthrough will start again from the beginning.")
+                    }
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color.cream.ignoresSafeArea())
+            .navigationDestination(isPresented: $navigateToAI) {
+                AISettingsView()
+            }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.cream, for: .navigationBar)
@@ -131,6 +160,12 @@ struct SettingsView: View {
             }
             .task {
                 await aiEntitlement.loadProduct()
+            }
+            .onChange(of: onboarding.requestNavigateToAISettings) { _, shouldNavigate in
+                if shouldNavigate {
+                    navigateToAI = true
+                    onboarding.requestNavigateToAISettings = false
+                }
             }
             .alert(
                 "Purchase",
@@ -159,7 +194,22 @@ struct SettingsView: View {
                 Text(aiEntitlement.restoreError ?? "")
             }
         }
-        .presentationDetents([.medium, .large])
+        .spotlightOverlay(
+            onboarding: onboarding,
+            totalPhaseSteps: onboarding.totalStepsInPhase,
+            currentPhaseIndex: onboarding.currentPhaseIndex
+        )
+        .presentationDetents([.medium, .large], selection: $selectedDetent)
+        .onAppear {
+            if let step = onboarding.currentStep, step == .p1AILink || step == .p1AIPage {
+                selectedDetent = .large
+            }
+        }
+        .onChange(of: onboarding.currentStep) { _, step in
+            if step == .p1AILink {
+                withAnimation { selectedDetent = .large }
+            }
+        }
     }
 
     private var aiTeaserSubline: String {

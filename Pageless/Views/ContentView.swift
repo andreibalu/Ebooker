@@ -14,6 +14,7 @@ enum LibraryTab {
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
     @Query private var audiobooks: [Audiobook]
@@ -58,6 +59,11 @@ struct ContentView: View {
                 }
             }
         }
+        .spotlightOverlay(
+            onboarding: onboarding,
+            totalPhaseSteps: onboarding.totalStepsInPhase,
+            currentPhaseIndex: onboarding.currentPhaseIndex
+        )
         .fileImporter(
             isPresented: $isImporterPresented,
             allowedContentTypes: [.audio],
@@ -71,6 +77,7 @@ struct ContentView: View {
         }) { pending in
             ImportAudiobookSheet(pending: pending) { title, author in
                 try viewModel.importAudiobook(pending, title: title, author: author, modelContext: modelContext)
+                onboarding.notifyBookImported()
             }
         }
         .sheet(isPresented: $isPlayerPresented) {
@@ -81,6 +88,19 @@ struct ContentView: View {
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
                 .environmentObject(aiEntitlementStore)
+                .environment(onboarding)
+        }
+        .onChange(of: onboarding.requestOpenSettings) { _, shouldOpen in
+            if shouldOpen {
+                isSettingsPresented = true
+                onboarding.requestOpenSettings = false
+            }
+        }
+        .onChange(of: onboarding.requestDismissSettings) { _, shouldDismiss in
+            if shouldDismiss {
+                isSettingsPresented = false
+                onboarding.requestDismissSettings = false
+            }
         }
         .alert("Remove Audiobook?", isPresented: deleteConfirmationBinding) {
             Button("Remove from App", role: .destructive) {
@@ -185,12 +205,14 @@ struct ContentView: View {
                 } label: {
                     toolbarIconButton(systemName: "slider.horizontal.3")
                 }
+                .spotlightTarget(.p1Settings)
 
                 Button {
                     isImporterPresented = true
                 } label: {
                     toolbarIconButton(systemName: "plus")
                 }
+                .spotlightTarget(.p1AddButton)
             }
         }
     }

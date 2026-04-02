@@ -7,6 +7,7 @@ import StoreKit
 import SwiftUI
 
 struct AISettingsView: View {
+    @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
@@ -62,6 +63,7 @@ struct AISettingsView: View {
                 }
 
                 togglesCard
+                    .spotlightTarget(.p1AIPage)
 
                 footerCopy
             }

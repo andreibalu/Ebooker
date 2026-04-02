@@ -13,6 +13,8 @@ Use XcodeBuildMCP tools for all build/run operations:
 
 Always call `mcp__XcodeBuildMCP__session_show_defaults` first to verify project/scheme/simulator settings before building.
 
+**Device target**: Always build and run on **Andrei's iPhone 15** (personal device) — use `mcp__XcodeBuildMCP__build_run_device` / `mcp__XcodeBuildMCP__build_device` instead of simulator tools when running on device. Use the `xcode-device-build` skill if needed for device setup.
+
 The project has no external package dependencies — it uses only native Apple frameworks (AVFoundation, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI).
 
 ## Architecture
