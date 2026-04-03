@@ -53,12 +53,13 @@ final class LibraryViewModel {
     }
 
     func importAudiobook(_ pending: PendingImportSelection, title: String, author: String, modelContext: ModelContext) throws {
-        _ = try LibraryImportService.importAudiobook(
+        let audiobook = try LibraryImportService.importAudiobook(
             from: pending,
             title: title,
             author: author,
             modelContext: modelContext
         )
+        SpotlightService.index(audiobook)
         pendingImport = nil
         releaseSecurityScopedAccess()
     }
@@ -74,6 +75,7 @@ final class LibraryViewModel {
 
     func deleteAudiobook(alsoDeleteFiles: Bool, modelContext: ModelContext) {
         guard let deleteCandidate else { return }
+        SpotlightService.deindex(deleteCandidate)
         do {
             try LibraryImportService.deleteAudiobook(
                 deleteCandidate,

@@ -9,6 +9,7 @@ import MediaPlayer
 import SwiftData
 import SwiftUI
 import UIKit
+import WidgetKit
 
 @MainActor
 final class AudioPlayerManager: NSObject, ObservableObject {
@@ -36,9 +37,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
     private var backgroundObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
+    private let liveActivity = LiveActivityManager()
 
     override init() {
         super.init()
@@ -46,6 +49,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         addPeriodicTimeObserver()
         observeTrackEnd()
         configureRemoteCommands()
+        observeAudioRouteChanges()
 
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
@@ -62,6 +66,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        syncSharedLibrary()
     }
 
     /// Seeds audiobook/track index/time for unit tests without loading media.
@@ -155,6 +160,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         updateProgressMarkerIfNeeded()
         persistPlayback(force: true)
         updateNowPlayingInfo()
+        if let audiobook = currentAudiobook, let track = currentTrack {
+            liveActivity.startOrUpdate(
+                bookTitle: audiobook.title,
+                author: audiobook.displayAuthor,
+                bookID: audiobook.id.uuidString,
+                trackTitle: track.title,
+                currentTime: currentTime,
+                duration: duration,
+                isPlaying: false,
+                progress: audiobook.progress
+            )
+        }
     }
 
     func seek(to seconds: Double) {
@@ -377,6 +394,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             force: force,
             context: modelContext
         )
+        if force { syncSharedLibrary() }
     }
 
     private func markCurrentBookFinished() {
@@ -392,6 +410,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         )
         currentTime = duration
         updateNowPlayingInfo()
+        liveActivity.stop()
     }
 
     private static var hasConfiguredAudioSessionCategory = false
@@ -419,6 +438,77 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             playbackRate: playbackRate,
             isPlaying: isPlaying
         )
+        syncSharedNowPlaying()
+
+        if isPlaying {
+            liveActivity.startOrUpdate(
+                bookTitle: audiobook.title,
+                author: audiobook.displayAuthor,
+                bookID: audiobook.id.uuidString,
+                trackTitle: track.title,
+                currentTime: currentTime,
+                duration: duration,
+                isPlaying: isPlaying,
+                progress: audiobook.progress
+            )
+        }
+    }
+
+    private func syncSharedNowPlaying() {
+        guard let audiobook = currentAudiobook, let track = currentTrack else {
+            SharedDefaults.saveNowPlaying(nil)
+            return
+        }
+        let data = SharedNowPlayingData(
+            bookID: audiobook.id.uuidString,
+            title: audiobook.title,
+            author: audiobook.displayAuthor,
+            coverArtData: audiobook.coverArtData,
+            trackTitle: track.title,
+            currentTime: currentTime,
+            duration: duration,
+            isPlaying: isPlaying,
+            playbackRate: playbackRate,
+            progress: audiobook.progress
+        )
+        SharedDefaults.saveNowPlaying(data)
+    }
+
+    func syncSharedLibrary() {
+        guard let context = modelContext else { return }
+        let descriptor = FetchDescriptor<Audiobook>()
+        guard let audiobooks = try? context.fetch(descriptor) else { return }
+        let shared = audiobooks.map { book in
+            SharedBookData(
+                id: book.id.uuidString,
+                title: book.title,
+                author: book.displayAuthor,
+                coverArtData: book.coverArtData,
+                progress: book.progress,
+                currentTrackTitle: book.currentTrackTitle,
+                totalDuration: book.totalDuration,
+                listenedDuration: book.listenedDuration,
+                lastPlayedAt: book.lastPlayedAt,
+                isFavorite: book.isFavorite
+            )
+        }
+        SharedDefaults.saveLibrary(shared)
+    }
+
+    private func observeAudioRouteChanges() {
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let self else { return }
+            guard let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+            else { return }
+            Task { @MainActor in
+                if self.isPlaying { self.pause() }
+            }
+        }
     }
 
     private func configureRemoteCommands() {

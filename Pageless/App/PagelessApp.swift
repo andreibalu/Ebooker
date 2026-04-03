@@ -13,6 +13,7 @@ struct PagelessApp: App {
     @StateObject private var audioPlayer = AudioPlayerManager()
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
     @State private var onboardingManager = OnboardingManager()
+    @State private var deepLinkBookID: String?
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -47,7 +48,26 @@ struct PagelessApp: App {
                     appDelegate.modelContainer = sharedModelContainer
                     appDelegate.audioPlayer = audioPlayer
                 }
+                .onOpenURL { url in
+                    handleDeepLink(url)
+                }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "pageless" else { return }
+        switch url.host {
+        case "nowplaying":
+            // App opens to current playback — no extra navigation needed
+            break
+        case "book":
+            let bookID = url.pathComponents.dropFirst().first
+            deepLinkBookID = bookID
+        case "library":
+            break
+        default:
+            break
+        }
     }
 }
