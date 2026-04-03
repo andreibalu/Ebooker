@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct PagelessApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var audioPlayer = AudioPlayerManager()
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
     @State private var onboardingManager = OnboardingManager()
@@ -42,6 +43,10 @@ struct PagelessApp: App {
                 .environmentObject(audioPlayer)
                 .environmentObject(aiEntitlementStore)
                 .environment(onboardingManager)
+                .onAppear {
+                    appDelegate.modelContainer = sharedModelContainer
+                    appDelegate.audioPlayer = audioPlayer
+                }
         }
         .modelContainer(sharedModelContainer)
     }
