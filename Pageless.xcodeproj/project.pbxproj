@@ -175,6 +175,11 @@
 				TargetAttributes = {
 					BC74D7E52F6986AC0070910C = {
 						CreatedOnToolsVersion = 26.3;
+						SystemCapabilities = {
+							com.apple.InAppPurchase = {
+								enabled = 1;
+							};
+						};
 					};
 					BC74D7F42F6986AD0070910C = {
 						CreatedOnToolsVersion = 26.3;
