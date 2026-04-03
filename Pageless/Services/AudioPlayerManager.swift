@@ -36,6 +36,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
     private var backgroundObserver: NSObjectProtocol?
+    private var cachedCoverThumbnail: Data?
+    private var cachedCoverBookID: UUID?
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
