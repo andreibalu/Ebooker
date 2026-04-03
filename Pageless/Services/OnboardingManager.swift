@@ -10,9 +10,15 @@ import Observation
 @Observable
 final class OnboardingManager {
 
+    /// When set, overrides hardware for unit tests. Must be `nil` in production; only tests assign this.
+    static var _unitTestDeviceSupportsOnboardingAI: Bool?
+
     /// Phase 1 includes AI Settings steps only on devices that can purchase / use the on-device AI stack.
     var deviceSupportsOnboardingAI: Bool {
-        AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
+        if let override = Self._unitTestDeviceSupportsOnboardingAI {
+            return override
+        }
+        return AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
     }
 
     private var phase1Steps: [OnboardingStep] {
@@ -23,12 +29,19 @@ final class OnboardingManager {
 
     // MARK: - Stored properties (tracked by @Observable)
 
-    var phaseRaw: Int = UserDefaults.standard.integer(forKey: "onboardingPhase") {
-        didSet { UserDefaults.standard.set(phaseRaw, forKey: "onboardingPhase") }
+    private let defaults: UserDefaults
+
+    var phaseRaw: Int {
+        didSet { defaults.set(phaseRaw, forKey: Keys.phase) }
     }
 
-    var stepIndex: Int = UserDefaults.standard.integer(forKey: "onboardingStepIndex") {
-        didSet { UserDefaults.standard.set(stepIndex, forKey: "onboardingStepIndex") }
+    var stepIndex: Int {
+        didSet { defaults.set(stepIndex, forKey: Keys.step) }
+    }
+
+    private enum Keys {
+        static let phase = "onboardingPhase"
+        static let step = "onboardingStepIndex"
     }
 
     // MARK: - Navigation Commands (observed by views)
@@ -83,7 +96,11 @@ final class OnboardingManager {
 
     // MARK: - Init
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        phaseRaw = defaults.integer(forKey: Keys.phase)
+        stepIndex = defaults.integer(forKey: Keys.step)
+
         guard Phase(rawValue: phaseRaw) == .phase1 else { return }
 
         let maxIndex = phase1Steps.count - 1
