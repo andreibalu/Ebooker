@@ -162,33 +162,70 @@ final class CarPlayCoordinator: NSObject {
     }
 
     private func listItems(for books: [Audiobook]) -> [CPListItem] {
-        books.map { book in
-            let item = CPListItem(text: book.title, detailText: book.displayAuthor)
+        var items: [CPListItem] = []
+        for book in books {
+            let playItem = CPListItem(text: book.title, detailText: book.displayAuthor)
             let bookID = book.id
-            item.handler = { [weak self] _, completion in
+            playItem.handler = { [weak self] _, completion in
                 guard let self else {
                     completion()
                     return
                 }
                 Task { @MainActor in
-                    await self.selectAudiobook(id: bookID)
+                    await self.playAudiobookFromList(id: bookID)
                     completion()
                 }
             }
-            return item
+            items.append(playItem)
+
+            if book.hasProgressPosition {
+                let jumpDetail = Self.savedProgressDetail(for: book)
+                let flagImage = UIImage(systemName: "flag.fill")?.withRenderingMode(.alwaysTemplate) ?? UIImage()
+                let jumpItem = CPListItem(text: "Jump to saved progress", detailText: jumpDetail, image: flagImage)
+                let jumpBookID = book.id
+                jumpItem.handler = { [weak self] _, completion in
+                    guard let self else {
+                        completion()
+                        return
+                    }
+                    Task { @MainActor in
+                        await self.jumpToSavedProgressFromList(id: jumpBookID)
+                        completion()
+                    }
+                }
+                items.append(jumpItem)
+            }
         }
+        return items
     }
 
-    private func selectAudiobook(id: UUID) async {
+    private static func savedProgressDetail(for book: Audiobook) -> String {
+        guard let idx = book.progressTrackIndex, let time = book.progressTime else { return "" }
+        let tracks = book.sortedTracks
+        let trackLabel = tracks.indices.contains(idx) ? tracks[idx].title : "Track"
+        return "\(trackLabel) · \(TimeFormatter.clockString(seconds: time))"
+    }
+
+    private func playAudiobookFromList(id: UUID) async {
+        guard let book = fetchAudiobook(id: id) else { return }
+        await audioPlayer.startPlaybackFromSavedProgress(for: book, autoplay: true)
+        presentNowPlayingIfNeeded()
+    }
+
+    private func jumpToSavedProgressFromList(id: UUID) async {
+        guard let book = fetchAudiobook(id: id) else { return }
+        await audioPlayer.jumpToSavedProgressMarker(in: book)
+        presentNowPlayingIfNeeded()
+    }
+
+    private func fetchAudiobook(id: UUID) -> Audiobook? {
         let context = ModelContext(modelContainer)
         let bookID = id
         var descriptor = FetchDescriptor<Audiobook>(
             predicate: #Predicate<Audiobook> { $0.id == bookID }
         )
         descriptor.fetchLimit = 1
-        guard let book = try? context.fetch(descriptor).first else { return }
-        await audioPlayer.startPlayback(for: book, autoplay: true)
-        presentNowPlayingIfNeeded()
+        return try? context.fetch(descriptor).first
     }
 
     private func presentNowPlayingIfNeeded() {

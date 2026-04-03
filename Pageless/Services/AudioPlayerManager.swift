@@ -99,6 +99,27 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         await load(audiobook: audiobook, trackIndex: trackIndex, time: resumeTime, autoplay: autoplay)
     }
 
+    /// Starts like tapping “Your progress” on the book detail: uses the saved progress marker when set (with On Resume backtrack), otherwise last playback position.
+    func startPlaybackFromSavedProgress(for audiobook: Audiobook, autoplay: Bool = true) async {
+        if !audiobook.isFinished,
+           audiobook.hasProgressPosition,
+           let idx = audiobook.progressTrackIndex,
+           let t = audiobook.progressTime {
+            await playProgressBookmark(at: idx, in: audiobook, time: t, autoplay: autoplay)
+            return
+        }
+        await startPlayback(for: audiobook, autoplay: autoplay)
+    }
+
+    /// Seeks to the saved progress marker time exactly (no resume backtrack). Use when the user scrubbed away and wants to snap back.
+    func jumpToSavedProgressMarker(in audiobook: Audiobook) async {
+        guard audiobook.hasProgressPosition,
+              let idx = audiobook.progressTrackIndex,
+              let t = audiobook.progressTime
+        else { return }
+        await playTrack(at: idx, in: audiobook, time: t, autoplay: true)
+    }
+
     func restart(_ audiobook: Audiobook) async {
         audiobook.currentTrackIndex = 0
         audiobook.currentTime = 0
