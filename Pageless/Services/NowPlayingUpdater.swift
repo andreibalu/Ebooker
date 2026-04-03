@@ -74,7 +74,7 @@ struct NowPlayingUpdater {
             guard let event = event as? MPChangePlaybackRateCommandEvent else {
                 return .commandFailed
             }
-            changePlaybackRate(event.playbackRate)
+            changePlaybackRate(Double(event.playbackRate))
             return .success
         }
     }

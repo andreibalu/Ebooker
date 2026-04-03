@@ -25,7 +25,7 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
 
     func templateApplicationScene(
         _ templateApplicationScene: CPTemplateApplicationScene,
-        didDisconnect interfaceController: CPInterfaceController
+        didDisconnectInterfaceController interfaceController: CPInterfaceController
     ) {
         coordinator?.disconnect()
         coordinator = nil
