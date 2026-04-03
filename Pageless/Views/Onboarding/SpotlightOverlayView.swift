@@ -66,6 +66,7 @@ private struct SpotlightMaskShape: Shape {
 struct SpotlightOverlayView: View {
     let highlightFrame: CGRect
     let step: OnboardingStep
+    let deviceSupportsOnboardingAI: Bool
     let totalSteps: Int
     let currentIndex: Int
     let onNext: () -> Void
@@ -109,10 +110,10 @@ struct SpotlightOverlayView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(step.title)
+                Text(step.title(deviceSupportsOnboardingAI: deviceSupportsOnboardingAI))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(step.body)
+                Text(step.body(deviceSupportsOnboardingAI: deviceSupportsOnboardingAI))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -181,6 +182,7 @@ extension View {
                     SpotlightOverlayView(
                         highlightFrame: frame,
                         step: step,
+                        deviceSupportsOnboardingAI: onboarding.deviceSupportsOnboardingAI,
                         totalSteps: totalPhaseSteps,
                         currentIndex: currentPhaseIndex,
                         onNext: { onboarding.advance() },

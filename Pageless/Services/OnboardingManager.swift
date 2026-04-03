@@ -10,6 +10,17 @@ import Observation
 @Observable
 final class OnboardingManager {
 
+    /// Phase 1 includes AI Settings steps only on devices that can purchase / use the on-device AI stack.
+    var deviceSupportsOnboardingAI: Bool {
+        AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
+    }
+
+    private var phase1Steps: [OnboardingStep] {
+        deviceSupportsOnboardingAI
+            ? [.p1AddButton, .p1Settings, .p1AILink, .p1AIPage]
+            : [.p1AddButton, .p1Settings, .p1DeviceCapability]
+    }
+
     // MARK: - Stored properties (tracked by @Observable)
 
     var phaseRaw: Int = UserDefaults.standard.integer(forKey: "onboardingPhase") {
@@ -45,7 +56,7 @@ final class OnboardingManager {
     var currentStep: OnboardingStep? {
         switch phase {
         case .phase1:
-            let steps: [OnboardingStep] = [.p1AddButton, .p1Settings, .p1AILink, .p1AIPage]
+            let steps = phase1Steps
             guard stepIndex < steps.count else { return nil }
             return steps[stepIndex]
         case .waitingForBook:
@@ -61,7 +72,7 @@ final class OnboardingManager {
 
     var totalStepsInPhase: Int {
         switch phase {
-        case .phase1:         return 4
+        case .phase1:         return phase1Steps.count
         case .waitingForBook: return 0
         case .phase2:         return 2
         case .completed:      return 0
@@ -73,10 +84,21 @@ final class OnboardingManager {
     // MARK: - Init
 
     init() {
-        // If relaunched mid-phase1 while on a step requiring the settings sheet,
-        // reset to step 1 so the sheet-open sequence replays cleanly.
-        if Phase(rawValue: phaseRaw) == .phase1, stepIndex >= 2 {
+        guard Phase(rawValue: phaseRaw) == .phase1 else { return }
+
+        let maxIndex = phase1Steps.count - 1
+        if stepIndex > maxIndex {
+            stepIndex = maxIndex
+        }
+
+        // Relaunch mid-phase1 on AI-capable devices: replay from settings so the sheet + AI navigation reopen cleanly.
+        if deviceSupportsOnboardingAI, stepIndex >= 2 {
             stepIndex = 1
+        }
+
+        // Non-AI path: step 2 is only meaningful with Settings open (anchor for .p1DeviceCapability).
+        if !deviceSupportsOnboardingAI, stepIndex == 2 {
+            requestOpenSettings = true
         }
     }
 
@@ -86,15 +108,22 @@ final class OnboardingManager {
         switch phase {
         case .phase1:
             switch stepIndex {
-            case 0: // p1AddButton → p1Settings
+            case 0:
                 stepIndex = 1
-            case 1: // p1Settings → open settings sheet, then p1AILink
+            case 1:
                 stepIndex = 2
                 requestOpenSettings = true
-            case 2: // p1AILink → navigate to AI settings, then p1AIPage
-                stepIndex = 3
-                requestNavigateToAISettings = true
-            case 3: // p1AIPage done → dismiss sheet, enter waiting phase
+            case 2:
+                if deviceSupportsOnboardingAI {
+                    stepIndex = 3
+                    requestNavigateToAISettings = true
+                } else {
+                    phase = .waitingForBook
+                    stepIndex = 0
+                    requestDismissSettings = true
+                }
+            case 3:
+                guard deviceSupportsOnboardingAI else { break }
                 phase = .waitingForBook
                 stepIndex = 0
                 requestDismissSettings = true
@@ -118,6 +147,9 @@ final class OnboardingManager {
 
     func goBack() {
         guard stepIndex > 0 else { return }
+        if phase == .phase1, stepIndex == 2, !deviceSupportsOnboardingAI {
+            requestDismissSettings = true
+        }
         stepIndex -= 1
     }
 

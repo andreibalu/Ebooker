@@ -35,6 +35,7 @@ struct SettingsView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .padding(.vertical, 4)
+                        .spotlightTarget(.p1DeviceCapability)
                     } else {
                         Button {
                             navigateToAI = true
@@ -201,12 +202,12 @@ struct SettingsView: View {
         )
         .presentationDetents([.medium, .large], selection: $selectedDetent)
         .onAppear {
-            if let step = onboarding.currentStep, step == .p1AILink || step == .p1AIPage {
+            if let step = onboarding.currentStep, step == .p1AILink || step == .p1AIPage || step == .p1DeviceCapability {
                 selectedDetent = .large
             }
         }
         .onChange(of: onboarding.currentStep) { _, step in
-            if step == .p1AILink {
+            if step == .p1AILink || step == .p1DeviceCapability {
                 withAnimation { selectedDetent = .large }
             }
         }
