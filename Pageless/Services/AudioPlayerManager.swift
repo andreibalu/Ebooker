@@ -12,6 +12,8 @@ import UIKit
 
 @MainActor
 final class AudioPlayerManager: NSObject, ObservableObject {
+    /// Shared with `PlayerView` and CarPlay playback-rate controls.
+    static let supportedPlaybackRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]
     @Published private(set) var currentAudiobook: Audiobook?
     @Published private(set) var currentTrack: AudioTrack?
     @Published private(set) var currentTrackIndex = 0
@@ -408,7 +410,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             skipForward: { [weak self] in Task { @MainActor in self?.skipForward() } },
             skipBackwardInterval: skipBackSeconds,
             skipBackward: { [weak self] in Task { @MainActor in self?.skipBackward() } },
-            seek: { [weak self] time in Task { @MainActor in self?.seek(to: time) } }
+            seek: { [weak self] time in Task { @MainActor in self?.seek(to: time) } },
+            supportedPlaybackRates: Self.supportedPlaybackRates,
+            changePlaybackRate: { [weak self] rate in Task { @MainActor in self?.setPlaybackRate(rate) } }
         )
     }
 }

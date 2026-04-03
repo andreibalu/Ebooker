@@ -11,6 +11,8 @@ struct NowPlayingUpdater {
     typealias CommandAction = () -> Void
     typealias SeekAction = (Double) -> Void
 
+    typealias PlaybackRateAction = (Double) -> Void
+
     func configureCommands(
         play: @escaping CommandAction,
         pause: @escaping CommandAction,
@@ -18,7 +20,9 @@ struct NowPlayingUpdater {
         skipForward: @escaping CommandAction,
         skipBackwardInterval: Double,
         skipBackward: @escaping CommandAction,
-        seek: @escaping SeekAction
+        seek: @escaping SeekAction,
+        supportedPlaybackRates: [Double],
+        changePlaybackRate: @escaping PlaybackRateAction
     ) {
         let commandCenter = MPRemoteCommandCenter.shared()
         resetCommands(on: commandCenter)
@@ -30,6 +34,10 @@ struct NowPlayingUpdater {
         commandCenter.skipBackwardCommand.isEnabled = skipBackwardInterval > 0
         commandCenter.nextTrackCommand.isEnabled = false
         commandCenter.previousTrackCommand.isEnabled = false
+
+        let rates = supportedPlaybackRates.filter { $0 > 0 }.sorted()
+        commandCenter.changePlaybackRateCommand.isEnabled = rates.count > 1
+        commandCenter.changePlaybackRateCommand.supportedPlaybackRates = rates.map { NSNumber(value: $0) }
 
         commandCenter.skipForwardCommand.preferredIntervals = [NSNumber(value: skipForwardInterval)]
         commandCenter.skipBackwardCommand.preferredIntervals = [NSNumber(value: skipBackwardInterval)]
@@ -61,6 +69,14 @@ struct NowPlayingUpdater {
             seek(event.positionTime)
             return .success
         }
+
+        commandCenter.changePlaybackRateCommand.addTarget { event in
+            guard let event = event as? MPChangePlaybackRateCommandEvent else {
+                return .commandFailed
+            }
+            changePlaybackRate(event.playbackRate)
+            return .success
+        }
     }
 
     private func resetCommands(on commandCenter: MPRemoteCommandCenter) {
@@ -71,6 +87,7 @@ struct NowPlayingUpdater {
         commandCenter.nextTrackCommand.removeTarget(nil)
         commandCenter.previousTrackCommand.removeTarget(nil)
         commandCenter.changePlaybackPositionCommand.removeTarget(nil)
+        commandCenter.changePlaybackRateCommand.removeTarget(nil)
     }
 
     func update(
@@ -86,7 +103,8 @@ struct NowPlayingUpdater {
             MPMediaItemPropertyAlbumTitle: audiobook.title,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPMediaItemPropertyPlaybackDuration: duration,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? playbackRate : 0
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? playbackRate : 0,
+            MPNowPlayingInfoPropertyDefaultPlaybackRate: playbackRate
         ]
 
         if !audiobook.author.isEmpty {

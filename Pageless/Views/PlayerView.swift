@@ -30,7 +30,7 @@ struct PlayerView: View {
             && AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
-    private let supportedRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]
+    private var supportedRates: [Double] { AudioPlayerManager.supportedPlaybackRates }
 
     var body: some View {
         NavigationStack {
