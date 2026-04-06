@@ -22,6 +22,7 @@ final class AIEntitlementStore: ObservableObject {
     @Published var purchaseError: String?
     @Published var restoreError: String?
 
+    @Published private(set) var canMakePayments = true
     @Published private(set) var trialUsesRemaining: Int
 
     init() {
@@ -37,6 +38,7 @@ final class AIEntitlementStore: ObservableObject {
         Task {
             await refreshEntitlements()
             await loadProduct()
+            canMakePayments = AppStore.canMakePayments
         }
     }
 
@@ -47,7 +49,7 @@ final class AIEntitlementStore: ObservableObject {
 
     /// Shown in settings when StoreKit price is not loaded yet.
     var unlockPriceDisplay: String {
-        product?.displayPrice ?? "$3.99"
+        product?.displayPrice ?? "3.99"
     }
 
     /// Call after a successful on-device AI run (naming or recap) while not fully unlocked.

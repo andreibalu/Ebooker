@@ -293,7 +293,7 @@ struct AISettingsView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(aiEntitlement.product == nil || aiEntitlement.isPurchasing || aiEntitlement.isLoadingProduct)
+            .disabled(aiEntitlement.product == nil || aiEntitlement.isPurchasing || aiEntitlement.isLoadingProduct || !aiEntitlement.canMakePayments)
 
             restorePurchasesButton
         } else {
