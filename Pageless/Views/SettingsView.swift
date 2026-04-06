@@ -78,9 +78,7 @@ struct SettingsView: View {
                             valueTitle: ResumeBacktrackOption(rawValue: resumeBacktrackSeconds)?.title ?? ""
                         )
                     }
-                }
 
-                Section {
                     NavigationLink {
                         SettingsDoubleOptionList(
                             navigationTitle: "Save Moment Offset",
@@ -95,9 +93,7 @@ struct SettingsView: View {
                             valueTitle: MomentBacktrackOption(rawValue: momentBacktrackSeconds)?.title ?? ""
                         )
                     }
-                }
 
-                Section {
                     NavigationLink {
                         SettingsDoubleOptionList(
                             navigationTitle: "Skip Backward",
