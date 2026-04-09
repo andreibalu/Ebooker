@@ -36,6 +36,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
     private var backgroundObserver: NSObjectProtocol?
+    private var interruptionObserver: NSObjectProtocol?
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
@@ -59,7 +60,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             }
         }
 
-        NotificationCenter.default.addObserver(
+        interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: AVAudioSession.sharedInstance(),
             queue: .main
