@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import AppIntents
 import AVFoundation
 import SwiftData
 import SwiftUI
@@ -14,6 +15,7 @@ struct PagelessApp: App {
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
     @State private var onboardingManager = OnboardingManager()
     @State private var downloadService = FreeBookDownloadService()
+    @Environment(\.scenePhase) private var scenePhase
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -50,7 +52,28 @@ struct PagelessApp: App {
                     appDelegate.audioPlayer = audioPlayer
                     downloadService.configure(modelContext: sharedModelContainer.mainContext)
                 }
+                .task {
+                    await UnpagedAppShortcuts.updateAppShortcutParameters()
+                }
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            handlePendingIntent()
+        }
+    }
+
+    private func handlePendingIntent() {
+        guard UserDefaults.standard.bool(forKey: "intent.playLatestBook") else { return }
+        UserDefaults.standard.removeObject(forKey: "intent.playLatestBook")
+        let context = sharedModelContainer.mainContext
+        var descriptor = FetchDescriptor<Audiobook>(
+            sortBy: [SortDescriptor(\.lastPlayedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = 1
+        guard let latest = try? context.fetch(descriptor).first else { return }
+        Task { @MainActor in
+            await audioPlayer.startPlayback(for: latest)
+        }
     }
 }

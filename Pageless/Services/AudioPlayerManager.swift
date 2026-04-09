@@ -58,6 +58,29 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 self.persistPlayback(force: true)
             }
         }
+
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+            Task { @MainActor in
+                switch type {
+                case .began:
+                    if self.isPlaying { self.pause() }
+                case .ended:
+                    if let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt,
+                       AVAudioSession.InterruptionOptions(rawValue: optionsValue).contains(.shouldResume) {
+                        self.play()
+                    }
+                default:
+                    break
+                }
+            }
+        }
     }
 
     func configure(modelContext: ModelContext) {
