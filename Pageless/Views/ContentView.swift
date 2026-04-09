@@ -33,6 +33,8 @@ struct ContentView: View {
     @State private var isSettingsPresented = false
     @State private var freeBooksExpanded = false
     @State private var selectedFreeBook: FreeBookCatalogEntry?
+    @State private var allCatalogEntries: [FreeBookCatalogEntry] = []
+    @State private var isCatalogLoading = false
 
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
@@ -167,6 +169,12 @@ struct ContentView: View {
         } message: {
             Text(viewModel.alertMessage)
         }
+        .task {
+            guard allCatalogEntries.isEmpty else { return }
+            isCatalogLoading = true
+            allCatalogEntries = await FreeBookCatalogService.allEntries()
+            isCatalogLoading = false
+        }
         .onAppear {
             player.configure(modelContext: modelContext)
             player.applyPlaybackDefaults(
@@ -300,15 +308,21 @@ struct ContentView: View {
         let books = displayedBooks
         let catalogEntries = availableCatalogEntries
 
-        if books.isEmpty && catalogEntries.isEmpty {
+        if books.isEmpty && catalogEntries.isEmpty && !isCatalogLoading {
             emptyState
         } else if books.isEmpty && selectedTab == .allBooks {
-            // Library empty but free books available — show them prominently
+            // Library empty — show free books or loading state prominently
             ScrollView {
-                freeBooksFeaturedSection(entries: catalogEntries)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 20)
+                if isCatalogLoading {
+                    ProgressView("Loading free books…")
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 60)
+                } else {
+                    freeBooksFeaturedSection(entries: catalogEntries)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                        .padding(.bottom, 20)
+                }
             }
         } else if books.isEmpty {
             emptyState
@@ -321,12 +335,18 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                .padding(.bottom, selectedTab == .allBooks && !catalogEntries.isEmpty ? 8 : 20)
+                .padding(.bottom, selectedTab == .allBooks && (!catalogEntries.isEmpty || isCatalogLoading) ? 8 : 20)
 
-                if selectedTab == .allBooks && !catalogEntries.isEmpty {
-                    freeBooksCatalogSection(entries: catalogEntries)
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                if selectedTab == .allBooks {
+                    if isCatalogLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 20)
+                    } else if !catalogEntries.isEmpty {
+                        freeBooksCatalogSection(entries: catalogEntries)
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
+                    }
                 }
             }
         }
@@ -462,7 +482,7 @@ struct ContentView: View {
     }
 
     private var availableCatalogEntries: [FreeBookCatalogEntry] {
-        FreeBookCatalogService.availableEntries(excluding: downloadedCatalogIds)
+        allCatalogEntries.filter { !downloadedCatalogIds.contains($0.id) }
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
