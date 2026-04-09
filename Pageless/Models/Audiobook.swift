@@ -26,6 +26,20 @@ final class Audiobook: Identifiable {
     // the public API non-optional everywhere else in the codebase.
     private var _isFavorite: Bool?
 
+    // Nullable for lightweight migration (same pattern as _isFavorite).
+    private var _isFreeBook: Bool?
+    private var _catalogId: String?
+
+    var isFreeBook: Bool {
+        get { _isFreeBook ?? false }
+        set { _isFreeBook = newValue }
+    }
+
+    var catalogId: String? {
+        get { _catalogId }
+        set { _catalogId = newValue }
+    }
+
     var isFavorite: Bool {
         get { _isFavorite ?? false }
         set { _isFavorite = newValue }
@@ -87,6 +101,8 @@ final class Audiobook: Identifiable {
         playbackRate: Double = 1,
         isFinished: Bool = false,
         isFavorite: Bool = false,
+        isFreeBook: Bool = false,
+        catalogId: String? = nil,
         tracks: [AudioTrack] = []
     ) {
         self.id = UUID()
@@ -102,6 +118,8 @@ final class Audiobook: Identifiable {
         self.playbackRate = playbackRate
         self.isFinished = isFinished
         self._isFavorite = isFavorite
+        self._isFreeBook = isFreeBook
+        self._catalogId = catalogId
         self.tracks = tracks
     }
 

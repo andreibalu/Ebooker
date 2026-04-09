@@ -24,11 +24,15 @@ struct ContentView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
 
+    @Environment(FreeBookDownloadService.self) private var downloadService
+
     @State private var viewModel = LibraryViewModel()
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
     @State private var isPlayerPresented = false
     @State private var isSettingsPresented = false
+    @State private var freeBooksExpanded = false
+    @State private var selectedFreeBook: FreeBookCatalogEntry?
 
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
@@ -90,6 +94,21 @@ struct ContentView: View {
                 .environmentObject(aiEntitlementStore)
                 .environment(onboarding)
         }
+        .sheet(item: $selectedFreeBook) { entry in
+            FreeBookDetailSheet(
+                entry: entry,
+                isDownloaded: downloadedCatalogIds.contains(entry.id),
+                isDownloading: downloadService.activeDownloads.contains(entry.id),
+                downloadProgress: downloadService.downloadProgress[entry.id],
+                downloadError: downloadService.downloadErrors[entry.id],
+                onDownload: {
+                    downloadService.startDownload(entry: entry)
+                },
+                onCancel: {
+                    downloadService.cancelDownload(catalogId: entry.id)
+                }
+            )
+        }
         .onChange(of: onboarding.requestOpenSettings) { _, shouldOpen in
             if shouldOpen {
                 isSettingsPresented = true
@@ -102,18 +121,34 @@ struct ContentView: View {
                 onboarding.requestDismissSettings = false
             }
         }
-        .alert("Remove Audiobook?", isPresented: deleteConfirmationBinding) {
-            Button("Remove from App", role: .destructive) {
-                viewModel.deleteAudiobook(alsoDeleteFiles: false, modelContext: modelContext)
-            }
-            Button("Also Delete Files", role: .destructive) {
-                viewModel.deleteAudiobook(alsoDeleteFiles: true, modelContext: modelContext)
+        .alert(
+            viewModel.deleteCandidate?.isFreeBook == true ? "Remove Download?" : "Remove Audiobook?",
+            isPresented: deleteConfirmationBinding
+        ) {
+            if viewModel.deleteCandidate?.isFreeBook == true {
+                Button("Remove Download", role: .destructive) {
+                    if let book = viewModel.deleteCandidate {
+                        viewModel.deleteFreeBook(book, modelContext: modelContext)
+                        viewModel.deleteCandidate = nil
+                    }
+                }
+            } else {
+                Button("Remove from App", role: .destructive) {
+                    viewModel.deleteAudiobook(alsoDeleteFiles: false, modelContext: modelContext)
+                }
+                Button("Also Delete Files", role: .destructive) {
+                    viewModel.deleteAudiobook(alsoDeleteFiles: true, modelContext: modelContext)
+                }
             }
             Button("Cancel", role: .cancel) {
                 viewModel.deleteCandidate = nil
             }
         } message: {
-            Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
+            if viewModel.deleteCandidate?.isFreeBook == true {
+                Text("This will remove the downloaded audiobook. You can download it again from the free books section.")
+            } else {
+                Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
+            }
         }
         .alert("Rename Audiobook", isPresented: Binding(
             get: { viewModel.renameCandidate != nil },
@@ -263,53 +298,151 @@ struct ContentView: View {
     @ViewBuilder
     private var libraryContent: some View {
         let books = displayedBooks
-        if books.isEmpty {
+        let catalogEntries = availableCatalogEntries
+
+        if books.isEmpty && catalogEntries.isEmpty {
+            emptyState
+        } else if books.isEmpty && selectedTab == .allBooks {
+            // Library empty but free books available — show them prominently
+            ScrollView {
+                freeBooksFeaturedSection(entries: catalogEntries)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
+            }
+        } else if books.isEmpty {
             emptyState
         } else {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 16) {
                     ForEach(books) { audiobook in
-                        NavigationLink {
-                            AudiobookDetailView(audiobook: audiobook) {
-                                isPlayerPresented = true
-                            }
-                        } label: {
-                            AudiobookCardView(
-                                audiobook: audiobook,
-                                isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Resume", systemImage: "play.fill") {
-                                Task {
-                                    await player.startPlayback(for: audiobook)
-                                    try? await Task.sleep(for: .milliseconds(600))
-                                    isPlayerPresented = true
-                                }
-                            }
-
-                            Button(audiobook.isFavorite ? "Unfavorite" : "Favorite", systemImage: audiobook.isFavorite ? "heart.slash" : "heart") {
-                                audiobook.isFavorite.toggle()
-                            }
-
-                            Button("Rename", systemImage: "pencil") {
-                                viewModel.beginRename(audiobook)
-                            }
-
-                            Button(role: .destructive) {
-                                viewModel.deleteCandidate = audiobook
-                            } label: {
-                                Label("Delete", systemImage: "trash")
-                            }
-                        }
+                        audiobookGridItem(audiobook)
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
-                .padding(.bottom, 20)
+                .padding(.bottom, selectedTab == .allBooks && !catalogEntries.isEmpty ? 8 : 20)
+
+                if selectedTab == .allBooks && !catalogEntries.isEmpty {
+                    freeBooksCatalogSection(entries: catalogEntries)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 20)
+                }
             }
         }
+    }
+
+    private func audiobookGridItem(_ audiobook: Audiobook) -> some View {
+        NavigationLink {
+            AudiobookDetailView(audiobook: audiobook) {
+                isPlayerPresented = true
+            }
+        } label: {
+            AudiobookCardView(
+                audiobook: audiobook,
+                isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Resume", systemImage: "play.fill") {
+                Task {
+                    await player.startPlayback(for: audiobook)
+                    try? await Task.sleep(for: .milliseconds(600))
+                    isPlayerPresented = true
+                }
+            }
+
+            Button(audiobook.isFavorite ? "Unfavorite" : "Favorite", systemImage: audiobook.isFavorite ? "heart.slash" : "heart") {
+                audiobook.isFavorite.toggle()
+            }
+
+            if !audiobook.isFreeBook {
+                Button("Rename", systemImage: "pencil") {
+                    viewModel.beginRename(audiobook)
+                }
+            }
+
+            Button(role: .destructive) {
+                viewModel.deleteCandidate = audiobook
+            } label: {
+                Label(audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - Free Books Sections
+
+    private func freeBooksFeaturedSection(entries: [FreeBookCatalogEntry]) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Get Started with Free Classics")
+                    .font(.title3.weight(.semibold))
+                Text("Download free public domain audiobooks to start listening.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(columns: gridColumns, spacing: 16) {
+                ForEach(entries) { entry in
+                    Button {
+                        selectedFreeBook = entry
+                    } label: {
+                        FreeBookCardView(
+                            entry: entry,
+                            downloadProgress: downloadService.downloadProgress[entry.id],
+                            isDownloading: downloadService.activeDownloads.contains(entry.id)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button("Import Your Own Audiobook") {
+                isImporterPresented = true
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+        }
+    }
+
+    private func freeBooksCatalogSection(entries: [FreeBookCatalogEntry]) -> some View {
+        DisclosureGroup(isExpanded: $freeBooksExpanded) {
+            LazyVGrid(columns: gridColumns, spacing: 16) {
+                ForEach(entries) { entry in
+                    Button {
+                        selectedFreeBook = entry
+                    } label: {
+                        FreeBookCardView(
+                            entry: entry,
+                            downloadProgress: downloadService.downloadProgress[entry.id],
+                            isDownloading: downloadService.activeDownloads.contains(entry.id)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 12)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "book.closed")
+                    .foregroundStyle(.secondary)
+                Text("Free Books")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text("\(entries.count)")
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.08), in: Capsule())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .tint(.primary.opacity(0.55))
+        .padding(16)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
     }
 
     // MARK: - Computed
@@ -322,6 +455,14 @@ struct ContentView: View {
             base = Array(audiobooks)
         }
         return viewModel.sorted(base, by: sortOptionRawValue)
+    }
+
+    private var downloadedCatalogIds: Set<String> {
+        Set(audiobooks.compactMap(\.catalogId))
+    }
+
+    private var availableCatalogEntries: [FreeBookCatalogEntry] {
+        FreeBookCatalogService.availableEntries(excluding: downloadedCatalogIds)
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
