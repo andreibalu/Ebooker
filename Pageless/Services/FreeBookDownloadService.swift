@@ -42,6 +42,7 @@ final class FreeBookDownloadService: FreeBookDownloading {
 
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        guard backgroundSession == nil else { return }
         let delegate = SessionDelegate(service: self)
         self.sessionDelegate = delegate
         let config = URLSessionConfiguration.background(withIdentifier: "com.ebooker.freeBookDownloads")
@@ -151,11 +152,22 @@ final class FreeBookDownloadService: FreeBookDownloading {
 
     func handleDownloadError(taskId: Int, error: Error) {
         guard let context = taskContexts[taskId] else { return }
-        downloadErrors[context.catalogId] = error.localizedDescription
-        activeDownloads.remove(context.catalogId)
-        downloadProgress.removeValue(forKey: context.catalogId)
-        bookDownloadState.removeValue(forKey: context.catalogId)
-        taskContexts.removeValue(forKey: taskId)
+        let catalogId = context.catalogId
+
+        downloadErrors[catalogId] = error.localizedDescription
+        activeDownloads.remove(catalogId)
+        downloadProgress.removeValue(forKey: catalogId)
+        bookDownloadState.removeValue(forKey: catalogId)
+
+        // Cancel and remove all remaining task contexts for this book so
+        // their completions don't attempt to finalize a partially-downloaded book.
+        let orphanTaskIds = taskContexts.compactMap { $0.value.catalogId == catalogId ? $0.key : nil }
+        for id in orphanTaskIds { taskContexts.removeValue(forKey: id) }
+        backgroundSession?.getAllTasks { tasks in
+            for task in tasks where orphanTaskIds.contains(task.taskIdentifier) {
+                task.cancel()
+            }
+        }
     }
 
     // MARK: - Private
@@ -173,7 +185,13 @@ final class FreeBookDownloadService: FreeBookDownloading {
             totalTracks: entry.tracks.count
         )
 
-        guard let backgroundSession else { return }
+        guard let backgroundSession else {
+            activeDownloads.remove(entry.id)
+            downloadProgress.removeValue(forKey: entry.id)
+            bookDownloadState.removeValue(forKey: entry.id)
+            downloadErrors[entry.id] = "Download service not ready."
+            return
+        }
         for track in entry.tracks {
             guard let url = URL(string: track.downloadURL) else { continue }
             let task = backgroundSession.downloadTask(with: url)
@@ -261,6 +279,16 @@ private final class SessionDelegate: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let taskId = downloadTask.taskIdentifier
+
+        if let httpResponse = downloadTask.response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            let error = URLError(.badServerResponse)
+            Task { @MainActor [weak self] in
+                self?.service?.handleDownloadError(taskId: taskId, error: error)
+            }
+            return
+        }
+
         // Copy file to temp location before it gets cleaned up
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tmp")
         try? FileManager.default.moveItem(at: location, to: tempURL)

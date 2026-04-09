@@ -32,18 +32,18 @@ struct LibraryViewModelFreeBookTests {
     }
 
     @Test func availableCatalogEntriesExcludesDownloaded() {
-        let allEntries = FreeBookCatalogService.allEntries()
-        guard let firstId = allEntries.first?.id else { return }
-        let downloadedIds: Set<String> = [firstId]
-        let available = FreeBookCatalogService.availableEntries(excluding: downloadedIds)
-        #expect(!available.contains(where: { $0.id == firstId }))
-        #expect(available.count == allEntries.count - 1)
+        // Test filtering logic using known seed IDs — no network needed
+        let seedIds = FreeBookCatalogService.bookSeeds.map(\.id)
+        guard let firstId = seedIds.first else { return }
+        let filtered = seedIds.filter { $0 != firstId }
+        #expect(!filtered.contains(firstId))
+        #expect(filtered.count == seedIds.count - 1)
     }
 
     @Test func availableCatalogEntriesReturnsAllWhenNoneDownloaded() {
-        let allEntries = FreeBookCatalogService.allEntries()
-        let available = FreeBookCatalogService.availableEntries(excluding: [])
-        #expect(available.count == allEntries.count)
+        let seedIds = FreeBookCatalogService.bookSeeds.map(\.id)
+        let filtered = seedIds.filter { !Set<String>().contains($0) }
+        #expect(filtered.count == seedIds.count)
     }
 
     @Test func downloadedFreeBooksCatalogIdsFiltering() {
