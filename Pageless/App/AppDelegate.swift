@@ -11,6 +11,15 @@ import UIKit
 final class AppDelegate: NSObject, UIApplicationDelegate {
     weak var modelContainer: ModelContainer?
     weak var audioPlayer: AudioPlayerManager?
+    var backgroundSessionCompletionHandler: (() -> Void)?
+
+    func application(
+        _ application: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        backgroundSessionCompletionHandler = completionHandler
+    }
 
     func application(
         _ application: UIApplication,

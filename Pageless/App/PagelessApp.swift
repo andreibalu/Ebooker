@@ -13,6 +13,7 @@ struct PagelessApp: App {
     @StateObject private var audioPlayer = AudioPlayerManager()
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
     @State private var onboardingManager = OnboardingManager()
+    @State private var downloadService = FreeBookDownloadService()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -43,9 +44,11 @@ struct PagelessApp: App {
                 .environmentObject(audioPlayer)
                 .environmentObject(aiEntitlementStore)
                 .environment(onboardingManager)
+                .environment(downloadService)
                 .onAppear {
                     appDelegate.modelContainer = sharedModelContainer
                     appDelegate.audioPlayer = audioPlayer
+                    downloadService.configure(modelContext: sharedModelContainer.mainContext)
                 }
         }
         .modelContainer(sharedModelContainer)
