@@ -5,6 +5,7 @@
 
 import Foundation
 
+@MainActor
 enum FreeBookCatalogService {
 
     // MARK: - Static Seeds
@@ -126,9 +127,10 @@ enum FreeBookCatalogService {
         let tracks = audioFiles.enumerated().map { index, file -> FreeBookTrackEntry in
             let duration = Double(file.length ?? "") ?? 0
             let downloadURL = "https://archive.org/download/\(seed.archiveIdentifier)/\(file.name)"
+            let title = (file.title?.isEmpty == false) ? file.title! : "Track \(index + 1)"
             return FreeBookTrackEntry(
                 id: "\(seed.id)-\(index + 1)",
-                title: file.title ?? file.name,
+                title: title,
                 fileName: file.name,
                 downloadURL: downloadURL,
                 durationSeconds: duration,

@@ -35,6 +35,7 @@ struct ContentView: View {
     @State private var selectedFreeBook: FreeBookCatalogEntry?
     @State private var allCatalogEntries: [FreeBookCatalogEntry] = []
     @State private var isCatalogLoading = false
+    @State private var catalogLoadAttempt = 0
 
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
@@ -169,7 +170,7 @@ struct ContentView: View {
         } message: {
             Text(viewModel.alertMessage)
         }
-        .task {
+        .task(id: catalogLoadAttempt) {
             guard allCatalogEntries.isEmpty else { return }
             isCatalogLoading = true
             allCatalogEntries = await FreeBookCatalogService.allEntries()
@@ -317,6 +318,16 @@ struct ContentView: View {
                     ProgressView("Loading free books…")
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
+                } else if catalogEntries.isEmpty {
+                    VStack(spacing: 12) {
+                        Text("Couldn't load free books.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Button("Retry") { catalogLoadAttempt += 1 }
+                            .buttonStyle(.bordered)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 60)
                 } else {
                     freeBooksFeaturedSection(entries: catalogEntries)
                         .padding(.horizontal, 20)
