@@ -261,6 +261,16 @@ private final class SessionDelegate: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let taskId = downloadTask.taskIdentifier
+
+        if let httpResponse = downloadTask.response as? HTTPURLResponse,
+           !(200...299).contains(httpResponse.statusCode) {
+            let error = URLError(.badServerResponse)
+            Task { @MainActor [weak self] in
+                self?.service?.handleDownloadError(taskId: taskId, error: error)
+            }
+            return
+        }
+
         // Copy file to temp location before it gets cleaned up
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tmp")
         try? FileManager.default.moveItem(at: location, to: tempURL)
