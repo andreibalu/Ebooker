@@ -28,11 +28,11 @@ struct ContentView: View {
     @Environment(FreeBookDownloadService.self) private var downloadService
 
     @State private var viewModel = LibraryViewModel()
+    @State private var browseViewModel = BrowseLibriVoxViewModel()
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
     @State private var isPlayerPresented = false
     @State private var isSettingsPresented = false
-    @State private var freeBooksExpanded = false
     @State private var selectedFreeBook: FreeBookCatalogEntry?
     @State private var allCatalogEntries: [FreeBookCatalogEntry] = []
     @State private var isCatalogLoading = false
@@ -310,7 +310,7 @@ struct ContentView: View {
     private var libraryContent: some View {
         // Free Books tab → full LibriVox catalog search
         if selectedTab == .freeBooks {
-            BrowseLibriVoxView {
+            BrowseLibriVoxView(viewModel: browseViewModel) {
                 isPlayerPresented = true
             }
         } else {
@@ -355,19 +355,7 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 16)
-                    .padding(.bottom, selectedTab == .allBooks && (!catalogEntries.isEmpty || isCatalogLoading) ? 8 : 20)
-
-                    if selectedTab == .allBooks {
-                        if isCatalogLoading {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 20)
-                        } else if !catalogEntries.isEmpty {
-                            freeBooksCatalogSection(entries: catalogEntries)
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 20)
-                        }
-                    }
+                    .padding(.bottom, 20)
                 }
             }
         }
@@ -448,59 +436,6 @@ struct ContentView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 8)
         }
-    }
-
-    private func freeBooksCatalogSection(entries: [FreeBookCatalogEntry]) -> some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    freeBooksExpanded.toggle()
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "book.closed")
-                        .foregroundStyle(.secondary)
-                    Text("Free Books")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text("\(entries.count)")
-                        .font(.caption.weight(.medium))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.primary.opacity(0.08), in: Capsule())
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary.opacity(0.7))
-                        .rotationEffect(.degrees(freeBooksExpanded ? 90 : 0))
-                }
-            }
-            .buttonStyle(.plain)
-
-            if freeBooksExpanded {
-                VStack(spacing: 10) {
-                    ForEach(entries) { entry in
-                        Button {
-                            selectedFreeBook = entry
-                        } label: {
-                            FreeBookCardView(
-                                entry: entry,
-                                downloadProgress: downloadService.downloadProgress[entry.id],
-                                isDownloading: downloadService.activeDownloads.contains(entry.id),
-                                onDownload: { downloadService.startDownload(entry: entry) },
-                                onCancel: { downloadService.cancelDownload(catalogId: entry.id) }
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.top, 12)
-            }
-        }
-        .padding(16)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
     }
 
     // MARK: - Computed

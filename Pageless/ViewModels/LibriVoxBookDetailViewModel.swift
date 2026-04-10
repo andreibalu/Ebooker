@@ -34,9 +34,13 @@ final class LibriVoxBookDetailViewModel {
     var downloadState: DownloadState = .idle
 
     private var downloadTask: Task<Void, Never>?
+    private weak var tracker: BrowseLibriVoxViewModel?
+    private var trackedBookId: String?
 
-    func startDownload(book: LibriVoxBook, modelContext: ModelContext) {
+    func startDownload(book: LibriVoxBook, modelContext: ModelContext, tracker: BrowseLibriVoxViewModel? = nil) {
         guard !downloadState.isActive else { return }
+        self.tracker = tracker
+        self.trackedBookId = book.id
         downloadTask = Task { [weak self] in
             await self?.performDownload(book: book, modelContext: modelContext)
         }
@@ -46,6 +50,9 @@ final class LibriVoxBookDetailViewModel {
         downloadTask?.cancel()
         downloadTask = nil
         downloadState = .idle
+        if let bookId = trackedBookId {
+            tracker?.cancelOrFailDownload(bookId: bookId)
+        }
     }
 
     @MainActor
@@ -53,7 +60,9 @@ final class LibriVoxBookDetailViewModel {
         downloadState = .fetchingTracks
         do {
             let tracks = try await LibriVoxDownloadService.prepareDownload(projectID: book.id)
-            downloadState = .downloading(completed: 0, total: tracks.count)
+            let total = tracks.count
+            downloadState = .downloading(completed: 0, total: total)
+            tracker?.registerDownload(book: book, total: total)
 
             let audiobook = try await LibriVoxDownloadService.downloadAndImport(
                 book: book,
@@ -62,16 +71,19 @@ final class LibriVoxBookDetailViewModel {
             ) { [weak self] completed, total in
                 Task { @MainActor [weak self] in
                     self?.downloadState = .downloading(completed: completed, total: total)
+                    self?.tracker?.updateDownloadProgress(bookId: book.id, completed: completed, total: total)
                 }
             }
 
             downloadState = .complete(audiobook)
+            tracker?.completeDownload(bookId: book.id)
         } catch {
             if Task.isCancelled {
                 downloadState = .idle
             } else {
                 downloadState = .failed(error.localizedDescription)
             }
+            tracker?.cancelOrFailDownload(bookId: book.id)
         }
     }
 }

@@ -8,10 +8,17 @@ import SwiftUI
 struct LibriVoxBookDetailView: View {
     let book: LibriVoxBook
     let onOpenPlayer: () -> Void
+    let browseViewModel: BrowseLibriVoxViewModel?
 
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = LibriVoxBookDetailViewModel()
     @State private var descriptionExpanded = false
+
+    init(book: LibriVoxBook, onOpenPlayer: @escaping () -> Void, browseViewModel: BrowseLibriVoxViewModel? = nil) {
+        self.book = book
+        self.onOpenPlayer = onOpenPlayer
+        self.browseViewModel = browseViewModel
+    }
 
     var body: some View {
         ScrollView {
@@ -103,58 +110,75 @@ struct LibriVoxBookDetailView: View {
 
     @ViewBuilder
     private var downloadSection: some View {
-        switch viewModel.downloadState {
-        case .idle:
-            Button {
-                viewModel.startDownload(book: book, modelContext: modelContext)
-            } label: {
-                Label("Download Free Book", systemImage: "arrow.down.circle.fill")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-
-        case .fetchingTracks:
-            HStack(spacing: 10) {
-                ProgressView()
-                Text("Fetching track list…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-
-        case .downloading(let completed, let total):
+        // If another session is already downloading this book (user navigated away and back),
+        // show tracker progress instead of the idle button.
+        if let trackerDownload = browseViewModel?.activeDownloads[book.id], !viewModel.downloadState.isActive {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Downloading…")
                         .font(.subheadline.weight(.medium))
                     Spacer()
-                    Text("\(completed) / \(total)")
+                    Text("\(trackerDownload.completed) / \(trackerDownload.total)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                ProgressView(value: trackerDownload.progress)
                     .tint(.primary)
-                Button("Cancel") {
-                    viewModel.cancelDownload()
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
-
-        case .complete:
-            EmptyView()
-
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
-                Label(message, systemImage: "exclamationmark.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
-                Button("Try Again") {
-                    viewModel.startDownload(book: book, modelContext: modelContext)
+        } else {
+            switch viewModel.downloadState {
+            case .idle:
+                Button {
+                    viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
+                } label: {
+                    Label("Download Free Book", systemImage: "arrow.down.circle.fill")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+
+            case .fetchingTracks:
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Fetching track list…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+
+            case .downloading(let completed, let total):
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Downloading…")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("\(completed) / \(total)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                        .tint(.primary)
+                    Button("Cancel") {
+                        viewModel.cancelDownload()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+            case .complete:
+                EmptyView()
+
+            case .failed(let message):
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(message, systemImage: "exclamationmark.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                    Button("Try Again") {
+                        viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
     }
