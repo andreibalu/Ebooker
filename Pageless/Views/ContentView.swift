@@ -25,16 +25,12 @@ struct ContentView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
 
-    @Environment(FreeBookDownloadService.self) private var downloadService
-
     @State private var viewModel = LibraryViewModel()
     @State private var browseViewModel = BrowseLibriVoxViewModel()
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
     @State private var isPlayerPresented = false
     @State private var isSettingsPresented = false
-    @State private var selectedFreeBook: FreeBookCatalogEntry?
-
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
     var body: some View {
@@ -96,21 +92,6 @@ struct ContentView: View {
             })
             .environmentObject(aiEntitlementStore)
             .environment(onboarding)
-        }
-        .sheet(item: $selectedFreeBook) { entry in
-            FreeBookDetailSheet(
-                entry: entry,
-                isDownloaded: downloadedCatalogIds.contains(entry.id),
-                isDownloading: downloadService.activeDownloads.contains(entry.id),
-                downloadProgress: downloadService.downloadProgress[entry.id],
-                downloadError: downloadService.downloadErrors[entry.id],
-                onDownload: {
-                    downloadService.startDownload(entry: entry)
-                },
-                onCancel: {
-                    downloadService.cancelDownload(catalogId: entry.id)
-                }
-            )
         }
         .onChange(of: onboarding.requestOpenSettings) { _, shouldOpen in
             if shouldOpen {
@@ -373,10 +354,6 @@ struct ContentView: View {
             base = Array(audiobooks)
         }
         return viewModel.sorted(base, by: sortOptionRawValue)
-    }
-
-    private var downloadedCatalogIds: Set<String> {
-        Set(audiobooks.compactMap(\.catalogId))
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
