@@ -94,9 +94,11 @@ struct ContentView: View {
                 .environmentObject(aiEntitlementStore)
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView()
-                .environmentObject(aiEntitlementStore)
-                .environment(onboarding)
+            SettingsView(onRefreshCatalog: {
+                browseViewModel.forceRefresh(modelContext: modelContext)
+            })
+            .environmentObject(aiEntitlementStore)
+            .environment(onboarding)
         }
         .sheet(item: $selectedFreeBook) { entry in
             FreeBookDetailSheet(

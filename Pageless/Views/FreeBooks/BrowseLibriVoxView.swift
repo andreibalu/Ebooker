@@ -133,81 +133,101 @@ struct BrowseLibriVoxView: View {
         }
     }
 
-    // MARK: - Filter chips
+    // MARK: - Filter dropdowns
 
     private var filterChipsRow: some View {
-        @Bindable var vm = viewModel
-        return VStack(alignment: .leading, spacing: 4) {
-            // Language row — only shown once languages are loaded
+        HStack(spacing: 8) {
             if !viewModel.availableLanguages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        filterChip("All Languages", isSelected: viewModel.selectedLanguage == nil) {
-                            vm.selectedLanguage = nil
-                            viewModel.triggerSearch(modelContext: modelContext)
-                        }
-                        ForEach(viewModel.availableLanguages, id: \.self) { lang in
-                            filterChip(lang, isSelected: viewModel.selectedLanguage == lang) {
-                                vm.selectedLanguage = viewModel.selectedLanguage == lang ? nil : lang
-                                viewModel.triggerSearch(modelContext: modelContext)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            }
-            // Genre row — only shown once genres are loaded
-            if !viewModel.availableGenres.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        filterChip("All Genres", isSelected: viewModel.selectedGenre == nil) {
-                            vm.selectedGenre = nil
-                            viewModel.triggerSearch(modelContext: modelContext)
-                        }
-                        ForEach(viewModel.availableGenres, id: \.self) { genre in
-                            filterChip(genre, isSelected: viewModel.selectedGenre == genre) {
-                                vm.selectedGenre = viewModel.selectedGenre == genre ? nil : genre
-                                viewModel.triggerSearch(modelContext: modelContext)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-            }
-            // Duration row — always visible
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    filterChip("Any Length", isSelected: viewModel.selectedDuration == nil) {
-                        vm.selectedDuration = nil
+                Menu {
+                    Button("All Languages") {
+                        viewModel.selectedLanguage = nil
                         viewModel.triggerSearch(modelContext: modelContext)
                     }
-                    ForEach(DurationFilter.allCases) { dur in
-                        filterChip(dur.rawValue, isSelected: viewModel.selectedDuration == dur) {
-                            vm.selectedDuration = viewModel.selectedDuration == dur ? nil : dur
+                    Divider()
+                    ForEach(viewModel.availableLanguages, id: \.self) { lang in
+                        Button {
+                            viewModel.selectedLanguage = viewModel.selectedLanguage == lang ? nil : lang
                             viewModel.triggerSearch(modelContext: modelContext)
+                        } label: {
+                            if viewModel.selectedLanguage == lang {
+                                Label(lang, systemImage: "checkmark")
+                            } else {
+                                Text(lang)
+                            }
+                        }
+                    }
+                } label: {
+                    filterDropdownLabel(viewModel.selectedLanguage ?? "Language", isSelected: viewModel.selectedLanguage != nil)
+                }
+            }
+
+            if !viewModel.availableGenres.isEmpty {
+                Menu {
+                    Button("All Genres") {
+                        viewModel.selectedGenre = nil
+                        viewModel.triggerSearch(modelContext: modelContext)
+                    }
+                    Divider()
+                    ForEach(viewModel.availableGenres, id: \.self) { genre in
+                        Button {
+                            viewModel.selectedGenre = viewModel.selectedGenre == genre ? nil : genre
+                            viewModel.triggerSearch(modelContext: modelContext)
+                        } label: {
+                            if viewModel.selectedGenre == genre {
+                                Label(genre, systemImage: "checkmark")
+                            } else {
+                                Text(genre)
+                            }
+                        }
+                    }
+                } label: {
+                    filterDropdownLabel(viewModel.selectedGenre ?? "Genre", isSelected: viewModel.selectedGenre != nil)
+                }
+            }
+
+            Menu {
+                Button("Any Length") {
+                    viewModel.selectedDuration = nil
+                    viewModel.triggerSearch(modelContext: modelContext)
+                }
+                Divider()
+                ForEach(DurationFilter.allCases) { dur in
+                    Button {
+                        viewModel.selectedDuration = viewModel.selectedDuration == dur ? nil : dur
+                        viewModel.triggerSearch(modelContext: modelContext)
+                    } label: {
+                        if viewModel.selectedDuration == dur {
+                            Label(dur.rawValue, systemImage: "checkmark")
+                        } else {
+                            Text(dur.rawValue)
                         }
                     }
                 }
-                .padding(.horizontal, 20)
+            } label: {
+                filterDropdownLabel(viewModel.selectedDuration?.rawValue ?? "Length", isSelected: viewModel.selectedDuration != nil)
             }
+
+            Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 6)
     }
 
-    private func filterChip(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
+    private func filterDropdownLabel(_ text: String, isSelected: Bool) -> some View {
+        HStack(spacing: 4) {
+            Text(text)
                 .font(.caption.weight(isSelected ? .semibold : .regular))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    isSelected ? Color.primary : Color.cardWhite,
-                    in: Capsule()
-                )
-                .foregroundStyle(isSelected ? Color.cream : Color.primary)
-                .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
+            Image(systemName: "chevron.down")
+                .font(.caption2.weight(.medium))
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            isSelected ? Color.primary : Color.cardWhite,
+            in: Capsule()
+        )
+        .foregroundStyle(isSelected ? Color.cream : Color.primary)
+        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
     }
 
     // MARK: - Search bar
@@ -290,20 +310,11 @@ struct BrowseLibriVoxView: View {
             if case .syncing = viewModel.syncState {
                 EmptyView() // first-time overlay is showing; don't double-up
             } else {
-                HStack {
-                    Text(viewModel.lastSyncDescription)
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                    Spacer()
-                    Button {
-                        viewModel.forceRefresh(modelContext: modelContext)
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .padding(.vertical, 6)
+                Text(viewModel.lastSyncDescription)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
             }
         }
     }
@@ -363,8 +374,5 @@ struct BrowseLibriVoxView: View {
         }
         .listStyle(.plain)
         .scrollDismissesKeyboard(.immediately)
-        .refreshable {
-            viewModel.forceRefresh(modelContext: modelContext)
-        }
     }
 }

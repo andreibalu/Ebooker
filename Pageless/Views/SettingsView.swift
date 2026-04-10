@@ -6,6 +6,8 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var onRefreshCatalog: (() -> Void)? = nil
+
     @Environment(\.dismiss) private var dismiss
     @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
@@ -123,6 +125,14 @@ struct SettingsView: View {
                             valueTitle: SkipIntervalOption(rawValue: skipForwardSeconds)?.title ?? ""
                         )
                     }
+                }
+
+                Section("Free Books") {
+                    Button("Refresh Catalog") {
+                        onRefreshCatalog?()
+                        dismiss()
+                    }
+                    .foregroundStyle(.primary)
                 }
 
                 Section {
