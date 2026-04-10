@@ -49,6 +49,7 @@ final class BrowseLibriVoxViewModel {
     var searchResults: [LibriVoxBook] = []
     var syncState: SyncState = .idle
     var activeDownloads: [String: ActiveLibriVoxDownload] = [:]
+    var featuredBooks: [LibriVoxBook] = []
 
     // MARK: - Filter state
 
@@ -238,11 +239,71 @@ final class BrowseLibriVoxViewModel {
         }
     }
 
+    // MARK: - Featured Books
+
+    static let featuredTitles: [String] = [
+        "The Art of War",
+        "The Adventures of Sherlock Holmes",
+        "Pride and Prejudice",
+        "Jane Eyre",
+        "Adventures of Huckleberry Finn",
+        "Frankenstein",
+        "The Picture of Dorian Gray",
+        "The Scarlet Pimpernel",
+        "Dracula",
+        "The Count of Monte Cristo",
+        "Treasure Island",
+        "The War of the Worlds",
+        "The Invisible Man",
+        "The Wonderful Wizard of Oz",
+        "Gulliver's Travels",
+        "Our Mutual Friend",
+        "A Tale of Two Cities",
+        "The Woman in White",
+        "Crime and Punishment",
+        "Anna Karenina",
+        "Black Beauty",
+        "Persuasion",
+        "Barnaby Rudge",
+        "Three Men in a Boat",
+        "Twenty Years After",
+        "Incidents in the Life of a Slave Girl",
+        "The Mysterious Affair at Styles",
+        "Common Sense",
+        "The Dhammapada",
+        "The Iliad",
+        "The Odyssey"
+    ]
+
+    @MainActor
+    func loadFeaturedBooks(modelContext: ModelContext) async {
+        guard featuredBooks.isEmpty else { return }
+        let picks = Self.featuredTitles.shuffled().prefix(5)
+        var found: [LibriVoxBook] = []
+        for title in picks {
+            let t = title
+            let predicate = #Predicate<LibriVoxBook> { book in
+                book.title.localizedStandardContains(t)
+            }
+            var descriptor = FetchDescriptor(predicate: predicate)
+            descriptor.fetchLimit = 1
+            if let book = try? modelContext.fetch(descriptor).first {
+                found.append(book)
+            }
+        }
+        featuredBooks = found
+    }
+
     // MARK: - Sync
 
     func triggerSyncIfNeeded(modelContext: ModelContext) {
         guard syncTask == nil else { return }
-        guard case .idle = syncState else { return }
+        guard case .idle = syncState else {
+            if LibriVoxCatalogSync.syncedBookCount > 0 && featuredBooks.isEmpty {
+                Task { [weak self] in await self?.loadFeaturedBooks(modelContext: modelContext) }
+            }
+            return
+        }
         syncTask = Task { [weak self] in
             await self?.performSync(modelContext: modelContext, force: false)
         }
@@ -272,6 +333,7 @@ final class BrowseLibriVoxViewModel {
             }
             syncState = .done
             await loadAvailableFilters(modelContext: modelContext)
+            await loadFeaturedBooks(modelContext: modelContext)
         } catch {
             let offline = isNetworkUnavailable(error)
             let message = offline
