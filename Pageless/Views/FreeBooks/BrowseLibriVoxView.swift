@@ -20,6 +20,8 @@ struct BrowseLibriVoxView: View {
                     .padding(.top, 12)
                     .padding(.bottom, 10)
 
+                filterChipsRow
+
                 syncBanner
                     .padding(.horizontal, 20)
 
@@ -131,6 +133,83 @@ struct BrowseLibriVoxView: View {
         }
     }
 
+    // MARK: - Filter chips
+
+    private var filterChipsRow: some View {
+        @Bindable var vm = viewModel
+        return VStack(alignment: .leading, spacing: 4) {
+            // Language row — only shown once languages are loaded
+            if !viewModel.availableLanguages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        filterChip("All Languages", isSelected: viewModel.selectedLanguage == nil) {
+                            vm.selectedLanguage = nil
+                            viewModel.triggerSearch(modelContext: modelContext)
+                        }
+                        ForEach(viewModel.availableLanguages, id: \.self) { lang in
+                            filterChip(lang, isSelected: viewModel.selectedLanguage == lang) {
+                                vm.selectedLanguage = viewModel.selectedLanguage == lang ? nil : lang
+                                viewModel.triggerSearch(modelContext: modelContext)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+            // Genre row — only shown once genres are loaded
+            if !viewModel.availableGenres.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        filterChip("All Genres", isSelected: viewModel.selectedGenre == nil) {
+                            vm.selectedGenre = nil
+                            viewModel.triggerSearch(modelContext: modelContext)
+                        }
+                        ForEach(viewModel.availableGenres, id: \.self) { genre in
+                            filterChip(genre, isSelected: viewModel.selectedGenre == genre) {
+                                vm.selectedGenre = viewModel.selectedGenre == genre ? nil : genre
+                                viewModel.triggerSearch(modelContext: modelContext)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+            }
+            // Duration row — always visible
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    filterChip("Any Length", isSelected: viewModel.selectedDuration == nil) {
+                        vm.selectedDuration = nil
+                        viewModel.triggerSearch(modelContext: modelContext)
+                    }
+                    ForEach(DurationFilter.allCases) { dur in
+                        filterChip(dur.rawValue, isSelected: viewModel.selectedDuration == dur) {
+                            vm.selectedDuration = viewModel.selectedDuration == dur ? nil : dur
+                            viewModel.triggerSearch(modelContext: modelContext)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func filterChip(_ label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption.weight(isSelected ? .semibold : .regular))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    isSelected ? Color.primary : Color.cardWhite,
+                    in: Capsule()
+                )
+                .foregroundStyle(isSelected ? Color.cream : Color.primary)
+                .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Search bar
 
     private func searchBar(vm: Binding<String>) -> some View {
@@ -235,7 +314,8 @@ struct BrowseLibriVoxView: View {
     private var contentArea: some View {
         if viewModel.isOfflineWithNoData {
             noInternetState
-        } else if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        } else if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+               && !viewModel.hasActiveFilters {
             emptySearch
         } else if viewModel.searchResults.isEmpty {
             noResults
@@ -261,7 +341,7 @@ struct BrowseLibriVoxView: View {
         ContentUnavailableView {
             Label("Search LibriVox", systemImage: "magnifyingglass")
         } description: {
-            Text("Find any of \(viewModel.catalogCount > 0 ? viewModel.catalogCount.formatted() + "+" : "thousands of") public-domain audiobooks by title or author.")
+            Text("Search by title or author, or use the filters above to browse by language, genre, or length.")
         }
     }
 

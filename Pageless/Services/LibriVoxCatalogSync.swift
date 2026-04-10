@@ -70,6 +70,7 @@ enum LibriVoxCatalogSync {
                     bookDescription: apiBook.description,
                     language: apiBook.language,
                     totalTimeSecs: apiBook.totalTimeSecs,
+                    genres: apiBook.genreNames,
                     coverThumbnailURLString: apiBook.coverartThumbnail,
                     librivoxURLString: apiBook.urlLibrivox,
                     internetArchiveURLString: apiBook.urlIarchive,
@@ -129,6 +130,7 @@ enum LibriVoxCatalogSync {
             book.bookDescription = apiBook.description
             book.language = apiBook.language
             book.totalTimeSecs = apiBook.totalTimeSecs
+            book.genres = apiBook.genreNames
             book.coverThumbnailURLString = apiBook.coverartThumbnail
             book.librivoxURLString = apiBook.urlLibrivox
             book.internetArchiveURLString = apiBook.urlIarchive
@@ -142,6 +144,7 @@ enum LibriVoxCatalogSync {
                 bookDescription: apiBook.description,
                 language: apiBook.language,
                 totalTimeSecs: apiBook.totalTimeSecs,
+                genres: apiBook.genreNames,
                 coverThumbnailURLString: apiBook.coverartThumbnail,
                 librivoxURLString: apiBook.urlLibrivox,
                 internetArchiveURLString: apiBook.urlIarchive,

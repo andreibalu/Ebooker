@@ -21,7 +21,7 @@ struct LibriVoxBookRow: View {
     }
 
     private var coverThumbnail: some View {
-        AsyncImage(url: book.coverThumbnailURL) { phase in
+        AsyncImage(url: book.bestCoverURL) { phase in
             switch phase {
             case .success(let image):
                 image
