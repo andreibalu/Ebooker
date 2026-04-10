@@ -27,6 +27,7 @@ struct AudiobookDetailView: View {
     @State private var showFilterSheet = false
     @State private var tracksExpanded = false
     @State private var momentsExpanded = false
+    @State private var folderSizeMB: Int?
 
     init(audiobook: Audiobook, openPlayer: @escaping () -> Void) {
         self.audiobook = audiobook
@@ -80,6 +81,7 @@ struct AudiobookDetailView: View {
         .onAppear {
             viewModel.reconcileStoredRecap(modelContext: modelContext)
             onboarding.notifyBookImported()
+            folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
         }
     }
 
@@ -98,6 +100,17 @@ struct AudiobookDetailView: View {
                     Text(audiobook.displayAuthor)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+
+                    if let mb = folderSizeMB {
+                        HStack(spacing: 4) {
+                            Image(systemName: "internaldrive")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                            Text("\(mb) MB")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
 
                     Text(currentTimestampLabel)
                         .font(.caption.monospacedDigit())

@@ -151,6 +151,37 @@ enum LibraryImportService {
         try storageFolderURL(for: audiobook.folderName).appendingPathComponent(track.storedFileName)
     }
 
+    /// Returns the total on-disk size of an audiobook's storage folder in megabytes, or nil if unavailable.
+    static func folderSizeMB(for audiobook: Audiobook) -> Int? {
+        guard let appSupport = try? FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        ) else { return nil }
+
+        let folderURL = appSupport
+            .appendingPathComponent("Audiobooks", isDirectory: true)
+            .appendingPathComponent(audiobook.folderName, isDirectory: true)
+
+        guard FileManager.default.fileExists(atPath: folderURL.path()) else { return nil }
+
+        var totalBytes: Int64 = 0
+        let enumerator = FileManager.default.enumerator(
+            at: folderURL,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        )
+        while let fileURL = enumerator?.nextObject() as? URL {
+            if let size = try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                totalBytes += Int64(size)
+            }
+        }
+
+        guard totalBytes > 0 else { return nil }
+        return Int(totalBytes / (1024 * 1024))
+    }
+
     private static func titleSuggestion(for urls: [URL]) -> String {
         guard let firstURL = urls.first else { return "Imported Audiobook" }
 
