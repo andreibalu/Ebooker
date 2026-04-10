@@ -60,12 +60,18 @@ final class LibriVoxBook {
         self.bookDescription = bookDescription
         self.language = language
         self.totalTimeSecs = totalTimeSecs
-        self.genres = genres
         self.coverThumbnailURLString = coverThumbnailURLString
         self.librivoxURLString = librivoxURLString
         self.internetArchiveURLString = internetArchiveURLString
         self.rssURLString = rssURLString
         self.lastSyncedAt = lastSyncedAt
+        if !genres.isEmpty,
+           let data = try? JSONEncoder().encode(genres),
+           let str = String(data: data, encoding: .utf8) {
+            _genresRaw = str
+        } else {
+            _genresRaw = nil
+        }
     }
 
     var formattedDuration: String {
