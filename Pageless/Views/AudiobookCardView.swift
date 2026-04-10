@@ -9,6 +9,8 @@ struct AudiobookCardView: View {
     let audiobook: Audiobook
     let isCurrentlyPlaying: Bool
 
+    @State private var folderSizeMB: Int?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ZStack(alignment: .topTrailing) {
@@ -63,6 +65,24 @@ struct AudiobookCardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                HStack(spacing: 4) {
+                    Image(systemName: "clock")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                    Text(TimeFormatter.durationSummary(seconds: audiobook.totalDuration))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    if let mb = folderSizeMB {
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("\(mb) MB")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
 
             // Custom slim progress capsule
@@ -81,6 +101,9 @@ struct AudiobookCardView: View {
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.07), radius: 12, x: 0, y: 4)
+        .onAppear {
+            folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
+        }
     }
 
     private var cover: some View {
