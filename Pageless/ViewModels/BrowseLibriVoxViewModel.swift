@@ -7,6 +7,17 @@ import Foundation
 import Observation
 import SwiftData
 
+struct ActiveLibriVoxDownload: Identifiable {
+    let id: String // book.id
+    let book: LibriVoxBook
+    var completed: Int
+    var total: Int
+
+    var progress: Double {
+        total > 0 ? Double(completed) / Double(total) : 0
+    }
+}
+
 @Observable
 final class BrowseLibriVoxViewModel {
     enum SyncState {
@@ -19,9 +30,33 @@ final class BrowseLibriVoxViewModel {
     var searchQuery: String = ""
     var searchResults: [LibriVoxBook] = []
     var syncState: SyncState = .idle
+    var activeDownloads: [String: ActiveLibriVoxDownload] = [:]
+
+    var sortedActiveDownloads: [ActiveLibriVoxDownload] {
+        activeDownloads.values.sorted { $0.book.title < $1.book.title }
+    }
 
     private var searchTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
+
+    // MARK: - Download tracking
+
+    func registerDownload(book: LibriVoxBook, total: Int) {
+        activeDownloads[book.id] = ActiveLibriVoxDownload(id: book.id, book: book, completed: 0, total: total)
+    }
+
+    func updateDownloadProgress(bookId: String, completed: Int, total: Int) {
+        activeDownloads[bookId]?.completed = completed
+        activeDownloads[bookId]?.total = total
+    }
+
+    func completeDownload(bookId: String) {
+        activeDownloads.removeValue(forKey: bookId)
+    }
+
+    func cancelOrFailDownload(bookId: String) {
+        activeDownloads.removeValue(forKey: bookId)
+    }
 
     var lastSyncDescription: String {
         guard let date = LibriVoxCatalogSync.lastSyncDate else { return "Never synced" }

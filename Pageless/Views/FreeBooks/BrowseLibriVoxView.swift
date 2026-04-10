@@ -7,14 +7,15 @@ import SwiftUI
 
 struct BrowseLibriVoxView: View {
     let onOpenPlayer: () -> Void
+    let viewModel: BrowseLibriVoxViewModel
 
     @Environment(\.modelContext) private var modelContext
-    @State private var viewModel = BrowseLibriVoxViewModel()
 
     var body: some View {
+        @Bindable var vm = viewModel
         ZStack {
             VStack(spacing: 0) {
-                searchBar
+                searchBar(vm: $vm.searchQuery)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                     .padding(.bottom, 10)
@@ -24,6 +25,10 @@ struct BrowseLibriVoxView: View {
 
                 Divider()
                     .padding(.horizontal, 20)
+
+                if !viewModel.activeDownloads.isEmpty {
+                    activeDownloadsSection
+                }
 
                 contentArea
             }
@@ -38,6 +43,56 @@ struct BrowseLibriVoxView: View {
         .onAppear {
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
         }
+    }
+
+    // MARK: - Active downloads pinned section
+
+    private var activeDownloadsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Downloading")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+
+            VStack(spacing: 8) {
+                ForEach(viewModel.sortedActiveDownloads) { download in
+                    activeDownloadCard(download)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 10)
+
+            Divider()
+                .padding(.horizontal, 20)
+        }
+    }
+
+    private func activeDownloadCard(_ download: ActiveLibriVoxDownload) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(download.book.title)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                    Text(download.book.authorDisplay)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                Text("\(download.completed)/\(download.total) tracks")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            ProgressView(value: download.progress)
+                .tint(.primary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
     // MARK: - First-load overlay
@@ -78,13 +133,13 @@ struct BrowseLibriVoxView: View {
 
     // MARK: - Search bar
 
-    private var searchBar: some View {
+    private func searchBar(vm: Binding<String>) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .font(.subheadline)
 
-            TextField("Search 20,000+ free audiobooks", text: $viewModel.searchQuery)
+            TextField("Search 20,000+ free audiobooks", text: vm)
                 .font(.subheadline)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -218,7 +273,7 @@ struct BrowseLibriVoxView: View {
         List {
             ForEach(viewModel.searchResults) { book in
                 NavigationLink {
-                    LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer)
+                    LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
                 } label: {
                     LibriVoxBookRow(book: book)
                 }
