@@ -19,6 +19,7 @@ struct PagelessApp: App {
             Audiobook.self,
             AudioTrack.self,
             Moment.self,
+            LibriVoxBook.self,
         ])
 
         let supportURL = FileManager.default.urls(

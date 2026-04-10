@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 enum LibraryTab {
     case favorites
     case allBooks
+    case freeBooks
 }
 
 struct ContentView: View {
@@ -231,6 +232,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             tabButton(title: "Favorites", tab: .favorites)
             tabButton(title: "All Books", tab: .allBooks)
+            tabButton(title: "Free Books", tab: .freeBooks)
         }
         .padding(.bottom, 1)
     }
@@ -262,52 +264,58 @@ struct ContentView: View {
 
     @ViewBuilder
     private var libraryContent: some View {
-        let books = displayedBooks
-        if books.isEmpty {
-            emptyState
+        if selectedTab == .freeBooks {
+            BrowseLibriVoxView {
+                isPlayerPresented = true
+            }
         } else {
-            ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 16) {
-                    ForEach(books) { audiobook in
-                        NavigationLink {
-                            AudiobookDetailView(audiobook: audiobook) {
-                                isPlayerPresented = true
-                            }
-                        } label: {
-                            AudiobookCardView(
-                                audiobook: audiobook,
-                                isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Resume", systemImage: "play.fill") {
-                                Task {
-                                    await player.startPlayback(for: audiobook)
-                                    try? await Task.sleep(for: .milliseconds(600))
+            let books = displayedBooks
+            if books.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        ForEach(books) { audiobook in
+                            NavigationLink {
+                                AudiobookDetailView(audiobook: audiobook) {
                                     isPlayerPresented = true
                                 }
-                            }
-
-                            Button(audiobook.isFavorite ? "Unfavorite" : "Favorite", systemImage: audiobook.isFavorite ? "heart.slash" : "heart") {
-                                audiobook.isFavorite.toggle()
-                            }
-
-                            Button("Rename", systemImage: "pencil") {
-                                viewModel.beginRename(audiobook)
-                            }
-
-                            Button(role: .destructive) {
-                                viewModel.deleteCandidate = audiobook
                             } label: {
-                                Label("Delete", systemImage: "trash")
+                                AudiobookCardView(
+                                    audiobook: audiobook,
+                                    isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button("Resume", systemImage: "play.fill") {
+                                    Task {
+                                        await player.startPlayback(for: audiobook)
+                                        try? await Task.sleep(for: .milliseconds(600))
+                                        isPlayerPresented = true
+                                    }
+                                }
+
+                                Button(audiobook.isFavorite ? "Unfavorite" : "Favorite", systemImage: audiobook.isFavorite ? "heart.slash" : "heart") {
+                                    audiobook.isFavorite.toggle()
+                                }
+
+                                Button("Rename", systemImage: "pencil") {
+                                    viewModel.beginRename(audiobook)
+                                }
+
+                                Button(role: .destructive) {
+                                    viewModel.deleteCandidate = audiobook
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 20)
             }
         }
     }
