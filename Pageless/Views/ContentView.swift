@@ -439,38 +439,51 @@ struct ContentView: View {
     }
 
     private func freeBooksCatalogSection(entries: [FreeBookCatalogEntry]) -> some View {
-        DisclosureGroup(isExpanded: $freeBooksExpanded) {
-            VStack(spacing: 10) {
-                ForEach(entries) { entry in
-                    Button {
-                        selectedFreeBook = entry
-                    } label: {
-                        FreeBookCardView(
-                            entry: entry,
-                            downloadProgress: downloadService.downloadProgress[entry.id],
-                            isDownloading: downloadService.activeDownloads.contains(entry.id)
-                        )
-                    }
-                    .buttonStyle(.plain)
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    freeBooksExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "book.closed")
+                        .foregroundStyle(.secondary)
+                    Text("Free Books")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("\(entries.count)")
+                        .font(.caption.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.08), in: Capsule())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.7))
+                        .rotationEffect(.degrees(freeBooksExpanded ? 90 : 0))
                 }
             }
-            .padding(.top, 12)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "book.closed")
-                    .foregroundStyle(.secondary)
-                Text("Free Books")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text("\(entries.count)")
-                    .font(.caption.weight(.medium))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.primary.opacity(0.08), in: Capsule())
-                    .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+
+            if freeBooksExpanded {
+                VStack(spacing: 10) {
+                    ForEach(entries) { entry in
+                        Button {
+                            selectedFreeBook = entry
+                        } label: {
+                            FreeBookCardView(
+                                entry: entry,
+                                downloadProgress: downloadService.downloadProgress[entry.id],
+                                isDownloading: downloadService.activeDownloads.contains(entry.id)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 12)
             }
         }
-        .tint(.primary.opacity(0.55))
         .padding(16)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 6, y: 2)
