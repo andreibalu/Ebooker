@@ -13,7 +13,7 @@ final class BrowseLibriVoxViewModel {
         case idle
         case syncing(fetched: Int)
         case done
-        case failed(String)
+        case failed(String, isOffline: Bool)
     }
 
     var searchQuery: String = ""
@@ -24,14 +24,32 @@ final class BrowseLibriVoxViewModel {
     private var syncTask: Task<Void, Never>?
 
     var lastSyncDescription: String {
-        guard let date = LibriVoxCatalogSync.lastSyncDate else {
-            return "Never synced"
-        }
+        guard let date = LibriVoxCatalogSync.lastSyncDate else { return "Never synced" }
         return "Updated \(TimeFormatter.relativeDateString(for: date))"
     }
 
-    var catalogCount: Int {
-        LibriVoxCatalogSync.syncedBookCount
+    var catalogCount: Int { LibriVoxCatalogSync.syncedBookCount }
+
+    /// True while the very first catalog download is running (no data cached yet).
+    var isFirstTimeLoading: Bool {
+        if case .syncing = syncState { return LibriVoxCatalogSync.syncedBookCount == 0 }
+        return false
+    }
+
+    /// Network is unreachable and there is no cached catalog to search.
+    var isOfflineWithNoData: Bool {
+        if case .failed(_, let offline) = syncState {
+            return offline && LibriVoxCatalogSync.syncedBookCount == 0
+        }
+        return false
+    }
+
+    /// Network is unreachable but there is a cached catalog the user can still search.
+    var isOfflineWithCachedData: Bool {
+        if case .failed(_, let offline) = syncState {
+            return offline && LibriVoxCatalogSync.syncedBookCount > 0
+        }
+        return false
     }
 
     // MARK: - Search
@@ -62,9 +80,7 @@ final class BrowseLibriVoxViewModel {
             descriptor.fetchLimit = 150
             let raw = try modelContext.fetch(descriptor)
             let q = query.lowercased()
-            searchResults = raw.sorted { a, b in
-                rankScore(a, query: q) < rankScore(b, query: q)
-            }
+            searchResults = raw.sorted { rankScore($0, query: q) < rankScore($1, query: q) }
         } catch {
             searchResults = []
         }
@@ -111,8 +127,27 @@ final class BrowseLibriVoxViewModel {
             }
             syncState = .done
         } catch {
-            syncState = .failed(error.localizedDescription)
+            let offline = isNetworkUnavailable(error)
+            let message = offline
+                ? "No internet connection"
+                : error.localizedDescription
+            syncState = .failed(message, isOffline: offline)
         }
         syncTask = nil
+    }
+
+    private func isNetworkUnavailable(_ error: Error) -> Bool {
+        guard let urlError = error as? URLError else { return false }
+        switch urlError.code {
+        case .notConnectedToInternet,
+             .networkConnectionLost,
+             .timedOut,
+             .cannotConnectToHost,
+             .cannotFindHost,
+             .dnsLookupFailed:
+            return true
+        default:
+            return false
+        }
     }
 }

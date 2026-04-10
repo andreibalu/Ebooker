@@ -12,23 +12,67 @@ struct BrowseLibriVoxView: View {
     @State private var viewModel = BrowseLibriVoxViewModel()
 
     var body: some View {
-        VStack(spacing: 0) {
-            searchBar
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 10)
+        ZStack {
+            VStack(spacing: 0) {
+                searchBar
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 10)
 
-            syncBanner
-                .padding(.horizontal, 20)
+                syncBanner
+                    .padding(.horizontal, 20)
 
-            Divider()
-                .padding(.horizontal, 20)
+                Divider()
+                    .padding(.horizontal, 20)
 
-            contentArea
+                contentArea
+            }
+            .background(Color.cream.ignoresSafeArea())
+
+            if viewModel.isFirstTimeLoading {
+                firstLoadOverlay
+                    .transition(.opacity)
+            }
         }
-        .background(Color.cream.ignoresSafeArea())
+        .animation(.easeInOut(duration: 0.35), value: viewModel.isFirstTimeLoading)
         .onAppear {
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
+        }
+    }
+
+    // MARK: - First-load overlay
+
+    private var firstLoadOverlay: some View {
+        ZStack {
+            Rectangle()
+                .fill(.regularMaterial)
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                ProgressView()
+                    .scaleEffect(1.4)
+                    .tint(.primary)
+
+                VStack(spacing: 6) {
+                    Text("Building Your Free Library")
+                        .font(.headline)
+
+                    if case .syncing(let fetched) = viewModel.syncState, fetched > 0 {
+                        Text("\(fetched.formatted()) books loaded…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Downloading catalog of 20,000+ public-domain audiobooks")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .padding(32)
+            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
+            .padding(.horizontal, 48)
         }
     }
 
@@ -68,19 +112,33 @@ struct BrowseLibriVoxView: View {
 
     @ViewBuilder
     private var syncBanner: some View {
-        switch viewModel.syncState {
-        case .syncing(let fetched):
+        // Incremental refresh in progress (only when catalog already has data)
+        if case .syncing(let fetched) = viewModel.syncState, !viewModel.isFirstTimeLoading {
             HStack(spacing: 6) {
-                ProgressView()
-                    .scaleEffect(0.75)
-                Text("Syncing catalog… \(fetched.formatted()) books loaded")
+                ProgressView().scaleEffect(0.75)
+                Text("Refreshing catalog… \(fetched.formatted()) updated")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
             }
             .padding(.vertical, 6)
 
-        case .failed(let message):
+        // Offline but catalog is cached — search still works
+        } else if viewModel.isOfflineWithCachedData {
+            HStack(spacing: 6) {
+                Image(systemName: "wifi.slash")
+                    .foregroundStyle(.orange)
+                Text("Offline — showing cached catalog")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Retry") { viewModel.forceRefresh(modelContext: modelContext) }
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.vertical, 6)
+
+        // Online error (not an offline / no-data situation)
+        } else if case .failed(let message, false) = viewModel.syncState {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
@@ -88,15 +146,16 @@ struct BrowseLibriVoxView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Retry") {
-                    viewModel.forceRefresh(modelContext: modelContext)
-                }
-                .font(.caption.weight(.medium))
+                Button("Retry") { viewModel.forceRefresh(modelContext: modelContext) }
+                    .font(.caption.weight(.medium))
             }
             .padding(.vertical, 6)
 
-        case .done, .idle:
-            if LibriVoxCatalogSync.syncedBookCount > 0 {
+        // Steady state: show last-sync timestamp
+        } else if viewModel.catalogCount > 0 {
+            if case .syncing = viewModel.syncState {
+                EmptyView() // first-time overlay is showing; don't double-up
+            } else {
                 HStack {
                     Text(viewModel.lastSyncDescription)
                         .font(.caption)
@@ -119,7 +178,9 @@ struct BrowseLibriVoxView: View {
 
     @ViewBuilder
     private var contentArea: some View {
-        if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if viewModel.isOfflineWithNoData {
+            noInternetState
+        } else if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             emptySearch
         } else if viewModel.searchResults.isEmpty {
             noResults
@@ -128,11 +189,24 @@ struct BrowseLibriVoxView: View {
         }
     }
 
+    private var noInternetState: some View {
+        ContentUnavailableView {
+            Label("No Internet Connection", systemImage: "wifi.slash")
+        } description: {
+            Text("Free Books needs a connection on first launch to download the catalog. Connect and tap Retry.")
+        } actions: {
+            Button("Retry") {
+                viewModel.forceRefresh(modelContext: modelContext)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
     private var emptySearch: some View {
         ContentUnavailableView {
             Label("Search LibriVox", systemImage: "magnifyingglass")
         } description: {
-            Text("Find any of \(LibriVoxCatalogSync.syncedBookCount > 0 ? LibriVoxCatalogSync.syncedBookCount.formatted() + "+" : "thousands of") public-domain audiobooks by title or author.")
+            Text("Find any of \(viewModel.catalogCount > 0 ? viewModel.catalogCount.formatted() + "+" : "thousands of") public-domain audiobooks by title or author.")
         }
     }
 
