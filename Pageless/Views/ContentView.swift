@@ -422,7 +422,9 @@ struct ContentView: View {
                         FreeBookCardView(
                             entry: entry,
                             downloadProgress: downloadService.downloadProgress[entry.id],
-                            isDownloading: downloadService.activeDownloads.contains(entry.id)
+                            isDownloading: downloadService.activeDownloads.contains(entry.id),
+                            onDownload: { downloadService.startDownload(entry: entry) },
+                            onCancel: { downloadService.cancelDownload(catalogId: entry.id) }
                         )
                     }
                     .buttonStyle(.plain)
@@ -475,7 +477,9 @@ struct ContentView: View {
                             FreeBookCardView(
                                 entry: entry,
                                 downloadProgress: downloadService.downloadProgress[entry.id],
-                                isDownloading: downloadService.activeDownloads.contains(entry.id)
+                                isDownloading: downloadService.activeDownloads.contains(entry.id),
+                                onDownload: { downloadService.startDownload(entry: entry) },
+                                onCancel: { downloadService.cancelDownload(catalogId: entry.id) }
                             )
                         }
                         .buttonStyle(.plain)
@@ -498,7 +502,9 @@ struct ContentView: View {
         } else {
             base = Array(audiobooks)
         }
-        return viewModel.sorted(base, by: sortOptionRawValue)
+        let sorted = viewModel.sorted(base, by: sortOptionRawValue)
+        guard selectedTab == .allBooks else { return sorted }
+        return sorted.filter { !$0.isFreeBook } + sorted.filter { $0.isFreeBook }
     }
 
     private var downloadedCatalogIds: Set<String> {

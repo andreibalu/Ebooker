@@ -9,6 +9,8 @@ struct FreeBookCardView: View {
     let entry: FreeBookCatalogEntry
     let downloadProgress: Double?
     let isDownloading: Bool
+    let onDownload: () -> Void
+    let onCancel: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
@@ -82,23 +84,35 @@ struct FreeBookCardView: View {
     @ViewBuilder
     private var downloadControl: some View {
         if isDownloading, let progress = downloadProgress {
-            ZStack {
-                Circle()
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 2.5)
-                    .frame(width: 34, height: 34)
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(Color.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                    .frame(width: 34, height: 34)
-                    .rotationEffect(.degrees(-90))
-                Text("\(Int(progress * 100))")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.primary)
+            HStack(spacing: 10) {
+                Button(action: onCancel) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                ZStack {
+                    Circle()
+                        .stroke(Color.secondary.opacity(0.2), lineWidth: 2.5)
+                        .frame(width: 34, height: 34)
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.primary, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .frame(width: 34, height: 34)
+                        .rotationEffect(.degrees(-90))
+                    Text("\(Int(progress * 100))")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.primary)
+                }
             }
         } else {
-            Image(systemName: "arrow.down.circle")
-                .font(.system(size: 26))
-                .foregroundStyle(.secondary)
+            Button(action: onDownload) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 26))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
         }
     }
 }
