@@ -62,7 +62,7 @@ struct LibriVoxBookDetailView: View {
     }
 
     private var coverArt: some View {
-        AsyncImage(url: book.coverThumbnailURL) { phase in
+        AsyncImage(url: book.bestCoverURL) { phase in
             switch phase {
             case .success(let image):
                 image

@@ -47,7 +47,7 @@ enum LibriVoxDownloadService {
 
         do {
             // Cover art (best-effort — nil is fine)
-            let coverData = await fetchCoverArt(url: book.coverThumbnailURL)
+            let coverData = await fetchCoverArt(url: book.bestCoverURL)
 
             // Download each track
             var audioTracks: [AudioTrack] = []

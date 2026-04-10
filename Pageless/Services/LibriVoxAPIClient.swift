@@ -5,6 +5,22 @@
 
 import Foundation
 
+// MARK: - Genre model
+
+struct LibriVoxAPIGenre: Decodable {
+    let id: String
+    let name: String
+
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = (try? c.decode(Int.self, forKey: .id)).map(String.init)
+            ?? ((try? c.decode(String.self, forKey: .id)) ?? "")
+        name = (try? c.decode(String.self, forKey: .name)) ?? ""
+    }
+
+    enum CodingKeys: String, CodingKey { case id, name }
+}
+
 // MARK: - Response envelopes
 
 private struct CatalogResponse: Decodable {
@@ -28,6 +44,7 @@ struct LibriVoxAPIBook: Decodable {
     let urlIarchive: String?
     let urlRss: String?
     let coverartThumbnail: String?
+    let genres: [LibriVoxAPIGenre]?
 
     var authorDisplay: String {
         guard let authors, !authors.isEmpty else { return "Unknown Author" }
@@ -42,6 +59,11 @@ struct LibriVoxAPIBook: Decodable {
         case urlIarchive = "url_iarchive"
         case urlRss = "url_rss"
         case coverartThumbnail = "coverart_thumbnail"
+        case genres
+    }
+
+    var genreNames: [String] {
+        (genres ?? []).map(\.name).filter { !$0.isEmpty }
     }
 
     init(from decoder: any Decoder) throws {
@@ -61,6 +83,7 @@ struct LibriVoxAPIBook: Decodable {
         urlIarchive = try? c.decode(String.self, forKey: .urlIarchive)
         urlRss = try? c.decode(String.self, forKey: .urlRss)
         coverartThumbnail = try? c.decode(String.self, forKey: .coverartThumbnail)
+        genres = try? c.decode([LibriVoxAPIGenre].self, forKey: .genres)
     }
 }
 
@@ -138,6 +161,7 @@ enum LibriVoxAPIClient {
         URLQueryItem(name: "fields[]", value: "url_iarchive"),
         URLQueryItem(name: "fields[]", value: "url_rss"),
         URLQueryItem(name: "fields[]", value: "coverart_thumbnail"),
+        URLQueryItem(name: "fields[]", value: "genres"),
     ]
 
     /// Fetches a single page of the catalog at the given offset.

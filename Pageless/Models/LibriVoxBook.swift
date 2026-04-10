@@ -20,6 +20,26 @@ final class LibriVoxBook {
     var rssURLString: String?
     var lastSyncedAt: Date
 
+    // Schema-migration-safe genres field (private backing, JSON-encoded [String])
+    private var _genresRaw: String?
+
+    var genres: [String] {
+        get {
+            guard let raw = _genresRaw,
+                  let data = raw.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([String].self, from: data)
+            else { return [] }
+            return decoded
+        }
+        set {
+            guard !newValue.isEmpty,
+                  let data = try? JSONEncoder().encode(newValue),
+                  let str = String(data: data, encoding: .utf8)
+            else { _genresRaw = nil; return }
+            _genresRaw = str
+        }
+    }
+
     init(
         id: String,
         title: String,
@@ -27,6 +47,7 @@ final class LibriVoxBook {
         bookDescription: String,
         language: String,
         totalTimeSecs: Int,
+        genres: [String] = [],
         coverThumbnailURLString: String? = nil,
         librivoxURLString: String? = nil,
         internetArchiveURLString: String? = nil,
@@ -39,6 +60,7 @@ final class LibriVoxBook {
         self.bookDescription = bookDescription
         self.language = language
         self.totalTimeSecs = totalTimeSecs
+        self.genres = genres
         self.coverThumbnailURLString = coverThumbnailURLString
         self.librivoxURLString = librivoxURLString
         self.internetArchiveURLString = internetArchiveURLString
@@ -54,5 +76,22 @@ final class LibriVoxBook {
     var coverThumbnailURL: URL? {
         guard let s = coverThumbnailURLString, !s.isEmpty else { return nil }
         return URL(string: s)
+    }
+
+    /// Identifier extracted from the Internet Archive details URL (last path component).
+    private var internetArchiveIdentifier: String? {
+        guard let s = internetArchiveURLString,
+              let url = URL(string: s) else { return nil }
+        let id = url.lastPathComponent
+        return id.isEmpty ? nil : id
+    }
+
+    /// Best available cover image URL: LibriVox thumbnail first, then Internet Archive services image.
+    var bestCoverURL: URL? {
+        if let s = coverThumbnailURLString, !s.isEmpty, let url = URL(string: s) { return url }
+        if let id = internetArchiveIdentifier {
+            return URL(string: "https://archive.org/services/img/\(id)")
+        }
+        return nil
     }
 }
