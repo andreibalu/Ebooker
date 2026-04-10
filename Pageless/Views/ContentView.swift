@@ -414,7 +414,7 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
 
-            LazyVGrid(columns: gridColumns, spacing: 16) {
+            VStack(spacing: 10) {
                 ForEach(entries) { entry in
                     Button {
                         selectedFreeBook = entry
@@ -440,7 +440,7 @@ struct ContentView: View {
 
     private func freeBooksCatalogSection(entries: [FreeBookCatalogEntry]) -> some View {
         DisclosureGroup(isExpanded: $freeBooksExpanded) {
-            LazyVGrid(columns: gridColumns, spacing: 16) {
+            VStack(spacing: 10) {
                 ForEach(entries) { entry in
                     Button {
                         selectedFreeBook = entry
