@@ -17,7 +17,7 @@ enum LibriVoxDownloadError: LocalizedError {
         case .noTracks:
             "This book has no downloadable tracks."
         case .invalidTrackURL(let title):
-            "Could not resolve a download URL for "\(title)"."
+            "Could not resolve a download URL for \"\(title)\"."
         case .couldNotCreateStorage:
             "The app could not create local storage for this audiobook."
         }
