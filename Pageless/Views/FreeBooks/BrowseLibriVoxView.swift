@@ -327,12 +327,41 @@ struct BrowseLibriVoxView: View {
             noInternetState
         } else if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                && !viewModel.hasActiveFilters {
-            emptySearch
+            if !viewModel.featuredBooks.isEmpty {
+                featuredBooksList
+            } else {
+                emptySearch
+            }
         } else if viewModel.searchResults.isEmpty {
             noResults
         } else {
             resultsList
         }
+    }
+
+    // MARK: - Featured Books
+
+    private var featuredBooksList: some View {
+        List {
+            Section {
+                ForEach(viewModel.featuredBooks) { book in
+                    NavigationLink {
+                        LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+                    } label: {
+                        LibriVoxBookRow(book: book)
+                    }
+                    .listRowBackground(Color.cardWhite)
+                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                }
+            } header: {
+                Text("Popular Classics")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .textCase(nil)
+            }
+        }
+        .listStyle(.plain)
+        .scrollDismissesKeyboard(.immediately)
     }
 
     private var noInternetState: some View {

@@ -25,19 +25,12 @@ struct ContentView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
 
-    @Environment(FreeBookDownloadService.self) private var downloadService
-
     @State private var viewModel = LibraryViewModel()
     @State private var browseViewModel = BrowseLibriVoxViewModel()
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
     @State private var isPlayerPresented = false
     @State private var isSettingsPresented = false
-    @State private var selectedFreeBook: FreeBookCatalogEntry?
-    @State private var allCatalogEntries: [FreeBookCatalogEntry] = []
-    @State private var isCatalogLoading = false
-    @State private var catalogLoadAttempt = 0
-
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
 
     var body: some View {
@@ -100,21 +93,6 @@ struct ContentView: View {
             .environmentObject(aiEntitlementStore)
             .environment(onboarding)
         }
-        .sheet(item: $selectedFreeBook) { entry in
-            FreeBookDetailSheet(
-                entry: entry,
-                isDownloaded: downloadedCatalogIds.contains(entry.id),
-                isDownloading: downloadService.activeDownloads.contains(entry.id),
-                downloadProgress: downloadService.downloadProgress[entry.id],
-                downloadError: downloadService.downloadErrors[entry.id],
-                onDownload: {
-                    downloadService.startDownload(entry: entry)
-                },
-                onCancel: {
-                    downloadService.cancelDownload(catalogId: entry.id)
-                }
-            )
-        }
         .onChange(of: onboarding.requestOpenSettings) { _, shouldOpen in
             if shouldOpen {
                 isSettingsPresented = true
@@ -172,12 +150,6 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.alertMessage)
-        }
-        .task(id: catalogLoadAttempt) {
-            guard allCatalogEntries.isEmpty else { return }
-            isCatalogLoading = true
-            allCatalogEntries = await FreeBookCatalogService.allEntries()
-            isCatalogLoading = false
         }
         .onAppear {
             player.configure(modelContext: modelContext)
@@ -310,43 +282,13 @@ struct ContentView: View {
 
     @ViewBuilder
     private var libraryContent: some View {
-        // Free Books tab → full LibriVox catalog search
         if selectedTab == .freeBooks {
             BrowseLibriVoxView(onOpenPlayer: {
                 isPlayerPresented = true
             }, viewModel: browseViewModel)
         } else {
-            // Favorites and All Books tabs
             let books = displayedBooks
-            let catalogEntries = availableCatalogEntries
-
-            if books.isEmpty && catalogEntries.isEmpty && !isCatalogLoading {
-                emptyState
-            } else if books.isEmpty && selectedTab == .allBooks {
-                // Library empty — show curated free books or loading state prominently
-                ScrollView {
-                    if isCatalogLoading {
-                        ProgressView("Loading free books…")
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 60)
-                    } else if catalogEntries.isEmpty {
-                        VStack(spacing: 12) {
-                            Text("Couldn't load free books.")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Button("Retry") { catalogLoadAttempt += 1 }
-                                .buttonStyle(.bordered)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 60)
-                    } else {
-                        freeBooksFeaturedSection(entries: catalogEntries)
-                            .padding(.horizontal, 20)
-                            .padding(.top, 16)
-                            .padding(.bottom, 20)
-                    }
-                }
-            } else if books.isEmpty {
+            if books.isEmpty {
                 emptyState
             } else {
                 ScrollView {
@@ -402,44 +344,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Free Books Sections
-
-    private func freeBooksFeaturedSection(entries: [FreeBookCatalogEntry]) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Get Started with Free Classics")
-                    .font(.title3.weight(.semibold))
-                Text("Download free public domain audiobooks to start listening.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            VStack(spacing: 10) {
-                ForEach(entries) { entry in
-                    Button {
-                        selectedFreeBook = entry
-                    } label: {
-                        FreeBookCardView(
-                            entry: entry,
-                            downloadProgress: downloadService.downloadProgress[entry.id],
-                            isDownloading: downloadService.activeDownloads.contains(entry.id),
-                            onDownload: { downloadService.startDownload(entry: entry) },
-                            onCancel: { downloadService.cancelDownload(catalogId: entry.id) }
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Button("Import Your Own Audiobook") {
-                isImporterPresented = true
-            }
-            .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
-        }
-    }
-
     // MARK: - Computed
 
     private var displayedBooks: [Audiobook] {
@@ -450,14 +354,6 @@ struct ContentView: View {
             base = Array(audiobooks)
         }
         return viewModel.sorted(base, by: sortOptionRawValue)
-    }
-
-    private var downloadedCatalogIds: Set<String> {
-        Set(audiobooks.compactMap(\.catalogId))
-    }
-
-    private var availableCatalogEntries: [FreeBookCatalogEntry] {
-        allCatalogEntries.filter { !downloadedCatalogIds.contains($0.id) }
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {
@@ -483,12 +379,19 @@ struct ContentView: View {
             ContentUnavailableView {
                 Label("Your Library Is Empty", systemImage: "books.vertical")
             } description: {
-                Text("Import one big audio file or a full set of chapter files from the Files app.")
+                Text("Import an audiobook from Files, or browse thousands of free public-domain classics.")
             } actions: {
                 Button("Import Audiobook") {
                     isImporterPresented = true
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button("Browse Free Books") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = .freeBooks
+                    }
+                }
+                .buttonStyle(.bordered)
             }
         }
     }
