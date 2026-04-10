@@ -86,6 +86,18 @@ final class LibraryViewModel {
         }
     }
 
+    func deleteFreeBook(_ audiobook: Audiobook, modelContext: ModelContext) {
+        do {
+            try LibraryImportService.deleteAudiobook(
+                audiobook,
+                deleteFiles: true,
+                modelContext: modelContext
+            )
+        } catch {
+            presentAlert(message: error.localizedDescription)
+        }
+    }
+
     // MARK: - Rename
 
     func beginRename(_ audiobook: Audiobook) {

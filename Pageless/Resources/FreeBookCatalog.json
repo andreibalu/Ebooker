@@ -1,0 +1,617 @@
+[
+    {
+        "id": "librivox-christmas-carol",
+        "title": "A Christmas Carol",
+        "author": "Charles Dickens",
+        "description": "Ebenezer Scrooge, a miserly old man, is visited by the ghosts of Christmas Past, Present, and Yet to Come, who show him the error of his ways and inspire a remarkable transformation.",
+        "coverAssetName": null,
+        "totalDurationSeconds": 10802,
+        "downloadSizeMB": 87,
+        "tracks": [
+            {
+                "id": "cc-stave1",
+                "title": "Stave 1 - Marley's Ghost",
+                "fileName": "a_christmas_carol_01_dickens_64kb.mp3",
+                "downloadURL": "https://archive.org/download/christmas_carol_1212_librivox/a_christmas_carol_01_dickens_64kb.mp3",
+                "durationSeconds": 2514,
+                "orderIndex": 0
+            },
+            {
+                "id": "cc-stave2",
+                "title": "Stave 2 - The First of the Three Spirits",
+                "fileName": "a_christmas_carol_02_dickens_64kb.mp3",
+                "downloadURL": "https://archive.org/download/christmas_carol_1212_librivox/a_christmas_carol_02_dickens_64kb.mp3",
+                "durationSeconds": 2350,
+                "orderIndex": 1
+            },
+            {
+                "id": "cc-stave3",
+                "title": "Stave 3 - The Second of the Three Spirits",
+                "fileName": "a_christmas_carol_03_dickens_64kb.mp3",
+                "downloadURL": "https://archive.org/download/christmas_carol_1212_librivox/a_christmas_carol_03_dickens_64kb.mp3",
+                "durationSeconds": 3063,
+                "orderIndex": 2
+            },
+            {
+                "id": "cc-stave4",
+                "title": "Stave 4 - The Last of the Spirits",
+                "fileName": "a_christmas_carol_04_dickens_64kb.mp3",
+                "downloadURL": "https://archive.org/download/christmas_carol_1212_librivox/a_christmas_carol_04_dickens_64kb.mp3",
+                "durationSeconds": 2000,
+                "orderIndex": 3
+            },
+            {
+                "id": "cc-stave5",
+                "title": "Stave 5 - The End of It",
+                "fileName": "a_christmas_carol_05_dickens_64kb.mp3",
+                "downloadURL": "https://archive.org/download/christmas_carol_1212_librivox/a_christmas_carol_05_dickens_64kb.mp3",
+                "durationSeconds": 875,
+                "orderIndex": 4
+            }
+        ]
+    },
+    {
+        "id": "librivox-alice-wonderland",
+        "title": "Alice's Adventures in Wonderland",
+        "author": "Lewis Carroll",
+        "description": "A young girl named Alice follows a White Rabbit down a rabbit hole into a surreal underground world filled with peculiar creatures and nonsensical adventures.",
+        "coverAssetName": null,
+        "totalDurationSeconds": 9354,
+        "downloadSizeMB": 75,
+        "tracks": [
+            {
+                "id": "alice-ch01",
+                "title": "Chapter 1 - Down the Rabbit-Hole",
+                "fileName": "alices_adventures_01_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_01_carroll_64kb.mp3",
+                "durationSeconds": 763,
+                "orderIndex": 0
+            },
+            {
+                "id": "alice-ch02",
+                "title": "Chapter 2 - The Pool of Tears",
+                "fileName": "alices_adventures_02_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_02_carroll_64kb.mp3",
+                "durationSeconds": 738,
+                "orderIndex": 1
+            },
+            {
+                "id": "alice-ch03",
+                "title": "Chapter 3 - A Caucus-Race and a Long Tale",
+                "fileName": "alices_adventures_03_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_03_carroll_64kb.mp3",
+                "durationSeconds": 600,
+                "orderIndex": 2
+            },
+            {
+                "id": "alice-ch04",
+                "title": "Chapter 4 - The Rabbit Sends in a Little Bill",
+                "fileName": "alices_adventures_04_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_04_carroll_64kb.mp3",
+                "durationSeconds": 888,
+                "orderIndex": 3
+            },
+            {
+                "id": "alice-ch05",
+                "title": "Chapter 5 - Advice from a Caterpillar",
+                "fileName": "alices_adventures_05_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_05_carroll_64kb.mp3",
+                "durationSeconds": 788,
+                "orderIndex": 4
+            },
+            {
+                "id": "alice-ch06",
+                "title": "Chapter 6 - Pig and Pepper",
+                "fileName": "alices_adventures_06_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_06_carroll_64kb.mp3",
+                "durationSeconds": 938,
+                "orderIndex": 5
+            },
+            {
+                "id": "alice-ch07",
+                "title": "Chapter 7 - A Mad Tea-Party",
+                "fileName": "alices_adventures_07_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_07_carroll_64kb.mp3",
+                "durationSeconds": 850,
+                "orderIndex": 6
+            },
+            {
+                "id": "alice-ch08",
+                "title": "Chapter 8 - The Queen's Croquet-Ground",
+                "fileName": "alices_adventures_08_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_08_carroll_64kb.mp3",
+                "durationSeconds": 875,
+                "orderIndex": 7
+            },
+            {
+                "id": "alice-ch09",
+                "title": "Chapter 9 - The Mock Turtle's Story",
+                "fileName": "alices_adventures_09_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_09_carroll_64kb.mp3",
+                "durationSeconds": 863,
+                "orderIndex": 8
+            },
+            {
+                "id": "alice-ch10",
+                "title": "Chapter 10 - The Lobster Quadrille",
+                "fileName": "alices_adventures_10_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_10_carroll_64kb.mp3",
+                "durationSeconds": 788,
+                "orderIndex": 9
+            },
+            {
+                "id": "alice-ch11",
+                "title": "Chapter 11 - Who Stole the Tarts?",
+                "fileName": "alices_adventures_11_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_11_carroll_64kb.mp3",
+                "durationSeconds": 700,
+                "orderIndex": 10
+            },
+            {
+                "id": "alice-ch12",
+                "title": "Chapter 12 - Alice's Evidence",
+                "fileName": "alices_adventures_12_carroll_64kb.mp3",
+                "downloadURL": "https://archive.org/download/alices_adventures_1003/alices_adventures_12_carroll_64kb.mp3",
+                "durationSeconds": 763,
+                "orderIndex": 11
+            }
+        ]
+    },
+    {
+        "id": "librivox-frankenstein",
+        "title": "Frankenstein",
+        "author": "Mary Shelley",
+        "description": "Victor Frankenstein, a young scientist, creates a sapient creature in an unorthodox experiment. This haunting novel explores themes of ambition, isolation, and the consequences of playing God.",
+        "coverAssetName": null,
+        "totalDurationSeconds": 27501,
+        "downloadSizeMB": 220,
+        "tracks": [
+            {
+                "id": "frank-01",
+                "title": "Dedication and Preface",
+                "fileName": "frankenstein_01_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_01_shelley_64kb.mp3",
+                "durationSeconds": 263,
+                "orderIndex": 0
+            },
+            {
+                "id": "frank-02",
+                "title": "Vol. I, Letter I",
+                "fileName": "frankenstein_02_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_02_shelley_64kb.mp3",
+                "durationSeconds": 450,
+                "orderIndex": 1
+            },
+            {
+                "id": "frank-03",
+                "title": "Vol. I, Letter II",
+                "fileName": "frankenstein_03_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_03_shelley_64kb.mp3",
+                "durationSeconds": 388,
+                "orderIndex": 2
+            },
+            {
+                "id": "frank-04",
+                "title": "Vol. I, Letter III",
+                "fileName": "frankenstein_04_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_04_shelley_64kb.mp3",
+                "durationSeconds": 107,
+                "orderIndex": 3
+            },
+            {
+                "id": "frank-05",
+                "title": "Vol. I, Letter IV",
+                "fileName": "frankenstein_05_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_05_shelley_64kb.mp3",
+                "durationSeconds": 850,
+                "orderIndex": 4
+            },
+            {
+                "id": "frank-06",
+                "title": "Vol. I, Chapter I",
+                "fileName": "frankenstein_06_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_06_shelley_64kb.mp3",
+                "durationSeconds": 1150,
+                "orderIndex": 5
+            },
+            {
+                "id": "frank-07",
+                "title": "Vol. I, Chapter II",
+                "fileName": "frankenstein_07_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_07_shelley_64kb.mp3",
+                "durationSeconds": 875,
+                "orderIndex": 6
+            },
+            {
+                "id": "frank-08",
+                "title": "Vol. I, Chapter III",
+                "fileName": "frankenstein_08_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_08_shelley_64kb.mp3",
+                "durationSeconds": 1000,
+                "orderIndex": 7
+            },
+            {
+                "id": "frank-09",
+                "title": "Vol. I, Chapter IV",
+                "fileName": "frankenstein_09_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_09_shelley_64kb.mp3",
+                "durationSeconds": 900,
+                "orderIndex": 8
+            },
+            {
+                "id": "frank-10",
+                "title": "Vol. I, Chapter V",
+                "fileName": "frankenstein_10_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_10_shelley_64kb.mp3",
+                "durationSeconds": 1000,
+                "orderIndex": 9
+            },
+            {
+                "id": "frank-11",
+                "title": "Vol. I, Chapter VI",
+                "fileName": "frankenstein_11_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_11_shelley_64kb.mp3",
+                "durationSeconds": 1425,
+                "orderIndex": 10
+            },
+            {
+                "id": "frank-12",
+                "title": "Vol. I, Chapter VII",
+                "fileName": "frankenstein_12_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_12_shelley_64kb.mp3",
+                "durationSeconds": 1138,
+                "orderIndex": 11
+            },
+            {
+                "id": "frank-13",
+                "title": "Vol. II, Chapter I",
+                "fileName": "frankenstein_13_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_13_shelley_64kb.mp3",
+                "durationSeconds": 788,
+                "orderIndex": 12
+            },
+            {
+                "id": "frank-14",
+                "title": "Vol. II, Chapter II",
+                "fileName": "frankenstein_14_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_14_shelley_64kb.mp3",
+                "durationSeconds": 850,
+                "orderIndex": 13
+            },
+            {
+                "id": "frank-15",
+                "title": "Vol. II, Chapter III",
+                "fileName": "frankenstein_15_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_15_shelley_64kb.mp3",
+                "durationSeconds": 1050,
+                "orderIndex": 14
+            },
+            {
+                "id": "frank-16",
+                "title": "Vol. II, Chapter IV",
+                "fileName": "frankenstein_16_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_16_shelley_64kb.mp3",
+                "durationSeconds": 800,
+                "orderIndex": 15
+            },
+            {
+                "id": "frank-17",
+                "title": "Vol. II, Chapter V",
+                "fileName": "frankenstein_17_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_17_shelley_64kb.mp3",
+                "durationSeconds": 813,
+                "orderIndex": 16
+            },
+            {
+                "id": "frank-18",
+                "title": "Vol. II, Chapter VI",
+                "fileName": "frankenstein_18_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_18_shelley_64kb.mp3",
+                "durationSeconds": 663,
+                "orderIndex": 17
+            },
+            {
+                "id": "frank-19",
+                "title": "Vol. II, Chapter VII",
+                "fileName": "frankenstein_19_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_19_shelley_64kb.mp3",
+                "durationSeconds": 1175,
+                "orderIndex": 18
+            },
+            {
+                "id": "frank-20",
+                "title": "Vol. II, Chapter VIII",
+                "fileName": "frankenstein_20_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_20_shelley_64kb.mp3",
+                "durationSeconds": 1138,
+                "orderIndex": 19
+            },
+            {
+                "id": "frank-21",
+                "title": "Vol. II, Chapter IX",
+                "fileName": "frankenstein_21_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_21_shelley_64kb.mp3",
+                "durationSeconds": 738,
+                "orderIndex": 20
+            },
+            {
+                "id": "frank-22",
+                "title": "Vol. III, Chapter I",
+                "fileName": "frankenstein_22_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_22_shelley_64kb.mp3",
+                "durationSeconds": 1038,
+                "orderIndex": 21
+            },
+            {
+                "id": "frank-23",
+                "title": "Vol. III, Chapter II",
+                "fileName": "frankenstein_23_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_23_shelley_64kb.mp3",
+                "durationSeconds": 925,
+                "orderIndex": 22
+            },
+            {
+                "id": "frank-24",
+                "title": "Vol. III, Chapter III",
+                "fileName": "frankenstein_24_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_24_shelley_64kb.mp3",
+                "durationSeconds": 1300,
+                "orderIndex": 23
+            },
+            {
+                "id": "frank-25",
+                "title": "Vol. III, Chapter IV",
+                "fileName": "frankenstein_25_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_25_shelley_64kb.mp3",
+                "durationSeconds": 1338,
+                "orderIndex": 24
+            },
+            {
+                "id": "frank-26",
+                "title": "Vol. III, Chapter V",
+                "fileName": "frankenstein_26_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_26_shelley_64kb.mp3",
+                "durationSeconds": 1213,
+                "orderIndex": 25
+            },
+            {
+                "id": "frank-27",
+                "title": "Vol. III, Chapter VI",
+                "fileName": "frankenstein_27_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_27_shelley_64kb.mp3",
+                "durationSeconds": 950,
+                "orderIndex": 26
+            },
+            {
+                "id": "frank-28",
+                "title": "Vol. III, Chapter VII",
+                "fileName": "frankenstein_28_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_28_shelley_64kb.mp3",
+                "durationSeconds": 1138,
+                "orderIndex": 27
+            },
+            {
+                "id": "frank-29",
+                "title": "Vol. III, Letters",
+                "fileName": "frankenstein_29_shelley_64kb.mp3",
+                "downloadURL": "https://archive.org/download/frankenstein_cs_librivox/frankenstein_29_shelley_64kb.mp3",
+                "durationSeconds": 2038,
+                "orderIndex": 28
+            }
+        ]
+    },
+    {
+        "id": "librivox-metamorphosis",
+        "title": "The Metamorphosis",
+        "author": "Franz Kafka",
+        "description": "Gregor Samsa wakes one morning to find himself transformed into a monstrous insect. This haunting novella explores alienation, guilt, and the absurdity of modern existence.",
+        "coverAssetName": null,
+        "totalDurationSeconds": 9265,
+        "downloadSizeMB": 74,
+        "tracks": [
+            {
+                "id": "meta-ch01",
+                "title": "Part I",
+                "fileName": "metamorphosis_1_kafka_64kb.mp3",
+                "downloadURL": "https://archive.org/download/metamorphosis_librivox/metamorphosis_1_kafka_64kb.mp3",
+                "durationSeconds": 2992,
+                "orderIndex": 0
+            },
+            {
+                "id": "meta-ch02",
+                "title": "Part II",
+                "fileName": "metamorphosis_2_kafka_64kb.mp3",
+                "downloadURL": "https://archive.org/download/metamorphosis_librivox/metamorphosis_2_kafka_64kb.mp3",
+                "durationSeconds": 3231,
+                "orderIndex": 1
+            },
+            {
+                "id": "meta-ch03",
+                "title": "Part III",
+                "fileName": "metamorphosis_3_kafka_64kb.mp3",
+                "downloadURL": "https://archive.org/download/metamorphosis_librivox/metamorphosis_3_kafka_64kb.mp3",
+                "durationSeconds": 3042,
+                "orderIndex": 2
+            }
+        ]
+    },
+    {
+        "id": "librivox-picture-dorian-gray",
+        "title": "The Picture of Dorian Gray",
+        "author": "Oscar Wilde",
+        "description": "A young man's portrait ages while he remains youthful, descending into a life of corruption and sin. Wilde's only novel is a masterful exploration of beauty, morality, and the price of vanity.",
+        "coverAssetName": null,
+        "totalDurationSeconds": 32669,
+        "downloadSizeMB": 261,
+        "tracks": [
+            {
+                "id": "dorian-00",
+                "title": "The Preface",
+                "fileName": "pictureofdoriangray_00_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_00_wilde_64kb.mp3",
+                "durationSeconds": 188,
+                "orderIndex": 0
+            },
+            {
+                "id": "dorian-01",
+                "title": "Chapter 1",
+                "fileName": "pictureofdoriangray_01_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_01_wilde_64kb.mp3",
+                "durationSeconds": 2038,
+                "orderIndex": 1
+            },
+            {
+                "id": "dorian-02",
+                "title": "Chapter 2",
+                "fileName": "pictureofdoriangray_02_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_02_wilde_64kb.mp3",
+                "durationSeconds": 2325,
+                "orderIndex": 2
+            },
+            {
+                "id": "dorian-03",
+                "title": "Chapter 3",
+                "fileName": "pictureofdoriangray_03_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_03_wilde_64kb.mp3",
+                "durationSeconds": 1863,
+                "orderIndex": 3
+            },
+            {
+                "id": "dorian-04",
+                "title": "Chapter 4",
+                "fileName": "pictureofdoriangray_04_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_04_wilde_64kb.mp3",
+                "durationSeconds": 2275,
+                "orderIndex": 4
+            },
+            {
+                "id": "dorian-05",
+                "title": "Chapter 5",
+                "fileName": "pictureofdoriangray_05_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_05_wilde_64kb.mp3",
+                "durationSeconds": 1825,
+                "orderIndex": 5
+            },
+            {
+                "id": "dorian-06",
+                "title": "Chapter 6",
+                "fileName": "pictureofdoriangray_06_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_06_wilde_64kb.mp3",
+                "durationSeconds": 1200,
+                "orderIndex": 6
+            },
+            {
+                "id": "dorian-07",
+                "title": "Chapter 7",
+                "fileName": "pictureofdoriangray_07_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_07_wilde_64kb.mp3",
+                "durationSeconds": 1838,
+                "orderIndex": 7
+            },
+            {
+                "id": "dorian-08",
+                "title": "Chapter 8",
+                "fileName": "pictureofdoriangray_08_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_08_wilde_64kb.mp3",
+                "durationSeconds": 2200,
+                "orderIndex": 8
+            },
+            {
+                "id": "dorian-09",
+                "title": "Chapter 9",
+                "fileName": "pictureofdoriangray_09_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_09_wilde_64kb.mp3",
+                "durationSeconds": 1588,
+                "orderIndex": 9
+            },
+            {
+                "id": "dorian-10",
+                "title": "Chapter 10",
+                "fileName": "pictureofdoriangray_10_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_10_wilde_64kb.mp3",
+                "durationSeconds": 1238,
+                "orderIndex": 10
+            },
+            {
+                "id": "dorian-11",
+                "title": "Chapter 11",
+                "fileName": "pictureofdoriangray_11_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_11_wilde_64kb.mp3",
+                "durationSeconds": 2888,
+                "orderIndex": 11
+            },
+            {
+                "id": "dorian-12",
+                "title": "Chapter 12",
+                "fileName": "pictureofdoriangray_12_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_12_wilde_64kb.mp3",
+                "durationSeconds": 1088,
+                "orderIndex": 12
+            },
+            {
+                "id": "dorian-13",
+                "title": "Chapter 13",
+                "fileName": "pictureofdoriangray_13_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_13_wilde_64kb.mp3",
+                "durationSeconds": 1050,
+                "orderIndex": 13
+            },
+            {
+                "id": "dorian-14",
+                "title": "Chapter 14",
+                "fileName": "pictureofdoriangray_14_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_14_wilde_64kb.mp3",
+                "durationSeconds": 1975,
+                "orderIndex": 14
+            },
+            {
+                "id": "dorian-15",
+                "title": "Chapter 15",
+                "fileName": "pictureofdoriangray_15_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_15_wilde_64kb.mp3",
+                "durationSeconds": 1288,
+                "orderIndex": 15
+            },
+            {
+                "id": "dorian-16",
+                "title": "Chapter 16",
+                "fileName": "pictureofdoriangray_16_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_16_wilde_64kb.mp3",
+                "durationSeconds": 1300,
+                "orderIndex": 16
+            },
+            {
+                "id": "dorian-17",
+                "title": "Chapter 17",
+                "fileName": "pictureofdoriangray_17_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_17_wilde_64kb.mp3",
+                "durationSeconds": 813,
+                "orderIndex": 17
+            },
+            {
+                "id": "dorian-18",
+                "title": "Chapter 18",
+                "fileName": "pictureofdoriangray_18_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_18_wilde_64kb.mp3",
+                "durationSeconds": 1363,
+                "orderIndex": 18
+            },
+            {
+                "id": "dorian-19",
+                "title": "Chapter 19",
+                "fileName": "pictureofdoriangray_19_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_19_wilde_64kb.mp3",
+                "durationSeconds": 1513,
+                "orderIndex": 19
+            },
+            {
+                "id": "dorian-20",
+                "title": "Chapter 20",
+                "fileName": "pictureofdoriangray_20_wilde_64kb.mp3",
+                "downloadURL": "https://archive.org/download/picture_dorian_gray_1204_librivox/pictureofdoriangray_20_wilde_64kb.mp3",
+                "durationSeconds": 813,
+                "orderIndex": 20
+            }
+        ]
+    }
+]
