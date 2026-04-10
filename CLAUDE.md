@@ -23,23 +23,34 @@ The project has no external package dependencies — it uses only native Apple f
 
 ### Folder Structure
 ```
-Ebooker/
-├── App/               EbookerApp.swift (entry point, container setup)
-├── Models/            SwiftData models + enums (Audiobook, AudioTrack, Moment, PlaybackSettings)
+Pageless/
+├── App/               PagelessApp.swift (entry point, container setup), AppDelegate.swift, CarPlaySceneDelegate.swift
+├── Models/            SwiftData models + enums (Audiobook, AudioTrack, Moment, PlaybackSettings, FreeBookCatalogEntry)
 ├── Services/          Business logic & platform integration
-│   ├── Protocols/     Service protocols (TranscriptionProviding, MomentAnalyzing, RecapProviding, AudioExtracting)
-│   ├── AudioPlayerManager.swift   (central playback state, ObservableObject)
-│   ├── PlaybackPersistence.swift  (progress tracking, SwiftData saves)
-│   ├── NowPlayingUpdater.swift    (MPRemoteCommandCenter, MPNowPlayingInfoCenter)
-│   ├── LibraryImportService.swift (file import, security-scoped access)
-│   └── ...            (TranscriptionService, MomentNamingService, RecapService, etc.)
+│   ├── Protocols/     Service protocols (TranscriptionProviding, MomentAnalyzing, RecapProviding, AudioExtracting, FreeBookDownloading)
+│   ├── AudioPlayerManager.swift      (central playback state, ObservableObject)
+│   ├── PlaybackPersistence.swift     (progress tracking, SwiftData saves)
+│   ├── NowPlayingUpdater.swift       (MPRemoteCommandCenter, MPNowPlayingInfoCenter)
+│   ├── LibraryImportService.swift    (file import, security-scoped access)
+│   ├── FreeBookCatalogService.swift  (@MainActor enum; fetches file listings from archive.org metadata API)
+│   ├── FreeBookDownloadService.swift (@Observable; background URLSession downloads for free books)
+│   ├── OnboardingManager.swift       (first-launch spotlight walkthrough state)
+│   ├── AIEntitlementStore.swift      (StoreKit AI feature entitlement)
+│   ├── CarPlayCoordinator.swift      (CarPlay playback integration)
+│   └── ...            (TranscriptionService, MomentNamingService, RecapService, AudioExtractionService, etc.)
 ├── ViewModels/        @Observable ViewModels (PlayerViewModel, AudiobookDetailViewModel, LibraryViewModel)
-├── Views/             SwiftUI views (ContentView, PlayerView, AudiobookDetailView, etc.)
+├── Views/             SwiftUI views
+│   ├── Onboarding/    OnboardingStep.swift, SpotlightOverlayView.swift
+│   └── ...            ContentView, PlayerView, AudiobookDetailView, FreeBookCardView, FreeBookDetailSheet,
+│                      AudiobookCardView, MiniPlayerBar, SettingsView, AISettingsView, ImportAudiobookSheet, etc.
+├── AppIntents/        AudiobookIntents.swift (Siri/Shortcuts integration)
 └── Utilities/         TimeFormatter, Color+Theme
 ```
 
 ### Data Layer (SwiftData)
 Three models: `Audiobook` → `AudioTrack[]` + `Moment[]`. Audio files are stored in `Application Support/Audiobooks/[UUID]/`. Cover images use SwiftData external storage.
+
+`Audiobook` has `isFreeBook: Bool` and `catalogId: String?` to distinguish downloaded free books. Free books use the same file storage path as imported books.
 
 ### Central State: `AudioPlayerManager`
 `AudioPlayerManager` (ObservableObject) is the single source of truth for all playback state. It's injected via `@EnvironmentObject` and handles:
@@ -59,26 +70,37 @@ ViewModels receive protocol-typed service dependencies via initializer injection
 ### Services
 Services are `struct` types conforming to protocols (`TranscriptionProviding`, `MomentAnalyzing`, `RecapProviding`, `AudioExtracting`). This enables mock injection for testing.
 
-`LibraryImportService` remains a concrete `enum` with static methods — it handles file management and is used directly by `AudioPlayerManager` and ViewModels.
+`LibraryImportService` and `FreeBookCatalogService` are concrete `enum` types with static methods — they handle file management / API fetching and are used directly without injection.
+
+`FreeBookDownloadService` is `@Observable` and injected via SwiftUI `@Environment`. It manages a background `URLSession` for downloading free audiobooks. It must be configured once via `configure(modelContext:)` before use.
+
+### Free Books Feature
+- `FreeBookCatalogService` — `@MainActor enum`; fetches file listings from `https://archive.org/metadata/[identifier]` for 5 hardcoded LibriVox recordings; caches results in memory for the session lifetime.
+- `FreeBookDownloadService` — background downloads using `URLSessionDownloadDelegate`; one book downloads at a time; checks HTTP status codes before accepting a download as successful.
+- Books are stored identically to user-imported books (`Application Support/Audiobooks/[UUID]/`); `Audiobook.isFreeBook = true` and `catalogId` distinguishes them.
 
 ### AI & On-Device Intelligence
 - `MomentNamingService: MomentAnalyzing` — uses `FoundationModels.SystemLanguageModel` for moment analysis
 - `RecapService: RecapProviding` — generates recaps of recent listening
 - `TranscriptionService: TranscriptionProviding` — Speech framework wrapper
 - `AppleIntelligenceCapability` — runtime feature detection (UI guard for showing/hiding AI buttons)
+- `AIEntitlementStore` — StoreKit entitlement check for AI features
 - AI features are isolated behind protocols; app works fully without Apple Intelligence
 
 ### View Hierarchy
 ```
 ContentView (library grid, favorites tab) → LibraryViewModel
 ├── AudiobookCardView (grid cell)
+├── FreeBookCardView (free book grid cell)
+├── FreeBookDetailSheet (download sheet)
 ├── AudiobookDetailView (tracks + moments tabs, cover editing) → AudiobookDetailViewModel
 │   ├── AudiobookTrackRow (track list item)
 │   ├── MomentRow (moment list item with edit sheet)
 │   └── MomentFilterSheet (category/character/mood filtering)
 ├── PlayerView (full-screen player, moment saving) → PlayerViewModel
 ├── MiniPlayerBar (persistent bottom bar when playing)
-└── SettingsView (playback preferences via @AppStorage)
+├── SettingsView (playback preferences via @AppStorage)
+└── AISettingsView (AI feature settings)
 ```
 
 ### Settings & Preferences
@@ -92,16 +114,19 @@ User preferences live in `@AppStorage` and are typed via enums in `PlaybackSetti
 - **File access**: Always use security-scoped access (`startAccessingSecurityScopedResource`) for user-imported files
 - **Async bridging**: Use `withCheckedContinuation` when bridging completion-handler APIs (e.g., Speech framework)
 - **AI isolation**: `AppleIntelligenceCapability` guards UI visibility; ViewModels catch service errors and fall back gracefully
+- **Free book catalog**: `FreeBookCatalogService` is `@MainActor` with a mutable static cache — do not add non-isolated static state to it
 
 ## Testing
 
 Tests use Swift Testing framework (`import Testing`). Test structure:
 ```
-EbookerTests/
-├── Mocks/              Mock service implementations (MockTranscriptionService, MockMomentAnalyzer, etc.)
-├── ViewModelTests/     PlayerViewModelTests, AudiobookDetailViewModelTests, LibraryViewModelTests
-├── ServiceTests/       PlaybackPersistenceTests
-└── ModelTests/         AudiobookTests
+PagelessTests/
+├── Mocks/              Mock service implementations (MockTranscriptionService, MockMomentAnalyzer, MockFreeBookDownloadService, etc.)
+├── ViewModelTests/     PlayerViewModelTests, AudiobookDetailViewModelTests, LibraryViewModelTests, LibraryViewModelFreeBookTests
+├── ServiceTests/       PlaybackPersistenceTests, FreeBookDownloadServiceTests, FreeBookCatalogServiceTests, etc.
+└── ModelTests/         AudiobookTests, AudioTrackTests, FreeBookCatalogEntryTests, etc.
 ```
+
+`FreeBookCatalogServiceTests` injects a mock `URLSession` via `URLProtocol` — do not test against the real archive.org API in unit tests.
 
 To run tests: use `mcp__XcodeBuildMCP__test_sim` or `xcodebuild test`.
