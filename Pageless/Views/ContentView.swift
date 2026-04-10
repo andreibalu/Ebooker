@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 enum LibraryTab {
     case favorites
     case allBooks
+    case freeBooks
 }
 
 struct ContentView: View {
@@ -275,6 +276,7 @@ struct ContentView: View {
         HStack(spacing: 0) {
             tabButton(title: "Favorites", tab: .favorites)
             tabButton(title: "All Books", tab: .allBooks)
+            tabButton(title: "Free Books", tab: .freeBooks)
         }
         .padding(.bottom, 1)
     }
@@ -306,57 +308,65 @@ struct ContentView: View {
 
     @ViewBuilder
     private var libraryContent: some View {
-        let books = displayedBooks
-        let catalogEntries = availableCatalogEntries
+        // Free Books tab → full LibriVox catalog search
+        if selectedTab == .freeBooks {
+            BrowseLibriVoxView {
+                isPlayerPresented = true
+            }
+        } else {
+            // Favorites and All Books tabs
+            let books = displayedBooks
+            let catalogEntries = availableCatalogEntries
 
-        if books.isEmpty && catalogEntries.isEmpty && !isCatalogLoading {
-            emptyState
-        } else if books.isEmpty && selectedTab == .allBooks {
-            // Library empty — show free books or loading state prominently
-            ScrollView {
-                if isCatalogLoading {
-                    ProgressView("Loading free books…")
+            if books.isEmpty && catalogEntries.isEmpty && !isCatalogLoading {
+                emptyState
+            } else if books.isEmpty && selectedTab == .allBooks {
+                // Library empty — show curated free books or loading state prominently
+                ScrollView {
+                    if isCatalogLoading {
+                        ProgressView("Loading free books…")
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 60)
+                    } else if catalogEntries.isEmpty {
+                        VStack(spacing: 12) {
+                            Text("Couldn't load free books.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Button("Retry") { catalogLoadAttempt += 1 }
+                                .buttonStyle(.bordered)
+                        }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
-                } else if catalogEntries.isEmpty {
-                    VStack(spacing: 12) {
-                        Text("Couldn't load free books.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Button("Retry") { catalogLoadAttempt += 1 }
-                            .buttonStyle(.bordered)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 60)
-                } else {
-                    freeBooksFeaturedSection(entries: catalogEntries)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 16)
-                        .padding(.bottom, 20)
-                }
-            }
-        } else if books.isEmpty {
-            emptyState
-        } else {
-            ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 16) {
-                    ForEach(books) { audiobook in
-                        audiobookGridItem(audiobook)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, selectedTab == .allBooks && (!catalogEntries.isEmpty || isCatalogLoading) ? 8 : 20)
-
-                if selectedTab == .allBooks {
-                    if isCatalogLoading {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 20)
-                    } else if !catalogEntries.isEmpty {
-                        freeBooksCatalogSection(entries: catalogEntries)
+                    } else {
+                        freeBooksFeaturedSection(entries: catalogEntries)
                             .padding(.horizontal, 20)
+                            .padding(.top, 16)
                             .padding(.bottom, 20)
+                    }
+                }
+            } else if books.isEmpty {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        ForEach(books) { audiobook in
+                            audiobookGridItem(audiobook)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                    .padding(.bottom, selectedTab == .allBooks && (!catalogEntries.isEmpty || isCatalogLoading) ? 8 : 20)
+
+                    if selectedTab == .allBooks {
+                        if isCatalogLoading {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 20)
+                        } else if !catalogEntries.isEmpty {
+                            freeBooksCatalogSection(entries: catalogEntries)
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 20)
+                        }
                     }
                 }
             }
