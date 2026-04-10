@@ -310,9 +310,9 @@ struct ContentView: View {
     private var libraryContent: some View {
         // Free Books tab → full LibriVox catalog search
         if selectedTab == .freeBooks {
-            BrowseLibriVoxView(viewModel: browseViewModel) {
+            BrowseLibriVoxView(onOpenPlayer: {
                 isPlayerPresented = true
-            }
+            }, viewModel: browseViewModel)
         } else {
             // Favorites and All Books tabs
             let books = displayedBooks
