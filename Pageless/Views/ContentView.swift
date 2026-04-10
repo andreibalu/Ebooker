@@ -502,9 +502,7 @@ struct ContentView: View {
         } else {
             base = Array(audiobooks)
         }
-        let sorted = viewModel.sorted(base, by: sortOptionRawValue)
-        guard selectedTab == .allBooks else { return sorted }
-        return sorted.filter { !$0.isFreeBook } + sorted.filter { $0.isFreeBook }
+        return viewModel.sorted(base, by: sortOptionRawValue)
     }
 
     private var downloadedCatalogIds: Set<String> {
