@@ -282,25 +282,36 @@ struct ContentView: View {
 
     @ViewBuilder
     private var libraryContent: some View {
-        if selectedTab == .freeBooks {
+        TabView(selection: $selectedTab) {
+            booksGrid(for: .favorites)
+                .tag(LibraryTab.favorites)
+
+            booksGrid(for: .allBooks)
+                .tag(LibraryTab.allBooks)
+
             BrowseLibriVoxView(onOpenPlayer: {
                 isPlayerPresented = true
             }, viewModel: browseViewModel)
+            .tag(LibraryTab.freeBooks)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    @ViewBuilder
+    private func booksGrid(for tab: LibraryTab) -> some View {
+        let books = displayedBooks(for: tab)
+        if books.isEmpty {
+            emptyState(for: tab)
         } else {
-            let books = displayedBooks
-            if books.isEmpty {
-                emptyState
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
-                        ForEach(books) { audiobook in
-                            audiobookGridItem(audiobook)
-                        }
+            ScrollView {
+                LazyVGrid(columns: gridColumns, spacing: 16) {
+                    ForEach(books) { audiobook in
+                        audiobookGridItem(audiobook)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 16)
-                    .padding(.bottom, 20)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 20)
             }
         }
     }
@@ -346,9 +357,9 @@ struct ContentView: View {
 
     // MARK: - Computed
 
-    private var displayedBooks: [Audiobook] {
+    private func displayedBooks(for tab: LibraryTab) -> [Audiobook] {
         let base: [Audiobook]
-        if selectedTab == .favorites {
+        if tab == .favorites {
             base = audiobooks.filter { $0.isFavorite }
         } else {
             base = Array(audiobooks)
@@ -368,8 +379,8 @@ struct ContentView: View {
     // MARK: - Empty States
 
     @ViewBuilder
-    private var emptyState: some View {
-        if selectedTab == .favorites {
+    private func emptyState(for tab: LibraryTab) -> some View {
+        if tab == .favorites {
             ContentUnavailableView {
                 Label("No Favorites Yet", systemImage: "heart")
             } description: {
