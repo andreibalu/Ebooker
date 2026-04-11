@@ -78,9 +78,16 @@ struct AudiobookCardView: View {
                         Text("·")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Label("Streaming", systemImage: "antenna.radiowaves.left.and.right")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        HStack(spacing: 2) {
+                            Image(systemName: "antenna.radiowaves.left.and.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            Text("Stream")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
                     } else if let mb = folderSizeMB {
                         Text("·")
                             .font(.caption2)

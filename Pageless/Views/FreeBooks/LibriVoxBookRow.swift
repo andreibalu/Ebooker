@@ -17,9 +17,6 @@ struct LibriVoxBookRow: View {
             if let browseViewModel {
                 sampleButton(browseViewModel: browseViewModel)
             }
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 6)
     }
