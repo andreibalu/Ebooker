@@ -30,6 +30,9 @@ final class Audiobook: Identifiable {
     private var _isFreeBook: Bool?
     private var _catalogId: String?
 
+    // Nullable for lightweight migration. Defaults to true so existing books (all local) are correct.
+    private var _isDownloaded: Bool?
+
     var isFreeBook: Bool {
         get { _isFreeBook ?? false }
         set { _isFreeBook = newValue }
@@ -39,6 +42,13 @@ final class Audiobook: Identifiable {
         get { _catalogId }
         set { _catalogId = newValue }
     }
+
+    var isDownloaded: Bool {
+        get { _isDownloaded ?? true }
+        set { _isDownloaded = newValue }
+    }
+
+    var isStreamingOnly: Bool { !isDownloaded }
 
     var isFavorite: Bool {
         get { _isFavorite ?? false }
@@ -103,6 +113,7 @@ final class Audiobook: Identifiable {
         isFavorite: Bool = false,
         isFreeBook: Bool = false,
         catalogId: String? = nil,
+        isDownloaded: Bool = true,
         tracks: [AudioTrack] = []
     ) {
         self.id = UUID()
@@ -120,6 +131,7 @@ final class Audiobook: Identifiable {
         self._isFavorite = isFavorite
         self._isFreeBook = isFreeBook
         self._catalogId = catalogId
+        self._isDownloaded = isDownloaded
         self.tracks = tracks
     }
 

@@ -23,6 +23,9 @@ final class LibriVoxBook {
     // Schema-migration-safe genres field (private backing, JSON-encoded [String])
     private var _genresRaw: String?
 
+    // Cached track data for offline "Add to Library" (JSON-encoded [CachedLibriVoxTrack])
+    private var _cachedTracksRaw: String?
+
     var genres: [String] {
         get {
             guard let raw = _genresRaw,
@@ -37,6 +40,23 @@ final class LibriVoxBook {
                   let str = String(data: data, encoding: .utf8)
             else { _genresRaw = nil; return }
             _genresRaw = str
+        }
+    }
+
+    var cachedTracks: [CachedLibriVoxTrack]? {
+        get {
+            guard let raw = _cachedTracksRaw,
+                  let data = raw.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode([CachedLibriVoxTrack].self, from: data)
+            else { return nil }
+            return decoded
+        }
+        set {
+            guard let newValue,
+                  let data = try? JSONEncoder().encode(newValue),
+                  let str = String(data: data, encoding: .utf8)
+            else { _cachedTracksRaw = nil; return }
+            _cachedTracksRaw = str
         }
     }
 

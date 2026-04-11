@@ -348,7 +348,7 @@ struct BrowseLibriVoxView: View {
                     NavigationLink {
                         LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
                     } label: {
-                        LibriVoxBookRow(book: book)
+                        LibriVoxBookRow(book: book, browseViewModel: viewModel)
                     }
                     .listRowBackground(Color.cardWhite)
                     .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
@@ -395,7 +395,7 @@ struct BrowseLibriVoxView: View {
                 NavigationLink {
                     LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
                 } label: {
-                    LibriVoxBookRow(book: book)
+                    LibriVoxBookRow(book: book, browseViewModel: viewModel)
                 }
                 .listRowBackground(Color.cardWhite)
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))

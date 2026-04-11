@@ -67,6 +67,25 @@ final class BrowseLibriVoxViewModel {
         activeDownloads.values.sorted { $0.book.title < $1.book.title }
     }
 
+    // MARK: - Sample playback URL cache
+
+    var cachedFirstTrackURLs: [String: URL] = [:]
+
+    func fetchFirstTrackURL(for book: LibriVoxBook) async -> URL? {
+        if let cached = cachedFirstTrackURLs[book.id] { return cached }
+        // Try cached tracks on the book first
+        if let cachedTracks = book.cachedTracks, let first = cachedTracks.first,
+           let url = URL(string: first.listenURL) {
+            cachedFirstTrackURLs[book.id] = url
+            return url
+        }
+        guard let tracks = try? await LibriVoxAPIClient.fetchTracks(projectID: book.id),
+              let first = tracks.first,
+              let url = URL(string: first.listenURL) else { return nil }
+        cachedFirstTrackURLs[book.id] = url
+        return url
+    }
+
     private var searchTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
 

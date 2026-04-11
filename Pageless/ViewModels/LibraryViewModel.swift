@@ -90,7 +90,7 @@ final class LibraryViewModel {
         do {
             try LibraryImportService.deleteAudiobook(
                 audiobook,
-                deleteFiles: true,
+                deleteFiles: audiobook.isDownloaded,
                 modelContext: modelContext
             )
         } catch {

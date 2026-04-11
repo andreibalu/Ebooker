@@ -7,17 +7,48 @@ import SwiftUI
 
 struct LibriVoxBookRow: View {
     let book: LibriVoxBook
+    var browseViewModel: BrowseLibriVoxViewModel?
 
     var body: some View {
         HStack(spacing: 12) {
             coverThumbnail
             info
             Spacer(minLength: 0)
+            if let browseViewModel {
+                sampleButton(browseViewModel: browseViewModel)
+            }
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 6)
+    }
+
+    private func sampleButton(browseViewModel: BrowseLibriVoxViewModel) -> some View {
+        Button {
+            if SamplePlayer.shared.isActive(for: book.id) {
+                SamplePlayer.shared.stop()
+            } else {
+                Task {
+                    if let url = await browseViewModel.fetchFirstTrackURL(for: book) {
+                        SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
+                    }
+                }
+            }
+        } label: {
+            Group {
+                if case .loading(let id) = SamplePlayer.shared.state, id == book.id {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: SamplePlayer.shared.isActive(for: book.id) ? "stop.circle.fill" : "play.circle")
+                        .font(.title3)
+                        .foregroundStyle(SamplePlayer.shared.isActive(for: book.id) ? .red : .primary)
+                }
+            }
+            .frame(width: 30, height: 30)
+        }
+        .buttonStyle(.plain)
     }
 
     private var coverThumbnail: some View {

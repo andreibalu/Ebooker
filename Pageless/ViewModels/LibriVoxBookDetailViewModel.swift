@@ -33,9 +33,30 @@ final class LibriVoxBookDetailViewModel {
 
     var downloadState: DownloadState = .idle
 
+    enum AddToLibraryState {
+        case idle
+        case loading
+        case complete(Audiobook)
+        case failed(String)
+    }
+
+    var addToLibraryState: AddToLibraryState = .idle
+
     private var downloadTask: Task<Void, Never>?
     private weak var tracker: BrowseLibriVoxViewModel?
     private var trackedBookId: String?
+
+    /// True when already added to library (via streaming or download).
+    var isAlreadyInLibrary: Bool {
+        switch downloadState {
+        case .complete: return true
+        default: break
+        }
+        switch addToLibraryState {
+        case .complete: return true
+        default: return false
+        }
+    }
 
     func startDownload(book: LibriVoxBook, modelContext: ModelContext, tracker: BrowseLibriVoxViewModel? = nil) {
         guard !downloadState.isActive else { return }
@@ -55,6 +76,46 @@ final class LibriVoxBookDetailViewModel {
         }
     }
 
+    func addToLibrary(book: LibriVoxBook, modelContext: ModelContext) {
+        guard case .idle = addToLibraryState else { return }
+        Task { [weak self] in
+            await self?.performAddToLibrary(book: book, modelContext: modelContext)
+        }
+    }
+
+    @MainActor
+    private func performAddToLibrary(book: LibriVoxBook, modelContext: ModelContext) async {
+        addToLibraryState = .loading
+        do {
+            let cached: [CachedLibriVoxTrack]
+            if let existing = book.cachedTracks {
+                cached = existing
+            } else {
+                guard NetworkMonitor.shared.isConnected else {
+                    addToLibraryState = .failed("Connect to the internet to load track info for this book.")
+                    return
+                }
+                let apiTracks = try await LibriVoxAPIClient.fetchTracks(projectID: book.id)
+                guard !apiTracks.isEmpty else {
+                    addToLibraryState = .failed("This book has no available tracks.")
+                    return
+                }
+                cached = apiTracks.enumerated().map { i, t in
+                    CachedLibriVoxTrack(title: t.title, listenURL: t.listenURL, durationSeconds: t.durationSeconds, orderIndex: i)
+                }
+                book.cachedTracks = cached
+                try? modelContext.save()
+            }
+
+            let audiobook = try await StreamingLibraryService.addToLibrary(
+                book: book, tracks: cached, modelContext: modelContext
+            )
+            addToLibraryState = .complete(audiobook)
+        } catch {
+            addToLibraryState = .failed(error.localizedDescription)
+        }
+    }
+
     @MainActor
     private func performDownload(book: LibriVoxBook, modelContext: ModelContext) async {
         downloadState = .fetchingTracks
@@ -63,6 +124,12 @@ final class LibriVoxBookDetailViewModel {
             let total = tracks.count
             downloadState = .downloading(completed: 0, total: total)
             tracker?.registerDownload(book: book, total: total)
+
+            // Cache tracks for future offline use
+            book.cachedTracks = tracks.enumerated().map { i, t in
+                CachedLibriVoxTrack(title: t.title, listenURL: t.listenURL, durationSeconds: t.durationSeconds, orderIndex: i)
+            }
+            try? modelContext.save()
 
             let audiobook = try await LibriVoxDownloadService.downloadAndImport(
                 book: book,

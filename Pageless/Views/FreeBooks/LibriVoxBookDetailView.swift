@@ -24,8 +24,9 @@ struct LibriVoxBookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                sampleSection
                 descriptionSection
-                downloadSection
+                actionSection
                 completionSection
             }
             .padding(20)
@@ -106,13 +107,50 @@ struct LibriVoxBookDetailView: View {
         }
     }
 
-    // MARK: - Download
+    // MARK: - Sample
+
+    private var sampleSection: some View {
+        Button {
+            if SamplePlayer.shared.isActive(for: book.id) {
+                SamplePlayer.shared.stop()
+            } else {
+                Task {
+                    if let url = await browseViewModel?.fetchFirstTrackURL(for: book) {
+                        SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Group {
+                    if case .loading(let id) = SamplePlayer.shared.state, id == book.id {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: SamplePlayer.shared.isActive(for: book.id) ? "stop.fill" : "play.fill")
+                    }
+                }
+                .frame(width: 16)
+                Text(SamplePlayer.shared.isActive(for: book.id) ? "Stop Sample" : "Play 10s Sample")
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color.primary.opacity(0.06), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!NetworkMonitor.shared.isConnected && !SamplePlayer.shared.isActive(for: book.id))
+    }
+
+    // MARK: - Actions
 
     @ViewBuilder
-    private var downloadSection: some View {
-        // If another session is already downloading this book (user navigated away and back),
-        // show tracker progress instead of the idle button.
-        if let trackerDownload = browseViewModel?.activeDownloads[book.id], !viewModel.downloadState.isActive {
+    private var actionSection: some View {
+        if viewModel.isAlreadyInLibrary {
+            EmptyView()
+        } else if let trackerDownload = browseViewModel?.activeDownloads[book.id], !viewModel.downloadState.isActive {
+            // Another session is already downloading this book
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Downloading…")
@@ -128,14 +166,18 @@ struct LibriVoxBookDetailView: View {
         } else {
             switch viewModel.downloadState {
             case .idle:
-                Button {
-                    viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
-                } label: {
-                    Label("Download Free Book", systemImage: "arrow.down.circle.fill")
-                        .frame(maxWidth: .infinity)
+                VStack(spacing: 10) {
+                    Button {
+                        viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
+                    } label: {
+                        Label("Download Free Book", systemImage: "arrow.down.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    addToLibraryButton
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
 
             case .fetchingTracks:
                 HStack(spacing: 10) {
@@ -183,11 +225,59 @@ struct LibriVoxBookDetailView: View {
         }
     }
 
+    // MARK: - Add to Library
+
+    @ViewBuilder
+    private var addToLibraryButton: some View {
+        switch viewModel.addToLibraryState {
+        case .idle:
+            Button {
+                viewModel.addToLibrary(book: book, modelContext: modelContext)
+            } label: {
+                Label("Add to Library", systemImage: "plus.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+
+        case .loading:
+            HStack(spacing: 10) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Adding to library…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+
+        case .complete:
+            EmptyView()
+
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 8) {
+                Label(message, systemImage: "exclamationmark.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                Button("Try Again") {
+                    viewModel.addToLibrary(book: book, modelContext: modelContext)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
     // MARK: - Completion
 
     @ViewBuilder
     private var completionSection: some View {
-        if case .complete(let audiobook) = viewModel.downloadState {
+        let completedAudiobook: Audiobook? = {
+            if case .complete(let ab) = viewModel.downloadState { return ab }
+            if case .complete(let ab) = viewModel.addToLibraryState { return ab }
+            return nil
+        }()
+
+        if let audiobook = completedAudiobook {
             VStack(spacing: 12) {
                 Label("Added to Your Library", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.semibold))

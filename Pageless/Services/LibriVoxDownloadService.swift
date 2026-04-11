@@ -106,6 +106,54 @@ enum LibriVoxDownloadService {
         }
     }
 
+    /// Downloads all tracks for a streaming-only audiobook that's already in the library.
+    /// Updates existing AudioTrack entities in place to preserve playback state.
+    static func downloadStreamedBook(
+        audiobook: Audiobook,
+        modelContext: ModelContext,
+        onProgress: @escaping ProgressHandler
+    ) async throws {
+        let folderURL = try makeStorageFolder(named: audiobook.folderName)
+        let sortedTracks = audiobook.sortedTracks
+
+        do {
+            for (index, track) in sortedTracks.enumerated() {
+                guard let remoteURL = track.remoteURL else {
+                    throw LibriVoxDownloadError.invalidTrackURL(track.title)
+                }
+
+                let ext = remoteURL.pathExtension.isEmpty ? "mp3" : remoteURL.pathExtension
+                let safeTitle = track.title.isEmpty ? "Track_\(index + 1)" : track.title
+                let storedFileName = "\(String(format: "%03d", index + 1))-\(sanitized(safeTitle)).\(ext)"
+                let destURL = folderURL.appendingPathComponent(storedFileName)
+
+                let (tempURL, _) = try await URLSession.shared.download(from: remoteURL)
+                if FileManager.default.fileExists(atPath: destURL.path()) {
+                    try FileManager.default.removeItem(at: destURL)
+                }
+                try FileManager.default.moveItem(at: tempURL, to: destURL)
+
+                track.storedFileName = storedFileName
+                track.originalFileName = remoteURL.lastPathComponent
+
+                let asset = AVURLAsset(url: destURL)
+                if let dur = try? await asset.load(.duration), dur.seconds.isFinite, dur.seconds > 0 {
+                    track.duration = dur.seconds
+                }
+
+                onProgress(index + 1, sortedTracks.count)
+            }
+
+            audiobook.isDownloaded = true
+            audiobook.totalDuration = sortedTracks.reduce(0) { $0 + $1.duration }
+            try modelContext.save()
+        } catch {
+            // Clean up partial downloads on failure
+            try? FileManager.default.removeItem(at: folderURL)
+            throw error
+        }
+    }
+
     // MARK: - Private helpers
 
     private static func fetchCoverArt(url: URL?) async -> Data? {

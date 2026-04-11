@@ -74,7 +74,14 @@ struct AudiobookCardView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
-                    if let mb = folderSizeMB {
+                    if audiobook.isStreamingOnly {
+                        Text("·")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Label("Streaming", systemImage: "antenna.radiowaves.left.and.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    } else if let mb = folderSizeMB {
                         Text("·")
                             .font(.caption2)
                             .foregroundStyle(.secondary)

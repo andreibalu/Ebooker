@@ -28,6 +28,7 @@ struct AudiobookDetailView: View {
     @State private var tracksExpanded = false
     @State private var momentsExpanded = false
     @State private var folderSizeMB: Int?
+    @State private var streamDownloadVM = StreamedBookDownloadViewModel()
 
     init(audiobook: Audiobook, openPlayer: @escaping () -> Void) {
         self.audiobook = audiobook
@@ -40,6 +41,9 @@ struct AudiobookDetailView: View {
             VStack(alignment: .leading, spacing: 24) {
                 header
                     .spotlightTarget(.p2Progress)
+                if audiobook.isStreamingOnly {
+                    streamingDownloadSection
+                }
                 resumeAnchorRow
                 momentsSection
                     .spotlightTarget(.p2Moments)
@@ -82,6 +86,59 @@ struct AudiobookDetailView: View {
             viewModel.reconcileStoredRecap(modelContext: modelContext)
             onboarding.notifyBookImported()
             folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
+        }
+    }
+
+    // MARK: - Streaming Download
+
+    @ViewBuilder
+    private var streamingDownloadSection: some View {
+        switch streamDownloadVM.state {
+        case .idle:
+            Button {
+                streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
+            } label: {
+                Label("Download for Offline", systemImage: "arrow.down.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+
+        case .downloading(let completed, let total):
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Downloading…")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Text("\(completed) / \(total) tracks")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                    .tint(.primary)
+                Button("Cancel") {
+                    streamDownloadVM.cancel()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+        case .complete:
+            Label("Downloaded", systemImage: "checkmark.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.green)
+
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 8) {
+                Label(message, systemImage: "exclamationmark.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                Button("Try Again") {
+                    streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
     }
 

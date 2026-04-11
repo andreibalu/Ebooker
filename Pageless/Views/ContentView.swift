@@ -106,10 +106,17 @@ struct ContentView: View {
             }
         }
         .alert(
-            viewModel.deleteCandidate?.isFreeBook == true ? "Remove Download?" : "Remove Audiobook?",
+            deleteAlertTitle,
             isPresented: deleteConfirmationBinding
         ) {
-            if viewModel.deleteCandidate?.isFreeBook == true {
+            if viewModel.deleteCandidate?.isStreamingOnly == true {
+                Button("Remove from Library", role: .destructive) {
+                    if let book = viewModel.deleteCandidate {
+                        viewModel.deleteFreeBook(book, modelContext: modelContext)
+                        viewModel.deleteCandidate = nil
+                    }
+                }
+            } else if viewModel.deleteCandidate?.isFreeBook == true {
                 Button("Remove Download", role: .destructive) {
                     if let book = viewModel.deleteCandidate {
                         viewModel.deleteFreeBook(book, modelContext: modelContext)
@@ -128,7 +135,9 @@ struct ContentView: View {
                 viewModel.deleteCandidate = nil
             }
         } message: {
-            if viewModel.deleteCandidate?.isFreeBook == true {
+            if viewModel.deleteCandidate?.isStreamingOnly == true {
+                Text("This will remove the book from your library. You can add it again from the free books section.")
+            } else if viewModel.deleteCandidate?.isFreeBook == true {
                 Text("This will remove the downloaded audiobook. You can download it again from the free books section.")
             } else {
                 Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
@@ -350,7 +359,7 @@ struct ContentView: View {
             Button(role: .destructive) {
                 viewModel.deleteCandidate = audiobook
             } label: {
-                Label(audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
+                Label(audiobook.isStreamingOnly ? "Remove from Library" : audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
             }
         }
     }
@@ -365,6 +374,16 @@ struct ContentView: View {
             base = Array(audiobooks)
         }
         return viewModel.sorted(base, by: sortOptionRawValue)
+    }
+
+    private var deleteAlertTitle: String {
+        if viewModel.deleteCandidate?.isStreamingOnly == true {
+            return "Remove from Library?"
+        } else if viewModel.deleteCandidate?.isFreeBook == true {
+            return "Remove Download?"
+        } else {
+            return "Remove Audiobook?"
+        }
     }
 
     private var deleteConfirmationBinding: Binding<Bool> {

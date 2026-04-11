@@ -296,8 +296,22 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         activateAudioSession()
 
         do {
-            let fileURL = try LibraryImportService.fileURL(for: track, in: audiobook)
-            let asset = AVURLAsset(url: fileURL)
+            let assetURL: URL
+            if audiobook.isDownloaded {
+                assetURL = try LibraryImportService.fileURL(for: track, in: audiobook)
+            } else if let remoteURL = track.remoteURL {
+                guard NetworkMonitor.shared.isConnected else {
+                    isLoadingItem = false
+                    playerErrorMessage = "You're offline. Download this book to listen without internet."
+                    return
+                }
+                assetURL = remoteURL
+            } else {
+                isLoadingItem = false
+                playerErrorMessage = "No audio source available for this track."
+                return
+            }
+            let asset = AVURLAsset(url: assetURL)
             let item = AVPlayerItem(asset: asset)
 
             currentAudiobook = audiobook

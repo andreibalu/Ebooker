@@ -16,6 +16,19 @@ final class AudioTrack: Identifiable {
     var duration: Double
     var audiobook: Audiobook?
 
+    // Nullable for lightweight migration (same pattern as Audiobook._isFreeBook).
+    private var _remoteURLString: String?
+
+    var remoteURLString: String? {
+        get { _remoteURLString }
+        set { _remoteURLString = newValue }
+    }
+
+    var remoteURL: URL? {
+        guard let s = _remoteURLString, !s.isEmpty else { return nil }
+        return URL(string: s)
+    }
+
     init(
         title: String,
         originalFileName: String,
