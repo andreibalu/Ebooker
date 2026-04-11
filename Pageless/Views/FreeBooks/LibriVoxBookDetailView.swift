@@ -88,7 +88,7 @@ struct LibriVoxBookDetailView: View {
 
     @ViewBuilder
     private var descriptionSection: some View {
-        let text = book.bookDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = BookDescriptionFormatting.plainText(fromHTMLFragment: book.bookDescription)
         if !text.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("About")

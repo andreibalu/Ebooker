@@ -105,7 +105,7 @@ struct FreeBookDetailSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("About")
                 .font(.headline)
-            Text(entry.description)
+            Text(BookDescriptionFormatting.plainText(fromHTMLFragment: entry.description))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineSpacing(4)
