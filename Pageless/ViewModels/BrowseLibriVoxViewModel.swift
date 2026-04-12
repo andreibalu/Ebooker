@@ -340,15 +340,16 @@ final class BrowseLibriVoxViewModel {
 
     @MainActor
     private func performSync(modelContext: ModelContext, force: Bool) async {
-        syncState = .syncing(fetched: 0)
+        let baseCount = LibriVoxCatalogSync.syncedBookCount
+        syncState = .syncing(fetched: baseCount)
         do {
             if force {
                 try await LibriVoxCatalogSync.forceFullSync(modelContext: modelContext) { [weak self] fetched in
-                    self?.syncState = .syncing(fetched: fetched)
+                    self?.syncState = .syncing(fetched: baseCount + fetched)
                 }
             } else {
                 try await LibriVoxCatalogSync.syncIfNeeded(modelContext: modelContext) { [weak self] fetched in
-                    self?.syncState = .syncing(fetched: fetched)
+                    self?.syncState = .syncing(fetched: baseCount + fetched)
                 }
             }
             syncState = .done
