@@ -317,14 +317,15 @@ final class BrowseLibriVoxViewModel {
 
     func triggerSyncIfNeeded(modelContext: ModelContext) {
         guard syncTask == nil else { return }
-        guard case .idle = syncState else {
+        switch syncState {
+        case .idle, .failed:
+            syncTask = Task { [weak self] in
+                await self?.performSync(modelContext: modelContext, force: false)
+            }
+        default:
             if LibriVoxCatalogSync.syncedBookCount > 0 && featuredBooks.isEmpty {
                 Task { [weak self] in await self?.loadFeaturedBooks(modelContext: modelContext) }
             }
-            return
-        }
-        syncTask = Task { [weak self] in
-            await self?.performSync(modelContext: modelContext, force: false)
         }
     }
 

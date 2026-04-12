@@ -80,6 +80,7 @@ enum LibriVoxCatalogSync {
 
             try modelContext.save()
             totalFetched += page.count
+            UserDefaults.standard.set(existingIDs.count + totalFetched, forKey: syncedCountKey)
             onProgress(totalFetched)
 
             if page.count < 50 { break }
@@ -87,10 +88,6 @@ enum LibriVoxCatalogSync {
         }
 
         UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
-        UserDefaults.standard.set(
-            existingIDs.count + totalFetched,
-            forKey: syncedCountKey
-        )
     }
 
     private static func incrementalSync(

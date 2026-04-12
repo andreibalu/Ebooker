@@ -10,6 +10,7 @@ struct BrowseLibriVoxView: View {
     let viewModel: BrowseLibriVoxViewModel
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         @Bindable var vm = viewModel
@@ -44,6 +45,11 @@ struct BrowseLibriVoxView: View {
         .animation(.easeInOut(duration: 0.35), value: viewModel.isFirstTimeLoading)
         .onAppear {
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                viewModel.triggerSyncIfNeeded(modelContext: modelContext)
+            }
         }
     }
 
