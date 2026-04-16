@@ -126,4 +126,51 @@ struct SiriIntentTests {
 
         #expect(results.count == 1)
     }
+
+    // MARK: - Start-from-saved-progress routing
+
+    /// The Siri intent hands the fetched book to `startPlaybackFromSavedProgress`, which
+    /// routes through `AudiobookSavedProgressResume.startChoice`. If the user has a saved
+    /// progress marker, we must start there — not from `currentTime` (which may be wherever
+    /// the playhead was parked, e.g. after scrubbing).
+    @Test func siriResumesFromSavedProgressMarkerWhenPresent() throws {
+        let context = try makeContainer().mainContext
+        let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 300)
+        let book = Audiobook(
+            title: "Latest",
+            folderName: "latest",
+            totalDuration: 300,
+            currentTrackIndex: 0,
+            currentTime: 275, // parked near the end (e.g. after a scrub)
+            tracks: [track]
+        )
+        book.lastPlayedAt = Date(timeIntervalSinceNow: -60)
+        book.progressTrackIndex = 0
+        book.progressTime = 42 // saved progress marker
+        context.insert(book)
+
+        let latest = try #require(try fetchLatest(from: context))
+        #expect(
+            AudiobookSavedProgressResume.startChoice(for: latest)
+                == .useProgressBookmark(trackIndex: 0, time: 42)
+        )
+    }
+
+    @Test func siriFallsBackToStandardPlaybackWhenNoMarker() throws {
+        let context = try makeContainer().mainContext
+        let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 300)
+        let book = Audiobook(
+            title: "No Marker",
+            folderName: "nm",
+            totalDuration: 300,
+            currentTrackIndex: 0,
+            currentTime: 55,
+            tracks: [track]
+        )
+        book.lastPlayedAt = Date(timeIntervalSinceNow: -60)
+        context.insert(book)
+
+        let latest = try #require(try fetchLatest(from: context))
+        #expect(AudiobookSavedProgressResume.startChoice(for: latest) == .useStandardStartPlayback)
+    }
 }

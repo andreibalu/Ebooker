@@ -137,4 +137,51 @@ struct NowPlayingUpdaterTests {
         let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
         #expect(info?[MPMediaItemPropertyArtist] as? String == "Jane Austen")
     }
+
+    // MARK: - Remote command routing (AirPods double/triple-click)
+
+    /// AirPods double-click fires `nextTrackCommand` and triple-click fires
+    /// `previousTrackCommand`. Audiobook apps re-map those to skip forward/backward,
+    /// so both commands must be enabled for remote controls to reach the app.
+    @Test func configureCommandsEnablesNextAndPreviousTrackForSkipping() {
+        let updater = NowPlayingUpdater()
+        updater.configureCommands(
+            play: {},
+            pause: {},
+            skipForwardInterval: 30,
+            skipForward: {},
+            skipBackwardInterval: 30,
+            skipBackward: {},
+            seek: { _ in },
+            supportedPlaybackRates: [1.0, 1.5],
+            changePlaybackRate: { _ in }
+        )
+
+        let center = MPRemoteCommandCenter.shared()
+        #expect(center.nextTrackCommand.isEnabled == true)
+        #expect(center.previousTrackCommand.isEnabled == true)
+        #expect(center.skipForwardCommand.isEnabled == true)
+        #expect(center.skipBackwardCommand.isEnabled == true)
+        #expect(center.skipForwardCommand.preferredIntervals.map(\.doubleValue) == [30])
+        #expect(center.skipBackwardCommand.preferredIntervals.map(\.doubleValue) == [30])
+    }
+
+    @Test func configureCommandsDisablesNextPrevWhenSkipIntervalIsZero() {
+        let updater = NowPlayingUpdater()
+        updater.configureCommands(
+            play: {},
+            pause: {},
+            skipForwardInterval: 0,
+            skipForward: {},
+            skipBackwardInterval: 0,
+            skipBackward: {},
+            seek: { _ in },
+            supportedPlaybackRates: [1.0],
+            changePlaybackRate: { _ in }
+        )
+
+        let center = MPRemoteCommandCenter.shared()
+        #expect(center.nextTrackCommand.isEnabled == false)
+        #expect(center.previousTrackCommand.isEnabled == false)
+    }
 }
