@@ -110,7 +110,7 @@ final class BrowseLibriVoxViewModel {
 
     var lastSyncDescription: String {
         guard let date = LibriVoxCatalogSync.lastSyncDate else { return "Never synced" }
-        return "Updated \(TimeFormatter.relativeDateString(for: date))"
+        return "Updated \(TimeFormatter.relativeDateString(for: date)) · Books provided by Librivox"
     }
 
     var catalogCount: Int { LibriVoxCatalogSync.syncedBookCount }
