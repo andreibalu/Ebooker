@@ -131,7 +131,7 @@ struct LibriVoxBookDetailView: View {
                     }
                 }
                 .frame(width: 16)
-                Text(SamplePlayer.shared.isActive(for: book.id) ? "Stop Sample" : "Play 10s Sample")
+                Text(SamplePlayer.shared.isActive(for: book.id) ? "Stop Sample" : "Play \(SamplePlayer.sampleDurationSeconds)s Sample")
             }
             .font(.subheadline.weight(.medium))
             .foregroundStyle(.primary)

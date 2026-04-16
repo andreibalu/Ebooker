@@ -43,7 +43,16 @@ final class SamplePlayer {
                 guard let self else { return }
                 switch item.status {
                 case .readyToPlay:
+                    // Only start the auto-stop countdown once the sample is
+                    // actually playing, so loading time isn't counted.
+                    guard case .loading(let id) = self.state, id == bookId else { return }
                     self.state = .playing(bookId: bookId)
+                    self.stopTask?.cancel()
+                    self.stopTask = Task { [weak self] in
+                        try? await Task.sleep(for: .seconds(Self.sampleDurationSeconds))
+                        guard !Task.isCancelled else { return }
+                        self?.stop()
+                    }
                 case .failed:
                     self.stop()
                 default:
@@ -57,14 +66,11 @@ final class SamplePlayer {
         try? AVAudioSession.sharedInstance().setActive(true)
 
         avPlayer.play()
-
-        // Auto-stop after 10 seconds
-        stopTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(10))
-            guard !Task.isCancelled else { return }
-            self?.stop()
-        }
     }
+
+    /// Duration of the sample playback countdown, in seconds. Starts once the
+    /// audio is actually ready to play (not while still loading).
+    static let sampleDurationSeconds: Int = 20
 
     func stop() {
         stopTask?.cancel()

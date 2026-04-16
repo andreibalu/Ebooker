@@ -294,19 +294,24 @@ final class BrowseLibriVoxViewModel {
         "The Odyssey"
     ]
 
+    static let featuredBooksTarget = 4
+
     @MainActor
     func loadFeaturedBooks(modelContext: ModelContext) async {
         guard featuredBooks.isEmpty else { return }
-        let picks = Self.featuredTitles.shuffled().prefix(5)
+        let shuffled = Self.featuredTitles.shuffled()
         var found: [LibriVoxBook] = []
-        for title in picks {
+        var seenIds = Set<String>()
+        for title in shuffled {
+            if found.count >= Self.featuredBooksTarget { break }
             let t = title
             let predicate = #Predicate<LibriVoxBook> { book in
                 book.title.localizedStandardContains(t)
             }
             var descriptor = FetchDescriptor(predicate: predicate)
             descriptor.fetchLimit = 1
-            if let book = try? modelContext.fetch(descriptor).first {
+            if let book = try? modelContext.fetch(descriptor).first,
+               seenIds.insert(book.id).inserted {
                 found.append(book)
             }
         }
