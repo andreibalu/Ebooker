@@ -74,7 +74,7 @@ struct PagelessApp: App {
         descriptor.fetchLimit = 1
         guard let latest = try? context.fetch(descriptor).first else { return }
         Task { @MainActor in
-            await audioPlayer.startPlayback(for: latest)
+            await audioPlayer.startPlaybackFromSavedProgress(for: latest)
         }
     }
 }

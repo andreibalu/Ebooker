@@ -32,8 +32,11 @@ struct NowPlayingUpdater {
         commandCenter.changePlaybackPositionCommand.isEnabled = true
         commandCenter.skipForwardCommand.isEnabled = skipForwardInterval > 0
         commandCenter.skipBackwardCommand.isEnabled = skipBackwardInterval > 0
-        commandCenter.nextTrackCommand.isEnabled = false
-        commandCenter.previousTrackCommand.isEnabled = false
+        // AirPods double/triple-click and similar remote controls trigger next/previous
+        // track commands. For an audiobook we re-map those to skip forward/backward so
+        // they use the interval from Settings (same seconds as on-screen buttons).
+        commandCenter.nextTrackCommand.isEnabled = skipForwardInterval > 0
+        commandCenter.previousTrackCommand.isEnabled = skipBackwardInterval > 0
 
         let rates = supportedPlaybackRates.filter { $0 > 0 }.sorted()
         commandCenter.changePlaybackRateCommand.isEnabled = rates.count > 1
@@ -58,6 +61,16 @@ struct NowPlayingUpdater {
         }
 
         commandCenter.skipBackwardCommand.addTarget { _ in
+            skipBackward()
+            return .success
+        }
+
+        commandCenter.nextTrackCommand.addTarget { _ in
+            skipForward()
+            return .success
+        }
+
+        commandCenter.previousTrackCommand.addTarget { _ in
             skipBackward()
             return .success
         }
