@@ -139,7 +139,7 @@ struct SettingsView: View {
                     Button("Reset Onboarding") {
                         showResetConfirmation = true
                     }
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                     .confirmationDialog("Reset Onboarding?", isPresented: $showResetConfirmation) {
                         Button("Reset", role: .destructive) {
                             onboarding.resetOnboarding()
