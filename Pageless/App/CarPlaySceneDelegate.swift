@@ -6,6 +6,7 @@
 import CarPlay
 import UIKit
 
+@MainActor
 final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private var coordinator: CarPlayCoordinator?
 
@@ -13,12 +14,12 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         _ templateApplicationScene: CPTemplateApplicationScene,
         didConnect interfaceController: CPInterfaceController
     ) {
-        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
-              let container = appDelegate.modelContainer,
-              let player = appDelegate.audioPlayer
-        else { return }
+        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate else { return }
 
-        let coord = CarPlayCoordinator(modelContainer: container, audioPlayer: player)
+        let coord = CarPlayCoordinator(
+            modelContainer: appDelegate.modelContainer,
+            audioPlayer: appDelegate.audioPlayer
+        )
         coordinator = coord
         coord.connect(interfaceController: interfaceController)
     }
