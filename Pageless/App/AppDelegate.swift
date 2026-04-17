@@ -9,8 +9,8 @@ import UIKit
 
 /// Supplies the CarPlay scene configuration alongside SwiftUI `WindowGroup`.
 final class AppDelegate: NSObject, UIApplicationDelegate {
-    weak var modelContainer: ModelContainer?
-    weak var audioPlayer: AudioPlayerManager?
+    var modelContainer: ModelContainer?
+    var audioPlayer: AudioPlayerManager?
     var backgroundSessionCompletionHandler: (() -> Void)?
 
     func application(
