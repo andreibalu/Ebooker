@@ -40,8 +40,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
+    let equalizer: AudioEqualizerService
 
     override init() {
+        self.equalizer = AudioEqualizerService()
         super.init()
         player.automaticallyWaitsToMinimizeStalling = true
         addPeriodicTimeObserver()
@@ -86,6 +88,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func configure(modelContext: ModelContext) {
         self.modelContext = modelContext
+        equalizer.configure(modelContext: modelContext)
     }
 
     /// Seeds audiobook/track index/time for unit tests without loading media.
@@ -313,6 +316,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             }
             let asset = AVURLAsset(url: assetURL)
             let item = AVPlayerItem(asset: asset)
+
+            if currentAudiobook !== audiobook {
+                equalizer.bind(to: audiobook)
+            }
+            if let mix = await equalizer.makeAudioMix(for: asset) {
+                item.audioMix = mix
+            }
 
             currentAudiobook = audiobook
             currentTrack = track

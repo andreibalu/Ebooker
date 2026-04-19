@@ -20,6 +20,7 @@ struct PagelessApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(appDelegate.audioPlayer)
+                .environmentObject(appDelegate.audioPlayer.equalizer)
                 .environmentObject(aiEntitlementStore)
                 .environment(onboardingManager)
                 .environment(downloadService)
