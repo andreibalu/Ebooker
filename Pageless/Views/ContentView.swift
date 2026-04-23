@@ -67,15 +67,11 @@ struct ContentView: View {
             }
 
             if isPlayerVisible {
-                PlayerView(
-                    onDismiss: closePlayer,
-                    onDragChanged: handlePlayerDragDownChanged,
-                    onDragEnded: handlePlayerDragDownEnded
-                )
-                .environmentObject(player)
-                .environmentObject(aiEntitlementStore)
-                .offset(y: playerYOffset)
-                .ignoresSafeArea()
+                PlayerView(onDismiss: closePlayer)
+                    .environmentObject(player)
+                    .environmentObject(aiEntitlementStore)
+                    .offset(y: playerYOffset)
+                    .ignoresSafeArea()
             }
         }
         .spotlightOverlay(
@@ -421,20 +417,6 @@ struct ContentView: View {
             Task {
                 try? await Task.sleep(for: .milliseconds(400))
                 isPlayerVisible = false
-            }
-        }
-    }
-
-    private func handlePlayerDragDownChanged(_ dragDown: CGFloat) {
-        playerYOffset = max(0, dragDown)
-    }
-
-    private func handlePlayerDragDownEnded(_ dragDown: CGFloat, velocity: CGFloat) {
-        if dragDown > screenHeight * 0.3 || velocity > 600 {
-            closePlayer()
-        } else {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                playerYOffset = 0
             }
         }
     }
