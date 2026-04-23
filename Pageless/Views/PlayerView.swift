@@ -38,27 +38,27 @@ struct PlayerView: View {
     private var supportedRates: [Double] { AudioPlayerManager.supportedPlaybackRates }
 
     var body: some View {
-        GeometryReader { geometry in
-            VStack(spacing: 0) {
-                topInteractiveSection(topInset: geometry.safeAreaInsets.top)
+        VStack(spacing: 0) {
+            topInteractiveSection(topInset: windowSafeAreaInsets.top)
 
-                VStack(spacing: 16) {
-                    progressSection
-                    controlsSection
-                }
-                .padding(.horizontal, 28)
-                .padding(.top, 6)
-
-                Spacer(minLength: 0)
-
-                quickActionsSection
-                    .padding(.horizontal, 28)
-                    .padding(.top, 20)
-                    .padding(.bottom, max(24, geometry.safeAreaInsets.bottom + 12))
+            VStack(spacing: 16) {
+                progressSection
+                controlsSection
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .background(Color.cream.ignoresSafeArea())
+            .padding(.horizontal, 28)
+            .padding(.top, 6)
+
+            Spacer(minLength: 0)
+
+            quickActionsSection
+                .padding(.horizontal, 28)
+                .padding(.top, 20)
+                .padding(.bottom, max(24, windowSafeAreaInsets.bottom + 12))
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.cream.ignoresSafeArea())
+        .contentShape(Rectangle())
+        .simultaneousGesture(dismissDragGesture)
         .sheet(isPresented: $showEqualizer) {
             EqualizerSheet()
         }
@@ -101,8 +101,6 @@ struct PlayerView: View {
             }
             .padding(.horizontal, 28)
         }
-        .contentShape(Rectangle())
-        .simultaneousGesture(dismissDragGesture)
     }
 
     private func modalHeader(topInset: CGFloat) -> some View {
@@ -324,26 +322,43 @@ struct PlayerView: View {
 
     private var segmentedQuickActionsRow: some View {
         HStack(spacing: 0) {
-            Menu {
-                ForEach(supportedRates, id: \.self) { rate in
-                    Button {
-                        player.setPlaybackRate(rate)
-                    } label: {
-                        if rate == player.playbackRate {
-                            Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
-                        } else {
-                            Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
+            HStack(spacing: 0) {
+                Menu {
+                    ForEach(supportedRates, id: \.self) { rate in
+                        Button {
+                            player.setPlaybackRate(rate)
+                        } label: {
+                            if rate == player.playbackRate {
+                                Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
+                            } else {
+                                Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
+                            }
                         }
                     }
+                } label: {
+                    compactQuickActionSegment(
+                        icon: "speedometer",
+                        text: "\(playbackRateLabel)",
+                        filled: false,
+                        expands: true
+                    )
                 }
-            } label: {
-                compactQuickActionSegment(
-                    icon: "speedometer",
-                    text: "\(playbackRateLabel) Speed",
-                    filled: false,
-                    expands: false
-                )
+
+                segmentDivider
+
+                Button {
+                    showEqualizer = true
+                } label: {
+                    compactQuickActionSegment(
+                        icon: "slider.horizontal.3",
+                        text: "EQ",
+                        filled: equalizer.isEnabled,
+                        expands: true
+                    )
+                }
+                .disabled(player.currentAudiobook == nil)
             }
+            .frame(maxWidth: .infinity)
 
             segmentDivider
 
@@ -364,20 +379,7 @@ struct PlayerView: View {
                     expands: true
                 )
             }
-
-            segmentDivider
-
-            Button {
-                showEqualizer = true
-            } label: {
-                compactQuickActionSegment(
-                    icon: "slider.horizontal.3",
-                    text: "EQ",
-                    filled: equalizer.isEnabled,
-                    expands: false
-                )
-            }
-            .disabled(player.currentAudiobook == nil)
+            .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
@@ -465,14 +467,15 @@ struct PlayerView: View {
     // MARK: - Helpers
 
     private var dismissDragGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
+        DragGesture(minimumDistance: 8, coordinateSpace: .global)
             .onChanged { value in
-                guard shouldHandleDismissDrag(value.translation) else { return }
-                onDragChanged?(max(0, value.translation.height))
+                let dragDown = max(0, value.translation.height)
+                onDragChanged?(dragDown)
             }
             .onEnded { value in
-                guard shouldHandleDismissDrag(value.translation) else { return }
-                onDragEnded?(max(0, value.translation.height), max(0, value.velocity.height))
+                let dragDown = max(0, value.translation.height)
+                let velocityDown = max(0, value.velocity.height)
+                onDragEnded?(dragDown, velocityDown)
             }
     }
 
@@ -480,8 +483,17 @@ struct PlayerView: View {
         "\(player.playbackRate.formatted(.number.precision(.fractionLength(0...2))))x"
     }
 
-    private func shouldHandleDismissDrag(_ translation: CGSize) -> Bool {
-        translation.height > 0 && translation.height > abs(translation.width)
+    private var windowSafeAreaInsets: UIEdgeInsets {
+        guard
+            let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive })
+                ?? UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first,
+            let window = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first
+        else {
+            return .zero
+        }
+        return window.safeAreaInsets
     }
 
     private var skipBackIconName: String {
