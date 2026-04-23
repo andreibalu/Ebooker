@@ -8,6 +8,8 @@ import SwiftUI
 
 struct PlayerView: View {
     var onDismiss: (() -> Void)? = nil
+    var onDragChanged: ((CGFloat) -> Void)? = nil
+    var onDragEnded: ((CGFloat, CGFloat) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
@@ -36,11 +38,11 @@ struct PlayerView: View {
     private var supportedRates: [Double] { AudioPlayerManager.supportedPlaybackRates }
 
     var body: some View {
-        NavigationStack {
+        GeometryReader { geometry in
             VStack(spacing: 0) {
+                topInteractiveSection(topInset: geometry.safeAreaInsets.top)
+
                 VStack(spacing: 16) {
-                    cover
-                    titleSection
                     progressSection
                     controlsSection
                 }
@@ -52,27 +54,11 @@ struct PlayerView: View {
                 quickActionsSection
                     .padding(.horizontal, 28)
                     .padding(.top, 20)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, max(24, geometry.safeAreaInsets.bottom + 12))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Color.cream.ignoresSafeArea())
-            .navigationTitle(player.currentAudiobook?.title ?? "Player")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    AirPlayRoutePickerView()
-                        .frame(width: 32, height: 32)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        if let onDismiss { onDismiss() } else { dismiss() }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 17, weight: .semibold))
-                    }
-                }
-            }
         }
-        .presentationDetents([.large])
         .sheet(isPresented: $showEqualizer) {
             EqualizerSheet()
         }
@@ -104,6 +90,48 @@ struct PlayerView: View {
     }
 
     // MARK: - Cover
+
+    private func topInteractiveSection(topInset: CGFloat) -> some View {
+        VStack(spacing: 18) {
+            modalHeader(topInset: topInset)
+
+            VStack(spacing: 16) {
+                cover
+                titleSection
+            }
+            .padding(.horizontal, 28)
+        }
+        .contentShape(Rectangle())
+        .simultaneousGesture(dismissDragGesture)
+    }
+
+    private func modalHeader(topInset: CGFloat) -> some View {
+        VStack(spacing: 12) {
+            Capsule()
+                .fill(Color.primary.opacity(0.16))
+                .frame(width: 42, height: 5)
+
+            HStack(spacing: 12) {
+                AirPlayRoutePickerView()
+                    .frame(width: 32, height: 32)
+
+                Spacer()
+
+                Button {
+                    if let onDismiss { onDismiss() } else { dismiss() }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, max(topInset, 10))
+        .padding(.horizontal, 20)
+        .padding(.bottom, 2)
+    }
 
     private var cover: some View {
         Group {
@@ -244,55 +272,7 @@ struct PlayerView: View {
 
     private var quickActionsSection: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 10) {
-                Menu {
-                    ForEach(supportedRates, id: \.self) { rate in
-                        Button {
-                            player.setPlaybackRate(rate)
-                        } label: {
-                            if rate == player.playbackRate {
-                                Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
-                            } else {
-                                Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
-                            }
-                        }
-                    }
-                } label: {
-                    quickActionChip(
-                        icon: "speedometer",
-                        text: "\(player.playbackRate.formatted(.number.precision(.fractionLength(0...2))))×",
-                        filled: true
-                    )
-                }
-
-                Menu {
-                    Button("Off") {
-                        player.setSleepTimer(seconds: nil)
-                    }
-                    ForEach(SleepTimerOption.allCases) { option in
-                        Button(option.title) {
-                            player.setSleepTimer(seconds: option.rawValue)
-                        }
-                    }
-                } label: {
-                    quickActionChip(
-                        icon: "moon.zzz.fill",
-                        text: sleepTimerLabel,
-                        filled: player.sleepTimerEndsAt != nil
-                    )
-                }
-
-                Button {
-                    showEqualizer = true
-                } label: {
-                    quickActionChip(
-                        icon: "slider.horizontal.3",
-                        text: equalizer.isEnabled ? "EQ On" : "EQ",
-                        filled: equalizer.isEnabled
-                    )
-                }
-                .disabled(player.currentAudiobook == nil)
-            }
+            segmentedQuickActionsRow
 
             Button {
                 showProgressConfirmation = true
@@ -342,6 +322,74 @@ struct PlayerView: View {
         }
     }
 
+    private var segmentedQuickActionsRow: some View {
+        HStack(spacing: 0) {
+            Menu {
+                ForEach(supportedRates, id: \.self) { rate in
+                    Button {
+                        player.setPlaybackRate(rate)
+                    } label: {
+                        if rate == player.playbackRate {
+                            Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
+                        } else {
+                            Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
+                        }
+                    }
+                }
+            } label: {
+                compactQuickActionSegment(
+                    icon: "speedometer",
+                    text: "\(playbackRateLabel) Speed",
+                    filled: false,
+                    expands: false
+                )
+            }
+
+            segmentDivider
+
+            Menu {
+                Button("Off") {
+                    player.setSleepTimer(seconds: nil)
+                }
+                ForEach(SleepTimerOption.allCases) { option in
+                    Button(option.title) {
+                        player.setSleepTimer(seconds: option.rawValue)
+                    }
+                }
+            } label: {
+                compactQuickActionSegment(
+                    icon: "moon.zzz.fill",
+                    text: "Sleep Timer",
+                    filled: player.sleepTimerEndsAt != nil,
+                    expands: true
+                )
+            }
+
+            segmentDivider
+
+            Button {
+                showEqualizer = true
+            } label: {
+                compactQuickActionSegment(
+                    icon: "slider.horizontal.3",
+                    text: "EQ",
+                    filled: equalizer.isEnabled,
+                    expands: false
+                )
+            }
+            .disabled(player.currentAudiobook == nil)
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
+    }
+
     private var smartSaveLoadingChip: some View {
         HStack(spacing: 8) {
             ProgressView()
@@ -361,6 +409,33 @@ struct PlayerView: View {
         )
         .foregroundStyle(.secondary)
         .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
+    }
+
+    private func compactQuickActionSegment(icon: String, text: String, filled: Bool, expands: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+            Text(text)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.92)
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            filled ? Color.primary.opacity(0.08) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .frame(maxWidth: expands ? .infinity : nil)
+        .fixedSize(horizontal: !expands, vertical: false)
+    }
+
+    private var segmentDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.08))
+            .frame(width: 1, height: 22)
+            .padding(.vertical, 10)
     }
 
     private func quickActionChip(icon: String, text: String, filled: Bool) -> some View {
@@ -389,9 +464,24 @@ struct PlayerView: View {
 
     // MARK: - Helpers
 
-    private var sleepTimerLabel: String {
-        guard let sleepTimerEndsAt = player.sleepTimerEndsAt else { return "Sleep Timer" }
-        return "Stops \(TimeFormatter.relativeDateString(for: sleepTimerEndsAt))"
+    private var dismissDragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard shouldHandleDismissDrag(value.translation) else { return }
+                onDragChanged?(max(0, value.translation.height))
+            }
+            .onEnded { value in
+                guard shouldHandleDismissDrag(value.translation) else { return }
+                onDragEnded?(max(0, value.translation.height), max(0, value.velocity.height))
+            }
+    }
+
+    private var playbackRateLabel: String {
+        "\(player.playbackRate.formatted(.number.precision(.fractionLength(0...2))))x"
+    }
+
+    private func shouldHandleDismissDrag(_ translation: CGSize) -> Bool {
+        translation.height > 0 && translation.height > abs(translation.width)
     }
 
     private var skipBackIconName: String {

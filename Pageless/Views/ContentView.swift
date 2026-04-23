@@ -30,6 +30,7 @@ struct ContentView: View {
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
     @State private var isPlayerVisible = false
+    @State private var isClosingPlayer = false
     @State private var playerYOffset: CGFloat = UIScreen.main.bounds.height
     @State private var isSettingsPresented = false
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
@@ -67,7 +68,11 @@ struct ContentView: View {
             }
 
             if isPlayerVisible {
-                PlayerView(onDismiss: closePlayer)
+                PlayerView(
+                    onDismiss: closePlayer,
+                    onDragChanged: handlePlayerDismissDragChanged,
+                    onDragEnded: handlePlayerDismissDragEnded
+                )
                     .environmentObject(player)
                     .environmentObject(aiEntitlementStore)
                     .offset(y: playerYOffset)
@@ -376,6 +381,7 @@ struct ContentView: View {
     // MARK: - Player Presentation
 
     private func openPlayer() {
+        isClosingPlayer = false
         if !isPlayerVisible {
             playerYOffset = screenHeight
             isPlayerVisible = true
@@ -386,16 +392,20 @@ struct ContentView: View {
     }
 
     private func closePlayer() {
+        guard !isClosingPlayer else { return }
+        isClosingPlayer = true
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             playerYOffset = screenHeight
         }
         Task {
             try? await Task.sleep(for: .milliseconds(450))
             isPlayerVisible = false
+            isClosingPlayer = false
         }
     }
 
     private func handlePlayerDragChanged(_ dragUp: CGFloat) {
+        guard !isClosingPlayer else { return }
         if !isPlayerVisible && dragUp > 0 {
             playerYOffset = screenHeight
             isPlayerVisible = true
@@ -406,6 +416,7 @@ struct ContentView: View {
     }
 
     private func handlePlayerDragEnded(_ dragUp: CGFloat, velocity: CGFloat) {
+        guard !isClosingPlayer else { return }
         if dragUp > screenHeight * 0.3 || velocity > 600 {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 playerYOffset = 0
@@ -417,6 +428,24 @@ struct ContentView: View {
             Task {
                 try? await Task.sleep(for: .milliseconds(400))
                 isPlayerVisible = false
+            }
+        }
+    }
+
+    private func handlePlayerDismissDragChanged(_ dragDown: CGFloat) {
+        guard isPlayerVisible, !isClosingPlayer else { return }
+        playerYOffset = max(0, dragDown)
+    }
+
+    private func handlePlayerDismissDragEnded(_ dragDown: CGFloat, velocity: CGFloat) {
+        guard isPlayerVisible, !isClosingPlayer else { return }
+        let shouldDismiss = dragDown > screenHeight * 0.18 || velocity > 900
+
+        if shouldDismiss {
+            closePlayer()
+        } else {
+            withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
+                playerYOffset = 0
             }
         }
     }
