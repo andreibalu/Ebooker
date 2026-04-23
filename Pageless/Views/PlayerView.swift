@@ -7,6 +7,7 @@ import SwiftData
 import SwiftUI
 
 struct PlayerView: View {
+    var onDismiss: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
@@ -61,7 +62,7 @@ struct PlayerView: View {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
-                        dismiss()
+                        if let onDismiss { onDismiss() } else { dismiss() }
                     }
                     .fontWeight(.medium)
                 }

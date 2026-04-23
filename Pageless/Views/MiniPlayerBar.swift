@@ -7,6 +7,8 @@ import SwiftUI
 
 struct MiniPlayerBar: View {
     let openPlayer: () -> Void
+    var onDragChanged: ((CGFloat) -> Void)? = nil
+    var onDragEnded: ((CGFloat, CGFloat) -> Void)? = nil
 
     @EnvironmentObject private var player: AudioPlayerManager
 
@@ -70,11 +72,15 @@ struct MiniPlayerBar: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: openPlayer)
         .simultaneousGesture(
-            DragGesture(minimumDistance: 20)
+            DragGesture(minimumDistance: 10)
+                .onChanged { value in
+                    let up = max(0, -value.translation.height)
+                    onDragChanged?(up)
+                }
                 .onEnded { value in
-                    let isUpwardSwipe = value.translation.height < -40
-                        && abs(value.translation.height) > abs(value.translation.width)
-                    if isUpwardSwipe { openPlayer() }
+                    let up = max(0, -value.translation.height)
+                    let velocityUp = max(0, -value.velocity.height)
+                    onDragEnded?(up, velocityUp)
                 }
         )
     }

@@ -29,35 +29,49 @@ struct ContentView: View {
     @State private var browseViewModel = BrowseLibriVoxViewModel()
     @State private var selectedTab: LibraryTab = .favorites
     @State private var isImporterPresented = false
-    @State private var isPlayerPresented = false
+    @State private var isPlayerVisible = false
+    @State private var playerYOffset: CGFloat = UIScreen.main.bounds.height
     @State private var isSettingsPresented = false
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
+    private let screenHeight = UIScreen.main.bounds.height
 
     var body: some View {
-        VStack(spacing: 0) {
-            NavigationStack {
-                VStack(spacing: 0) {
-                    libraryHeader
-                        .padding(.horizontal, 20)
-                        .padding(.top, 12)
-                        .padding(.bottom, 16)
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                NavigationStack {
+                    VStack(spacing: 0) {
+                        libraryHeader
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .padding(.bottom, 16)
 
-                    tabPicker
-                        .padding(.horizontal, 20)
+                        tabPicker
+                            .padding(.horizontal, 20)
 
-                    Divider()
-                        .padding(.horizontal, 20)
+                        Divider()
+                            .padding(.horizontal, 20)
 
-                    libraryContent
+                        libraryContent
+                    }
+                    .background(Color.cream.ignoresSafeArea())
+                    .navigationBarHidden(true)
                 }
-                .background(Color.cream.ignoresSafeArea())
-                .navigationBarHidden(true)
+
+                if player.currentAudiobook != nil {
+                    MiniPlayerBar(
+                        openPlayer: openPlayer,
+                        onDragChanged: handlePlayerDragChanged,
+                        onDragEnded: handlePlayerDragEnded
+                    )
+                }
             }
 
-            if player.currentAudiobook != nil {
-                MiniPlayerBar {
-                    isPlayerPresented = true
-                }
+            if isPlayerVisible {
+                PlayerView(onDismiss: closePlayer)
+                    .environmentObject(player)
+                    .environmentObject(aiEntitlementStore)
+                    .offset(y: playerYOffset)
+                    .ignoresSafeArea()
             }
         }
         .spotlightOverlay(
@@ -80,11 +94,6 @@ struct ContentView: View {
                 try viewModel.importAudiobook(pending, title: title, author: author, modelContext: modelContext)
                 onboarding.notifyBookImported()
             }
-        }
-        .sheet(isPresented: $isPlayerPresented) {
-            PlayerView()
-                .environmentObject(player)
-                .environmentObject(aiEntitlementStore)
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(onRefreshCatalog: {
@@ -299,7 +308,7 @@ struct ContentView: View {
                 .tag(LibraryTab.allBooks)
 
             BrowseLibriVoxView(onOpenPlayer: {
-                isPlayerPresented = true
+                openPlayer()
             }, viewModel: browseViewModel)
             .tag(LibraryTab.freeBooks)
         }
@@ -328,7 +337,7 @@ struct ContentView: View {
     private func audiobookGridItem(_ audiobook: Audiobook) -> some View {
         NavigationLink {
             AudiobookDetailView(audiobook: audiobook) {
-                isPlayerPresented = true
+                openPlayer()
             }
         } label: {
             AudiobookCardView(
@@ -342,7 +351,7 @@ struct ContentView: View {
                 Task {
                     await player.startPlayback(for: audiobook)
                     try? await Task.sleep(for: .milliseconds(600))
-                    isPlayerPresented = true
+                    openPlayer()
                 }
             }
 
@@ -360,6 +369,54 @@ struct ContentView: View {
                 viewModel.deleteCandidate = audiobook
             } label: {
                 Label(audiobook.isStreamingOnly ? "Remove from Library" : audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    // MARK: - Player Presentation
+
+    private func openPlayer() {
+        if !isPlayerVisible {
+            playerYOffset = screenHeight
+            isPlayerVisible = true
+        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            playerYOffset = 0
+        }
+    }
+
+    private func closePlayer() {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            playerYOffset = screenHeight
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            isPlayerVisible = false
+        }
+    }
+
+    private func handlePlayerDragChanged(_ dragUp: CGFloat) {
+        if !isPlayerVisible && dragUp > 0 {
+            playerYOffset = screenHeight
+            isPlayerVisible = true
+        }
+        if isPlayerVisible {
+            playerYOffset = max(0, screenHeight - dragUp)
+        }
+    }
+
+    private func handlePlayerDragEnded(_ dragUp: CGFloat, velocity: CGFloat) {
+        if dragUp > screenHeight * 0.3 || velocity > 600 {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                playerYOffset = 0
+            }
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                playerYOffset = screenHeight
+            }
+            Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                isPlayerVisible = false
             }
         }
     }
