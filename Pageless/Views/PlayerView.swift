@@ -8,8 +8,6 @@ import SwiftUI
 
 struct PlayerView: View {
     var onDismiss: (() -> Void)? = nil
-    var onDragChanged: ((CGFloat) -> Void)? = nil
-    var onDragEnded: ((CGFloat, CGFloat) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
@@ -39,24 +37,8 @@ struct PlayerView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 VStack(spacing: 16) {
-                    VStack(spacing: 16) {
-                        cover
-                        titleSection
-                    }
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 10)
-                            .onChanged { value in
-                                let down = max(0, value.translation.height)
-                                onDragChanged?(down)
-                            }
-                            .onEnded { value in
-                                let down = max(0, value.translation.height)
-                                let velocityDown = max(0, value.velocity.height)
-                                onDragEnded?(down, velocityDown)
-                            }
-                    )
-
+                    cover
+                    titleSection
                     progressSection
                     controlsSection
                 }
