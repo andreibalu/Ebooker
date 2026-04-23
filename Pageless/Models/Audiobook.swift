@@ -92,6 +92,49 @@ final class Audiobook: Identifiable {
         set { _progressRecapAnchorTime = newValue }
     }
 
+    // Per-book equalizer + amplifier state. Nullable for lightweight migration.
+    // `_eqBandGainsJSON` stores a JSON array of 5 Doubles representing dB gains.
+    private var _eqEnabled: Bool?
+    private var _eqPreampDB: Double?
+    private var _eqPresetRaw: String?
+    private var _eqBandGainsJSON: String?
+
+    var equalizerConfiguration: EqualizerConfiguration {
+        get {
+            let enabled = _eqEnabled ?? false
+            let preamp = _eqPreampDB ?? 0
+            let preset = EqualizerPreset(rawValue: _eqPresetRaw ?? "") ?? .flat
+            let bands = decodeBandGains(_eqBandGainsJSON) ?? preset.bandGainsDB
+            var config = EqualizerConfiguration(
+                isEnabled: enabled,
+                preset: preset,
+                preampDB: preamp,
+                bandGainsDB: bands
+            )
+            config.clamp()
+            return config
+        }
+        set {
+            var clamped = newValue
+            clamped.clamp()
+            _eqEnabled = clamped.isEnabled
+            _eqPreampDB = clamped.preampDB
+            _eqPresetRaw = clamped.preset.rawValue
+            _eqBandGainsJSON = encodeBandGains(clamped.bandGainsDB)
+        }
+    }
+
+    private func decodeBandGains(_ json: String?) -> [Double]? {
+        guard let json, let data = json.data(using: .utf8) else { return nil }
+        guard let array = try? JSONDecoder().decode([Double].self, from: data) else { return nil }
+        return array.count == EqualizerBand.allCases.count ? array : nil
+    }
+
+    private func encodeBandGains(_ gains: [Double]) -> String? {
+        guard let data = try? JSONEncoder().encode(gains) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \AudioTrack.audiobook)
     var tracks: [AudioTrack]
 

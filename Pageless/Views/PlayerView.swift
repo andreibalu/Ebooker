@@ -12,6 +12,7 @@ struct PlayerView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+    @EnvironmentObject private var equalizer: AudioEqualizerService
 
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
@@ -23,6 +24,7 @@ struct PlayerView: View {
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
     @State private var showProgressConfirmation = false
+    @State private var showEqualizer = false
 
     private var useSmartSave: Bool {
         aiEntitlement.canUseAIFeatures
@@ -71,6 +73,9 @@ struct PlayerView: View {
             }
         }
         .presentationDetents([.large])
+        .sheet(isPresented: $showEqualizer) {
+            EqualizerSheet()
+        }
         .sheet(isPresented: Binding(
             get: { viewModel.pendingMomentTime != nil },
             set: { if !$0 { viewModel.pendingMomentTime = nil } }
@@ -239,7 +244,7 @@ struct PlayerView: View {
 
     private var quickActionsSection: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Menu {
                     ForEach(supportedRates, id: \.self) { rate in
                         Button {
@@ -276,6 +281,17 @@ struct PlayerView: View {
                         filled: player.sleepTimerEndsAt != nil
                     )
                 }
+
+                Button {
+                    showEqualizer = true
+                } label: {
+                    quickActionChip(
+                        icon: "slider.horizontal.3",
+                        text: equalizer.isEnabled ? "EQ On" : "EQ",
+                        filled: equalizer.isEnabled
+                    )
+                }
+                .disabled(player.currentAudiobook == nil)
             }
 
             Button {
