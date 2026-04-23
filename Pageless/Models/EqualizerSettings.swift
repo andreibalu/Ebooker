@@ -37,7 +37,7 @@ enum EqualizerBand: Int, CaseIterable, Identifiable {
 }
 
 /// Preset tonal curves. `.custom` is selected when the user edits any band manually.
-enum EqualizerPreset: String, CaseIterable, Identifiable {
+enum EqualizerPreset: String, CaseIterable, Identifiable, Codable {
     case flat
     case voiceBoost
     case bassBoost

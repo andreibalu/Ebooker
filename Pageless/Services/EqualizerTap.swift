@@ -76,12 +76,12 @@ final class TapState: @unchecked Sendable {
     // Writer-controlled (main thread under lock).
     var enabled: Bool = false
     var preampLinear: Float = 1.0
-    var coefficients: [BiquadCoefficients] = Array(repeating: .identity, count: bandCount)
+    fileprivate var coefficients: [BiquadCoefficients] = Array(repeating: .identity, count: bandCount)
 
     // Reader-controlled (audio thread, no lock needed — single-producer single-consumer).
     var sampleRate: Double = 44_100
     var channelCount: Int = 2
-    var delays: [[BiquadDelay]] = Array(
+    fileprivate var delays: [[BiquadDelay]] = Array(
         repeating: Array(repeating: BiquadDelay(), count: bandCount),
         count: 2
     )
@@ -153,15 +153,15 @@ enum EqualizerTap {
             process: tapProcess
         )
 
-        var unmanagedTap: Unmanaged<MTAudioProcessingTap>?
+        var tapRef: MTAudioProcessingTap?
         let status = MTAudioProcessingTapCreate(
             kCFAllocatorDefault,
             &callbacks,
             kMTAudioProcessingTapCreationFlag_PreEffects,
-            &unmanagedTap
+            &tapRef
         )
-        guard status == noErr, let tap = unmanagedTap else { return nil }
-        return tap.takeRetainedValue()
+        guard status == noErr, let tap = tapRef else { return nil }
+        return tap
     }
 }
 
