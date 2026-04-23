@@ -69,6 +69,14 @@ struct MiniPlayerBar: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: openPlayer)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    let isUpwardSwipe = value.translation.height < -40
+                        && abs(value.translation.height) > abs(value.translation.width)
+                    if isUpwardSwipe { openPlayer() }
+                }
+        )
     }
 
     private var miniCover: some View {
