@@ -4,8 +4,11 @@
 //
 
 import CarPlay
+import OSLog
 import SwiftData
 import UIKit
+
+private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "CarPlay")
 
 /// Supplies the CarPlay scene configuration alongside SwiftUI `WindowGroup`.
 @MainActor
@@ -55,7 +58,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
+        carPlayLog.info("configurationForConnecting role=\(connectingSceneSession.role.rawValue, privacy: .public)")
         if connectingSceneSession.role == .carTemplateApplication {
+            carPlayLog.info("returning CarPlay scene configuration")
             let configuration = UISceneConfiguration(
                 name: "CarPlay",
                 sessionRole: connectingSceneSession.role

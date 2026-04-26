@@ -4,8 +4,11 @@
 //
 
 import CarPlay
+import OSLog
 import SwiftData
 import UIKit
+
+private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "CarPlay")
 
 /// CarPlay UI: library tabs (Favorites / All Books), playback via `CPNowPlayingTemplate`, non-AI moments named "CarPlay N".
 @MainActor
@@ -30,11 +33,17 @@ final class CarPlayCoordinator: NSObject {
     }
 
     func connect(interfaceController: CPInterfaceController) {
+        carPlayLog.info("coordinator connect")
         self.interfaceController = interfaceController
         audioPlayer.configure(modelContext: modelContainer.mainContext)
         applyPlaybackDefaultsFromStorage()
         let root = makeRootTemplate()
-        interfaceController.setRootTemplate(root, animated: true) { [weak self] _, _ in
+        interfaceController.setRootTemplate(root, animated: true) { [weak self] success, error in
+            if let error {
+                carPlayLog.error("setRootTemplate failed: \(String(describing: error), privacy: .public)")
+            } else {
+                carPlayLog.info("setRootTemplate success=\(success, privacy: .public)")
+            }
             self?.refreshLibraryTemplates()
         }
     }
@@ -147,15 +156,23 @@ final class CarPlayCoordinator: NSObject {
               tabBar.templates.count >= 2,
               let favorites = tabBar.templates[0] as? CPListTemplate,
               let allBooks = tabBar.templates[1] as? CPListTemplate
-        else { return }
+        else {
+            carPlayLog.error("refreshLibraryTemplates aborted: root template not as expected")
+            return
+        }
 
         let sortRaw = UserDefaults.standard.string(forKey: "librarySortOption") ?? LibrarySortOption.recent.rawValue
         let context = ModelContext(modelContainer)
         let descriptor = FetchDescriptor<Audiobook>()
-        guard let all = try? context.fetch(descriptor) else { return }
+        guard let all = try? context.fetch(descriptor) else {
+            carPlayLog.error("refreshLibraryTemplates aborted: fetch failed")
+            return
+        }
 
         let favoriteBooks = libraryViewModel.sorted(all.filter(\.isFavorite), by: sortRaw)
         let sortedAll = libraryViewModel.sorted(Array(all), by: sortRaw)
+
+        carPlayLog.info("refresh: favorites=\(favoriteBooks.count, privacy: .public) all=\(sortedAll.count, privacy: .public)")
 
         favorites.updateSections([CPListSection(items: listItems(for: favoriteBooks), header: nil, sectionIndexTitle: nil)])
         allBooks.updateSections([CPListSection(items: listItems(for: sortedAll), header: nil, sectionIndexTitle: nil)])
