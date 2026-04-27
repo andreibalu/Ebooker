@@ -4,8 +4,11 @@
 //
 
 import CarPlay
+import OSLog
 import SwiftData
 import UIKit
+
+private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "CarPlay")
 
 /// CarPlay UI: library tabs (Favorites / All Books), playback via `CPNowPlayingTemplate`, non-AI moments named "CarPlay N".
 @MainActor
@@ -16,6 +19,9 @@ final class CarPlayCoordinator: NSObject {
 
     private let libraryViewModel = LibraryViewModel()
     private static let carPlayMomentSequenceKey = "carPlayMomentSequence"
+
+    private var momentButtonConfirmed = false
+    private var progressButtonConfirmed = false
 
     private lazy var nowPlayingTemplate: CPNowPlayingTemplate = {
         let template = CPNowPlayingTemplate.shared
@@ -30,11 +36,17 @@ final class CarPlayCoordinator: NSObject {
     }
 
     func connect(interfaceController: CPInterfaceController) {
+        carPlayLog.info("coordinator connect")
         self.interfaceController = interfaceController
         audioPlayer.configure(modelContext: modelContainer.mainContext)
         applyPlaybackDefaultsFromStorage()
         let root = makeRootTemplate()
-        interfaceController.setRootTemplate(root, animated: true) { [weak self] _, _ in
+        interfaceController.setRootTemplate(root, animated: true) { [weak self] success, error in
+            if let error {
+                carPlayLog.error("setRootTemplate failed: \(String(describing: error), privacy: .public)")
+            } else {
+                carPlayLog.info("setRootTemplate success=\(success, privacy: .public)")
+            }
             self?.refreshLibraryTemplates()
         }
     }
@@ -68,17 +80,48 @@ final class CarPlayCoordinator: NSObject {
             self?.cyclePlaybackRateForCarPlay()
         }
 
-        let momentImage = UIImage(systemName: "bookmark.fill")?.withRenderingMode(.alwaysTemplate) ?? UIImage()
+        let momentIconName = momentButtonConfirmed ? "checkmark.circle.fill" : "bookmark.fill"
+        let momentImage = UIImage(systemName: momentIconName)?.withRenderingMode(.alwaysTemplate) ?? UIImage()
         let momentButton = CPNowPlayingImageButton(image: momentImage) { [weak self] _ in
-            self?.saveCarPlayMoment()
+            self?.handleMomentButton()
         }
 
-        let progressImage = UIImage(systemName: "flag.fill")?.withRenderingMode(.alwaysTemplate) ?? UIImage()
+        let progressIconName = progressButtonConfirmed ? "checkmark.circle.fill" : "flag.fill"
+        let progressImage = UIImage(systemName: progressIconName)?.withRenderingMode(.alwaysTemplate) ?? UIImage()
         let progressButton = CPNowPlayingImageButton(image: progressImage) { [weak self] _ in
-            self?.audioPlayer.setProgressMarker()
+            self?.handleProgressButton()
         }
 
         return [rateButton, momentButton, progressButton]
+    }
+
+    private func handleMomentButton() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self else { return }
+            saveCarPlayMoment()
+            flashButtonConfirmation(moment: true)
+        }
+    }
+
+    private func handleProgressButton() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard let self else { return }
+            audioPlayer.setProgressMarker()
+            flashButtonConfirmation(moment: false)
+        }
+    }
+
+    private func flashButtonConfirmation(moment: Bool) {
+        if moment { momentButtonConfirmed = true } else { progressButtonConfirmed = true }
+        nowPlayingTemplate.updateNowPlayingButtons(makeNowPlayingButtons())
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard let self else { return }
+            if moment { momentButtonConfirmed = false } else { progressButtonConfirmed = false }
+            nowPlayingTemplate.updateNowPlayingButtons(makeNowPlayingButtons())
+        }
     }
 
     private func cyclePlaybackRateForCarPlay() {
@@ -147,74 +190,55 @@ final class CarPlayCoordinator: NSObject {
               tabBar.templates.count >= 2,
               let favorites = tabBar.templates[0] as? CPListTemplate,
               let allBooks = tabBar.templates[1] as? CPListTemplate
-        else { return }
+        else {
+            carPlayLog.error("refreshLibraryTemplates aborted: root template not as expected")
+            return
+        }
 
         let sortRaw = UserDefaults.standard.string(forKey: "librarySortOption") ?? LibrarySortOption.recent.rawValue
         let context = ModelContext(modelContainer)
         let descriptor = FetchDescriptor<Audiobook>()
-        guard let all = try? context.fetch(descriptor) else { return }
+        guard let all = try? context.fetch(descriptor) else {
+            carPlayLog.error("refreshLibraryTemplates aborted: fetch failed")
+            return
+        }
 
         let favoriteBooks = libraryViewModel.sorted(all.filter(\.isFavorite), by: sortRaw)
         let sortedAll = libraryViewModel.sorted(Array(all), by: sortRaw)
+
+        carPlayLog.info("refresh: favorites=\(favoriteBooks.count, privacy: .public) all=\(sortedAll.count, privacy: .public)")
 
         favorites.updateSections([CPListSection(items: listItems(for: favoriteBooks), header: nil, sectionIndexTitle: nil)])
         allBooks.updateSections([CPListSection(items: listItems(for: sortedAll), header: nil, sectionIndexTitle: nil)])
     }
 
     private func listItems(for books: [Audiobook]) -> [CPListItem] {
-        var items: [CPListItem] = []
-        for book in books {
-            let playItem = CPListItem(text: book.title, detailText: book.displayAuthor)
+        books.map { book in
+            let detail: String
+            if book.hasProgressPosition, let idx = book.progressTrackIndex, let time = book.progressTime {
+                let tracks = book.sortedTracks
+                let trackLabel = tracks.indices.contains(idx) ? tracks[idx].title : "Track"
+                detail = "\(trackLabel) · \(TimeFormatter.clockString(seconds: time))"
+            } else {
+                detail = book.displayAuthor
+            }
+
+            let item = CPListItem(text: book.title, detailText: detail)
             let bookID = book.id
-            playItem.handler = { [weak self] _, completion in
-                guard let self else {
-                    completion()
-                    return
-                }
+            item.handler = { [weak self] _, completion in
+                guard let self else { completion(); return }
                 Task { @MainActor in
                     await self.playAudiobookFromList(id: bookID)
                     completion()
                 }
             }
-            items.append(playItem)
-
-            if book.hasProgressPosition {
-                let jumpDetail = Self.savedProgressDetail(for: book)
-                let flagImage = UIImage(systemName: "flag.fill")?.withRenderingMode(.alwaysTemplate) ?? UIImage()
-                let jumpItem = CPListItem(text: "Jump to saved progress", detailText: jumpDetail, image: flagImage)
-                let jumpBookID = book.id
-                jumpItem.handler = { [weak self] _, completion in
-                    guard let self else {
-                        completion()
-                        return
-                    }
-                    Task { @MainActor in
-                        await self.jumpToSavedProgressFromList(id: jumpBookID)
-                        completion()
-                    }
-                }
-                items.append(jumpItem)
-            }
+            return item
         }
-        return items
-    }
-
-    private static func savedProgressDetail(for book: Audiobook) -> String {
-        guard let idx = book.progressTrackIndex, let time = book.progressTime else { return "" }
-        let tracks = book.sortedTracks
-        let trackLabel = tracks.indices.contains(idx) ? tracks[idx].title : "Track"
-        return "\(trackLabel) · \(TimeFormatter.clockString(seconds: time))"
     }
 
     private func playAudiobookFromList(id: UUID) async {
         guard let book = fetchAudiobook(id: id) else { return }
         await audioPlayer.startPlaybackFromSavedProgress(for: book, autoplay: true)
-        presentNowPlayingIfNeeded()
-    }
-
-    private func jumpToSavedProgressFromList(id: UUID) async {
-        guard let book = fetchAudiobook(id: id) else { return }
-        await audioPlayer.jumpToSavedProgressMarker(in: book)
         presentNowPlayingIfNeeded()
     }
 
