@@ -88,11 +88,13 @@ final class BrowseLibriVoxViewModel {
 
     private var searchTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
+    private var cancelHandlers: [String: () -> Void] = [:]
 
     // MARK: - Download tracking
 
-    func registerDownload(book: LibriVoxBook, total: Int) {
+    func registerDownload(book: LibriVoxBook, total: Int, cancelHandler: @escaping () -> Void = {}) {
         activeDownloads[book.id] = ActiveLibriVoxDownload(id: book.id, book: book, completed: 0, total: total)
+        cancelHandlers[book.id] = cancelHandler
     }
 
     func updateDownloadProgress(bookId: String, completed: Int, total: Int) {
@@ -102,10 +104,17 @@ final class BrowseLibriVoxViewModel {
 
     func completeDownload(bookId: String) {
         activeDownloads.removeValue(forKey: bookId)
+        cancelHandlers.removeValue(forKey: bookId)
     }
 
     func cancelOrFailDownload(bookId: String) {
         activeDownloads.removeValue(forKey: bookId)
+        cancelHandlers.removeValue(forKey: bookId)
+    }
+
+    func cancelDownload(bookId: String) {
+        cancelHandlers[bookId]?()
+        cancelHandlers.removeValue(forKey: bookId)
     }
 
     var lastSyncDescription: String {

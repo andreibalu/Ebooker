@@ -93,6 +93,15 @@ struct BrowseLibriVoxView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                Button {
+                    viewModel.cancelDownload(bookId: download.id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 10)
             }
             ProgressView(value: download.progress)
                 .tint(.primary)

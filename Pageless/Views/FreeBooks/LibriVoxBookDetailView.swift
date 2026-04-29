@@ -162,6 +162,11 @@ struct LibriVoxBookDetailView: View {
                 }
                 ProgressView(value: trackerDownload.progress)
                     .tint(.primary)
+                Button("Cancel Download") {
+                    browseViewModel?.cancelDownload(bookId: book.id)
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.red)
             }
         } else {
             switch viewModel.downloadState {
@@ -200,11 +205,11 @@ struct LibriVoxBookDetailView: View {
                     }
                     ProgressView(value: Double(completed), total: Double(max(total, 1)))
                         .tint(.primary)
-                    Button("Cancel") {
+                    Button("Cancel Download") {
                         viewModel.cancelDownload()
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.red)
                 }
 
             case .complete:
