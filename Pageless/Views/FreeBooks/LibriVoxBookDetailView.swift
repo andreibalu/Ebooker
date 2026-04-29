@@ -168,8 +168,8 @@ struct LibriVoxBookDetailView: View {
                 Button("Cancel Download") {
                     browseViewModel?.cancelDownload(bookId: book.id)
                 }
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.red)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
             }
         } else {
             switch viewModel.downloadState {
