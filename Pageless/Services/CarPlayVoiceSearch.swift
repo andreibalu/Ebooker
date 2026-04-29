@@ -42,8 +42,13 @@ final class CarPlayVoiceSearch {
 
     /// Records microphone audio and returns the transcribed text.
     /// Auto-stops 1.5 s after the last recognized word, or 6 s after start.
+    /// Caller MUST verify `VoiceSearchPermissions.status == .granted` before invoking
+    /// — this method never triggers a system permission prompt, because those can't
+    /// appear on the CarPlay display.
     func recognize() async throws -> String {
-        try await ensureAuthorization()
+        guard VoiceSearchPermissions.status == .granted else {
+            throw VoiceError.speechAuthDenied
+        }
 
         guard let recognizer = SFSpeechRecognizer(locale: Locale.current), recognizer.isAvailable else {
             throw VoiceError.recognizerUnavailable
@@ -177,15 +182,4 @@ final class CarPlayVoiceSearch {
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    private func ensureAuthorization() async throws {
-        let speechStatus: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { cont in
-            SFSpeechRecognizer.requestAuthorization { status in cont.resume(returning: status) }
-        }
-        guard speechStatus == .authorized else { throw VoiceError.speechAuthDenied }
-
-        let micGranted: Bool = await withCheckedContinuation { cont in
-            AVAudioApplication.requestRecordPermission { granted in cont.resume(returning: granted) }
-        }
-        guard micGranted else { throw VoiceError.microphoneDenied }
-    }
 }

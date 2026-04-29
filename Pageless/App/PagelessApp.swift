@@ -29,6 +29,11 @@ struct PagelessApp: App {
                 .task {
                     await UnpagedAppShortcuts.updateAppShortcutParameters()
                 }
+                .task {
+                    // Prime mic + speech permissions on the iPhone so CarPlay voice search
+                    // never has to trigger a system prompt mid-drive (CarPlay can't display them).
+                    await VoiceSearchPermissions.primeIfNeeded()
+                }
         }
         .modelContainer(appDelegate.modelContainer)
         .onChange(of: scenePhase) { _, newPhase in

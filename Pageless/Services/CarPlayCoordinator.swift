@@ -370,6 +370,26 @@ final class CarPlayCoordinator: NSObject {
     private func startVoiceSearch() {
         guard let interfaceController else { return }
 
+        // System permission prompts can't appear on the CarPlay display — they only
+        // surface on the iPhone. If permissions weren't primed while the phone was
+        // active, refuse mid-drive and tell the driver to enable it on their phone.
+        switch VoiceSearchPermissions.status {
+        case .granted:
+            break
+        case .notDetermined:
+            presentInfoAlert(
+                title: "Set up voice search on your iPhone",
+                message: "Open Unpaged on your iPhone, then tap Free Books to grant microphone access. After that, voice search will work here."
+            )
+            return
+        case .denied:
+            presentInfoAlert(
+                title: "Voice search needs permission",
+                message: "Enable Microphone and Speech Recognition for Unpaged in iPhone Settings, then try again."
+            )
+            return
+        }
+
         let listening = CPVoiceControlState(
             identifier: "listening",
             titleVariants: ["Listening… say a title or author"],
