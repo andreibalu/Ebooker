@@ -52,6 +52,9 @@ struct LibriVoxBookDetailView: View {
                     Label(book.formattedDuration, systemImage: "clock")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                    Label("\(book.estimatedDownloadSizeMB) MB", systemImage: "arrow.down.circle")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
                 if !book.language.isEmpty {
                     Label(book.language, systemImage: "globe")
@@ -162,6 +165,11 @@ struct LibriVoxBookDetailView: View {
                 }
                 ProgressView(value: trackerDownload.progress)
                     .tint(.primary)
+                Button("Cancel Download") {
+                    browseViewModel?.cancelDownload(bookId: book.id)
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.red)
             }
         } else {
             switch viewModel.downloadState {
@@ -180,13 +188,20 @@ struct LibriVoxBookDetailView: View {
                 }
 
             case .fetchingTracks:
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Fetching track list…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Fetching track list…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    Button("Cancel") {
+                        viewModel.cancelDownload()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
 
             case .downloading(let completed, let total):
                 VStack(alignment: .leading, spacing: 8) {

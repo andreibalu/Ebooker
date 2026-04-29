@@ -65,7 +65,12 @@ struct BrowseLibriVoxView: View {
 
             VStack(spacing: 8) {
                 ForEach(viewModel.sortedActiveDownloads) { download in
-                    activeDownloadCard(download)
+                    NavigationLink {
+                        LibriVoxBookDetailView(book: download.book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+                    } label: {
+                        activeDownloadCard(download)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 20)
@@ -89,10 +94,19 @@ struct BrowseLibriVoxView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Text("\(download.completed)/\(download.total) tracks")
+                Text(remainingSizeLabel(for: download))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                Button {
+                    viewModel.cancelDownload(bookId: download.id)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.leading, 10)
             }
             ProgressView(value: download.progress)
                 .tint(.primary)
@@ -101,6 +115,13 @@ struct BrowseLibriVoxView: View {
         .padding(.vertical, 10)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+    }
+
+    private func remainingSizeLabel(for download: ActiveLibriVoxDownload) -> String {
+        let totalMB = download.book.estimatedDownloadSizeMB
+        guard totalMB > 0 else { return "" }
+        let remaining = max(0, Int((Double(totalMB) * (1.0 - download.progress)).rounded()))
+        return "\(remaining) MB left"
     }
 
     // MARK: - First-load overlay

@@ -123,7 +123,7 @@ final class LibriVoxBookDetailViewModel {
             let tracks = try await LibriVoxDownloadService.prepareDownload(projectID: book.id)
             let total = tracks.count
             downloadState = .downloading(completed: 0, total: total)
-            tracker?.registerDownload(book: book, total: total)
+            tracker?.registerDownload(book: book, total: total, cancelHandler: { [weak self] in self?.cancelDownload() })
 
             // Cache tracks for future offline use
             book.cachedTracks = tracks.enumerated().map { i, t in
