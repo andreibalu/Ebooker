@@ -52,6 +52,9 @@ struct LibriVoxBookDetailView: View {
                     Label(book.formattedDuration, systemImage: "clock")
                         .font(.caption)
                         .foregroundStyle(.tertiary)
+                    Label("\(book.estimatedDownloadSizeMB) MB", systemImage: "arrow.down.circle")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
                 if !book.language.isEmpty {
                     Label(book.language, systemImage: "globe")

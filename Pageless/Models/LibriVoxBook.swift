@@ -99,6 +99,12 @@ final class LibriVoxBook {
         return TimeFormatter.durationSummary(seconds: Double(totalTimeSecs))
     }
 
+    /// Estimated MB at LibriVox's standard 64 kbps MP3 bitrate (≈0.008 MB/s).
+    var estimatedDownloadSizeMB: Int {
+        guard totalTimeSecs > 0 else { return 0 }
+        return max(1, Int((Double(totalTimeSecs) * 0.008).rounded()))
+    }
+
     var coverThumbnailURL: URL? {
         guard let s = coverThumbnailURLString, !s.isEmpty else { return nil }
         return URL(string: s)

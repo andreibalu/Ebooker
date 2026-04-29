@@ -94,7 +94,7 @@ struct BrowseLibriVoxView: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Text("\(download.completed)/\(download.total) tracks")
+                Text(remainingSizeLabel(for: download))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -115,6 +115,13 @@ struct BrowseLibriVoxView: View {
         .padding(.vertical, 10)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+    }
+
+    private func remainingSizeLabel(for download: ActiveLibriVoxDownload) -> String {
+        let totalMB = download.book.estimatedDownloadSizeMB
+        guard totalMB > 0 else { return "" }
+        let remaining = max(0, Int((Double(totalMB) * (1.0 - download.progress)).rounded()))
+        return "\(remaining) MB left"
     }
 
     // MARK: - First-load overlay
