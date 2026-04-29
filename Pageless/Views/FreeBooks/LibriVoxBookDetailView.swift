@@ -185,13 +185,20 @@ struct LibriVoxBookDetailView: View {
                 }
 
             case .fetchingTracks:
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Fetching track list…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Fetching track list…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    Button("Cancel") {
+                        viewModel.cancelDownload()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity)
 
             case .downloading(let completed, let total):
                 VStack(alignment: .leading, spacing: 8) {
@@ -205,11 +212,11 @@ struct LibriVoxBookDetailView: View {
                     }
                     ProgressView(value: Double(completed), total: Double(max(total, 1)))
                         .tint(.primary)
-                    Button("Cancel Download") {
+                    Button("Cancel") {
                         viewModel.cancelDownload()
                     }
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.red)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
 
             case .complete:
