@@ -65,7 +65,12 @@ struct BrowseLibriVoxView: View {
 
             VStack(spacing: 8) {
                 ForEach(viewModel.sortedActiveDownloads) { download in
-                    activeDownloadCard(download)
+                    NavigationLink {
+                        LibriVoxBookDetailView(book: download.book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+                    } label: {
+                        activeDownloadCard(download)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, 20)
