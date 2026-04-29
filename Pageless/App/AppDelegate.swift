@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
     let modelContainer: ModelContainer
     let audioPlayer: AudioPlayerManager
+    let freeBookDownloader: FreeBookDownloadService
     var backgroundSessionCompletionHandler: (() -> Void)?
 
     override init() {
@@ -42,6 +43,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             fatalError("Could not create ModelContainer: \(error)")
         }
         self.audioPlayer = AudioPlayerManager()
+        self.freeBookDownloader = FreeBookDownloadService()
         super.init()
         AppDelegate.shared = self
     }

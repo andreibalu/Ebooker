@@ -13,7 +13,6 @@ struct PagelessApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
     @State private var onboardingManager = OnboardingManager()
-    @State private var downloadService = FreeBookDownloadService()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -23,9 +22,9 @@ struct PagelessApp: App {
                 .environmentObject(appDelegate.audioPlayer.equalizer)
                 .environmentObject(aiEntitlementStore)
                 .environment(onboardingManager)
-                .environment(downloadService)
+                .environment(appDelegate.freeBookDownloader)
                 .onAppear {
-                    downloadService.configure(modelContext: appDelegate.modelContainer.mainContext)
+                    appDelegate.freeBookDownloader.configure(modelContext: appDelegate.modelContainer.mainContext)
                 }
                 .task {
                     await UnpagedAppShortcuts.updateAppShortcutParameters()

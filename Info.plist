@@ -24,8 +24,10 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Unpaged uses the microphone for hands-free voice search of free books while you drive.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Unpaged uses speech recognition to transcribe audio and suggest names for your saved moments.</string>
+	<string>Unpaged uses speech recognition to transcribe audio, suggest names for your saved moments, and search free books by voice in CarPlay.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
