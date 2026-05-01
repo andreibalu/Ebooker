@@ -346,16 +346,53 @@ final class CarPlayCoordinator: NSObject {
             }
             return
         }
-        if freeBookDownloader.activeDownloads.contains(entryId) {
-            presentInfoAlert(title: "Already downloading", message: "This book is on its way. We'll add it to your library when it's ready.")
+        guard NetworkMonitor.shared.isConnected else {
+            presentInfoAlert(
+                title: "You're offline",
+                message: "Free books stream over the internet. Connect and try again."
+            )
             return
         }
-        freeBookDownloader.startDownload(entry: entry)
-        refreshFreeBooksTemplate()
-        presentInfoAlert(
-            title: "Downloading \(entry.title)",
-            message: "It will appear in your library when finished. You can keep using CarPlay."
+        Task { @MainActor in
+            let audiobook = addCatalogEntryAsStreamingAudiobook(entry)
+            await audioPlayer.startPlayback(for: audiobook, autoplay: true)
+            presentNowPlayingIfNeeded()
+        }
+    }
+
+    /// Inserts an Audiobook with `isDownloaded == false` whose tracks point at the
+    /// catalog entry's remote URLs, so playback streams instead of waiting on a download.
+    private func addCatalogEntryAsStreamingAudiobook(_ entry: FreeBookCatalogEntry) -> Audiobook {
+        let context = modelContainer.mainContext
+        let audiobook = Audiobook(
+            title: entry.title,
+            author: entry.author,
+            folderName: UUID().uuidString,
+            coverArtData: nil,
+            totalDuration: entry.totalDurationSeconds,
+            isFreeBook: true,
+            catalogId: entry.id,
+            isDownloaded: false
         )
+        context.insert(audiobook)
+
+        for trackEntry in entry.tracks {
+            let safeTitle = trackEntry.title.isEmpty ? "Track \(trackEntry.orderIndex + 1)" : trackEntry.title
+            let audioTrack = AudioTrack(
+                title: safeTitle,
+                originalFileName: trackEntry.fileName,
+                storedFileName: "",
+                orderIndex: trackEntry.orderIndex,
+                duration: trackEntry.durationSeconds
+            )
+            audioTrack.remoteURLString = trackEntry.downloadURL
+            audioTrack.audiobook = audiobook
+            context.insert(audioTrack)
+            audiobook.tracks.append(audioTrack)
+        }
+
+        try? context.save()
+        return audiobook
     }
 
     private func downloadedFreeBookCatalogIds() -> Set<String> {
