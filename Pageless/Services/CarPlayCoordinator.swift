@@ -405,7 +405,8 @@ final class CarPlayCoordinator: NSObject {
         let template = CPVoiceControlTemplate(voiceControlStates: [listening, thinking])
         voiceTemplate = template
 
-        interfaceController.pushTemplate(template, animated: true) { [weak self] _, _ in
+        // CPVoiceControlTemplate is a modal template — pushing it raises an NSException.
+        interfaceController.presentTemplate(template, animated: true) { [weak self] _, _ in
             template.activateVoiceControlState(withIdentifier: "listening")
             self?.runVoiceRecognition()
         }
@@ -432,8 +433,8 @@ final class CarPlayCoordinator: NSObject {
 
     private func popVoiceTemplate() {
         guard let interfaceController, let template = voiceTemplate else { return }
-        if interfaceController.topTemplate === template {
-            interfaceController.popTemplate(animated: true) { _, _ in }
+        if interfaceController.presentedTemplate === template {
+            interfaceController.dismissTemplate(animated: true) { _, _ in }
         }
         voiceTemplate = nil
     }
@@ -465,12 +466,16 @@ final class CarPlayCoordinator: NSObject {
         let section = CPListSection(items: items, header: "Results for “\(query)”", sectionIndexTitle: nil)
         let resultsTemplate = CPListTemplate(title: "Free Books", sections: [section])
 
-        // Replace the voice template on the stack so back arrow returns to Free Books.
-        if interfaceController.topTemplate === voiceTemplate {
-            interfaceController.popTemplate(animated: false) { _, _ in }
+        // Dismiss the modally-presented voice template before pushing the results
+        // template onto the navigation stack, so the back arrow returns to Free Books.
+        if interfaceController.presentedTemplate === voiceTemplate {
+            interfaceController.dismissTemplate(animated: false) { [weak interfaceController] _, _ in
+                interfaceController?.pushTemplate(resultsTemplate, animated: true) { _, _ in }
+            }
+        } else {
+            interfaceController.pushTemplate(resultsTemplate, animated: true) { _, _ in }
         }
         voiceTemplate = nil
-        interfaceController.pushTemplate(resultsTemplate, animated: true) { _, _ in }
     }
 
     private struct FreeBookSearchResult: Sendable {
@@ -548,11 +553,8 @@ final class CarPlayCoordinator: NSObject {
             }
 
             // Reuse existing library entry if we already added this book.
-            let catalogId = book.id
-            let existingDescriptor = FetchDescriptor<Audiobook>(
-                predicate: #Predicate<Audiobook> { $0.catalogId == catalogId }
-            )
-            if let existing = try? context.fetch(existingDescriptor).first {
+            // `catalogId` is computed (wraps `_catalogId`), so #Predicate can't use it.
+            if let existing = self.fetchAudiobook(catalogId: book.id) {
                 await self.audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
                 self.presentNowPlayingIfNeeded()
                 return
@@ -592,12 +594,13 @@ final class CarPlayCoordinator: NSObject {
     }
 
     private func fetchAudiobook(catalogId: String) -> Audiobook? {
+        // `Audiobook.catalogId` is a computed property over the private stored
+        // `_catalogId`, so SwiftData's #Predicate keypath cache asserts on it.
+        // Filter in memory instead — the library is small and fully fits.
         let context = ModelContext(modelContainer)
-        var descriptor = FetchDescriptor<Audiobook>(
-            predicate: #Predicate<Audiobook> { $0.catalogId == catalogId }
-        )
-        descriptor.fetchLimit = 1
-        return try? context.fetch(descriptor).first
+        let descriptor = FetchDescriptor<Audiobook>()
+        guard let books = try? context.fetch(descriptor) else { return nil }
+        return books.first(where: { $0.catalogId == catalogId })
     }
 
     // MARK: - Alerts
