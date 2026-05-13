@@ -184,8 +184,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         updateNowPlayingInfo()
     }
 
-    func seek(to seconds: Double) {
-        persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
+    func seek(to seconds: Double, applyProgressPenalty: Bool = true) {
+        if applyProgressPenalty {
+            persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
+        }
         let boundedTime = max(0, min(seconds, duration))
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
         player.seek(to: target) { [weak self] finished in
@@ -199,7 +201,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func skipBackward() {
-        seek(to: currentTime - skipBackSeconds)
+        seek(to: currentTime - skipBackSeconds, applyProgressPenalty: false)
     }
 
     func skipForward() {
@@ -207,7 +209,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             nextTrack()
             return
         }
-        seek(to: currentTime + skipForwardSeconds)
+        seek(to: currentTime + skipForwardSeconds, applyProgressPenalty: false)
     }
 
     var canGoToNextTrack: Bool {
@@ -216,7 +218,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     var canGoToPreviousTrack: Bool {
-        currentTrackIndex > 0 || currentTime > 5
+        guard let audiobook = currentAudiobook, audiobook.sortedTracks.count > 1 else { return false }
+        return currentTrackIndex > 0 || currentTime > 5
     }
 
     func nextTrack() {
