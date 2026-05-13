@@ -61,9 +61,9 @@ struct AudioPlayerManagerSkipTests {
         #expect(player.canGoToNextTrack == true)
     }
 
-    // MARK: - Preset-interval skip does not arm seek penalty
+    // MARK: - Preset-interval skip and the progress-save penalty
 
-    @Test func skipBackwardDoesNotArmProgressSeekPenalty() {
+    @Test func skipBackwardKeepsPenaltyZeroWhenProgressIsSaving() {
         let player = AudioPlayerManager()
         let book = makeBook(trackCount: 1)
         player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 120)
@@ -74,7 +74,7 @@ struct AudioPlayerManagerSkipTests {
         #expect(player.persistence.seekPenaltyRemaining == 0)
     }
 
-    @Test func skipForwardDoesNotArmProgressSeekPenalty() {
+    @Test func skipForwardKeepsPenaltyZeroWhenProgressIsSaving() {
         let player = AudioPlayerManager()
         let book = makeBook(trackCount: 1)
         player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 120)
@@ -83,6 +83,29 @@ struct AudioPlayerManagerSkipTests {
         player.skipForward()
 
         #expect(player.persistence.seekPenaltyRemaining == 0)
+    }
+
+    @Test func skipBackwardResetsPenaltyWhenAlreadyPenalized() {
+        let player = AudioPlayerManager()
+        let book = makeBook(trackCount: 1)
+        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 120)
+        // Simulate a recent scrub that paused progress saving with some time left.
+        player.persistence.seekPenaltyRemaining = 30
+
+        player.skipBackward()
+
+        #expect(player.persistence.seekPenaltyRemaining == PlaybackPersistence.progressSeekPenalty)
+    }
+
+    @Test func skipForwardResetsPenaltyWhenAlreadyPenalized() {
+        let player = AudioPlayerManager()
+        let book = makeBook(trackCount: 1)
+        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 120)
+        player.persistence.seekPenaltyRemaining = 30
+
+        player.skipForward()
+
+        #expect(player.persistence.seekPenaltyRemaining == PlaybackPersistence.progressSeekPenalty)
     }
 
     @Test func explicitSeekStillArmsProgressSeekPenalty() {

@@ -201,7 +201,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func skipBackward() {
-        seek(to: currentTime - skipBackSeconds, applyProgressPenalty: false)
+        let isSavingProgress = persistence.seekPenaltyRemaining == 0
+        seek(to: currentTime - skipBackSeconds, applyProgressPenalty: !isSavingProgress)
     }
 
     func skipForward() {
@@ -209,7 +210,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             nextTrack()
             return
         }
-        seek(to: currentTime + skipForwardSeconds, applyProgressPenalty: false)
+        let isSavingProgress = persistence.seekPenaltyRemaining == 0
+        seek(to: currentTime + skipForwardSeconds, applyProgressPenalty: !isSavingProgress)
     }
 
     var canGoToNextTrack: Bool {
