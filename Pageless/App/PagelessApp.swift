@@ -11,7 +11,6 @@ import SwiftUI
 @main
 struct PagelessApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var aiEntitlementStore = AIEntitlementStore()
     @State private var onboardingManager = OnboardingManager()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -20,7 +19,8 @@ struct PagelessApp: App {
             ContentView()
                 .environmentObject(appDelegate.audioPlayer)
                 .environmentObject(appDelegate.audioPlayer.equalizer)
-                .environmentObject(aiEntitlementStore)
+                .environmentObject(appDelegate.aiEntitlementStore)
+                .environmentObject(appDelegate.comebackCoordinator)
                 .environment(onboardingManager)
                 .environment(appDelegate.freeBookDownloader)
                 .onAppear {
@@ -52,8 +52,19 @@ struct PagelessApp: App {
         descriptor.fetchLimit = 1
         guard let latest = try? context.fetch(descriptor).first else { return }
         let player = appDelegate.audioPlayer
-        Task { @MainActor in
-            await player.startPlaybackFromSavedProgress(for: latest)
+        let inputs = ComebackPromptCoordinator.currentInputs(for: latest, entitlement: appDelegate.aiEntitlementStore)
+        if ComebackPromptCoordinator.shouldOffer(inputs) {
+            Task { @MainActor in
+                await ComebackVoicePrompt.run(
+                    audiobook: latest,
+                    coordinator: appDelegate.comebackCoordinator,
+                    player: player
+                )
+            }
+        } else {
+            Task { @MainActor in
+                await player.startPlaybackFromSavedProgress(for: latest)
+            }
         }
     }
 }
