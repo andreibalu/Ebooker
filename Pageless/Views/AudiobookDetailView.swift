@@ -13,6 +13,7 @@ struct AudiobookDetailView: View {
 
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+    @EnvironmentObject private var comebackCoordinator: ComebackPromptCoordinator
     @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
 
@@ -174,8 +175,8 @@ struct AudiobookDetailView: View {
                         .foregroundStyle(.secondary)
 
                     Button {
-                        Task {
-                            await player.startPlayback(for: audiobook)
+                        comebackCoordinator.wrapPlaybackStart(for: audiobook, entitlement: aiEntitlement) { book in
+                            await player.startPlayback(for: book)
                             openPlayer()
                         }
                     } label: {
@@ -330,11 +331,19 @@ struct AudiobookDetailView: View {
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(progressSectionTitle)
+                        Text("Your Progress")
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
+
+                        if let headline = viewModel.recapProgressHeadline, !headline.isEmpty {
+                            Text(headline)
+                                .font(.caption.italic())
+                                .foregroundStyle(.primary.opacity(0.75))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
 
                         let subtitle: String = {
                             var parts = TimeFormatter.clockString(seconds: progressTime)
@@ -361,7 +370,7 @@ struct AudiobookDetailView: View {
                                     await viewModel.loadRecap(
                                         trackIndex: progressTrackIndex,
                                         progressTime: progressTime,
-                                        includeProgressHeadline: shortenSummary,
+                                        includeProgressHeadline: true,
                                         modelContext: modelContext,
                                         onSuccessfulRecap: {
                                             aiEntitlement.consumeTrialUse()
@@ -378,8 +387,8 @@ struct AudiobookDetailView: View {
                     }
 
                     Button {
-                        Task {
-                            await player.playProgressBookmark(at: progressTrackIndex, in: audiobook, time: progressTime)
+                        comebackCoordinator.wrapPlaybackStart(for: audiobook, entitlement: aiEntitlement) { book in
+                            await player.playProgressBookmark(at: progressTrackIndex, in: book, time: progressTime)
                             openPlayer()
                         }
                     } label: {
@@ -397,7 +406,7 @@ struct AudiobookDetailView: View {
                         .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
                 )
 
-                if let recap = viewModel.recapText {
+                if !shortenSummary, let recap = viewModel.recapText {
                     VStack(alignment: .leading, spacing: 4) {
                         Label("Where Was I?", systemImage: "sparkles")
                             .font(.caption.weight(.semibold))
@@ -631,12 +640,5 @@ struct AudiobookDetailView: View {
             && useLocalAIFeatures
             && useSmartSummary
             && AppleIntelligenceCapability.isSmartNamingAvailable
-    }
-
-    private var progressSectionTitle: String {
-        if shortenSummary, let headline = viewModel.recapProgressHeadline, !headline.isEmpty {
-            return headline
-        }
-        return "Your Progress"
     }
 }

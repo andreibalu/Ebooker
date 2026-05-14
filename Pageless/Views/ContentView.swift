@@ -18,6 +18,7 @@ struct ContentView: View {
     @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
+    @EnvironmentObject private var comebackCoordinator: ComebackPromptCoordinator
     @Query private var audiobooks: [Audiobook]
 
     @AppStorage("librarySortOption") private var sortOptionRawValue = LibrarySortOption.recent.rawValue
@@ -174,6 +175,13 @@ struct ContentView: View {
         } message: {
             Text(viewModel.alertMessage)
         }
+        .sheet(item: $comebackCoordinator.pendingPrompt) { prompt in
+            ComebackPromptSheet(
+                prompt: prompt,
+                onYes: { resolveComebackPrompt(for: prompt) },
+                onNo: { resolveComebackPrompt(for: prompt) }
+            )
+        }
         .onAppear {
             player.configure(modelContext: modelContext)
             player.applyPlaybackDefaults(
@@ -257,6 +265,14 @@ struct ContentView: View {
                 .spotlightTarget(.p1AddButton)
             }
         }
+    }
+
+    private func resolveComebackPrompt(for prompt: ComebackPromptCoordinator.PendingPrompt) {
+        guard let book = audiobooks.first(where: { $0.id == prompt.audiobookID }) else {
+            comebackCoordinator.pendingPrompt = nil
+            return
+        }
+        comebackCoordinator.resolveForegroundPrompt(audiobook: book)
     }
 
     private func toolbarIconButton(systemName: String) -> some View {
@@ -353,8 +369,8 @@ struct ContentView: View {
         .buttonStyle(.plain)
         .contextMenu {
             Button("Resume", systemImage: "play.fill") {
-                Task {
-                    await player.startPlayback(for: audiobook)
+                comebackCoordinator.wrapPlaybackStart(for: audiobook, entitlement: aiEntitlementStore) { book in
+                    await player.startPlayback(for: book)
                     try? await Task.sleep(for: .milliseconds(600))
                     openPlayer()
                 }

@@ -26,7 +26,9 @@ final class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegat
         let coord = CarPlayCoordinator(
             modelContainer: appDelegate.modelContainer,
             audioPlayer: appDelegate.audioPlayer,
-            freeBookDownloader: appDelegate.freeBookDownloader
+            freeBookDownloader: appDelegate.freeBookDownloader,
+            aiEntitlement: appDelegate.aiEntitlementStore,
+            comebackCoordinator: appDelegate.comebackCoordinator
         )
         coordinator = coord
         coord.connect(interfaceController: interfaceController)
