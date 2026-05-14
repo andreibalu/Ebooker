@@ -3,8 +3,10 @@
 //  Pageless
 //
 
+import Combine
 import Foundation
 import OSLog
+import Speech
 import SwiftData
 import SwiftUI
 
