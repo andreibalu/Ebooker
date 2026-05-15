@@ -20,8 +20,6 @@ final class CarPlayCoordinator: NSObject {
     private let libraryViewModel = LibraryViewModel()
     private let freeBookDownloader: FreeBookDownloadService
     private let voiceSearch = CarPlayVoiceSearch()
-    private let aiEntitlement: AIEntitlementStore
-    private let comebackCoordinator: ComebackPromptCoordinator
     private static let carPlayMomentSequenceKey = "carPlayMomentSequence"
 
     private var freeBookCatalog: [FreeBookCatalogEntry] = []
@@ -37,18 +35,10 @@ final class CarPlayCoordinator: NSObject {
         return template
     }()
 
-    init(
-        modelContainer: ModelContainer,
-        audioPlayer: AudioPlayerManager,
-        freeBookDownloader: FreeBookDownloadService,
-        aiEntitlement: AIEntitlementStore,
-        comebackCoordinator: ComebackPromptCoordinator
-    ) {
+    init(modelContainer: ModelContainer, audioPlayer: AudioPlayerManager, freeBookDownloader: FreeBookDownloadService) {
         self.modelContainer = modelContainer
         self.audioPlayer = audioPlayer
         self.freeBookDownloader = freeBookDownloader
-        self.aiEntitlement = aiEntitlement
-        self.comebackCoordinator = comebackCoordinator
         super.init()
     }
 
@@ -264,56 +254,8 @@ final class CarPlayCoordinator: NSObject {
 
     private func playAudiobookFromList(id: UUID) async {
         guard let book = fetchAudiobook(id: id) else { return }
-        await maybeOfferComebackThenPlay(book: book)
-    }
-
-    /// Common entry that asks the comeback prompt first when eligible, then starts playback.
-    /// Used by both library list taps and catalog taps for already-downloaded books.
-    private func maybeOfferComebackThenPlay(book: Audiobook) async {
-        let inputs = ComebackPromptCoordinator.currentInputs(for: book, entitlement: aiEntitlement)
-        if ComebackPromptCoordinator.shouldOffer(inputs) {
-            await presentComebackAlert(for: book)
-        } else {
-            await audioPlayer.startPlaybackFromSavedProgress(for: book, autoplay: true)
-            presentNowPlayingIfNeeded()
-        }
-    }
-
-    /// CarPlay version of the welcome-back prompt: a CPAlertTemplate with Recap / Skip.
-    /// Generates the recap up front so the driver can hear "Recap" land on the now-playing UI quickly.
-    private func presentComebackAlert(for book: Audiobook) async {
-        guard let interfaceController else { return }
-
-        let recap = await comebackCoordinator.generateRecap(for: book)
-        let titleVariants: [String]
-        if let recap, !recap.summary.isEmpty {
-            let anchor = ComebackPromptSheet.anchorLine(recap)
-            let body = anchor.isEmpty ? recap.summary : "\(anchor) \(recap.summary)"
-            titleVariants = ["Want a quick recap?", body]
-        } else {
-            titleVariants = ["Want a quick recap?", "Resume where you left off?"]
-        }
-
-        let player = audioPlayer
-        let presentNowPlaying: @MainActor () -> Void = { [weak self] in
-            self?.presentNowPlayingIfNeeded()
-        }
-        let yes = CPAlertAction(title: "Play recap", style: .default) { [weak interfaceController] _ in
-            interfaceController?.dismissTemplate(animated: true) { _, _ in }
-            Task { @MainActor in
-                await player.startPlaybackFromSavedProgress(for: book, autoplay: true)
-                presentNowPlaying()
-            }
-        }
-        let skip = CPAlertAction(title: "Skip", style: .cancel) { [weak interfaceController] _ in
-            interfaceController?.dismissTemplate(animated: true) { _, _ in }
-            Task { @MainActor in
-                await player.startPlaybackFromSavedProgress(for: book, autoplay: true)
-                presentNowPlaying()
-            }
-        }
-        let alert = CPAlertTemplate(titleVariants: titleVariants, actions: [yes, skip])
-        interfaceController.presentTemplate(alert, animated: true) { _, _ in }
+        await audioPlayer.startPlaybackFromSavedProgress(for: book, autoplay: true)
+        presentNowPlayingIfNeeded()
     }
 
     private func fetchAudiobook(id: UUID) -> Audiobook? {
@@ -399,7 +341,8 @@ final class CarPlayCoordinator: NSObject {
         guard let entry = freeBookCatalog.first(where: { $0.id == entryId }) else { return }
         if let existing = fetchAudiobook(catalogId: entryId) {
             Task { @MainActor in
-                await maybeOfferComebackThenPlay(book: existing)
+                await audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
+                presentNowPlayingIfNeeded()
             }
             return
         }
@@ -649,7 +592,8 @@ final class CarPlayCoordinator: NSObject {
             // Reuse existing library entry if we already added this book.
             // `catalogId` is computed (wraps `_catalogId`), so #Predicate can't use it.
             if let existing = self.fetchAudiobook(catalogId: book.id) {
-                await self.maybeOfferComebackThenPlay(book: existing)
+                await self.audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
+                self.presentNowPlayingIfNeeded()
                 return
             }
 

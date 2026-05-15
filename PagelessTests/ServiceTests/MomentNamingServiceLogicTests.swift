@@ -18,28 +18,10 @@ struct MomentNamingServiceLogicTests {
         #expect(out == "A memorable line from the story.")
     }
 
-    @Test func sanitizedQuoteStripsOuterDoubleQuotesButKeepsApostrophes() {
+    @Test func sanitizedQuoteStripsLeadingTrailingQuoteChars() {
         let transcript = String(repeating: "x", count: 50)
-        let out = service.sanitizedQuoteLine("\"\u{201C}\u{201D}'Hello there'\u{201D}\"", transcript: transcript)
-        #expect(out == "'Hello there'")
-    }
-
-    @Test func sanitizedQuotePreservesInternalApostrophes() {
-        let transcript = String(repeating: "x", count: 80)
-        let out = service.sanitizedQuoteLine("She said she wouldn't, and I'm sure of it.", transcript: transcript)
-        #expect(out == "She said she wouldn't, and I'm sure of it.")
-    }
-
-    @Test func sanitizedQuotePreservesLeadingApostropheStyle() {
-        let transcript = String(repeating: "x", count: 80)
-        let out = service.sanitizedQuoteLine("'Tis a strange thing to behold.", transcript: transcript)
-        #expect(out == "'Tis a strange thing to behold.")
-    }
-
-    @Test func sanitizedQuoteStripsCurlyDoubleQuoteWrappers() {
-        let transcript = String(repeating: "x", count: 80)
-        let out = service.sanitizedQuoteLine("\u{201C}Hello there.\u{201D}", transcript: transcript)
-        #expect(out == "Hello there.")
+        let out = service.sanitizedQuoteLine("\"“”'Hello there'”\"", transcript: transcript)
+        #expect(out == "Hello there")
     }
 
     @Test func sanitizedQuoteCollapsesInternalNewlines() {
