@@ -11,22 +11,10 @@ struct RecapGenerationResult: Sendable {
     var progressHeadline: String?
 }
 
-/// Anchor + 2-sentence summary used by the welcome-back prompt.
-struct ComebackRecapResult: Sendable {
-    var location: String
-    var characters: [String]
-    var summary: String
-}
-
 protocol RecapProviding: Sendable {
     func generateRecap(
         transcript: String,
         audiobookTitle: String?,
         includeProgressHeadline: Bool
     ) async throws -> RecapGenerationResult
-
-    func generateComebackRecap(
-        transcript: String,
-        audiobookTitle: String?
-    ) async throws -> ComebackRecapResult
 }

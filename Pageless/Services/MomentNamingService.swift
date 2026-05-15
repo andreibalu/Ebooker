@@ -9,24 +9,24 @@ import FoundationModels
 /// Uses the foundational local model (SystemLanguageModel.default) to generate
 /// a concise moment name from an audiobook transcript.
 struct MomentNamingService: MomentAnalyzing {
-    @Generable(description: "Analysis of an audiobook bookmark")
+    @Generable(description: "Analysis of an audiobook moment bookmark")
     struct MomentNameSuggestion {
-        @Guide(description: "A 3 to 5 word title-case phrase naming this moment. No quotes, no trailing punctuation.")
+        @Guide(description: "3–5 word phrase capturing the key concept or event from the transcript")
         var momentName: String
 
-        @Guide(description: "Two to four sentences explaining what is happening, what led up to it, and why it matters. 80 words max.")
+        @Guide(description: "3–4 sentence description providing detailed context about what is happening at this point in the audiobook, what led to it, and why it matters")
         var momentNote: String
 
-        @Guide(description: "Pick 1 to 3 values from this exact list: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance.")
+        @Guide(description: "1-3 categories from: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance")
         var categories: [String]
 
-        @Guide(description: "One sentence copied word-for-word from the transcript. 220 characters max. Do not paraphrase or rewrite. If nothing stands out, return an empty string.")
+        @Guide(description: "The single most memorable or quotable line from the transcript, verbatim (approximately 50 words max)")
         var quoteLine: String
 
-        @Guide(description: "Names of characters who speak or are named in the transcript. First names when possible. Empty list if none.")
+        @Guide(description: "Character names mentioned or speaking in the transcript")
         var characters: [String]
 
-        @Guide(description: "One value from this exact list: tense, funny, sad, romantic, inspirational, mysterious, peaceful, dramatic.")
+        @Guide(description: "Overall mood: tense, funny, sad, romantic, inspirational, mysterious, peaceful, or dramatic")
         var mood: String
     }
 
@@ -41,16 +41,13 @@ struct MomentNamingService: MomentAnalyzing {
 
     private static let instructionPrompt: String = {
         let parts = [
-            "You analyze a single bookmarked moment from an audiobook. The transcript may be short and mid-scene. ",
-            "First EXTRACT from the transcript: ",
-            "categories (the moment types that fit), ",
-            "characters (people named or speaking, first names when possible), ",
-            "mood (the overall feeling), ",
-            "quoteLine (one sentence copied verbatim from the transcript, or empty if nothing stands out). ",
-            "Then GENERATE: ",
-            "momentName (a 3 to 5 word title-case phrase capturing the gist), ",
-            "momentNote (2 to 4 sentences explaining what is happening and why it matters). ",
-            "Stay inside the transcript. Do not invent characters, plot, or quotes.",
+            "You are an assistant that analyzes audiobook bookmarks. Given a transcript excerpt, produce: ",
+            "1) A concise 3–5 word title-case name. ",
+            "2) A 3–4 sentence note describing what is happening, what led up to it, and why it matters. ",
+            "3) 1–3 categories from: dialogue, action, plotTwist, characterIntro, worldBuilding, quote, reflection, humor, tension, romance. ",
+            "4) The single most memorable or quotable line from the transcript, verbatim, approximately 50 words max. If none stands out, use an empty string. ",
+            "5) Character names mentioned or speaking. If none, use an empty array. ",
+            "6) The overall mood: tense, funny, sad, romantic, inspirational, mysterious, peaceful, or dramatic.",
         ]
         return parts.joined()
     }()
@@ -110,18 +107,12 @@ struct MomentNamingService: MomentAnalyzing {
         )
     }
 
-    /// Outer wrapping double-quote characters only — apostrophes (`'`, `\u{2018}`, `\u{2019}`)
-    /// are preserved so contractions like "don't" and openings like "'Tis" stay intact.
-    private static let outerWrappingQuoteChars = CharacterSet(charactersIn: "\"\u{201C}\u{201D}")
-
     func sanitizedQuoteLine(_ rawQuote: String, transcript: String) -> String {
         let normalized = rawQuote
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: Self.outerWrappingQuoteChars)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.init(charactersIn: "\"“”'")))
 
         guard !normalized.isEmpty else { return "" }
 
@@ -129,6 +120,7 @@ struct MomentNamingService: MomentAnalyzing {
         let maxQuoteCharacters = 220
         let transcriptRatio = Double(normalized.count) / Double(transcriptLength)
 
+        // If the model returns something transcript-sized, treat it as invalid.
         if normalized.count > maxQuoteCharacters || transcriptRatio > 0.45 {
             let candidate = firstSentence(in: normalized, maxLength: 140)
             guard !candidate.isEmpty else { return "" }

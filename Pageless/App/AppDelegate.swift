@@ -18,8 +18,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     let modelContainer: ModelContainer
     let audioPlayer: AudioPlayerManager
     let freeBookDownloader: FreeBookDownloadService
-    let aiEntitlementStore: AIEntitlementStore
-    let comebackCoordinator: ComebackPromptCoordinator
     var backgroundSessionCompletionHandler: (() -> Void)?
 
     override init() {
@@ -46,11 +44,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         self.audioPlayer = AudioPlayerManager()
         self.freeBookDownloader = FreeBookDownloadService()
-        let entitlement = AIEntitlementStore()
-        self.aiEntitlementStore = entitlement
-        let coordinator = ComebackPromptCoordinator()
-        coordinator.configure(consumeTrialUse: { entitlement.consumeTrialUse() })
-        self.comebackCoordinator = coordinator
         super.init()
         AppDelegate.shared = self
     }

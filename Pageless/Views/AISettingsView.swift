@@ -14,7 +14,6 @@ struct AISettingsView: View {
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
     @AppStorage("useSmartSummary") private var useSmartSummary = false
     @AppStorage("shortenSummary") private var shortenSummary = false
-    @AppStorage("useComebackRecap") private var useComebackRecap = false
 
     private var isSmartNamingAvailable: Bool {
         AppleIntelligenceCapability.isSmartNamingAvailable
@@ -91,7 +90,6 @@ struct AISettingsView: View {
                 useSmartMomentNaming = false
                 useSmartSummary = false
                 shortenSummary = false
-                useComebackRecap = false
             }
         }
         .onChange(of: useSmartSummary) { _, enabled in
@@ -194,27 +192,14 @@ struct AISettingsView: View {
 
                     Toggle(isOn: $shortenSummary) {
                         toggleLabel(
-                            title: "Headline only",
-                            caption: "Show just the short headline. Hide the long recap text on the progress row."
+                            title: "Short progress headline",
+                            caption: "Replace “Your progress” with a 3–4 word summary on one line"
                         )
                     }
                     .disabled(aiSubTogglesDisabled)
                     .padding(.vertical, 10)
                     .padding(.horizontal, 4)
                 }
-
-                Divider()
-                    .padding(.leading, 4)
-
-                Toggle(isOn: $useComebackRecap) {
-                    toggleLabel(
-                        title: "Welcome-back recap",
-                        caption: "When you return after 4 hours away, ask if you want a recap before resuming. Each prompt uses one AI credit."
-                    )
-                }
-                .disabled(aiSubTogglesDisabled)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 4)
             }
 
             if !aiEntitlement.isUnlocked {
@@ -271,7 +256,6 @@ struct AISettingsView: View {
         useSmartMomentNaming = false
         useSmartSummary = false
         shortenSummary = false
-        useComebackRecap = false
     }
 
     @ViewBuilder
