@@ -19,6 +19,7 @@ struct MomentEditSheet: View {
     let characters: [String]
     let mood: MomentMood?
 
+    let warningMessage: String?
     let onSave: () -> Void
     let onCancel: () -> Void
     let onPlay: (() -> Void)?
@@ -32,6 +33,7 @@ struct MomentEditSheet: View {
         quoteLine: String? = nil,
         characters: [String] = [],
         mood: MomentMood? = nil,
+        warningMessage: String? = nil,
         onSave: @escaping () -> Void,
         onCancel: @escaping () -> Void,
         onPlay: (() -> Void)? = nil
@@ -44,6 +46,7 @@ struct MomentEditSheet: View {
         self.quoteLine = quoteLine
         self.characters = characters
         self.mood = mood
+        self.warningMessage = warningMessage
         self.onSave = onSave
         self.onCancel = onCancel
         self.onPlay = onPlay
@@ -52,6 +55,21 @@ struct MomentEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let warning = warningMessage {
+                    Section {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.orange)
+                            Text(warning)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section("Name") {
                     TextField("Moment name", text: $nameInput)
                 }

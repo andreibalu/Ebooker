@@ -75,6 +75,9 @@ struct PlayerView: View {
                 quoteLine: viewModel.pendingQuoteLine,
                 characters: viewModel.pendingCharacters,
                 mood: viewModel.pendingMood,
+                warningMessage: viewModel.pendingSmartSaveUnsafeWarning
+                    ? "AI detected content likely to be unsafe and couldn't name this moment."
+                    : nil,
                 onSave: { viewModel.commitMoment(player: player, modelContext: modelContext) },
                 onCancel: { viewModel.pendingMomentTime = nil }
             )

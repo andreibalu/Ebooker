@@ -19,6 +19,7 @@ final class PlayerViewModel {
     var momentNameInput: String = "Saved Moment"
     var momentNoteInput: String = ""
     var isProcessingSmartSave = false
+    var pendingSmartSaveUnsafeWarning = false
     var pendingCategories: [MomentCategory] = []
     var pendingQuoteLine: String?
     var pendingCharacters: [String] = []
@@ -103,24 +104,30 @@ final class PlayerViewModel {
             if transcript.isEmpty {
                 resetMomentState()
                 pendingMomentTime = savedTime
-            } else if let analysis = try? await momentAnalyzer.analyzeMoment(
-                transcript: transcript,
-                audiobookTitle: audiobook.title
-            ) {
-                momentNameInput = analysis.name
-                momentNoteInput = analysis.note
-                pendingMomentTranscript = transcript
-                pendingMomentAiGenerated = true
-                pendingCategories = analysis.categories
-                pendingQuoteLine = analysis.quoteLine
-                pendingCharacters = analysis.characters
-                pendingMood = analysis.mood
-                pendingMomentTime = savedTime
-                onSuccessfulSmartAI?()
             } else {
-                resetMomentState()
-                pendingMomentTranscript = transcript
-                pendingMomentTime = savedTime
+                do {
+                    let analysis = try await momentAnalyzer.analyzeMoment(
+                        transcript: transcript,
+                        audiobookTitle: audiobook.title
+                    )
+                    momentNameInput = analysis.name
+                    momentNoteInput = analysis.note
+                    pendingMomentTranscript = transcript
+                    pendingMomentAiGenerated = true
+                    pendingCategories = analysis.categories
+                    pendingQuoteLine = analysis.quoteLine
+                    pendingCharacters = analysis.characters
+                    pendingMood = analysis.mood
+                    pendingSmartSaveUnsafeWarning = false
+                    pendingMomentTime = savedTime
+                    onSuccessfulSmartAI?()
+                } catch {
+                    let isUnsafe = error.localizedDescription.localizedCaseInsensitiveContains("unsafe")
+                    resetMomentState()
+                    pendingMomentTranscript = transcript
+                    pendingSmartSaveUnsafeWarning = isUnsafe
+                    pendingMomentTime = savedTime
+                }
             }
         } catch {
             resetMomentState()
@@ -159,6 +166,7 @@ final class PlayerViewModel {
         pendingQuoteLine = nil
         pendingCharacters = []
         pendingMood = nil
+        pendingSmartSaveUnsafeWarning = false
 
         withAnimation(.spring(duration: 0.2)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -185,5 +193,6 @@ final class PlayerViewModel {
         pendingQuoteLine = nil
         pendingCharacters = []
         pendingMood = nil
+        pendingSmartSaveUnsafeWarning = false
     }
 }
