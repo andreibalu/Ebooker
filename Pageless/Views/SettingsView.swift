@@ -151,7 +151,7 @@ struct SettingsView: View {
                     }
                 }
 
-                Section("About") {
+                Section {
                     Link(destination: LegalURLs.privacyPolicy) {
                         HStack {
                             Text("Privacy Policy")
@@ -172,6 +172,10 @@ struct SettingsView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Free books courtesy of [LibriVox](https://librivox.org) \u{2014} public domain audio recorded by volunteers.")
                 }
             }
             .scrollContentBackground(.hidden)

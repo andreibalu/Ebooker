@@ -386,6 +386,8 @@ struct BrowseLibriVoxView: View {
                     .foregroundStyle(.primary)
                     .textCase(nil)
             }
+
+            librivoxAttribution
         }
         .listStyle(.plain)
         .scrollDismissesKeyboard(.immediately)
@@ -427,8 +429,23 @@ struct BrowseLibriVoxView: View {
                 .listRowBackground(Color.cardWhite)
                 .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
             }
+
+            librivoxAttribution
         }
         .listStyle(.plain)
         .scrollDismissesKeyboard(.immediately)
+    }
+
+    private var librivoxAttribution: some View {
+        Text("Free books courtesy of [LibriVox](https://librivox.org) \u{2014} public domain audio recorded by volunteers.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 16)
+            .padding(.horizontal, 24)
+            .multilineTextAlignment(.center)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
     }
 }
