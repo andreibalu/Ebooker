@@ -19,6 +19,7 @@ final class AIEntitlementStore: ObservableObject {
     @Published private(set) var isLoadingProduct = false
     @Published private(set) var loadError: String?
     @Published private(set) var isPurchasing = false
+    @Published private(set) var isRestoring = false
     @Published var purchaseError: String?
     @Published var restoreError: String?
 
@@ -124,6 +125,8 @@ final class AIEntitlementStore: ObservableObject {
 
     func restorePurchases() async {
         restoreError = nil
+        isRestoring = true
+        defer { isRestoring = false }
         do {
             try await AppStore.sync()
             await refreshEntitlements()

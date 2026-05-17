@@ -284,13 +284,19 @@ struct AISettingsView: View {
             Button {
                 Task { await aiEntitlement.purchase() }
             } label: {
-                if let product = aiEntitlement.product {
-                    Text("Unlock — \(product.displayPrice)")
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Unlock — \(aiEntitlement.unlockPriceDisplay)")
-                        .frame(maxWidth: .infinity)
+                Group {
+                    if aiEntitlement.isPurchasing {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                    } else if let product = aiEntitlement.product {
+                        Text("Unlock — \(product.displayPrice)")
+                    } else {
+                        Text("Unlock — \(aiEntitlement.unlockPriceDisplay)")
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 20)
             }
             .buttonStyle(.borderedProminent)
             .disabled(aiEntitlement.product == nil || aiEntitlement.isPurchasing || aiEntitlement.isLoadingProduct || !aiEntitlement.canMakePayments)
@@ -312,10 +318,22 @@ struct AISettingsView: View {
     }
 
     private var restorePurchasesButton: some View {
-        Button("Restore purchases") {
+        Button {
             Task { await aiEntitlement.restorePurchases() }
+        } label: {
+            if aiEntitlement.isRestoring {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .scaleEffect(0.75)
+                    Text("Restoring…")
+                }
+            } else {
+                Text("Restore purchases")
+            }
         }
         .font(.subheadline)
+        .disabled(aiEntitlement.isRestoring)
     }
 }
 

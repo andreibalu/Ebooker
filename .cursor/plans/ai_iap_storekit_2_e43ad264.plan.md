@@ -6,17 +6,23 @@ todos:
     content: "Add AIProductID constant + AIEntitlementStore (StoreKit 2: Product.load, purchase, currentEntitlements, Transaction.updates, restore via AppStore.sync)"
     status: completed
   - id: wire-app-environment
-    content: Instantiate store in EbookerApp and inject .environmentObject
-    status: in_progress
+    content: Instantiate store in PagelessApp and inject .environmentObject
+    status: completed
   - id: settings-purchase-ui
-    content: "SettingsView: unlock CTA with displayPrice, restore, gate AI toggles until unlocked"
-    status: pending
+    content: "AISettingsView: unlock CTA with displayPrice + isPurchasing spinner, restore with isRestoring spinner, gate AI toggles until unlocked or trial remaining"
+    status: completed
   - id: gate-player-detail
-    content: PlayerView useSmartSave + AudiobookDetailView smartSummaryEnabled require isUnlocked
-    status: pending
+    content: PlayerView useSmartSave + AudiobookDetailView smartSummaryEnabled use canUseAIFeatures (isUnlocked || trial > 0)
+    status: completed
   - id: storekit-config
-    content: Add Products.storekit non-consumable matching product ID; attach to scheme for local testing
-    status: pending
+    content: "Add Products.storekit non-consumable matching product ID; attached to Pageless scheme LaunchAction for local testing"
+    status: completed
+  - id: iap-capability
+    content: Add com.apple.InAppPurchase SystemCapabilities entry to project.pbxproj
+    status: completed
+  - id: protocol-and-tests
+    content: "Add AIEntitlementChecking protocol + MockAIEntitlementStore + unit tests for gating logic"
+    status: completed
 isProject: false
 ---
 
