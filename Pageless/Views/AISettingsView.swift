@@ -66,6 +66,8 @@ struct AISettingsView: View {
                     .spotlightTarget(.p1AIPage)
 
                 footerCopy
+
+                legalLinks
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 16)
@@ -221,6 +223,18 @@ struct AISettingsView: View {
         .padding(12)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
+    }
+
+    private var legalLinks: some View {
+        HStack(spacing: 6) {
+            Link("Privacy Policy", destination: LegalURLs.privacyPolicy)
+            Text("·")
+                .foregroundStyle(.tertiary)
+            Link("Terms of Use", destination: LegalURLs.termsOfUse)
+            Spacer()
+        }
+        .font(.caption)
+        .padding(.top, 4)
     }
 
     private var footerCopy: some View {

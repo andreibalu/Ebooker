@@ -150,6 +150,29 @@ struct SettingsView: View {
                         Text("The onboarding walkthrough will start again from the beginning.")
                     }
                 }
+
+                Section("About") {
+                    Link(destination: LegalURLs.privacyPolicy) {
+                        HStack {
+                            Text("Privacy Policy")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Link(destination: LegalURLs.termsOfUse) {
+                        HStack {
+                            Text("Terms of Use")
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Color.cream.ignoresSafeArea())
