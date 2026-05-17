@@ -1,0 +1,9 @@
+# Claude Code agent worktrees — ephemeral, never commit
+.claude/worktrees/
+
+# Xcode / macOS noise
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
