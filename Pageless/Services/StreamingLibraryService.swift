@@ -14,7 +14,8 @@ enum StreamingLibraryService {
         tracks: [CachedLibriVoxTrack],
         modelContext: ModelContext
     ) async throws -> Audiobook {
-        let coverData = await fetchCoverArt(url: book.bestCoverURL)
+        // LibriVox cover URLs are unreliable — skip the fetch and let the
+        // generated letter template render in every cover surface instead.
         let folderName = UUID().uuidString
 
         let totalDuration = tracks.reduce(0.0) { $0 + $1.durationSeconds }
@@ -23,7 +24,7 @@ enum StreamingLibraryService {
             title: book.title,
             author: book.authorDisplay,
             folderName: folderName,
-            coverArtData: coverData,
+            coverArtData: nil,
             totalDuration: totalDuration,
             isFreeBook: true,
             catalogId: book.id,
@@ -49,10 +50,5 @@ enum StreamingLibraryService {
 
         try modelContext.save()
         return audiobook
-    }
-
-    private static func fetchCoverArt(url: URL?) async -> Data? {
-        guard let url else { return nil }
-        return try? await URLSession.shared.data(from: url).0
     }
 }

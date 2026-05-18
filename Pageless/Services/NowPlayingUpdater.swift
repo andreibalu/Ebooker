@@ -4,10 +4,14 @@
 //
 
 import MediaPlayer
+import SwiftUI
 import UIKit
 
 /// Manages the MPRemoteCommandCenter and MPNowPlayingInfoCenter integration.
 struct NowPlayingUpdater {
+    // Cache generated artwork by title so we don't re-render every ~1s tick.
+    @MainActor private static var generatedArtworkCache: [String: UIImage] = [:]
+
     typealias CommandAction = () -> Void
     typealias SeekAction = (Double) -> Void
 
@@ -103,6 +107,7 @@ struct NowPlayingUpdater {
         commandCenter.changePlaybackRateCommand.removeTarget(nil)
     }
 
+    @MainActor
     func update(
         audiobook: Audiobook,
         track: AudioTrack,
@@ -127,9 +132,23 @@ struct NowPlayingUpdater {
 
         if let coverArtData = audiobook.coverArtData, let image = UIImage(data: coverArtData) {
             nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        } else if let generated = generatedArtwork(for: audiobook.title) {
+            nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: generated.size) { _ in generated }
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+    }
+
+    @MainActor
+    private func generatedArtwork(for title: String) -> UIImage? {
+        if let cached = Self.generatedArtworkCache[title] {
+            return cached
+        }
+        guard let image = GeneratedCoverView.renderImage(title: title, side: 600) else {
+            return nil
+        }
+        Self.generatedArtworkCache[title] = image
+        return image
     }
 }

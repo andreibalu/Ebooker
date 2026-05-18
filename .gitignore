@@ -7,3 +7,6 @@ xcuserdata/
 *.xcuserstate
 DerivedData/
 build/
+
+# App Store screenshot generator (Next.js project — not part of the iOS app)
+screenshots/

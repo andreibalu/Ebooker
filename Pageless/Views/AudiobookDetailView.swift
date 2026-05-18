@@ -559,19 +559,7 @@ struct AudiobookDetailView: View {
                         .scaledToFill()
                         .clipped()
                 } else {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [.indigo, .purple, .blue],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay {
-                            Image(systemName: "book.pages.fill")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.white)
-                        }
+                    GeneratedCoverView(title: audiobook.title)
                 }
             }
             .frame(width: 130, height: 130)

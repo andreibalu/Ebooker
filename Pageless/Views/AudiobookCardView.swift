@@ -123,14 +123,7 @@ struct AudiobookCardView: View {
     private var cover: some View {
         // Use a fixed-size container as the layout anchor, then overlay the image.
         // This prevents scaledToFill from inflating the card height via its ideal size.
-        Rectangle()
-            .fill(
-                LinearGradient(
-                    colors: [.indigo.opacity(0.9), .purple.opacity(0.8), .blue.opacity(0.8)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+        Color.clear
             .frame(maxWidth: .infinity, minHeight: 185, maxHeight: 185)
             .overlay {
                 if let coverArtData = audiobook.coverArtData,
@@ -140,9 +133,7 @@ struct AudiobookCardView: View {
                         .resizable()
                         .scaledToFill()
                 } else {
-                    Image(systemName: "books.vertical.fill")
-                        .font(.system(size: 52))
-                        .foregroundStyle(.white.opacity(0.95))
+                    GeneratedCoverView(title: audiobook.title)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

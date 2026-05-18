@@ -95,18 +95,7 @@ struct MiniPlayerBar: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.indigo, .purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay {
-                        Image(systemName: "book.closed.fill")
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
+                GeneratedCoverView(title: player.currentAudiobook?.title ?? "Unpaged")
             }
         }
         .frame(width: 48, height: 48)

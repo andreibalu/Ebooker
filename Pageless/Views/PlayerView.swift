@@ -144,19 +144,7 @@ struct PlayerView: View {
                     .resizable()
                     .scaledToFill()
             } else {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [.indigo, .purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .overlay {
-                        Image(systemName: "books.vertical.fill")
-                            .font(.system(size: 44))
-                            .foregroundStyle(.white.opacity(0.95))
-                    }
+                GeneratedCoverView(title: player.currentAudiobook?.title ?? "Unpaged")
             }
         }
         .frame(width: 140, height: 140)

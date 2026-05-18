@@ -49,24 +49,9 @@ struct LibriVoxBookRow: View {
     }
 
     private var coverThumbnail: some View {
-        AsyncImage(url: book.bestCoverURL) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            default:
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.secondary.opacity(0.12))
-                    Image(systemName: "book.closed")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .frame(width: 54, height: 54)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        GeneratedCoverView(title: book.title)
+            .frame(width: 54, height: 54)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var info: some View {

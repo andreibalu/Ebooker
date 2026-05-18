@@ -46,8 +46,8 @@ enum LibriVoxDownloadService {
         let folderURL = try makeStorageFolder(named: folderName)
 
         do {
-            // Cover art (best-effort — nil is fine)
-            let coverData = await fetchCoverArt(url: book.bestCoverURL)
+            // LibriVox cover URLs are unreliable — skip the fetch and let the
+            // generated letter template render in every cover surface instead.
 
             // Download each track
             var audioTracks: [AudioTrack] = []
@@ -85,7 +85,7 @@ enum LibriVoxDownloadService {
                 title: book.title,
                 author: book.authorDisplay,
                 folderName: folderName,
-                coverArtData: coverData,
+                coverArtData: nil,
                 totalDuration: totalDuration
             )
 
@@ -155,11 +155,6 @@ enum LibriVoxDownloadService {
     }
 
     // MARK: - Private helpers
-
-    private static func fetchCoverArt(url: URL?) async -> Data? {
-        guard let url else { return nil }
-        return try? await URLSession.shared.data(from: url).0
-    }
 
     private static func makeStorageFolder(named folderName: String) throws -> URL {
         let appSupport = try FileManager.default.url(
