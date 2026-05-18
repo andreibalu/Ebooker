@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## App Identity
 
 - **Marketing name (App Store / home screen)**: Unpaged
-- **Xcode scheme**: `Ebooker`
+- **Xcode scheme**: `Pageless`
 - **Source module folder**: `Pageless/`
 - **Bundle identifier prefix**: `andreibaludev.Pageless`
 - **Current marketing version**: see `VERSION` (1.1)
@@ -34,7 +34,7 @@ After editing, remind the user to push the new content to their public Gist(s) â
 
 Use XcodeBuildMCP tools for all build/run operations:
 
-- **Build & run on simulator**: `mcp__XcodeBuildMCP__build_run_sim` (scheme: `Ebooker`)
+- **Build & run on simulator**: `mcp__XcodeBuildMCP__build_run_sim` (scheme: `Pageless`)
 - **Build only**: `mcp__XcodeBuildMCP__build_sim`
 - **Run tests**: `mcp__XcodeBuildMCP__test_sim`
 - **Clean**: `mcp__XcodeBuildMCP__clean`

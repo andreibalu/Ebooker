@@ -26,6 +26,21 @@ struct ImportAudiobookSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let coverData = pending.coverArtData, let uiImage = UIImage(data: coverData) {
+                    Section {
+                        HStack {
+                            Spacer()
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(maxWidth: 200, maxHeight: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            Spacer()
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                }
+
                 Section("Details") {
                     TextField("Title", text: $title)
                         .textInputAutocapitalization(.words)

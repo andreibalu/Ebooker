@@ -48,6 +48,13 @@ enum LibraryImportError: LocalizedError {
     }
 }
 
+private struct ExtractedTrackMetadata {
+    var title: String?
+    var artist: String?
+    var albumName: String?
+    var artworkData: Data?
+}
+
 enum LibraryImportService {
     static func prepareImport(from urls: [URL]) async throws -> PendingImportSelection {
         let audioURLs = urls
@@ -59,26 +66,59 @@ enum LibraryImportService {
         }
 
         var previews: [TrackImportPreview] = []
+        var metadatas: [ExtractedTrackMetadata] = []
 
         for url in audioURLs {
-            let duration = try await measureDuration(for: url)
+            let (duration, metadata) = try await loadDurationAndMetadata(for: url)
+            metadatas.append(metadata)
+
+            let embeddedTitle = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trackTitle = (embeddedTitle?.isEmpty == false ? embeddedTitle! : url.deletingPathExtension().lastPathComponent)
+
             previews.append(
                 TrackImportPreview(
                     sourceURL: url,
-                    title: url.deletingPathExtension().lastPathComponent,
+                    title: trackTitle,
                     originalFileName: url.lastPathComponent,
                     duration: duration
                 )
             )
         }
 
+        let coverArtData = metadatas.compactMap(\.artworkData).first
+        let suggestedAuthor = metadatas
+            .compactMap { $0.artist?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty } ?? ""
+        let suggestedTitle = suggestedTitle(from: metadatas, audioURLs: audioURLs)
+
         return PendingImportSelection(
             sourceURLs: audioURLs,
-            suggestedTitle: titleSuggestion(for: audioURLs),
-            suggestedAuthor: "",
-            coverArtData: nil,
+            suggestedTitle: suggestedTitle,
+            suggestedAuthor: suggestedAuthor,
+            coverArtData: coverArtData,
             tracks: previews
         )
+    }
+
+    private static func suggestedTitle(
+        from metadatas: [ExtractedTrackMetadata],
+        audioURLs: [URL]
+    ) -> String {
+        let albumNames = metadatas
+            .compactMap { $0.albumName?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let uniqueAlbums = Set(albumNames)
+        if uniqueAlbums.count == 1, let album = uniqueAlbums.first {
+            return album
+        }
+
+        if audioURLs.count == 1,
+           let single = metadatas.first?.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !single.isEmpty {
+            return single
+        }
+
+        return titleSuggestion(for: audioURLs)
     }
 
     @discardableResult
@@ -203,6 +243,52 @@ enum LibraryImportService {
             let duration = try await asset.load(.duration)
             return max(duration.seconds, 0)
         }
+    }
+
+    private static func loadDurationAndMetadata(for url: URL) async throws -> (Double, ExtractedTrackMetadata) {
+        try await withSecurityScopedAccess(to: url) {
+            let asset = AVURLAsset(url: url)
+            let duration = try await asset.load(.duration)
+            let metadata = await extractMetadata(from: asset)
+            return (max(duration.seconds, 0), metadata)
+        }
+    }
+
+    private static func extractMetadata(from asset: AVURLAsset) async -> ExtractedTrackMetadata {
+        var meta = ExtractedTrackMetadata()
+        guard let items = try? await asset.load(.commonMetadata) else { return meta }
+
+        for item in items {
+            guard let key = item.commonKey else { continue }
+            switch key {
+            case .commonKeyTitle:
+                if let trimmed = await trimmedString(from: item) {
+                    meta.title = trimmed
+                }
+            case .commonKeyArtist:
+                if let trimmed = await trimmedString(from: item) {
+                    meta.artist = trimmed
+                }
+            case .commonKeyAlbumName:
+                if let trimmed = await trimmedString(from: item) {
+                    meta.albumName = trimmed
+                }
+            case .commonKeyArtwork:
+                if meta.artworkData == nil, let data = try? await item.load(.dataValue) {
+                    meta.artworkData = data
+                }
+            default:
+                break
+            }
+        }
+
+        return meta
+    }
+
+    private static func trimmedString(from item: AVMetadataItem) async -> String? {
+        guard let value = try? await item.load(.stringValue) else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func copyFile(from sourceURL: URL, to destinationURL: URL) throws {
