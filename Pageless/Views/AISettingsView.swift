@@ -19,8 +19,8 @@ struct AISettingsView: View {
         AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
-    private var canPurchaseOnDevice: Bool {
-        AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
+    private var availabilityState: AIAvailabilityState {
+        AppleIntelligenceCapability.availabilityState
     }
 
     /// Sub-toggles: need master on, runtime AI available, and paid or trial quota left.
@@ -58,7 +58,7 @@ struct AISettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 statusCard
 
-                if canPurchaseOnDevice, !aiEntitlement.isUnlocked {
+                if availabilityState == .ready, !aiEntitlement.isUnlocked {
                     trialBadge
                 }
 
@@ -279,50 +279,86 @@ struct AISettingsView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             restorePurchasesButton
-        } else if canPurchaseOnDevice {
-            Text("Unlock smart moment naming and progress summaries powered by on-device Apple Intelligence.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            if aiEntitlement.isLoadingProduct {
-                ProgressView()
-                    .padding(.vertical, 4)
-            }
-
-            if let loadError = aiEntitlement.loadError {
-                Text(loadError)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-
-            Button {
-                Task { await aiEntitlement.purchase() }
-            } label: {
-                if let product = aiEntitlement.product {
-                    Text("Unlock — \(product.displayPrice)")
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Text("Unlock — \(aiEntitlement.unlockPriceDisplay)")
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(aiEntitlement.product == nil || aiEntitlement.isPurchasing || aiEntitlement.isLoadingProduct || !aiEntitlement.canMakePayments)
-
-            restorePurchasesButton
         } else {
-            Text(
-                "On-device AI requires iOS 18 or later and a compatible device (for example iPhone 15 Pro or newer, or an iPad with an M-series chip). You can’t buy the AI unlock on this device."
-            )
+            switch availabilityState {
+            case .ready:
+                readyPurchaseBlock
+            case .needsActivation:
+                needsActivationPurchaseBlock
+            case .unsupportedDevice:
+                unsupportedDevicePurchaseBlock
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var readyPurchaseBlock: some View {
+        Text("Unlock smart moment naming and progress summaries powered by on-device Apple Intelligence.")
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            Text("If you already purchased on another device, use Restore purchases.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-
-            restorePurchasesButton
+        if aiEntitlement.isLoadingProduct {
+            ProgressView()
+                .padding(.vertical, 4)
         }
+
+        if let loadError = aiEntitlement.loadError {
+            Text(loadError)
+                .font(.caption)
+                .foregroundStyle(.red)
+        }
+
+        unlockButton(disabledReason: nil)
+
+        restorePurchasesButton
+    }
+
+    @ViewBuilder
+    private var needsActivationPurchaseBlock: some View {
+        Text(AIAvailabilityState.needsActivation.explanation)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        // Buy stays visible (price intact) but disabled until the user activates Apple Intelligence.
+        unlockButton(disabledReason: .needsActivation)
+
+        restorePurchasesButton
+    }
+
+    @ViewBuilder
+    private var unsupportedDevicePurchaseBlock: some View {
+        Text(AIAvailabilityState.unsupportedDevice.explanation)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        Text("If you already purchased on another device, use Restore purchases.")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+
+        restorePurchasesButton
+    }
+
+    @ViewBuilder
+    private func unlockButton(disabledReason: AIAvailabilityState?) -> some View {
+        Button {
+            Task { await aiEntitlement.purchase() }
+        } label: {
+            if let product = aiEntitlement.product {
+                Text("Unlock — \(product.displayPrice)")
+                    .frame(maxWidth: .infinity)
+            } else {
+                Text("Unlock — \(aiEntitlement.unlockPriceDisplay)")
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(
+            disabledReason != nil
+                || aiEntitlement.product == nil
+                || aiEntitlement.isPurchasing
+                || aiEntitlement.isLoadingProduct
+                || !aiEntitlement.canMakePayments
+        )
     }
 
     private var restorePurchasesButton: some View {

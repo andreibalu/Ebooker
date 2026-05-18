@@ -21,15 +21,17 @@ struct SettingsView: View {
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
 
-    private var canPurchaseOnDevice: Bool {
-        AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
+    /// Only fully-unsupported hardware shows the static "compatible device required" row.
+    /// `.needsActivation` users should still land in `AISettingsView` and see actionable guidance there.
+    private var hideAIEntirely: Bool {
+        AppleIntelligenceCapability.availabilityState == .unsupportedDevice
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    if !canPurchaseOnDevice {
+                    if hideAIEntirely {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("AI Features")
                             Text("Requires an Apple Intelligence–compatible device.")

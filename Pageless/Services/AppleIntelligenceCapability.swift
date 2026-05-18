@@ -7,6 +7,33 @@ import Foundation
 import FoundationModels
 import Speech
 
+/// Three real states the AI Settings UI cares about. Used to drive Buy-button
+/// visibility/enablement and explanatory copy.
+enum AIAvailabilityState: Equatable {
+    /// Apple Intelligence is on and the model is available. Buy enabled.
+    case ready
+    /// Hardware + OS support Apple Intelligence but the user hasn't turned it on
+    /// (or the model is still loading). Buy visible but disabled until activated.
+    case needsActivation
+    /// This iPhone can't run Apple Intelligence at all. Buy hidden.
+    case unsupportedDevice
+
+    /// Only `.ready` allows purchase — anything else means the unlock wouldn't be usable.
+    var allowsPurchase: Bool { self == .ready }
+
+    /// Short user-facing explanation. Empty in `.ready` since the Buy block carries its own copy.
+    var explanation: String {
+        switch self {
+        case .ready:
+            return ""
+        case .needsActivation:
+            return "Apple Intelligence isn't turned on. Open iOS Settings → Apple Intelligence & Siri to enable it, then return here to unlock."
+        case .unsupportedDevice:
+            return "AI features aren't supported on this iPhone."
+        }
+    }
+}
+
 /// Checks whether the device supports Apple Intelligence and Smart Moment Naming.
 enum AppleIntelligenceCapability {
     private static let model = SystemLanguageModel.default
@@ -22,17 +49,26 @@ enum AppleIntelligenceCapability {
         model.availability
     }
 
-    /// Whether this device can buy the AI unlock (hardware supports Apple Intelligence).
-    /// Unlike `isSmartNamingAvailable`, this ignores Speech, Apple Intelligence being off, or the model still loading.
-    static var canPurchaseAIUnlockOnThisDevice: Bool {
+    /// High-level state for AI Settings UI. Collapses `.modelNotReady` and "AI off in Settings"
+    /// into a single `.needsActivation` bucket because both resolve via the same user action.
+    static var availabilityState: AIAvailabilityState {
         switch model.availability {
         case .available:
-            true
+            return .ready
         case .unavailable(.deviceNotEligible):
-            false
+            return .unsupportedDevice
+        case .unavailable(.appleIntelligenceNotEnabled),
+             .unavailable(.modelNotReady):
+            return .needsActivation
         case .unavailable:
-            true
+            return .needsActivation
         }
+    }
+
+    /// Whether this device can buy the AI unlock right now. Only `.ready` qualifies —
+    /// purchasing on `.needsActivation` would leave the user unable to use what they paid for.
+    static var canPurchaseAIUnlockOnThisDevice: Bool {
+        availabilityState == .ready
     }
 
     /// Human-readable reason when Smart Naming is unavailable.

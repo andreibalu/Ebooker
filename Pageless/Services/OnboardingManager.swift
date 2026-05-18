@@ -18,7 +18,9 @@ final class OnboardingManager {
         if let override = Self._unitTestDeviceSupportsOnboardingAI {
             return override
         }
-        return AppleIntelligenceCapability.canPurchaseAIUnlockOnThisDevice
+        // Includes `.needsActivation`: users who haven't enabled Apple Intelligence yet
+        // still walk the AI onboarding so they see how to activate it.
+        return AppleIntelligenceCapability.availabilityState != .unsupportedDevice
     }
 
     private var phase1Steps: [OnboardingStep] {
