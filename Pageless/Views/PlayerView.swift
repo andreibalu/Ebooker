@@ -107,10 +107,11 @@ struct PlayerView: View {
     }
 
     private func modalHeader(topInset: CGFloat) -> some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             Capsule()
-                .fill(Color.primary.opacity(0.16))
-                .frame(width: 42, height: 5)
+                .fill(Color.primary.opacity(0.22))
+                .frame(width: 44, height: 5)
+                .padding(.top, 4)
 
             HStack(spacing: 12) {
                 AirPlayRoutePickerView()
@@ -131,7 +132,19 @@ struct PlayerView: View {
         }
         .padding(.top, max(topInset, 10))
         .padding(.horizontal, 20)
-        .padding(.bottom, 2)
+        .padding(.bottom, 4)
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.primary.opacity(0.07),
+                    Color.primary.opacity(0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+            .ignoresSafeArea(edges: .top)
+        )
     }
 
     private var cover: some View {
@@ -173,13 +186,10 @@ struct PlayerView: View {
     // MARK: - Progress
 
     private var progressSection: some View {
-        VStack(spacing: 8) {
-            Slider(
-                value: Binding(
-                    get: { scrubValue },
-                    set: { scrubValue = $0 }
-                ),
-                in: 0...max(player.duration, 1),
+        VStack(spacing: 4) {
+            ScrubSlider(
+                value: $scrubValue,
+                range: 0...max(player.duration, 1),
                 onEditingChanged: { editing in
                     isScrubbing = editing
                     if !editing {
@@ -187,7 +197,6 @@ struct PlayerView: View {
                     }
                 }
             )
-            .tint(Color.primary.opacity(0.7))
 
             HStack {
                 Text(TimeFormatter.clockString(seconds: scrubValue))
@@ -460,10 +469,12 @@ struct PlayerView: View {
     private var dismissDragGesture: some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .global)
             .onChanged { value in
+                guard !isScrubbing else { return }
                 let dragDown = max(0, value.translation.height)
                 onDragChanged?(dragDown)
             }
             .onEnded { value in
+                guard !isScrubbing else { return }
                 let dragDown = max(0, value.translation.height)
                 let velocityDown = max(0, value.velocity.height)
                 onDragEnded?(dragDown, velocityDown)
@@ -499,6 +510,113 @@ struct PlayerView: View {
         let supported = [15, 30, 45]
         let closest = supported.min(by: { abs($0 - secs) < abs($1 - secs) }) ?? 30
         return "goforward.\(closest)"
+    }
+}
+
+// MARK: - ScrubSlider
+
+/// iOS-Music-style scrubber. Dragging horizontally adjusts the value at full speed; the further
+/// the finger moves vertically from the start point, the finer the adjustment becomes.
+private struct ScrubSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let onEditingChanged: (Bool) -> Void
+
+    @State private var isDragging = false
+    @State private var lastX: CGFloat = 0
+    @State private var startY: CGFloat = 0
+    @State private var scrubRate: Double = 1.0
+
+    private let trackHeight: CGFloat = 5
+    private let thumbSize: CGFloat = 16
+
+    var body: some View {
+        VStack(spacing: 4) {
+            ZStack {
+                if isDragging {
+                    Text(scrubRateLabel)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(scrubRate < 1.0 ? .primary : .secondary)
+                        .transition(.opacity)
+                }
+            }
+            .frame(height: 14)
+            .animation(.easeOut(duration: 0.12), value: scrubRate)
+            .animation(.easeOut(duration: 0.12), value: isDragging)
+
+            GeometryReader { geo in
+                let width = geo.size.width
+                let height = geo.size.height
+                let span = max(range.upperBound - range.lowerBound, 1)
+                let progress = max(0, min(1, (value - range.lowerBound) / span))
+                let thumbX = CGFloat(progress) * width
+                let thumbDiameter: CGFloat = isDragging ? thumbSize + 6 : thumbSize
+
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.14))
+                        .frame(height: trackHeight)
+
+                    Capsule()
+                        .fill(Color.primary.opacity(0.75))
+                        .frame(width: thumbX, height: trackHeight)
+
+                    Circle()
+                        .fill(Color.white)
+                        .overlay(
+                            Circle().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.5)
+                        )
+                        .frame(width: thumbDiameter, height: thumbDiameter)
+                        .shadow(color: .black.opacity(0.22), radius: 2.5, y: 1)
+                        .position(x: thumbX, y: height / 2)
+                        .animation(.easeOut(duration: 0.12), value: isDragging)
+                }
+                .frame(height: 44)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { g in
+                            if !isDragging {
+                                isDragging = true
+                                lastX = g.startLocation.x
+                                startY = g.startLocation.y
+                                onEditingChanged(true)
+                            }
+                            let dx = g.location.x - lastX
+                            lastX = g.location.x
+                            let dy = max(0, g.location.y - startY)
+                            scrubRate = rateForVerticalOffset(dy)
+                            let deltaValue = Double(dx / width) * span * scrubRate
+                            let newValue = (value + deltaValue)
+                            value = min(max(newValue, range.lowerBound), range.upperBound)
+                        }
+                        .onEnded { _ in
+                            isDragging = false
+                            scrubRate = 1.0
+                            onEditingChanged(false)
+                        }
+                )
+            }
+            .frame(height: 44)
+        }
+    }
+
+    private var scrubRateLabel: String {
+        switch scrubRate {
+        case 0.5: return "Half-Speed Scrubbing"
+        case 0.25: return "Quarter-Speed Scrubbing"
+        case 0.1: return "Fine Scrubbing"
+        default: return "Hi-Speed Scrubbing"
+        }
+    }
+
+    private func rateForVerticalOffset(_ dy: CGFloat) -> Double {
+        switch dy {
+        case ..<60: return 1.0
+        case 60..<130: return 0.5
+        case 130..<220: return 0.25
+        default: return 0.1
+        }
     }
 }
 
