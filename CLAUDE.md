@@ -12,6 +12,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The three names are intentional historical layers — do not "fix" them. New user-facing copy should say "Unpaged".
 
+## External-facing docs
+
+The repo ships two markdown files that are hosted publicly (currently via GitHub Gist) and linked from the App Store listing:
+
+- `support.md` — Support URL contents (FAQ, troubleshooting, contact)
+- `privacy-policy.md` — Privacy Policy URL contents
+
+**Keep these in sync with the app.** Whenever a change touches any of the following, update the relevant file(s) in the same commit:
+
+- Permissions requested (`Info.plist` `NS*UsageDescription` keys) → both files
+- Network behavior, third-party services, or data collected → `privacy-policy.md`
+- AI features, IAP terms, trial mechanics → both files
+- Supported devices, minimum iOS version (`IPHONEOS_DEPLOYMENT_TARGET`, `TARGETED_DEVICE_FAMILY`) → `support.md`
+- New user-visible features that warrant a FAQ entry → `support.md`
+- Contact email or developer name → both files
+
+After editing, remind the user to push the new content to their public Gist(s) — the repo files are the source of truth, but the App Store points to the Gist URLs.
+
 ## Build & Run
 
 Use XcodeBuildMCP tools for all build/run operations:
@@ -84,6 +102,7 @@ Pageless/
 │   ├── SettingsView.swift         Playback preferences
 │   ├── AISettingsView.swift       AI feature toggles, trial management, IAP unlock
 │   ├── CoverCropView.swift        Image cropping interface for cover art
+│   ├── GeneratedCoverView.swift   Deterministic letter-template cover used as universal fallback when `coverArtData == nil`; also renders to UIImage for MPNowPlayingInfoCenter / CarPlay artwork
 │   ├── EqualizerSheet.swift       5-band EQ + preamp + presets UI; mounted from player
 │   ├── FreeBooks/
 │   │   ├── BrowseLibriVoxView.swift       Search + filters + featured + active downloads
@@ -253,6 +272,7 @@ Protocol implementations are typically `struct`. `LibraryImportService` is a con
 - `AppleIntelligenceCapability` — runtime detection for showing/hiding AI UI buttons
 - `AIEntitlementStore` — StoreKit 2: trial uses tracking + IAP unlock (`AIProductID`)
 - AI features are isolated behind protocols; app works fully without Apple Intelligence
+- **`SystemLanguageModel.default` has a ~4096-token budget shared between input and output.** When designing a `@Generable` struct, order fields so cheap structured outputs (single-token enums, short arrays) come first and the longest prose field is last — the model generates fields in declaration order and the trailing field is what gets clipped when the budget runs out. Post-process any free-text field to handle mid-sentence truncation (see `MomentNamingService.trimToCompleteSentences` / `sanitizedQuoteLine`); never trust the model to honor word/sentence-count guides on the long tail.
 
 ## Feature Systems
 
@@ -262,9 +282,10 @@ The app contains **two independent free-book paths** that coexist by design:
 
 1. **LibriVox catalog (primary, iPhone)** — 20,000+ books from librivox.org. Cached locally in `LibriVoxBook` via `LibriVoxCatalogSync` (24h incremental sync). UI is the "Free Books" tab in `ContentView`, driven by `BrowseLibriVoxView` → `LibriVoxBookDetailView`. Supports:
    - **Add to Library (streaming)** via `StreamingLibraryService` — creates an `Audiobook` with `isDownloaded == false` and remote URLs on each `AudioTrack`. No files written. Requires network at playback time.
-   - **Download** via `LibriVoxDownloadService` — fetches all tracks + cover, creates a normal local `Audiobook`. Also used by `StreamedBookDownloadViewModel` to promote an already-added streaming book to downloaded.
+   - **Download** via `LibriVoxDownloadService` — fetches all tracks, creates a normal local `Audiobook`. Also used by `StreamedBookDownloadViewModel` to promote an already-added streaming book to downloaded.
    - **Sample preview** via `SamplePlayer` — 20s preview of a track without committing.
    - **Network gating** — `NetworkMonitor.shared.isConnected` checked before sample play, sync, and streaming.
+   - **Covers are intentionally not fetched.** LibriVox cover URLs are unreliable, so both `LibriVoxDownloadService` and `StreamingLibraryService` always set `coverArtData = nil` and let `GeneratedCoverView` render the letter template. Don't reintroduce remote cover fetches here.
 
 2. **Legacy seed catalog (CarPlay)** — `FreeBookCatalogService` exposes 5 hand-picked Internet Archive classics. Downloaded via `FreeBookDownloadService` (background URLSession with published `downloadProgress`, `activeDownloads`, `downloadErrors`). Consumed only by `CarPlayCoordinator` and `LibraryViewModel`. **Do not extend this path for new iPhone features — use the LibriVox path.**
 
@@ -336,6 +357,7 @@ All enums are `CaseIterable, Identifiable`.
 - **AI isolation**: `AppleIntelligenceCapability` guards UI visibility; ViewModels catch service errors and fall back gracefully.
 - **Schema migration**: Private backing field pattern (`_fieldName`) with computed getter/setter for post-launch columns; new fields nullable on disk.
 - **Streaming vs downloaded**: Treat `Audiobook.isStreamingOnly` as load-bearing — anything that touches the on-disk path must check it. Promotion to downloaded goes through `LibriVoxDownloadService`.
+- **Cover fallback**: Any view that displays cover art must fall through to `GeneratedCoverView(title:)` when `coverArtData == nil` — not a gradient + SF Symbol. `NowPlayingUpdater` mirrors this for lock screen / CarPlay artwork via `GeneratedCoverView.renderImage(title:side:)` with a `[title: UIImage]` cache so it doesn't re-render every periodic tick.
 - **CarPlay permission constraint**: Mic + speech permission prompts cannot appear on the CarPlay screen, so `VoiceSearchPermissions.primeIfNeeded()` runs at iPhone launch. Don't add new permission requests that can fire only on CarPlay.
 
 ## Testing

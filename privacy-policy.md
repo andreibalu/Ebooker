@@ -15,7 +15,7 @@ Everything you create or import in Unpaged stays on your device. That includes:
 - Free-book downloads from LibriVox and the bundled catalog
 - In-app purchase entitlement state and the AI feature trial counter
 
-This data is stored in the app's private container on your iPhone or iPad. Unpaged does not upload it to any server we control. If you delete the app, this data is removed by iOS along with it.
+This data is stored in the app's private container on your iPhone. Unpaged does not upload it to any server we control. If you delete the app, this data is removed by iOS along with it.
 
 ## Permissions Unpaged requests
 
@@ -58,4 +58,4 @@ If this policy changes, the revised version will be posted at the same URL with 
 
 ## Contact
 
-Questions? Email **andy23589@gmail.com**.
+Questions? Email **andrei.baluta@yahoo.com**.
