@@ -16,6 +16,10 @@ struct MomentRow: View {
     @State private var isEditing = false
     @State private var editNameInput = ""
     @State private var editNoteInput = ""
+    @State private var editCategories: [MomentCategory] = []
+    @State private var editQuoteLine: String? = nil
+    @State private var editCharacters: [String] = []
+    @State private var editMood: MomentMood? = nil
     @State private var dragOffset: CGFloat = 0
     @State private var isDraggingSwipe = false
     @State private var swipeBaseOffset: CGFloat = 0
@@ -53,6 +57,10 @@ struct MomentRow: View {
                     } else {
                         editNameInput = moment.label
                         editNoteInput = moment.notes ?? ""
+                        editCategories = moment.categories
+                        editQuoteLine = moment.quoteLine
+                        editCharacters = moment.characters
+                        editMood = moment.mood
                         isEditing = true
                     }
                 }
@@ -79,10 +87,10 @@ struct MomentRow: View {
                 isAiGenerated: moment.aiGeneratedName,
                 nameInput: $editNameInput,
                 noteInput: $editNoteInput,
-                categories: moment.categories,
-                quoteLine: moment.quoteLine,
-                characters: moment.characters,
-                mood: moment.mood,
+                categories: $editCategories,
+                quoteLine: $editQuoteLine,
+                characters: $editCharacters,
+                mood: $editMood,
                 onSave: {
                     let trimmedName = editNameInput.trimmingCharacters(in: .whitespaces)
                     if !trimmedName.isEmpty {
@@ -90,6 +98,11 @@ struct MomentRow: View {
                     }
                     let trimmedNote = editNoteInput.trimmingCharacters(in: .whitespaces)
                     moment.notes = trimmedNote.isEmpty ? nil : trimmedNote
+                    moment.categories = editCategories
+                    let trimmedQuote = editQuoteLine?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    moment.quoteLine = (trimmedQuote?.isEmpty ?? true) ? nil : trimmedQuote
+                    moment.characters = editCharacters
+                    moment.mood = editMood
                     isEditing = false
                 },
                 onCancel: { isEditing = false },

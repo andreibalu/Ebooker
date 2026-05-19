@@ -5,8 +5,9 @@
 
 import SwiftUI
 
-/// A bottom sheet for naming and optionally annotating a moment.
+/// A bottom sheet for naming and annotating a moment.
 /// Used both when first saving a moment (PlayerView) and when editing an existing one (AudiobookDetailView).
+/// All AI-generated metadata fields are fully editable.
 struct MomentEditSheet: View {
     let title: String
     let isAiGenerated: Bool
@@ -14,25 +15,28 @@ struct MomentEditSheet: View {
     @Binding var nameInput: String
     @Binding var noteInput: String
 
-    let categories: [MomentCategory]
-    let quoteLine: String?
-    let characters: [String]
-    let mood: MomentMood?
+    @Binding var categories: [MomentCategory]
+    @Binding var quoteLine: String?
+    @Binding var characters: [String]
+    @Binding var mood: MomentMood?
 
     let warningMessage: String?
     let onSave: () -> Void
     let onCancel: () -> Void
     let onPlay: (() -> Void)?
 
+    @State private var newCharacterInput: String = ""
+    @FocusState private var characterFieldFocused: Bool
+
     init(
         title: String,
         isAiGenerated: Bool = false,
         nameInput: Binding<String>,
         noteInput: Binding<String>,
-        categories: [MomentCategory] = [],
-        quoteLine: String? = nil,
-        characters: [String] = [],
-        mood: MomentMood? = nil,
+        categories: Binding<[MomentCategory]>,
+        quoteLine: Binding<String?>,
+        characters: Binding<[String]>,
+        mood: Binding<MomentMood?>,
         warningMessage: String? = nil,
         onSave: @escaping () -> Void,
         onCancel: @escaping () -> Void,
@@ -42,10 +46,10 @@ struct MomentEditSheet: View {
         self.isAiGenerated = isAiGenerated
         self._nameInput = nameInput
         self._noteInput = noteInput
-        self.categories = categories
-        self.quoteLine = quoteLine
-        self.characters = characters
-        self.mood = mood
+        self._categories = categories
+        self._quoteLine = quoteLine
+        self._characters = characters
+        self._mood = mood
         self.warningMessage = warningMessage
         self.onSave = onSave
         self.onCancel = onCancel
@@ -73,6 +77,7 @@ struct MomentEditSheet: View {
                 Section("Name") {
                     TextField("Moment name", text: $nameInput)
                 }
+
                 Section {
                     TextField(
                         "Add a note (optional)",
@@ -92,57 +97,19 @@ struct MomentEditSheet: View {
                     }
                 }
 
-                if let quote = quoteLine, !quote.isEmpty {
-                    Section("Quote") {
-                        Text("\u{201C}\(quote)\u{201D}")
-                            .font(.subheadline)
-                            .italic()
-                            .foregroundStyle(.secondary)
-                            .lineLimit(6)
-                    }
-                }
-
-                if !categories.isEmpty {
-                    Section("Categories") {
-                        FlowLayout(spacing: 8) {
-                            ForEach(categories) { category in
-                                Text(category.displayName)
-                                    .font(.caption.weight(.medium))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 5)
-                                    .background(Color.primary.opacity(0.08), in: Capsule())
-                            }
-                        }
-                    }
-                }
-
-                if let mood = mood {
-                    Section("Mood") {
-                        Text(mood.displayName)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.primary.opacity(0.08), in: Capsule())
-                    }
-                }
-
-                if !characters.isEmpty {
-                    Section("Characters") {
-                        Text(characters.joined(separator: ", "))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                quoteSection
+                categoriesSection
+                moodSection
+                charactersSection
 
                 if let onPlay = onPlay {
                     Section {
-                        Button(action: {
-                            onPlay()
-                        }) {
+                        Button(action: onPlay) {
                             HStack {
                                 Image(systemName: "play.fill")
                                 Text("Play from here")
                             }
+                            .foregroundStyle(.primary)
                         }
                     }
                 }
@@ -162,7 +129,187 @@ struct MomentEditSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
+
+    // MARK: - Quote
+
+    private var quoteSection: some View {
+        Section("Quote") {
+            TextField(
+                "Apple Intelligence couldn\u{2019}t extract a quote from this sequence",
+                text: Binding(
+                    get: { quoteLine ?? "" },
+                    set: { newValue in
+                        quoteLine = newValue.isEmpty ? nil : newValue
+                    }
+                ),
+                axis: .vertical
+            )
+            .font(.subheadline)
+            .italic()
+            .lineLimit(2...6)
+        }
+    }
+
+    // MARK: - Categories
+
+    private var categoriesSection: some View {
+        Section("Categories") {
+            FlowLayout(spacing: 8) {
+                ForEach(categories) { category in
+                    TagChip(text: category.displayName) {
+                        categories.removeAll { $0 == category }
+                    }
+                }
+
+                if !availableCategories.isEmpty {
+                    Menu {
+                        ForEach(availableCategories) { category in
+                            Button(category.displayName) {
+                                categories.append(category)
+                            }
+                        }
+                    } label: {
+                        TagChip.addLabel(text: categories.isEmpty ? "Add category" : "Add")
+                    }
+                }
+            }
+        }
+    }
+
+    private var availableCategories: [MomentCategory] {
+        MomentCategory.allCases.filter { !categories.contains($0) }
+    }
+
+    // MARK: - Mood
+
+    private var moodSection: some View {
+        Section("Mood") {
+            FlowLayout(spacing: 8) {
+                if let current = mood {
+                    TagChip(text: current.displayName) {
+                        mood = nil
+                    }
+                }
+
+                Menu {
+                    if mood != nil {
+                        Button("Clear mood", role: .destructive) {
+                            mood = nil
+                        }
+                    }
+                    ForEach(MomentMood.allCases) { option in
+                        Button {
+                            mood = option
+                        } label: {
+                            if option == mood {
+                                Label(option.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(option.displayName)
+                            }
+                        }
+                    }
+                } label: {
+                    TagChip.addLabel(text: mood == nil ? "Add mood" : "Change")
+                }
+            }
+        }
+    }
+
+    // MARK: - Characters
+
+    private var charactersSection: some View {
+        Section("Characters") {
+            if !characters.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(characters, id: \.self) { name in
+                        TagChip(text: name) {
+                            characters.removeAll { $0 == name }
+                        }
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("Add character", text: $newCharacterInput)
+                    .submitLabel(.done)
+                    .focused($characterFieldFocused)
+                    .onSubmit(addCharacter)
+
+                Button(action: addCharacter) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(canAddCharacter ? Color.primary : Color.secondary.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canAddCharacter)
+            }
+        }
+    }
+
+    private var canAddCharacter: Bool {
+        let trimmed = newCharacterInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return !characters.contains { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    private func addCharacter() {
+        let trimmed = newCharacterInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !characters.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
+        characters.append(trimmed)
+        newCharacterInput = ""
+    }
 }
+
+// MARK: - Tag chip
+
+private struct TagChip: View {
+    let text: String
+    let onRemove: (() -> Void)?
+
+    init(text: String, onRemove: (() -> Void)? = nil) {
+        self.text = text
+        self.onRemove = onRemove
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(text)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(text)")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Color.primary.opacity(0.08), in: Capsule())
+    }
+
+    static func addLabel(text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "plus")
+                .font(.caption2.weight(.semibold))
+            Text(text)
+                .font(.caption.weight(.medium))
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .overlay(
+            Capsule()
+                .strokeBorder(Color.primary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+        )
+    }
+}
+
+// MARK: - FlowLayout
 
 /// Simple flow layout for horizontal wrapping of tags.
 private struct FlowLayout: Layout {
@@ -206,16 +353,20 @@ private struct FlowLayout: Layout {
 #Preview {
     @Previewable @State var name = "Dragons Attack"
     @Previewable @State var note = "The village comes under attack by dragons. Key turning point in the story."
+    @Previewable @State var categories: [MomentCategory] = [.action, .tension]
+    @Previewable @State var quote: String? = "The dragons descended upon the village like a storm of fire."
+    @Previewable @State var characters: [String] = ["Eragon", "Saphira"]
+    @Previewable @State var mood: MomentMood? = .dramatic
 
     MomentEditSheet(
         title: "Edit Moment",
         isAiGenerated: true,
         nameInput: $name,
         noteInput: $note,
-        categories: [.action, .tension],
-        quoteLine: "The dragons descended upon the village like a storm of fire.",
-        characters: ["Eragon", "Saphira"],
-        mood: .dramatic,
+        categories: $categories,
+        quoteLine: $quote,
+        characters: $characters,
+        mood: $mood,
         onSave: { },
         onCancel: { },
         onPlay: { }
