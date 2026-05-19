@@ -30,7 +30,7 @@ struct MomentFilterSheet: View {
                                     Spacer()
                                     if viewModel.filterCategories.contains(category) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
+                                            .foregroundStyle(.primary)
                                     }
                                 }
                             }
@@ -56,7 +56,7 @@ struct MomentFilterSheet: View {
                                     Spacer()
                                     if viewModel.filterCharacters.contains(key) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
+                                            .foregroundStyle(.primary)
                                     }
                                 }
                             }
@@ -81,7 +81,7 @@ struct MomentFilterSheet: View {
                                     Spacer()
                                     if viewModel.filterMoods.contains(mood) {
                                         Image(systemName: "checkmark")
-                                            .foregroundStyle(.blue)
+                                            .foregroundStyle(.primary)
                                     }
                                 }
                             }

@@ -23,7 +23,8 @@ struct MomentEditSheet: View {
     let warningMessage: String?
     let onSave: () -> Void
     let onCancel: () -> Void
-    let onPlay: (() -> Void)?
+
+    @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
 
     @State private var newCharacterInput: String = ""
     @FocusState private var characterFieldFocused: Bool
@@ -39,8 +40,7 @@ struct MomentEditSheet: View {
         mood: Binding<MomentMood?>,
         warningMessage: String? = nil,
         onSave: @escaping () -> Void,
-        onCancel: @escaping () -> Void,
-        onPlay: (() -> Void)? = nil
+        onCancel: @escaping () -> Void
     ) {
         self.title = title
         self.isAiGenerated = isAiGenerated
@@ -53,7 +53,6 @@ struct MomentEditSheet: View {
         self.warningMessage = warningMessage
         self.onSave = onSave
         self.onCancel = onCancel
-        self.onPlay = onPlay
     }
 
     var body: some View {
@@ -101,18 +100,6 @@ struct MomentEditSheet: View {
                 categoriesSection
                 moodSection
                 charactersSection
-
-                if let onPlay = onPlay {
-                    Section {
-                        Button(action: onPlay) {
-                            HStack {
-                                Image(systemName: "play.fill")
-                                Text("Play from here")
-                            }
-                            .foregroundStyle(.primary)
-                        }
-                    }
-                }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -135,7 +122,7 @@ struct MomentEditSheet: View {
     private var quoteSection: some View {
         Section("Quote") {
             TextField(
-                "Apple Intelligence couldn\u{2019}t extract a quote from this sequence",
+                quotePlaceholder,
                 text: Binding(
                     get: { quoteLine ?? "" },
                     set: { newValue in
@@ -148,6 +135,12 @@ struct MomentEditSheet: View {
             .italic()
             .lineLimit(2...6)
         }
+    }
+
+    private var quotePlaceholder: String {
+        useLocalAIFeatures
+            ? "Apple Intelligence couldn\u{2019}t extract a quote from this sequence"
+            : "Add a quote (optional)"
     }
 
     // MARK: - Categories
@@ -368,7 +361,6 @@ private struct FlowLayout: Layout {
         characters: $characters,
         mood: $mood,
         onSave: { },
-        onCancel: { },
-        onPlay: { }
+        onCancel: { }
     )
 }

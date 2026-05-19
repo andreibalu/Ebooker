@@ -352,6 +352,7 @@ struct AISettingsView: View {
             }
         }
         .buttonStyle(.borderedProminent)
+        .foregroundStyle(Color.cream)
         .disabled(
             disabledReason != nil
                 || aiEntitlement.product == nil

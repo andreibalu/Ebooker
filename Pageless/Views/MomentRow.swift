@@ -105,14 +105,7 @@ struct MomentRow: View {
                     moment.mood = editMood
                     isEditing = false
                 },
-                onCancel: { isEditing = false },
-                onPlay: {
-                    Task {
-                        await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
-                        isEditing = false
-                        openPlayer()
-                    }
-                }
+                onCancel: { isEditing = false }
             )
         }
     }
@@ -181,9 +174,21 @@ struct MomentRow: View {
 
             Spacer()
 
-            Image(systemName: "play.circle")
-                .foregroundStyle(.secondary)
-                .font(.title3)
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                Task {
+                    await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
+                    openPlayer()
+                }
+            } label: {
+                Image(systemName: "play.circle")
+                    .foregroundStyle(.secondary)
+                    .font(.title3)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play from this moment")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
