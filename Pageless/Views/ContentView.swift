@@ -19,6 +19,9 @@ struct ContentView: View {
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
     @Query private var audiobooks: [Audiobook]
+    @Query(sort: \ReadingSession.date, order: .reverse) private var readingSessions: [ReadingSession]
+    @Namespace private var readingStatsNamespace
+    private let readingStatsMorphID = "reading-activity-heatmap"
 
     @AppStorage("librarySortOption") private var sortOptionRawValue = LibrarySortOption.recent.rawValue
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
@@ -324,18 +327,47 @@ struct ContentView: View {
     private func booksGrid(for tab: LibraryTab) -> some View {
         let books = displayedBooks(for: tab)
         if books.isEmpty {
-            emptyState(for: tab)
+            ScrollView {
+                if tab == .favorites { readingActivityHeader }
+                emptyState(for: tab)
+                    .padding(.top, 24)
+            }
         } else {
             ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 16) {
-                    ForEach(books) { audiobook in
-                        audiobookGridItem(audiobook)
+                LazyVStack(spacing: 16) {
+                    if tab == .favorites { readingActivityHeader }
+                    LazyVGrid(columns: gridColumns, spacing: 16) {
+                        ForEach(books) { audiobook in
+                            audiobookGridItem(audiobook)
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 20)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var readingActivityHeader: some View {
+        let stats = ReadingStats.compute(
+            sessions: readingSessions,
+            booksFinished: audiobooks.filter { $0.isFinished }.count
+        )
+        if stats.hasAnyActivity {
+            NavigationLink {
+                ReadingStatsView(stats: stats, palette: .amber)
+                    .navigationTransition(.zoom(sourceID: readingStatsMorphID, in: readingStatsNamespace))
+            } label: {
+                ReadingActivityCard(
+                    stats: stats,
+                    palette: .amber,
+                    morphNamespace: readingStatsNamespace,
+                    morphID: readingStatsMorphID
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 

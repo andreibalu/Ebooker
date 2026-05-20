@@ -40,6 +40,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
+    private let sessionRecorder = ReadingSessionRecorder()
     let equalizer: AudioEqualizerService
 
     override init() {
@@ -59,6 +60,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             Task { @MainActor in
                 self.updateProgressMarkerIfNeeded()
                 self.persistPlayback(force: true)
+                self.sessionRecorder.flush(context: self.modelContext)
             }
         }
 
@@ -181,6 +183,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         isPlaying = false
         updateProgressMarkerIfNeeded()
         persistPlayback(force: true)
+        sessionRecorder.flush(context: modelContext)
         updateNowPlayingInfo()
     }
 
@@ -384,6 +387,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 if self.isPlaying, self.persistence.seekPenaltyRemaining > 0 {
                     self.persistence.seekPenaltyRemaining = max(0, self.persistence.seekPenaltyRemaining - 1)
                 }
+                if self.isPlaying, let book = self.currentAudiobook {
+                    self.sessionRecorder.tick(audiobook: book, context: self.modelContext)
+                }
                 self.updateProgressMarkerIfNeeded()
                 self.persistPlayback()
                 self.updateNowPlayingInfo()
@@ -443,6 +449,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             duration: duration,
             context: modelContext
         )
+        sessionRecorder.end(context: modelContext)
         currentTime = duration
         updateNowPlayingInfo()
     }

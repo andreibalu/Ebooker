@@ -3,14 +3,17 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
     var onRefreshCatalog: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+    @Query private var existingAudiobooks: [Audiobook]
 
     @State private var navigateToAI = false
     @State private var selectedDetent: PresentationDetent = .medium
@@ -152,6 +155,22 @@ struct SettingsView: View {
                         Text("The onboarding walkthrough will start again from the beginning.")
                     }
                 }
+
+                #if DEBUG
+                Section("Developer") {
+                    Button("Seed Reading Activity (113 days)") {
+                        ReadingActivitySeeder.seed(
+                            audiobooks: existingAudiobooks,
+                            context: modelContext
+                        )
+                    }
+                    .foregroundStyle(.primary)
+
+                    Button("Clear Reading Activity", role: .destructive) {
+                        ReadingActivitySeeder.clear(context: modelContext)
+                    }
+                }
+                #endif
 
                 Section {
                     Link(destination: LegalURLs.privacyPolicy) {

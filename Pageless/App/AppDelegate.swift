@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             AudioTrack.self,
             Moment.self,
             LibriVoxBook.self,
+            ReadingSession.self,
         ])
 
         let supportURL = FileManager.default.urls(
