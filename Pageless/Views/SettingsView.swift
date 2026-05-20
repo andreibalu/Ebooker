@@ -158,8 +158,27 @@ struct SettingsView: View {
 
                 #if DEBUG
                 Section("Developer") {
-                    Button("Seed Reading Activity (113 days)") {
+                    Button("Seed Reading Activity · 7 days") {
                         ReadingActivitySeeder.seed(
+                            daysTracked: 7,
+                            audiobooks: existingAudiobooks,
+                            context: modelContext
+                        )
+                    }
+                    .foregroundStyle(.primary)
+
+                    Button("Seed Reading Activity · 30 days") {
+                        ReadingActivitySeeder.seed(
+                            daysTracked: 30,
+                            audiobooks: existingAudiobooks,
+                            context: modelContext
+                        )
+                    }
+                    .foregroundStyle(.primary)
+
+                    Button("Seed Reading Activity · 113 days") {
+                        ReadingActivitySeeder.seed(
+                            daysTracked: 113,
                             audiobooks: existingAudiobooks,
                             context: modelContext
                         )

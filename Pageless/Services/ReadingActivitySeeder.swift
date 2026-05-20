@@ -11,13 +11,12 @@ import Foundation
 import SwiftData
 
 enum ReadingActivitySeeder {
-    /// Generates ~113 days of synthetic sessions ending today.
+    /// Generates `daysTracked` days of synthetic sessions ending today.
     /// Distributes minutes across books using a weighted preference list of the user's library.
-    static func seed(audiobooks: [Audiobook], context: ModelContext) {
+    static func seed(daysTracked: Int = 113, audiobooks: [Audiobook], context: ModelContext) {
         // Wipe existing sessions so re-runs are deterministic.
         clear(context: context)
 
-        let daysTracked = 113
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
 

@@ -53,15 +53,32 @@ enum HeatmapPalette: String, CaseIterable {
 // MARK: - Time scale
 
 enum HeatmapScale {
-    case week        // 2 cols
-    case month       // 5 cols
-    case fourMonth   // 18 cols
+    case week        // 7 days, single row, per-cell weekday labels
+    case month       // 30 days, single row, month-boundary labels
+    case fourMonth   // 18 weeks × 7 days grid
 
     var weekCount: Int {
         switch self {
-        case .week:      return 2
-        case .month:     return 5
+        case .week:      return 1
+        case .month:     return 1
         case .fourMonth: return 18
+        }
+    }
+
+    var layout: HeatmapLayout {
+        switch self {
+        case .week:      return .linearWithDayLabels
+        case .month:     return .linearWithMonthLabels
+        case .fourMonth: return .grid
+        }
+    }
+
+    /// Number of cells in linear layouts. 0 for grid scales.
+    var linearDayCount: Int {
+        switch self {
+        case .week:      return 7
+        case .month:     return 30
+        case .fourMonth: return 0
         }
     }
 
@@ -70,6 +87,12 @@ enum HeatmapScale {
         if daysSinceFirst <= 30 { return .month }
         return .fourMonth
     }
+}
+
+enum HeatmapLayout {
+    case grid                   // weeks × 7 days
+    case linearWithDayLabels    // horizontal row, 3-letter weekday above each cell
+    case linearWithMonthLabels  // horizontal row, month name at boundaries
 }
 
 // MARK: - Grid model
@@ -90,9 +113,11 @@ struct HeatmapMonthLabel: Equatable {
 }
 
 struct HeatmapGridModel {
-    let cols: [[HeatmapCellInfo]]     // [week][7 days]
+    let cols: [[HeatmapCellInfo]]      // populated for .grid layout
+    let linearDays: [HeatmapCellInfo]  // populated for linear layouts
     let monthLabels: [HeatmapMonthLabel]
     let scale: HeatmapScale
+    let layout: HeatmapLayout
     let firstDay: Date
     let today: Date
 
@@ -103,10 +128,35 @@ struct HeatmapGridModel {
         activityByDay: [String: ReadingDayActivity],
         calendar: Calendar = .current
     ) -> HeatmapGridModel {
+        let todayStart = calendar.startOfDay(for: today)
+        switch scale.layout {
+        case .grid:
+            return buildGrid(
+                scale: scale, today: todayStart, firstDay: firstDay,
+                activityByDay: activityByDay, calendar: calendar
+            )
+        case .linearWithDayLabels, .linearWithMonthLabels:
+            return buildLinear(
+                scale: scale, today: todayStart, firstDay: firstDay,
+                activityByDay: activityByDay, calendar: calendar
+            )
+        }
+    }
+
+    private static func buildGrid(
+        scale: HeatmapScale,
+        today: Date,
+        firstDay: Date,
+        activityByDay: [String: ReadingDayActivity],
+        calendar: Calendar
+    ) -> HeatmapGridModel {
         let nw = scale.weekCount
         let monThis = mondayOf(today, calendar: calendar)
         guard let start = calendar.date(byAdding: .day, value: -(nw - 1) * 7, to: monThis) else {
-            return HeatmapGridModel(cols: [], monthLabels: [], scale: scale, firstDay: firstDay, today: today)
+            return HeatmapGridModel(
+                cols: [], linearDays: [], monthLabels: [],
+                scale: scale, layout: .grid, firstDay: firstDay, today: today
+            )
         }
 
         let todayKey = ReadingSession.makeDayKey(date: today, calendar: calendar)
@@ -138,7 +188,6 @@ struct HeatmapGridModel {
                     dow: r
                 ))
             }
-            // Month label on first column-of-month within active range
             if let firstOfMonth = days.first(where: { calendar.component(.day, from: $0.date) <= 7 && !$0.isBeforeStart }) {
                 let m = calendar.component(.month, from: firstOfMonth.date)
                 if m != lastMonth {
@@ -148,7 +197,65 @@ struct HeatmapGridModel {
             }
             cols.append(days)
         }
-        return HeatmapGridModel(cols: cols, monthLabels: monthLabels, scale: scale, firstDay: firstDay, today: today)
+        return HeatmapGridModel(
+            cols: cols, linearDays: [], monthLabels: monthLabels,
+            scale: scale, layout: .grid, firstDay: firstDay, today: today
+        )
+    }
+
+    private static func buildLinear(
+        scale: HeatmapScale,
+        today: Date,
+        firstDay: Date,
+        activityByDay: [String: ReadingDayActivity],
+        calendar: Calendar
+    ) -> HeatmapGridModel {
+        let n = scale.linearDayCount
+        let layout = scale.layout
+        let todayKey = ReadingSession.makeDayKey(date: today, calendar: calendar)
+
+        let monthFmt = DateFormatter()
+        monthFmt.locale = Locale(identifier: "en_US_POSIX")
+        monthFmt.dateFormat = "LLL"
+
+        var days: [HeatmapCellInfo] = []
+        var monthLabels: [HeatmapMonthLabel] = []
+        var lastMonth = -1
+
+        for i in 0..<n {
+            // i = 0 is the oldest cell in the row, i = n - 1 is today.
+            let offset = (n - 1) - i
+            guard let d = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let dStart = calendar.startOfDay(for: d)
+            let key = ReadingSession.makeDayKey(date: dStart, calendar: calendar)
+            let minutes = activityByDay[key]?.minutes ?? 0
+            let isFuture = dStart > today
+            let beforeStart = dStart < firstDay
+            let weekday = calendar.component(.weekday, from: dStart) // 1 = Sunday
+            let dow = (weekday + 5) % 7 // 0 = Mon
+            days.append(HeatmapCellInfo(
+                date: dStart,
+                dayKey: key,
+                minutes: minutes,
+                isFuture: isFuture,
+                isBeforeStart: beforeStart,
+                isToday: key == todayKey,
+                dow: dow
+            ))
+
+            if layout == .linearWithMonthLabels && !beforeStart {
+                let m = calendar.component(.month, from: dStart)
+                if m != lastMonth {
+                    monthLabels.append(HeatmapMonthLabel(colIdx: i, label: monthFmt.string(from: dStart)))
+                    lastMonth = m
+                }
+            }
+        }
+
+        return HeatmapGridModel(
+            cols: [], linearDays: days, monthLabels: monthLabels,
+            scale: scale, layout: layout, firstDay: firstDay, today: today
+        )
     }
 
     private static func mondayOf(_ date: Date, calendar: Calendar) -> Date {
@@ -178,12 +285,14 @@ struct ReadingHeatmapView: View {
     @State private var didAppear = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if showLabels { monthLabelsRow }
-
-            HStack(alignment: .top, spacing: 6) {
-                if showLabels { yAxisLabels }
-                cellsGrid
+        Group {
+            switch model.layout {
+            case .grid:
+                gridBody
+            case .linearWithDayLabels:
+                linearBody(showDayLabels: true)
+            case .linearWithMonthLabels:
+                linearBody(showDayLabels: false)
             }
         }
         .onAppear {
@@ -192,10 +301,65 @@ struct ReadingHeatmapView: View {
         }
     }
 
+    // MARK: grid (four-month)
+
+    private var gridBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if showLabels { monthLabelsRow }
+
+            HStack(alignment: .top, spacing: 6) {
+                if showLabels { yAxisLabels }
+                cellsGrid
+            }
+        }
+    }
+
+    // MARK: linear (week / month)
+
+    private func linearBody(showDayLabels: Bool) -> some View {
+        let days = model.linearDays
+        return VStack(alignment: .leading, spacing: 6) {
+            if showLabels && !showDayLabels {
+                linearMonthLabelsRow(days: days)
+            }
+            if showLabels && showDayLabels {
+                HStack(spacing: gap) {
+                    ForEach(Array(days.enumerated()), id: \.offset) { (_, cell) in
+                        Text(Self.dayShortLabels[cell.dow])
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(secondaryLabelColor)
+                            .frame(width: cellSize)
+                    }
+                }
+            }
+            HStack(spacing: gap) {
+                ForEach(Array(days.enumerated()), id: \.offset) { (i, cell) in
+                    cellView(cell, col: i, row: 0)
+                }
+            }
+        }
+    }
+
+    private func linearMonthLabelsRow(days: [HeatmapCellInfo]) -> some View {
+        let totalW: CGFloat = CGFloat(days.count) * cellSize + CGFloat(max(0, days.count - 1)) * gap
+        return ZStack(alignment: .topLeading) {
+            Color.clear.frame(height: 14)
+            ForEach(model.monthLabels, id: \.colIdx) { ml in
+                Text(ml.label)
+                    .font(.system(size: 9.5, weight: .medium))
+                    .foregroundStyle(secondaryLabelColor.opacity(0.9))
+                    .offset(x: CGFloat(ml.colIdx) * (cellSize + gap), y: 0)
+            }
+        }
+        .frame(width: max(totalW, 0), height: 14, alignment: .leading)
+    }
+
+    private static let dayShortLabels: [String] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
     // MARK: subviews
 
     private var monthLabelsRow: some View {
-        let labelW: CGFloat = 22
+        let labelW: CGFloat = 30
         let totalW: CGFloat = CGFloat(model.cols.count) * cellSize + CGFloat(max(0, model.cols.count - 1)) * gap
         return ZStack(alignment: .topLeading) {
             Color.clear.frame(height: 14)
@@ -215,7 +379,8 @@ struct ReadingHeatmapView: View {
                 Text(dayLabels[i])
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(secondaryLabelColor)
-                    .frame(width: 16, height: cellSize, alignment: .trailing)
+                    .frame(width: 24, height: cellSize, alignment: .trailing)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
     }
@@ -248,8 +413,8 @@ struct ReadingHeatmapView: View {
         let staggerDelay: Double = {
             guard stagger else { return 0 }
             // Approximation of the JS perCellMs = round(420 / cols). Cap at 14ms.
-            let cols = max(1, model.cols.count)
-            let perCell = min(14.0, max(5.0, 420.0 / Double(cols)))
+            let n = max(1, model.layout == .grid ? model.cols.count : model.linearDays.count)
+            let perCell = min(14.0, max(5.0, 420.0 / Double(n)))
             return Double(col + row) * (perCell / 1000.0)
         }()
 

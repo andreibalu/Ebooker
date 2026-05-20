@@ -20,7 +20,7 @@ struct ReadingActivityCard: View {
     private var subtitle: String {
         switch scale {
         case .week:      return "Last 7 days"
-        case .month:     return "Last 4 weeks"
+        case .month:     return "Last 30 days"
         case .fourMonth: return "Last 4 months"
         }
     }
@@ -28,21 +28,21 @@ struct ReadingActivityCard: View {
     private var cellSize: CGFloat {
         switch scale {
         case .week:      return 30
-        case .month:     return 22
+        case .month:     return 9
         case .fourMonth: return 11
         }
     }
     private var gap: CGFloat {
         switch scale {
         case .week:      return 7
-        case .month:     return 5
+        case .month:     return 2
         case .fourMonth: return 3
         }
     }
     private var radius: CGFloat {
         switch scale {
         case .week:      return 6
-        case .month:     return 4
+        case .month:     return 2
         case .fourMonth: return 2
         }
     }

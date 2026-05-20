@@ -118,38 +118,49 @@ struct StatsHeroSection: View {
     private var heroCell: CGFloat {
         switch scale {
         case .fourMonth: return 14
-        case .month:     return 32
-        case .week:      return 46
+        case .month:     return 10
+        case .week:      return 40
         }
     }
     private var heroGap: CGFloat {
         switch scale {
         case .fourMonth: return 4
-        case .month:     return 7
-        case .week:      return 11
+        case .month:     return 2
+        case .week:      return 10
         }
     }
     private var heroRad: CGFloat {
         switch scale {
         case .fourMonth: return 3
-        case .month:     return 7
-        case .week:      return 11
+        case .month:     return 2
+        case .week:      return 9
         }
     }
 
     private var eyebrowText: String {
         switch scale {
         case .week:      return "Reading · Last 7 days"
-        case .month:     return "Reading · Last 4 weeks"
+        case .month:     return "Reading · Last 30 days"
         case .fourMonth: return "Reading · Last 4 months"
         }
     }
 
     private var dateRange: String {
+        let calendar = Calendar.current
+        let start: Date = {
+            switch scale {
+            case .week:
+                return calendar.date(byAdding: .day, value: -6, to: stats.today) ?? stats.today
+            case .month:
+                return calendar.date(byAdding: .day, value: -29, to: stats.today) ?? stats.today
+            case .fourMonth:
+                return stats.firstDay
+            }
+        }()
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "MMM d"
-        let from = f.string(from: stats.firstDay)
+        let from = f.string(from: start)
         f.dateFormat = "MMM d, yyyy"
         let to = f.string(from: stats.today)
         return "\(from) — \(to)"
@@ -170,7 +181,7 @@ struct StatsHeroSection: View {
             StatsEyebrow(text: eyebrowText)
                 .revealOnAppear(delay: 0.05, y: 12)
 
-            SerifDisplay(text: "Your year, page\nby quiet page.", size: 38)
+            SerifDisplay(text: "Page by quiet\npage.", size: 38)
                 .lineSpacing(2)
                 .padding(.top, 8)
                 .multilineTextAlignment(.leading)
@@ -414,7 +425,7 @@ struct BestTimeSection: View {
             HStack {
                 Spacer()
                 polarChart
-                    .frame(width: 220, height: 220)
+                    .frame(width: 240, height: 240)
                 Spacer()
             }
             .padding(.top, 20)
@@ -429,26 +440,30 @@ struct BestTimeSection: View {
     }
 
     private var polarChart: some View {
-        let size: CGFloat = 220
-        let R: CGFloat = 86
-        let r0: CGFloat = 36
+        let size: CGFloat = 240
+        let R: CGFloat = 92
+        let r0: CGFloat = 38
 
-        let maxH = max(1, stats.hourMinutes.max() ?? 1)
-        let bestHour = stats.bestHour
+        // Treat the dial as a 12-hour analog clock face. Sum AM + PM minutes for
+        // each clock position so 2 AM and 2 PM share the "2 o'clock" spoke; the
+        // peak-hour text below still calls out the actual hour.
+        let clockBuckets: [Int] = (0..<12).map { pos in
+            stats.hourMinutes[pos] + stats.hourMinutes[pos + 12]
+        }
+        let maxH = max(1, clockBuckets.max() ?? 1)
+        let bestPos = ((stats.bestHour % 12) + 12) % 12
 
         return ZStack {
-            // Hour tick labels
-            ForEach([0, 6, 12, 18], id: \.self) { h in
-                let angle = Angle.degrees(Double(h) / 24 * 360 - 90)
-                let label: String = {
-                    switch h { case 0: return "12a"; case 6: return "6a"; case 12: return "12p"; default: return "6p" }
-                }()
+            // Cardinal numerals — 12 top, 3 right, 6 bottom, 9 left
+            ForEach([(0, "12"), (3, "3"), (6, "6"), (9, "9")], id: \.0) { pos, label in
+                let angle = Angle.degrees(Double(pos) / 12 * 360 - 90)
                 Text(label)
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.system(size: 18, weight: .medium, design: .serif))
                     .foregroundStyle(.secondary)
+                    .kerning(-0.3)
                     .offset(
-                        x: cos(angle.radians) * Double(R + 14),
-                        y: sin(angle.radians) * Double(R + 14)
+                        x: cos(angle.radians) * Double(R + 20),
+                        y: sin(angle.radians) * Double(R + 20)
                     )
             }
 
@@ -460,12 +475,12 @@ struct BestTimeSection: View {
                 )
                 .frame(width: r0 * 2, height: r0 * 2)
 
-            // Spokes
-            ForEach(0..<24, id: \.self) { h in
-                let angle = Angle.degrees(Double(h) / 24 * 360 - 90)
-                let mins = stats.hourMinutes[h]
+            // Spokes — one per clock position (12-hour layout)
+            ForEach(0..<12, id: \.self) { pos in
+                let angle = Angle.degrees(Double(pos) / 12 * 360 - 90)
+                let mins = clockBuckets[pos]
                 let len = (Double(mins) / Double(maxH)) * Double(R - r0)
-                let isBest = (h == bestHour)
+                let isBest = (pos == bestPos)
                 Spoke(
                     angleRadians: angle.radians,
                     r0: r0,
@@ -478,7 +493,7 @@ struct BestTimeSection: View {
                 .opacity(isBest ? 1 : 0.55)
                 .animation(
                     .interpolatingSpring(stiffness: 80, damping: 14)
-                        .delay(Double(h) * 0.014),
+                        .delay(Double(pos) * 0.028),
                     value: visible
                 )
             }
@@ -488,7 +503,7 @@ struct BestTimeSection: View {
                 Text("peak")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
-                SerifDisplay(text: fmtClock12(bestHour), size: 20, weight: .medium)
+                SerifDisplay(text: fmtClock12(stats.bestHour), size: 20, weight: .medium)
             }
         }
         .frame(width: size, height: size)
