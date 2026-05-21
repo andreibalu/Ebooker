@@ -5,6 +5,7 @@
 
 import CarPlay
 import OSLog
+import RevenueCat
 import SwiftData
 import UIKit
 
@@ -47,6 +48,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         self.freeBookDownloader = FreeBookDownloadService()
         super.init()
         AppDelegate.shared = self
+
+        #if DEBUG
+        Purchases.logLevel = .info
+        let rcAPIKey = "test_qeiEKewUdXbJfItZAOSWMKUiCcz"
+        #else
+        let rcAPIKey = "appl_fLJZEZIjoyasIHSFeJyYlqHmfzx"
+        #endif
+        Purchases.configure(
+            with: Configuration.Builder(withAPIKey: rcAPIKey)
+                .with(purchasesAreCompletedBy: .myApp, storeKitVersion: .storeKit2)
+                .build()
+        )
     }
 
     nonisolated func application(
