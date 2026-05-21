@@ -164,6 +164,7 @@ struct LibriVoxBookDetailView: View {
                         viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
                     } label: {
                         Label("Download Free Book", systemImage: "arrow.down.circle.fill")
+                            .foregroundStyle(.black)
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
