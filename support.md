@@ -2,7 +2,7 @@
 
 _Last updated: May 18, 2026_
 
-Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 26 and later. This page is the support hub — start here if something isn't working or if you have a question.
+Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
 **Contact:** [andrei.baluta@yahoo.com](mailto:andrei.baluta@yahoo.com)
 
@@ -42,7 +42,7 @@ The AI features rely on Apple Intelligence, which requires:
 - iPhone 15 Pro / Pro Max, or any iPhone 16 (or later)
 - Apple Intelligence enabled in **Settings → Apple Intelligence & Siri**
 
-On older iPhones running iOS 26, the AI buttons are hidden and the rest of the app works normally.
+On iPhones running iOS 18–25, or on iOS 26 iPhones without Apple Intelligence, the AI buttons are hidden and the rest of the app works normally.
 
 ### Does Unpaged work in CarPlay?
 
@@ -95,7 +95,7 @@ Unpaged does not collect, transmit, sell, or share any personal data. Full detai
 Email [andrei.baluta@yahoo.com](mailto:andrei.baluta@yahoo.com) with:
 
 - A short description of what happened (or what you'd like to see)
-- iOS version (Settings → General → About → Software Version, must be iOS 26 or later)
+- iOS version (Settings → General → About → Software Version, must be iOS 18 or later)
 - iPhone model (e.g. iPhone 15 Pro)
 - Unpaged version (shown at the bottom of the Settings sheet)
 - Screenshots or a screen recording if relevant

@@ -285,6 +285,8 @@ struct AISettingsView: View {
                 readyPurchaseBlock
             case .needsActivation:
                 needsActivationPurchaseBlock
+            case .needsIOSUpgrade:
+                needsIOSUpgradePurchaseBlock
             case .unsupportedDevice:
                 unsupportedDevicePurchaseBlock
             }
@@ -321,6 +323,19 @@ struct AISettingsView: View {
 
         // Buy stays visible (price intact) but disabled until the user activates Apple Intelligence.
         unlockButton(disabledReason: .needsActivation)
+
+        restorePurchasesButton
+    }
+
+    @ViewBuilder
+    private var needsIOSUpgradePurchaseBlock: some View {
+        Text(AIAvailabilityState.needsIOSUpgrade.explanation)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        Text("If you already purchased on another device, use Restore purchases.")
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
 
         restorePurchasesButton
     }

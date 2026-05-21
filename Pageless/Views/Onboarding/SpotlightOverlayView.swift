@@ -67,6 +67,7 @@ struct SpotlightOverlayView: View {
     let highlightFrame: CGRect
     let step: OnboardingStep
     let deviceSupportsOnboardingAI: Bool
+    let requiresIOSUpgrade: Bool
     let totalSteps: Int
     let currentIndex: Int
     let onNext: () -> Void
@@ -110,10 +111,10 @@ struct SpotlightOverlayView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             VStack(alignment: .leading, spacing: 5) {
-                Text(step.title(deviceSupportsOnboardingAI: deviceSupportsOnboardingAI))
+                Text(step.title(deviceSupportsOnboardingAI: deviceSupportsOnboardingAI, requiresIOSUpgrade: requiresIOSUpgrade))
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                Text(step.body(deviceSupportsOnboardingAI: deviceSupportsOnboardingAI))
+                Text(step.body(deviceSupportsOnboardingAI: deviceSupportsOnboardingAI, requiresIOSUpgrade: requiresIOSUpgrade))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -183,6 +184,7 @@ extension View {
                         highlightFrame: frame,
                         step: step,
                         deviceSupportsOnboardingAI: onboarding.deviceSupportsOnboardingAI,
+                        requiresIOSUpgrade: onboarding.requiresIOSUpgradeForAI,
                         totalSteps: totalPhaseSteps,
                         currentIndex: currentPhaseIndex,
                         onNext: { onboarding.advance() },

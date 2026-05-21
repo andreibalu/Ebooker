@@ -25,7 +25,8 @@ struct SettingsView: View {
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
 
     /// Only fully-unsupported hardware shows the static "compatible device required" row.
-    /// `.needsActivation` users should still land in `AISettingsView` and see actionable guidance there.
+    /// `.needsActivation` and `.needsIOSUpgrade` users still land in `AISettingsView` so they
+    /// see actionable guidance there (turn on Apple Intelligence / update to iOS 26).
     private var hideAIEntirely: Bool {
         AppleIntelligenceCapability.availabilityState == .unsupportedDevice
     }
@@ -290,6 +291,9 @@ struct SettingsView: View {
         if aiEntitlement.isUnlocked {
             return "Unlocked"
         }
+        if AppleIntelligenceCapability.availabilityState == .needsIOSUpgrade {
+            return "Update to iOS 26 to use AI features"
+        }
         let price = aiEntitlement.unlockPriceDisplay
         if aiEntitlement.trialUsesRemaining > 0 {
             return "\(aiEntitlement.trialUsesRemaining) free tries left · Unlock for \(price)"
@@ -298,7 +302,10 @@ struct SettingsView: View {
     }
 
     private var aiTeaserSublineAccent: Bool {
-        !aiEntitlement.isUnlocked && aiEntitlement.trialUsesRemaining == 0
+        if AppleIntelligenceCapability.availabilityState == .needsIOSUpgrade {
+            return true
+        }
+        return !aiEntitlement.isUnlocked && aiEntitlement.trialUsesRemaining == 0
     }
 
     private func playbackSettingRow(title: String, caption: String, valueTitle: String) -> some View {

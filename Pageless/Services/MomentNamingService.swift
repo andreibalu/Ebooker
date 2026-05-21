@@ -8,6 +8,7 @@ import FoundationModels
 
 /// Uses the foundational local model (SystemLanguageModel.default) to generate
 /// a concise moment name from an audiobook transcript.
+@available(iOS 26, *)
 struct MomentNamingService: MomentAnalyzing {
     // Field order matters: the model generates fields top-to-bottom and can run out
     // of output tokens before reaching the last one. Keep cheap, structured fields
@@ -32,15 +33,6 @@ struct MomentNamingService: MomentAnalyzing {
 
         @Guide(description: "Exactly 2 short sentences (max 40 words total) summarizing what is happening and why it matters. Must end with a period.")
         var momentNote: String
-    }
-
-    struct MomentAnalysis {
-        let name: String
-        let note: String
-        let categories: [MomentCategory]
-        let quoteLine: String?
-        let characters: [String]
-        let mood: MomentMood?
     }
 
     private static let instructionPrompt: String = {
@@ -188,16 +180,5 @@ struct MomentNamingService: MomentAnalyzing {
         }
 
         return String(text.prefix(maxLength)).trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-enum MomentNamingError: LocalizedError {
-    case modelUnavailable
-
-    var errorDescription: String? {
-        switch self {
-        case .modelUnavailable:
-            "Apple Intelligence is not available."
-        }
     }
 }

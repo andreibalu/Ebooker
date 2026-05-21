@@ -18,9 +18,16 @@ final class OnboardingManager {
         if let override = Self._unitTestDeviceSupportsOnboardingAI {
             return override
         }
-        // Includes `.needsActivation`: users who haven't enabled Apple Intelligence yet
-        // still walk the AI onboarding so they see how to activate it.
+        // Includes `.needsActivation` and `.needsIOSUpgrade`: hardware can handle AI, so the user
+        // walks the AI onboarding and gets told how to activate Apple Intelligence or update iOS.
         return AppleIntelligenceCapability.availabilityState != .unsupportedDevice
+    }
+
+    /// True when hardware supports Apple Intelligence but the OS is below iOS 26.
+    /// Onboarding copy branches on this so the AI steps point the user at Software Update
+    /// instead of describing features they can't use yet.
+    var requiresIOSUpgradeForAI: Bool {
+        AppleIntelligenceCapability.availabilityState == .needsIOSUpgrade
     }
 
     private var phase1Steps: [OnboardingStep] {

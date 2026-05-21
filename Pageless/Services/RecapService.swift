@@ -7,6 +7,7 @@ import Foundation
 import FoundationModels
 
 /// Uses the on-device foundation model to generate a brief recap of recent audiobook events.
+@available(iOS 26, *)
 struct RecapService: RecapProviding {
     @Generable(description: "A brief recap of recent audiobook events")
     struct RecapSuggestion {
@@ -77,19 +78,5 @@ struct RecapService: RecapProviding {
         let words = trimmed.split(whereSeparator: \.isWhitespace)
         guard !words.isEmpty else { return trimmed }
         return words.prefix(4).joined(separator: " ")
-    }
-}
-
-enum RecapError: LocalizedError {
-    case modelUnavailable
-    case noAudioAvailable
-
-    var errorDescription: String? {
-        switch self {
-        case .modelUnavailable:
-            "Apple Intelligence is not available."
-        case .noAudioAvailable:
-            "No audio available for recap."
-        }
     }
 }

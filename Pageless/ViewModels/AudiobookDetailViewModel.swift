@@ -41,7 +41,13 @@ final class AudiobookDetailViewModel {
         self.audiobook = audiobook
         self.transcription = transcription ?? TranscriptionService()
         self.audioExtractor = audioExtractor ?? AudioExtractionService()
-        self.recapProvider = recapProvider ?? RecapService()
+        if let recapProvider {
+            self.recapProvider = recapProvider
+        } else if #available(iOS 26, *) {
+            self.recapProvider = RecapService()
+        } else {
+            self.recapProvider = UnavailableRecapProvider()
+        }
         syncRecapFromAudiobook()
     }
 

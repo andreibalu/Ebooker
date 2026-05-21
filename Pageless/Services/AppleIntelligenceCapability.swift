@@ -7,7 +7,7 @@ import Foundation
 import FoundationModels
 import Speech
 
-/// Three real states the AI Settings UI cares about. Used to drive Buy-button
+/// Four real states the AI Settings UI cares about. Used to drive Buy-button
 /// visibility/enablement and explanatory copy.
 enum AIAvailabilityState: Equatable {
     /// Apple Intelligence is on and the model is available. Buy enabled.
@@ -15,7 +15,11 @@ enum AIAvailabilityState: Equatable {
     /// Hardware + OS support Apple Intelligence but the user hasn't turned it on
     /// (or the model is still loading). Buy visible but disabled until activated.
     case needsActivation
-    /// This iPhone can't run Apple Intelligence at all. Buy hidden.
+    /// Hardware is Apple Intelligence–capable but the device is running an iOS
+    /// version older than 26. Buy hidden; user is told to update iOS.
+    case needsIOSUpgrade
+    /// This iPhone can't run Apple Intelligence at all (incompatible hardware
+    /// regardless of iOS version). Buy hidden.
     case unsupportedDevice
 
     /// Only `.ready` allows purchase — anything else means the unlock wouldn't be usable.
@@ -28,6 +32,8 @@ enum AIAvailabilityState: Equatable {
             return ""
         case .needsActivation:
             return "Apple Intelligence isn't turned on. Open iOS Settings → Apple Intelligence & Siri to enable it, then return here to unlock."
+        case .needsIOSUpgrade:
+            return "AI features require iOS 26 or later. Update iOS in Settings → General → Software Update, then return here to unlock."
         case .unsupportedDevice:
             return "AI features aren't supported on this iPhone."
         }
@@ -35,24 +41,26 @@ enum AIAvailabilityState: Equatable {
 }
 
 /// Checks whether the device supports Apple Intelligence and Smart Moment Naming.
+/// Stays callable on iOS 18+ — below iOS 26 it reports `.needsIOSUpgrade` for
+/// AI-capable hardware (iPhone 15 Pro and later) and `.unsupportedDevice` for the rest.
 enum AppleIntelligenceCapability {
-    private static let model = SystemLanguageModel.default
-
     /// Whether the foundational local model is available for Smart Moment Naming.
-    /// Requires: compatible device, Apple Intelligence enabled, and speech recognition available.
+    /// Requires: iOS 26+, compatible device, Apple Intelligence enabled, and speech
+    /// recognition available.
     static var isSmartNamingAvailable: Bool {
-        model.isAvailable && isSpeechRecognitionAvailable
-    }
-
-    /// Detailed availability status for UI messaging.
-    static var availability: SystemLanguageModel.Availability {
-        model.availability
+        if #available(iOS 26, *) {
+            return SystemLanguageModel.default.isAvailable && isSpeechRecognitionAvailable
+        }
+        return false
     }
 
     /// High-level state for AI Settings UI. Collapses `.modelNotReady` and "AI off in Settings"
     /// into a single `.needsActivation` bucket because both resolve via the same user action.
     static var availabilityState: AIAvailabilityState {
-        switch model.availability {
+        guard #available(iOS 26, *) else {
+            return hardwareSupportsAppleIntelligence ? .needsIOSUpgrade : .unsupportedDevice
+        }
+        switch SystemLanguageModel.default.availability {
         case .available:
             return .ready
         case .unavailable(.deviceNotEligible):
@@ -75,7 +83,13 @@ enum AppleIntelligenceCapability {
     static var unavailabilityReason: String? {
         guard !isSmartNamingAvailable else { return nil }
 
-        switch model.availability {
+        guard #available(iOS 26, *) else {
+            return hardwareSupportsAppleIntelligence
+                ? "AI features require iOS 26 or later. Update iOS to unlock."
+                : "This device does not support Apple Intelligence."
+        }
+
+        switch SystemLanguageModel.default.availability {
         case .available:
             return isSpeechRecognitionAvailable ? nil : "Speech recognition is not available."
         case .unavailable(.deviceNotEligible):
@@ -91,5 +105,30 @@ enum AppleIntelligenceCapability {
 
     private static var isSpeechRecognitionAvailable: Bool {
         SFSpeechRecognizer(locale: Locale.current)?.isAvailable ?? false
+    }
+
+    /// True when this iPhone's hardware can run Apple Intelligence (independent of iOS version).
+    /// Apple Intelligence is supported on iPhone 15 Pro and later. Those map to model identifiers
+    /// `iPhone16,1` and up; iPhone 15 / 15 Plus are `iPhone15,4` / `iPhone15,5` and don't qualify.
+    /// So the rule is: model identifier `iPhoneN,M` with `N >= 16`.
+    static var hardwareSupportsAppleIntelligence: Bool {
+        let id = deviceModelIdentifier
+        guard id.hasPrefix("iPhone"),
+              let comma = id.firstIndex(of: ","),
+              let major = Int(id[id.index(id.startIndex, offsetBy: "iPhone".count)..<comma])
+        else { return false }
+        return major >= 16
+    }
+
+    private static var deviceModelIdentifier: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? ""
+        #else
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        return withUnsafePointer(to: &systemInfo.machine) { pointer in
+            pointer.withMemoryRebound(to: CChar.self, capacity: 1) { String(cString: $0) }
+        }
+        #endif
     }
 }

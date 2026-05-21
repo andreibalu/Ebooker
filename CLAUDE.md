@@ -54,6 +54,7 @@ The project has no external package dependencies — it uses only native Apple f
 - `UIBackgroundModes`: `audio`
 - Two scene roles registered: `UIWindowScene` (default) and `CPTemplateApplicationScene` → `CarPlaySceneDelegate`
 - Orientations: portrait + both landscapes on iPhone; all four on iPad
+- `IPHONEOS_DEPLOYMENT_TARGET = 18.0` (`TARGETED_DEVICE_FAMILY = 1` keeps it iPhone-only). AI features (`FoundationModels`) are gated `@available(iOS 26, *)` and runtime-checked, so the binary installs and runs on iOS 18+ with the AI surface auto-hidden when below iOS 26.
 
 ## Architecture
 
@@ -80,6 +81,8 @@ Pageless/
 │   ├── EqualizerSettings.swift    `EqualizerBand`, `EqualizerPreset` (flat/voiceBoost/bassBoost/trebleBoost/podcast/custom), `EqualizerConfiguration`
 │   ├── LibriVoxBook.swift         SwiftData @Model for the cached LibriVox catalog (20k+ rows)
 │   ├── CachedLibriVoxTrack.swift  Lightweight non-persisted track snapshot embedded JSON-encoded inside `LibriVoxBook.cachedTracks`
+│   ├── ReadingSession.swift       SwiftData @Model; per-chunk listening row (book snapshot + hour bucket + minutes) feeding the Reading Activity heatmap
+│   ├── ReadingStats.swift         Non-persisted `ReadingStats` aggregate (`compute(sessions:booksFinished:)`) + `ReadingDayActivity` per-day rollup
 │   └── FreeBookCatalogEntry.swift Legacy non-persisted struct for the 5-seed CarPlay free-book catalog
 ├── ViewModels/
 │   ├── PlayerViewModel.swift                Moment creation, AI naming workflow, smart save warning
@@ -108,23 +111,30 @@ Pageless/
 │   │   ├── BrowseLibriVoxView.swift       Search + filters + featured + active downloads
 │   │   ├── LibriVoxBookDetailView.swift   Cover/metadata, sample preview, download/add-to-library
 │   │   └── LibriVoxBookRow.swift          Search result row with inline sample button
+│   ├── ReadingStats/
+│   │   ├── ReadingActivityCard.swift     Compact heatmap card pinned at the top of the Favorites tab; tap pushes the full screen
+│   │   ├── ReadingStatsView.swift        Full-screen stats view (zoom-transitions out of the card)
+│   │   ├── ReadingStatsSections.swift    Hero, totals, best day, polar best-time-of-day chart, longest book, streaks, metrics, free-books ring
+│   │   └── ReadingHeatmap.swift          Reusable heatmap renderer + `HeatmapPalette` (uses `.amber` by default)
 │   └── Onboarding/
 │       ├── OnboardingStep.swift          Enum defining 7 onboarding phases
 │       └── SpotlightOverlayView.swift    Spotlight tutorial overlay
 ├── Services/
 │   ├── Protocols/
 │   │   ├── TranscriptionProviding.swift
-│   │   ├── MomentAnalyzing.swift
+│   │   ├── MomentAnalyzing.swift              (also defines `MomentAnalysis`, `MomentNamingError`, and `UnavailableMomentAnalyzer` fallback for iOS < 26)
 │   │   ├── AudioExtracting.swift
-│   │   ├── RecapProviding.swift               (defines `RecapGenerationResult`)
+│   │   ├── RecapProviding.swift               (also defines `RecapGenerationResult`, `RecapError`, and `UnavailableRecapProvider` fallback for iOS < 26)
 │   │   └── FreeBookDownloading.swift          (legacy seed-catalog download protocol)
 │   ├── AudioPlayerManager.swift            Central playback state (ObservableObject); owns `equalizer: AudioEqualizerService`
 │   ├── PlaybackPersistence.swift           Progress tracking, high-water mark, SwiftData saves
 │   ├── NowPlayingUpdater.swift             MPRemoteCommandCenter + MPNowPlayingInfoCenter
 │   ├── LibraryImportService.swift          User-file import with security-scoped access (enum + static methods)
 │   ├── TranscriptionService.swift          Speech framework wrapper
-│   ├── MomentNamingService.swift           FoundationModels AI moment analysis
-│   ├── RecapService.swift                  FoundationModels progress recap generation
+│   ├── MomentNamingService.swift           FoundationModels AI moment analysis — `@available(iOS 26, *)`
+│   ├── RecapService.swift                  FoundationModels progress recap generation — `@available(iOS 26, *)`
+│   ├── ReadingSessionRecorder.swift        Accumulates wall-clock playback time and flushes `ReadingSession` rows (5-min chunks, lifecycle boundaries)
+│   ├── ReadingActivitySeeder.swift         DEBUG-only synthetic-activity seeder (113 days) for stats screen iteration
 │   ├── AudioExtractionService.swift        AVAssetExportSession audio segment extraction (50s segments)
 │   ├── AudioEqualizerService.swift         Live 5-band EQ + preamp orchestration; builds AVAudioMix; @Published bindings to UI
 │   ├── EqualizerTap.swift                  C-level MTAudioProcessingTap: biquad filters + soft limiter (realtime audio thread)
@@ -141,7 +151,7 @@ Pageless/
 │   ├── CarPlayVoiceSearch.swift            Hands-free dictation: mic → Speech framework with silence auto-stop
 │   ├── VoiceSearchPermissions.swift        Centralised mic + speech permission gating (primed at app launch)
 │   ├── AudiobookSavedProgressResume.swift  Resume-from-bookmark logic (enum)
-│   ├── AppleIntelligenceCapability.swift   Runtime AI feature detection
+│   ├── AppleIntelligenceCapability.swift   Runtime AI feature detection; iOS-18-safe (internal `#available(iOS 26, *)` branches, returns `.unsupportedDevice` below iOS 26)
 │   └── AIEntitlementStore.swift            StoreKit 2 IAP + trial-use tracking
 └── Utilities/
     ├── TimeFormatter.swift                 Clock string formatting, duration summaries
@@ -194,7 +204,7 @@ PagelessUITests/
 
 ## Data Layer (SwiftData)
 
-**Four models** registered in the `ModelContainer` (see `AppDelegate.swift`): `Audiobook`, `AudioTrack`, `Moment`, `LibriVoxBook`.
+**Five models** registered in the `ModelContainer` (see `AppDelegate.swift`): `Audiobook`, `AudioTrack`, `Moment`, `LibriVoxBook`, `ReadingSession`.
 
 Audio files for downloaded books are stored at `Application Support/Audiobooks/[UUID]/`. Cover images use SwiftData external storage. Streaming-only books store remote URLs on `AudioTrack` and have `Audiobook.isDownloaded == false`.
 
@@ -223,6 +233,11 @@ LibriVoxBook (@Model final)
 ├── id (unique), title, authorDisplay, bookDescription, language, totalTimeSecs
 ├── genres (JSON-backed), cachedTracks (JSON-backed [CachedLibriVoxTrack]), cover URLs, RSS URL
 └── Computed: formattedDuration, estimatedDownloadSizeMB, bestCoverURL
+
+ReadingSession (@Model final)
+├── id (unique), date (start-of-day), dayKey ("YYYY-MM-DD"), hour (0...23), minutes (≥1)
+├── Book snapshot (so stats survive book deletion): bookID, bookTitle, bookAuthor, isFreeBook
+└── createdAt
 ```
 
 **Schema evolution**: New columns use private backing fields with computed getters/setters (e.g., `_isFavorite`, `_isFreeBook`, `_isDownloaded`, `_progressRecap*`, `_eqBandGainsJSON`, `_eqPresetRaw`) for SwiftData lightweight migration. All post-launch fields are nullable on disk and given safe defaults in the computed accessor.
@@ -236,7 +251,8 @@ Responsibilities:
 - Builds per-item `AVAudioMix` via `AudioEqualizerService.makeAudioMix(for:)` so the EQ tap runs in the audio pipeline
 - Delegates persistence to `PlaybackPersistence` (progress saves, high-water mark, seek penalty)
 - Delegates remote commands to `NowPlayingUpdater` (Control Center, headphone controls, CarPlay now-playing)
-- 1-second periodic time observer for live progress updates
+- 1-second periodic time observer for live progress updates; feeds `ReadingSessionRecorder.tick(...)` to attribute wall-clock listening to the current book
+- Flushes the `ReadingSessionRecorder` on pause, track change, audiobook change, app background, and book finish so partial chunks aren't lost
 - Handles streaming items (remote `AudioTrack` URLs) and local file items uniformly
 
 ## ViewModels
@@ -259,19 +275,20 @@ Protocol implementations are typically `struct`. `LibraryImportService` is a con
 | Protocol | Implementation | Framework |
 |----------|---------------|-----------|
 | `TranscriptionProviding` | `TranscriptionService` | Speech |
-| `MomentAnalyzing` | `MomentNamingService` | FoundationModels |
-| `RecapProviding` | `RecapService` | FoundationModels |
+| `MomentAnalyzing` | `MomentNamingService` (iOS 26+) · `UnavailableMomentAnalyzer` (iOS 18 fallback) | FoundationModels |
+| `RecapProviding` | `RecapService` (iOS 26+) · `UnavailableRecapProvider` (iOS 18 fallback) | FoundationModels |
 | `AudioExtracting` | `AudioExtractionService` | AVFoundation (AVAssetExportSession) |
 | `FreeBookDownloading` | `FreeBookDownloadService` | URLSession (background) — legacy seed catalog |
 
 ## AI & On-Device Intelligence
 
-- `MomentNamingService: MomentAnalyzing` — AI moment analysis: name, note, categories, quoteLine, characters, mood
-- `RecapService: RecapProviding` — generates `RecapGenerationResult` (recap text + optional `progressHeadline`)
+- `MomentNamingService: MomentAnalyzing` — AI moment analysis: name, note, categories, quoteLine, characters, mood (`@available(iOS 26, *)`)
+- `RecapService: RecapProviding` — generates `RecapGenerationResult` (recap text + optional `progressHeadline`) (`@available(iOS 26, *)`)
 - `TranscriptionService: TranscriptionProviding` — Speech framework wrapper with `withCheckedContinuation` bridge
-- `AppleIntelligenceCapability` — runtime detection for showing/hiding AI UI buttons
+- `AppleIntelligenceCapability` — runtime detection for showing/hiding AI UI buttons; iOS-18-safe (internal `if #available(iOS 26, *)` branches)
 - `AIEntitlementStore` — StoreKit 2: trial uses tracking + IAP unlock (`AIProductID`)
 - AI features are isolated behind protocols; app works fully without Apple Intelligence
+- **iOS 18 deployment-target rule.** The deployment target is `18.0` but `FoundationModels` is iOS 26-only. The two service types (`MomentNamingService`, `RecapService`) carry `@available(iOS 26, *)`; `MomentAnalysis`/`MomentNamingError`/`RecapError`/`RecapGenerationResult` live in the protocol files so iOS-18 callers and mocks can use them without availability gating. ViewModel default initializers (`PlayerViewModel`, `AudiobookDetailViewModel`) branch on `if #available(iOS 26, *)` to construct the real service vs. the `Unavailable…` no-op stub. Any new AI-only API must follow the same pattern — never reference `FoundationModels` symbols outside an `@available`-gated type or an `if #available(iOS 26, *)` block.
 - **`SystemLanguageModel.default` has a ~4096-token budget shared between input and output.** When designing a `@Generable` struct, order fields so cheap structured outputs (single-token enums, short arrays) come first and the longest prose field is last — the model generates fields in declaration order and the trailing field is what gets clipped when the budget runs out. Post-process any free-text field to handle mid-sentence truncation (see `MomentNamingService.trimToCompleteSentences` / `sanitizedQuoteLine`); never trust the model to honor word/sentence-count guides on the long tail.
 
 ## Feature Systems
@@ -288,6 +305,15 @@ The app contains **two independent free-book paths** that coexist by design:
    - **Covers are intentionally not fetched.** LibriVox cover URLs are unreliable, so both `LibriVoxDownloadService` and `StreamingLibraryService` always set `coverArtData = nil` and let `GeneratedCoverView` render the letter template. Don't reintroduce remote cover fetches here.
 
 2. **Legacy seed catalog (CarPlay)** — `FreeBookCatalogService` exposes 5 hand-picked Internet Archive classics. Downloaded via `FreeBookDownloadService` (background URLSession with published `downloadProgress`, `activeDownloads`, `downloadErrors`). Consumed only by `CarPlayCoordinator` and `LibraryViewModel`. **Do not extend this path for new iPhone features — use the LibriVox path.**
+
+### Reading Activity & Stats
+
+- `ReadingSession` (SwiftData `@Model`) is the only persisted row — one chunk = one book × one wall-clock hour bucket, with the book's metadata snapshotted so deletion of a book doesn't erase the history.
+- `ReadingSessionRecorder` (`@MainActor`) is owned by `AudioPlayerManager` and ticked from its 1-second periodic time observer while `isPlaying`. Continuous play emits chunks every ~5 minutes; pause / track change / book change / app background / finish all flush whatever's accumulated. Chunks shorter than 30s are dropped as scrub noise.
+- `ReadingStats.compute(sessions:booksFinished:)` is a pure aggregate over `[ReadingSession]` → totals, best day/hour/dow, streaks, top author, longest book, free-book share, per-day activity map. No persistence; recomputed when the `@Query` of sessions changes.
+- The Favorites tab pins `ReadingActivityCard` above the grid (only when `stats.hasAnyActivity`); tapping pushes `ReadingStatsView` with a zoom transition that morphs out of the card's heatmap. The full view composes `ReadingStatsSections` (hero, totals, best day, polar best-time-of-day chart, longest book, streaks, metrics, free-books ring) inside a `LazyVStack` with `revealOnAppear` and `CountUpText` choreography.
+- `ReadingHeatmap` + `HeatmapPalette` (currently `.amber`) are the shared visual primitive used by both the card and the full view.
+- `ReadingActivitySeeder` is wrapped in `#if DEBUG` and seeds 113 days of synthetic activity for iterating on the stats screen without burning real listening time. Don't ship a code path that calls it from release builds.
 
 ### Equalizer (per-book)
 
@@ -321,6 +347,7 @@ PagelessApp (@main)
     ├── NavigationStack
     │   ├── libraryHeader (sort options)
     │   ├── tabPicker (Favorites / All Books / Free Books)
+    │   ├── (Favorites tab only) ReadingActivityCard → NavigationLink → ReadingStatsView (zoom transition)
     │   └── booksGrid OR BrowseLibriVoxView
     │       ├── (library tabs) LazyVGrid → AudiobookCardView[] → AudiobookDetailView (AudiobookDetailViewModel)
     │       │   ├── resumeAnchorRow (play from progress or recap)
@@ -354,7 +381,7 @@ All enums are `CaseIterable, Identifiable`.
 - **SwiftData queries**: Use `@Query` in views; pass `modelContext` explicitly to ViewModels/services.
 - **Security-scoped file access**: For user-imported files, always pair `startAccessingSecurityScopedResource` with a release path (see `LibraryViewModel.releaseSecurityScopedAccess()`).
 - **Async bridging**: Use `withCheckedContinuation` / `withCheckedThrowingContinuation` when bridging completion-handler APIs (Speech framework).
-- **AI isolation**: `AppleIntelligenceCapability` guards UI visibility; ViewModels catch service errors and fall back gracefully.
+- **AI isolation**: `AppleIntelligenceCapability` guards UI visibility; ViewModels catch service errors and fall back gracefully. On iOS 18 the helper hard-returns `.unsupportedDevice` / `false` so AI surfaces never render.
 - **Schema migration**: Private backing field pattern (`_fieldName`) with computed getter/setter for post-launch columns; new fields nullable on disk.
 - **Streaming vs downloaded**: Treat `Audiobook.isStreamingOnly` as load-bearing — anything that touches the on-disk path must check it. Promotion to downloaded goes through `LibriVoxDownloadService`.
 - **Cover fallback**: Any view that displays cover art must fall through to `GeneratedCoverView(title:)` when `coverArtData == nil` — not a gradient + SF Symbol. `NowPlayingUpdater` mirrors this for lock screen / CarPlay artwork via `GeneratedCoverView.renderImage(title:side:)` with a `[title: UIImage]` cache so it doesn't re-render every periodic tick.

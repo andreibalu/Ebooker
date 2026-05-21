@@ -42,7 +42,13 @@ final class PlayerViewModel {
         audioExtractor: (any AudioExtracting)? = nil
     ) {
         self.transcription = transcription ?? TranscriptionService()
-        self.momentAnalyzer = momentAnalyzer ?? MomentNamingService()
+        if let momentAnalyzer {
+            self.momentAnalyzer = momentAnalyzer
+        } else if #available(iOS 26, *) {
+            self.momentAnalyzer = MomentNamingService()
+        } else {
+            self.momentAnalyzer = UnavailableMomentAnalyzer()
+        }
         self.audioExtractor = audioExtractor ?? AudioExtractionService()
     }
 

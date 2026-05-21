@@ -7,6 +7,7 @@ import Foundation
 import Testing
 @testable import Pageless
 
+@available(iOS 26, *)
 struct MomentNamingServiceLogicTests {
     private let service = MomentNamingService()
 

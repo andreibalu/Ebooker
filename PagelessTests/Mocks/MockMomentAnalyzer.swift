@@ -7,12 +7,12 @@ import Foundation
 @testable import Pageless
 
 final class MockMomentAnalyzer: MomentAnalyzing, @unchecked Sendable {
-    var analysisToReturn: MomentNamingService.MomentAnalysis?
+    var analysisToReturn: MomentAnalysis?
     var shouldThrow = false
 
-    func analyzeMoment(transcript: String, audiobookTitle: String?) async throws -> MomentNamingService.MomentAnalysis {
+    func analyzeMoment(transcript: String, audiobookTitle: String?) async throws -> MomentAnalysis {
         if shouldThrow { throw MomentNamingError.modelUnavailable }
-        return analysisToReturn ?? MomentNamingService.MomentAnalysis(
+        return analysisToReturn ?? MomentAnalysis(
             name: "Test Moment",
             note: "Test note",
             categories: [.dialogue],
