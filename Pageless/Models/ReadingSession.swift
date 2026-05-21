@@ -15,23 +15,25 @@ import SwiftData
 /// Book metadata is snapshotted so stats remain accurate after a book is removed.
 @Model
 final class ReadingSession {
-    @Attribute(.unique) var id: UUID
+    // CloudKit-backed SwiftData stores cannot declare @Attribute(.unique);
+    // app-level UUID uniqueness is enforced by `id` semantics.
+    var id: UUID = UUID()
 
     /// Start-of-day in the user's calendar. Stable per-day index for the heatmap.
-    var date: Date
+    var date: Date = Date.distantPast
     /// "YYYY-MM-DD" for fast grouping/lookups without recomputing calendar components.
-    var dayKey: String
+    var dayKey: String = ""
     /// 0...23, wall-clock hour when the chunk began.
-    var hour: Int
+    var hour: Int = 0
     /// Wall-clock minutes listened in this chunk (≥1).
-    var minutes: Int
+    var minutes: Int = 0
 
-    var bookID: UUID
-    var bookTitle: String
-    var bookAuthor: String
-    var isFreeBook: Bool
+    var bookID: UUID = UUID()
+    var bookTitle: String = ""
+    var bookAuthor: String = ""
+    var isFreeBook: Bool = false
 
-    var createdAt: Date
+    var createdAt: Date = Date.distantPast
 
     init(
         id: UUID = UUID(),

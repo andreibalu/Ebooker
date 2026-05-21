@@ -8,18 +8,28 @@ import SwiftData
 
 @Model
 final class Audiobook: Identifiable {
-    @Attribute(.unique) var id: UUID
-    var title: String
-    var author: String
-    var folderName: String
+    // CloudKit-backed SwiftData stores cannot declare @Attribute(.unique);
+    // app-level UUID uniqueness is enforced by `id` semantics.
+    var id: UUID = UUID()
+    var title: String = ""
+    var author: String = ""
+    var folderName: String = ""
     @Attribute(.externalStorage) var coverArtData: Data?
-    var createdAt: Date
+    var createdAt: Date = Date.distantPast
     var lastPlayedAt: Date?
-    var totalDuration: Double
-    var currentTrackIndex: Int
-    var currentTime: Double
-    var playbackRate: Double
-    var isFinished: Bool
+    var totalDuration: Double = 0
+    var currentTrackIndex: Int = 0
+    var currentTime: Double = 0
+    var playbackRate: Double = 1
+    var isFinished: Bool = false
+
+    // Set the first time this row is observed locally; used to sort orphan books
+    // in the Cloud Library picker so the most-recently-synced appear first.
+    private var _iCloudRecordCreatedAt: Date?
+    var iCloudRecordCreatedAt: Date? {
+        get { _iCloudRecordCreatedAt }
+        set { _iCloudRecordCreatedAt = newValue }
+    }
 
     // Stored as Bool? so CoreData can add this column as NULL for existing rows
     // during automatic lightweight migration. The computed wrapper below keeps
@@ -48,7 +58,9 @@ final class Audiobook: Identifiable {
         set { _isDownloaded = newValue }
     }
 
-    var isStreamingOnly: Bool { !isDownloaded }
+    // Own books that synced from iCloud but lack local files have isDownloaded==false too —
+    // isFreeBook distinguishes them from genuinely streaming LibriVox entries.
+    var isStreamingOnly: Bool { !isDownloaded && isFreeBook }
 
     var isFavorite: Bool {
         get { _isFavorite ?? false }
@@ -136,7 +148,7 @@ final class Audiobook: Identifiable {
     }
 
     @Relationship(deleteRule: .cascade, inverse: \AudioTrack.audiobook)
-    var tracks: [AudioTrack]
+    var tracks: [AudioTrack] = []
 
     @Relationship(deleteRule: .cascade, inverse: \Moment.audiobook)
     var moments: [Moment] = []

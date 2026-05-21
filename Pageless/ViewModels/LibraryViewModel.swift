@@ -6,6 +6,12 @@
 import Foundation
 import SwiftData
 
+struct RestoreMatchCandidate: Identifiable {
+    let id = UUID()
+    let pending: PendingImportSelection
+    let orphan: Audiobook
+}
+
 @MainActor
 @Observable
 final class LibraryViewModel {
@@ -13,6 +19,11 @@ final class LibraryViewModel {
 
     var pendingImport: PendingImportSelection?
     var urlsHoldingSecurityAccess: [URL] = []
+
+    /// Set when `prepareImport` detects an orphan cloud-synced book whose tracks fingerprint-match
+    /// the file the user just picked. The ImportAudiobookSheet branches on this and offers
+    /// "Restore" vs "Add as new" before committing.
+    var restoreMatch: RestoreMatchCandidate?
 
     // MARK: - Delete / rename
 
@@ -27,7 +38,7 @@ final class LibraryViewModel {
 
     // MARK: - Import
 
-    func handleImportSelection(_ result: Result<[URL], Error>) {
+    func handleImportSelection(_ result: Result<[URL], Error>, modelContext: ModelContext) {
         switch result {
         case .success(let urls):
             let audioURLs = urls
@@ -41,7 +52,12 @@ final class LibraryViewModel {
             urlsHoldingSecurityAccess = accessed
             Task {
                 do {
-                    pendingImport = try await LibraryImportService.prepareImport(from: audioURLs)
+                    let pending = try await LibraryImportService.prepareImport(from: audioURLs)
+                    if let orphan = OrphanRestoreService.findMatch(for: pending, modelContext: modelContext) {
+                        restoreMatch = RestoreMatchCandidate(pending: pending, orphan: orphan)
+                    } else {
+                        pendingImport = pending
+                    }
                 } catch {
                     releaseSecurityScopedAccess()
                     presentAlert(message: error.localizedDescription)
@@ -60,6 +76,35 @@ final class LibraryViewModel {
             modelContext: modelContext
         )
         pendingImport = nil
+        releaseSecurityScopedAccess()
+    }
+
+    /// User accepted the auto-match: write files into the orphan's folder and adopt its metadata.
+    func adoptRestoreMatch(modelContext: ModelContext) {
+        guard let candidate = restoreMatch else { return }
+        do {
+            _ = try OrphanRestoreService.adopt(
+                orphan: candidate.orphan,
+                pending: candidate.pending,
+                modelContext: modelContext
+            )
+            restoreMatch = nil
+            releaseSecurityScopedAccess()
+        } catch {
+            presentAlert(message: error.localizedDescription)
+        }
+    }
+
+    /// User rejected the match: fall through to the normal new-book import sheet.
+    func dismissRestoreMatchAndAddAsNew() {
+        guard let candidate = restoreMatch else { return }
+        pendingImport = candidate.pending
+        restoreMatch = nil
+    }
+
+    /// User cancelled both flows; release security scopes.
+    func cancelRestoreMatch() {
+        restoreMatch = nil
         releaseSecurityScopedAccess()
     }
 

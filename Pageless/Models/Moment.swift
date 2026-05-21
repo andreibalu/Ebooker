@@ -8,14 +8,16 @@ import SwiftData
 
 @Model
 final class Moment {
-    @Attribute(.unique) var id: UUID
-    var trackIndex: Int
-    var time: Double
-    var label: String
-    var createdAt: Date
+    // CloudKit-backed SwiftData stores cannot declare @Attribute(.unique);
+    // app-level UUID uniqueness is enforced by `id` semantics.
+    var id: UUID = UUID()
+    var trackIndex: Int = 0
+    var time: Double = 0
+    var label: String = ""
+    var createdAt: Date = Date.distantPast
     var audiobook: Audiobook?
     var transcript: String?
-    var aiGeneratedName: Bool
+    var aiGeneratedName: Bool = false
     var notes: String?
     var isPinned: Bool = false
 

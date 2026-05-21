@@ -22,12 +22,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     var backgroundSessionCompletionHandler: (() -> Void)?
 
     override init() {
-        let schema = Schema([
+        // Synced models live in the default store and optionally back onto the user's private
+        // CloudKit database. The LibriVox catalog cache (20k rows) is in a separate store and
+        // never syncs — it refreshes from the LibriVox API on its own cadence.
+        let syncedSchema = Schema([
             Audiobook.self,
             AudioTrack.self,
             Moment.self,
-            LibriVoxBook.self,
             ReadingSession.self,
+        ])
+        let localSchema = Schema([
+            LibriVoxBook.self,
         ])
 
         let supportURL = FileManager.default.urls(
@@ -35,12 +40,32 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             in: .userDomainMask
         ).first!
         try? FileManager.default.createDirectory(at: supportURL, withIntermediateDirectories: true)
-        let storeURL = supportURL.appendingPathComponent("default.store")
+        let syncedStoreURL = supportURL.appendingPathComponent("default.store")
+        let localStoreURL = supportURL.appendingPathComponent("librivox-catalog.store")
 
-        let modelConfiguration = ModelConfiguration(url: storeURL)
+        let syncEnabled = IcloudSyncGate.isEnabled()
+        let syncedConfiguration = ModelConfiguration(
+            "synced",
+            schema: syncedSchema,
+            url: syncedStoreURL,
+            cloudKitDatabase: syncEnabled ? .private(IcloudSyncGate.containerIdentifier) : .none
+        )
+        let localConfiguration = ModelConfiguration(
+            "local",
+            schema: localSchema,
+            url: localStoreURL,
+            cloudKitDatabase: .none
+        )
 
         do {
-            self.modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            self.modelContainer = try ModelContainer(
+                for: Audiobook.self,
+                AudioTrack.self,
+                Moment.self,
+                ReadingSession.self,
+                LibriVoxBook.self,
+                configurations: syncedConfiguration, localConfiguration
+            )
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
@@ -48,6 +73,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         self.freeBookDownloader = FreeBookDownloadService()
         super.init()
         AppDelegate.shared = self
+
+        FingerprintBackfillService.runIfNeeded(modelContainer: modelContainer)
+        OrphanDetectionService.runIfNeeded(modelContainer: modelContainer)
 
         #if DEBUG
         Purchases.logLevel = .info

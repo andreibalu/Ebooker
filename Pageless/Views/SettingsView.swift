@@ -23,6 +23,10 @@ struct SettingsView: View {
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
+    @AppStorage(IcloudSyncGate.preferenceKey) private var iCloudSyncEnabled = false
+
+    @State private var showRelaunchHint = false
+    @State private var hasUbiquityIdentity = IcloudSyncGate.hasUbiquityIdentity()
 
     /// Only fully-unsupported hardware shows the static "compatible device required" row.
     /// `.needsActivation` and `.needsIOSUpgrade` users still land in `AISettingsView` so they
@@ -130,6 +134,42 @@ struct SettingsView: View {
                             caption: "How far the \u{21AA} button jumps ahead",
                             valueTitle: SkipIntervalOption(rawValue: skipForwardSeconds)?.title ?? ""
                         )
+                    }
+                }
+
+                Section {
+                    Toggle(isOn: $iCloudSyncEnabled) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Sync library with iCloud")
+                            Text(iCloudCaption)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .disabled(!hasUbiquityIdentity)
+                    .onChange(of: iCloudSyncEnabled) { _, _ in
+                        showRelaunchHint = true
+                    }
+
+                    NavigationLink {
+                        CloudLibraryView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Cloud Library")
+                            Text("Restore books that came down from iCloud")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("iCloud Sync")
+                } footer: {
+                    if !hasUbiquityIdentity {
+                        Text("Sign in to iCloud in System Settings to enable sync.")
+                    } else if showRelaunchHint {
+                        Text("Quit and reopen Unpaged to apply the iCloud change.")
+                    } else {
+                        Text("Syncs library titles, progress, moments, recaps, EQ, and listening history privately to your iCloud account. Audio files stay on each device.")
                     }
                 }
 
@@ -299,6 +339,13 @@ struct SettingsView: View {
             return "\(aiEntitlement.trialUsesRemaining) free tries left · Unlock for \(price)"
         }
         return "Free tries used up · Unlock for \(price)"
+    }
+
+    private var iCloudCaption: String {
+        if !hasUbiquityIdentity {
+            return "iCloud is not signed in on this device."
+        }
+        return iCloudSyncEnabled ? "Library data syncs to your iCloud." : "Off — your library stays only on this device."
     }
 
     private var aiTeaserSublineAccent: Bool {

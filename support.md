@@ -1,6 +1,6 @@
 # Unpaged — Support
 
-_Last updated: May 18, 2026_
+_Last updated: May 21, 2026_
 
 Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
@@ -62,7 +62,16 @@ Long-press the book cover in your library and choose **Delete**. This removes al
 
 ### Will my bookmarks and progress sync to other devices?
 
-Not currently. Everything stays on the device where you created it. iCloud sync is on the roadmap.
+Yes — opt-in iCloud sync is built in. Open **Settings** inside Unpaged and turn on **Sync library with iCloud**. The first time you toggle it on you'll be asked to quit and reopen the app so the new iCloud-backed store takes effect. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ.
+
+### How do I restore my library on a new iPhone (or after reinstalling)?
+
+1. Sign in to the same iCloud account on the new device and install Unpaged.
+2. Open **Settings → Sync library with iCloud** and turn it on. Within a minute or two your library titles and metadata will appear.
+3. Open **Settings → Cloud Library** to see every book waiting to be re-acquired:
+   - **Free books** — tap **Stream** to start listening immediately, or open the book and re-download for offline listening. Your bookmarks, progress, EQ, and recaps are already restored.
+   - **Your own imports** — tap **Locate…**, pick the same audio file from Files / iCloud Drive, and Unpaged will fingerprint-match it. If the file matches, your bookmarks and progress flow straight back onto it. If it doesn't match exactly, you'll see a warning and can still adopt the file if you're confident it's the right book.
+4. You can also just re-import a book the normal way (tap **+** in the library) — if the file matches an iCloud copy, Unpaged offers to restore it for you on the spot.
 
 ## Troubleshooting
 

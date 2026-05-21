@@ -92,7 +92,7 @@ struct ContentView: View {
             allowedContentTypes: [.audio],
             allowsMultipleSelection: true
         ) { result in
-            viewModel.handleImportSelection(result)
+            viewModel.handleImportSelection(result, modelContext: modelContext)
         }
         .sheet(item: $viewModel.pendingImport, onDismiss: {
             viewModel.releaseSecurityScopedAccess()
@@ -102,6 +102,21 @@ struct ContentView: View {
                 try viewModel.importAudiobook(pending, title: title, author: author, modelContext: modelContext)
                 onboarding.notifyBookImported()
             }
+        }
+        .sheet(item: $viewModel.restoreMatch) { candidate in
+            RestoreMatchSheet(
+                candidate: candidate,
+                onRestore: {
+                    viewModel.adoptRestoreMatch(modelContext: modelContext)
+                    onboarding.notifyBookImported()
+                },
+                onAddAsNew: {
+                    viewModel.dismissRestoreMatchAndAddAsNew()
+                },
+                onCancel: {
+                    viewModel.cancelRestoreMatch()
+                }
+            )
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(onRefreshCatalog: {

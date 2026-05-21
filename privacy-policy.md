@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: May 17, 2026_
+_Last updated: May 21, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Balu. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, transmit, sell, or share any personal data about you.**
 
@@ -25,6 +25,23 @@ This data is stored in the app's private container on your iPhone. Unpaged does 
 | **Speech Recognition** | Transcribing audiobook moments, generating AI moment names, and converting CarPlay voice queries into text. | Speech recognition uses Apple's on-device model. No transcripts are sent to Unpaged servers (there are none). |
 
 If you decline these permissions, the relevant features (CarPlay voice search, AI moment naming) are disabled. The rest of the app continues to work.
+
+## iCloud Sync (optional)
+
+Unpaged offers an opt-in iCloud Sync feature you can enable in Settings. When on, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
+
+- Audiobook titles, authors, cover art, and your favorite/finished flags
+- Per-book progress, playback rate, equalizer state, and progress recaps
+- Bookmarks ("moments"), including any transcripts, notes, AI-generated names, categories, moods, quote lines, and character lists you've captured
+- Your listening-session history (per-day, per-hour aggregates) that powers the Reading Activity heatmap
+- For free books: the LibriVox catalog ID and remote audio URLs so the book can be re-streamed or re-downloaded on another device
+- For your own imports: a short content fingerprint (a SHA-256 digest derived from a small portion of each audio file) used solely to recognize the same file when you re-import it on another device
+
+The audio files themselves are **never** uploaded — they stay on each device. Audio you imported continues to be local-only; on a new device you re-add the file and Unpaged matches it to the synced book record using the fingerprint described above.
+
+Sync is off by default and is gated by your iCloud account on the device. When sync is off, Unpaged behaves exactly as the original local-only experience. You can turn sync off at any time in Settings; doing so stops further uploads but does not delete previously synced data from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
+
+Apple's [iCloud privacy](https://www.apple.com/legal/privacy/data/en/icloud/) covers transport, storage, and access on Apple's side. Unpaged never sees a backend copy of this data — there is no Unpaged server.
 
 ## Apple Intelligence features
 

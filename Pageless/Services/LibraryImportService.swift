@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -26,6 +27,9 @@ struct TrackImportPreview: Identifiable {
     let title: String
     let originalFileName: String
     let duration: Double
+    /// SHA-256 hex digest used to auto-match against an orphan cloud-synced book on re-import.
+    /// Computed during `prepareImport`; nil when the file can't be read for fingerprinting.
+    let contentFingerprint: String?
 }
 
 enum LibraryImportError: LocalizedError {
@@ -74,13 +78,15 @@ enum LibraryImportService {
 
             let embeddedTitle = metadata.title?.trimmingCharacters(in: .whitespacesAndNewlines)
             let trackTitle = (embeddedTitle?.isEmpty == false ? embeddedTitle! : url.deletingPathExtension().lastPathComponent)
+            let fingerprint = await fingerprint(url: url, durationSeconds: duration)
 
             previews.append(
                 TrackImportPreview(
                     sourceURL: url,
                     title: trackTitle,
                     originalFileName: url.lastPathComponent,
-                    duration: duration
+                    duration: duration,
+                    contentFingerprint: fingerprint
                 )
             )
         }
@@ -160,6 +166,7 @@ enum LibraryImportService {
                 duration: track.duration,
                 audiobook: audiobook
             )
+            savedTrack.contentFingerprint = track.contentFingerprint
 
             audiobook.tracks.append(savedTrack)
             modelContext.insert(savedTrack)
@@ -235,6 +242,60 @@ enum LibraryImportService {
         }
 
         return firstURL.deletingPathExtension().lastPathComponent
+    }
+
+    // MARK: - Content fingerprint (iCloud auto-match)
+
+    /// SHA-256 hex digest of (first 1MB || last 1MB || u64LE(fileSize) || u64LE(durationMs)).
+    /// Files at most 2MB get hashed in full. Returns nil if the file can't be read.
+    /// Off the main thread — called from `prepareImport` and from the orphan-match probe.
+    static func fingerprint(url: URL, durationSeconds: Double? = nil) async -> String? {
+        return await Task.detached(priority: .utility) { () -> String? in
+            let accessed = url.startAccessingSecurityScopedResource()
+            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+            defer { try? handle.close() }
+
+            let size: UInt64
+            do { size = try handle.seekToEnd() } catch { return nil }
+            do { try handle.seek(toOffset: 0) } catch { return nil }
+
+            let chunkSize: UInt64 = 1024 * 1024 // 1MB
+            var hasher = SHA256()
+
+            if size <= chunkSize * 2 {
+                if let data = try? handle.read(upToCount: Int(size)) {
+                    hasher.update(data: data)
+                }
+            } else {
+                if let head = try? handle.read(upToCount: Int(chunkSize)) {
+                    hasher.update(data: head)
+                }
+                do { try handle.seek(toOffset: size - chunkSize) } catch { return nil }
+                if let tail = try? handle.read(upToCount: Int(chunkSize)) {
+                    hasher.update(data: tail)
+                }
+            }
+
+            var sizeLE = size.littleEndian
+            withUnsafeBytes(of: &sizeLE) { hasher.update(bufferPointer: $0) }
+
+            let duration = durationSeconds ?? probeDurationSync(url: url)
+            var durationMs = UInt64(max(0, duration * 1000)).littleEndian
+            withUnsafeBytes(of: &durationMs) { hasher.update(bufferPointer: $0) }
+
+            return hasher.finalize().compactMap { String(format: "%02x", $0) }.joined()
+        }.value
+    }
+
+    /// Best-effort blocking duration probe used when a fingerprint is being computed for an existing
+    /// file (e.g. backfill) without going back to AVURLAsset's async API.
+    private static func probeDurationSync(url: URL) -> Double {
+        let asset = AVURLAsset(url: url)
+        let cmtime = asset.duration
+        let seconds = CMTimeGetSeconds(cmtime)
+        return seconds.isFinite ? max(seconds, 0) : 0
     }
 
     private static func measureDuration(for url: URL) async throws -> Double {
