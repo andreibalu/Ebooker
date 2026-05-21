@@ -7,6 +7,7 @@ import Testing
 import Foundation
 @testable import Pageless
 
+@MainActor
 struct FreeBookCatalogServiceTests {
 
     // MARK: - Seed validation (no network needed)

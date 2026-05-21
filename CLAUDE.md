@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Xcode scheme**: `Pageless`
 - **Source module folder**: `Pageless/`
 - **Bundle identifier prefix**: `andreibaludev.Pageless`
-- **Current marketing version**: see `VERSION` (1.1)
+- **Current marketing version**: see `VERSION` (1.2)
 
 The three names are intentional historical layers — do not "fix" them. New user-facing copy should say "Unpaged".
 
