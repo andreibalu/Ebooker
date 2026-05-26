@@ -26,6 +26,7 @@ struct SettingsView: View {
     @AppStorage(IcloudSyncGate.preferenceKey) private var iCloudSyncEnabled = false
 
     @State private var showRelaunchHint = false
+    @State private var showRelaunchAlert = false
     @State private var hasUbiquityIdentity = IcloudSyncGate.hasUbiquityIdentity()
 
     /// Only fully-unsupported hardware shows the static "compatible device required" row.
@@ -147,8 +148,11 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(!hasUbiquityIdentity)
-                    .onChange(of: iCloudSyncEnabled) { _, _ in
+                    .onChange(of: iCloudSyncEnabled) { _, newValue in
                         showRelaunchHint = true
+                        if newValue {
+                            showRelaunchAlert = true
+                        }
                     }
 
                     NavigationLink {
@@ -261,6 +265,11 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .background(Color.cream.ignoresSafeArea())
+            .alert("Relaunch Required", isPresented: $showRelaunchAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Quit and reopen Unpaged to finish turning on iCloud sync. Your library will appear shortly after.")
+            }
             .navigationDestination(isPresented: $navigateToAI) {
                 AISettingsView()
             }

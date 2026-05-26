@@ -66,7 +66,7 @@ The project has no external package dependencies — it uses only native Apple f
 Pageless/
 ├── App/
 │   ├── PagelessApp.swift          @main; ModelContainer, scene wiring, env injection, voice-permission priming, Siri shortcut handoff
-│   ├── AppDelegate.swift          Owns ModelContainer, AudioPlayerManager, FreeBookDownloadService; background URLSession handler; CarPlay scene config
+│   ├── AppDelegate.swift          Owns split ModelContainer (synced+local configs), AudioPlayerManager, FreeBookDownloadService; background URLSession handler; CarPlay scene config; observes NSPersistentCloudKitContainer.eventChangedNotification to re-run orphan detection after CloudKit import batches
 │   └── CarPlaySceneDelegate.swift CarPlay interface controller connector
 ├── AppIntents/
 │   └── AudiobookIntents.swift     `PlayLatestBookIntent` + `UnpagedAppShortcuts` provider ("Play Latest Book")
@@ -74,7 +74,7 @@ Pageless/
 │   └── AIProductID.swift          StoreKit product ID constant for AI unlock
 ├── Models/
 │   ├── Audiobook.swift            SwiftData @Model; playback, progress marker, recap, EQ, streaming-vs-downloaded, free-book metadata
-│   ├── AudioTrack.swift           SwiftData @Model; per-track metadata (supports remote URLs for streaming)
+│   ├── AudioTrack.swift           SwiftData @Model; per-track metadata (supports remote URLs for streaming); `contentFingerprint` (SHA-256 hex) for iCloud orphan matching
 │   ├── Moment.swift               SwiftData @Model; bookmarks with AI metadata
 │   ├── MomentEnums.swift          `MomentCategory` (10 types), `MomentMood` (8 types)
 │   ├── PlaybackSettings.swift     `LibrarySortOption`, `SkipIntervalOption`, `ResumeBacktrackOption`, `MomentBacktrackOption`, `SleepTimerOption`
@@ -102,9 +102,11 @@ Pageless/
 │   ├── MomentEditSheet.swift      Modal for naming moments + AI-generated metadata display
 │   ├── MomentFilterSheet.swift    Category/character/mood filtering UI
 │   ├── ImportAudiobookSheet.swift Import workflow with file preview
-│   ├── SettingsView.swift         Playback preferences
+│   ├── SettingsView.swift         Playback preferences + iCloud Sync section (toggle + Cloud Library link)
 │   ├── AISettingsView.swift       AI feature toggles, trial management, IAP unlock
 │   ├── CoverCropView.swift        Image cropping interface for cover art
+│   ├── CloudLibraryView.swift     iCloud orphan recovery: own-book "Locate…" file picker + free-book one-tap stream restore
+│   ├── RestoreMatchSheet.swift    Shown on import when fingerprint matches a synced orphan; prompts "Restore from iCloud" vs "Add as new"
 │   ├── GeneratedCoverView.swift   Deterministic letter-template cover used as universal fallback when `coverArtData == nil`; also renders to UIImage for MPNowPlayingInfoCenter / CarPlay artwork
 │   ├── EqualizerSheet.swift       5-band EQ + preamp + presets UI; mounted from player
 │   ├── FreeBooks/
@@ -152,7 +154,11 @@ Pageless/
 │   ├── VoiceSearchPermissions.swift        Centralised mic + speech permission gating (primed at app launch)
 │   ├── AudiobookSavedProgressResume.swift  Resume-from-bookmark logic (enum)
 │   ├── AppleIntelligenceCapability.swift   Runtime AI feature detection; iOS-18-safe (internal `#available(iOS 26, *)` branches, returns `.unsupportedDevice` below iOS 26)
-│   └── AIEntitlementStore.swift            StoreKit 2 IAP + trial-use tracking
+│   ├── AIEntitlementStore.swift            StoreKit 2 IAP + trial-use tracking
+│   ├── IcloudSyncGate.swift                Opt-in iCloud sync gate: reads `iCloudSyncEnabled` UserDefaults toggle + ubiquity identity check; holds CloudKit container ID
+│   ├── FingerprintBackfillService.swift    One-shot background pass to SHA-256-fingerprint pre-existing tracks for orphan matching after upgrade
+│   ├── OrphanDetectionService.swift        At launch (and after each CloudKit import batch), flips `isDownloaded=false` for books whose storage folder is absent on this device
+│   └── OrphanRestoreService.swift          Fingerprint-matches a pending import to a synced orphan and rewrites its `AudioTrack` records in-place, preserving moments/progress/EQ
 └── Utilities/
     ├── TimeFormatter.swift                 Clock string formatting, duration summaries
     ├── BookDescriptionFormatting.swift     HTML fragment → plain text (entity decoding, block breaks)
@@ -174,6 +180,8 @@ PagelessTests/
 │   ├── EqualizerSettingsTests.swift
 │   ├── FreeBookCatalogEntryTests.swift
 │   └── MomentTests.swift
+├── ModelTests/
+│   └── SchemaCompatibilityTests.swift   CloudKit schema constraint checks (no `.unique` on synced models, explicit inverses)
 ├── ServiceTests/
 │   ├── AudioEqualizerServiceTests.swift
 │   ├── AudioPlayerManagerSkipTests.swift
@@ -181,9 +189,11 @@ PagelessTests/
 │   ├── AudiobookSavedProgressResumeTests.swift
 │   ├── FreeBookCatalogServiceTests.swift
 │   ├── FreeBookDownloadServiceTests.swift
+│   ├── LibraryImportFingerprintTests.swift  SHA-256 fingerprint generation + backfill logic
 │   ├── MomentNamingServiceLogicTests.swift
 │   ├── NowPlayingUpdaterTests.swift
 │   ├── OnboardingManagerTests.swift
+│   ├── OrphanRestoreServiceTests.swift      Orphan adopt / fingerprint matching
 │   ├── PlaybackPersistenceTests.swift
 │   ├── RecapServiceLogicTests.swift
 │   └── SiriIntentTests.swift
@@ -221,7 +231,7 @@ Audiobook (@Model final)
 └── @Relationship: tracks[] + moments[] (both cascade delete)
 
 AudioTrack (@Model final)
-└── id, title, originalFileName, storedFileName, orderIndex, duration, audiobook?
+└── id, title, originalFileName, storedFileName, orderIndex, duration, contentFingerprint? (SHA-256 hex, used for iCloud orphan matching), audiobook?
 
 Moment (@Model final)
 ├── id, trackIndex, time, createdAt
@@ -240,7 +250,9 @@ ReadingSession (@Model final)
 └── createdAt
 ```
 
-**Schema evolution**: New columns use private backing fields with computed getters/setters (e.g., `_isFavorite`, `_isFreeBook`, `_isDownloaded`, `_progressRecap*`, `_eqBandGainsJSON`, `_eqPresetRaw`) for SwiftData lightweight migration. All post-launch fields are nullable on disk and given safe defaults in the computed accessor.
+**Schema evolution**: New columns use private backing fields with computed getters/setters (e.g., `_isFavorite`, `_isFreeBook`, `_isDownloaded`, `_progressRecap*`, `_eqBandGainsJSON`, `_eqPresetRaw`, `_contentFingerprint`) for SwiftData lightweight migration. All post-launch fields are nullable on disk and given safe defaults in the computed accessor.
+
+**CloudKit schema constraint**: CloudKit does not support `@Attribute(.unique)` or relationship `originalName` without explicit inverses. All four synced models (`Audiobook`, `AudioTrack`, `Moment`, `ReadingSession`) have explicit relationship inverses and no `.unique` attributes. `LibriVoxBook` (local store only) retains `.unique` on its `id` field. Do not add `.unique` to any synced model.
 
 ## Central State: `AudioPlayerManager`
 
@@ -326,6 +338,18 @@ The app contains **two independent free-book paths** that coexist by design:
 - `OnboardingManager` — 4 phases: `phase1`, `waitingForBook`, `phase2`, `completed` (UserDefaults persistence)
 - `OnboardingStep` — 7 steps: `p1AddButton`, `p1Settings`, `p1AILink`, `p1AIPage`, `p1DeviceCapability`, `p2Progress`, `p2Moments`
 - `SpotlightOverlayView` — spotlight tutorial overlay rendered over content
+
+### iCloud Sync
+
+Library metadata, progress, moments, EQ configuration, and reading sessions sync across devices via CloudKit private database. Audio files are not synced — they must be re-acquired on each device.
+
+- **`IcloudSyncGate`** — single decision point: reads the `iCloudSyncEnabled` UserDefaults toggle AND checks `FileManager.ubiquityIdentityToken`. When disabled, `AppDelegate` builds the SwiftData container with `.none` database. Container ID: `iCloud.andreibaludev.Pageless`.
+- **Split `ModelContainer`** — `AppDelegate` creates two configurations: `"synced"` (Audiobook/AudioTrack/Moment/ReadingSession → CloudKit private DB when enabled) and `"local"` (LibriVoxBook → never synced).
+- **Orphan detection** — `OrphanDetectionService` runs at launch and after every `NSPersistentCloudKitContainer.eventChangedNotification` import event. Any book marked `isDownloaded = true` whose storage folder is absent gets flipped to `isDownloaded = false`, making it a recoverable orphan.
+- **Fingerprinting** — `LibraryImportService` computes a SHA-256 content fingerprint (truncated to 16 bytes of audio data) for each imported track, stored on `AudioTrack.contentFingerprint`. `FingerprintBackfillService` backfills existing tracks on first launch after upgrade.
+- **Restore on re-import** — when a user imports files on a new device, `LibraryViewModel` calls `OrphanRestoreService.findMatch` to fingerprint-compare against orphan candidates. A match triggers `RestoreMatchSheet` ("Restore from iCloud" / "Add as new"). `OrphanRestoreService.adopt` rewrites the orphan's `AudioTrack` records in-place, preserving all moments/progress/EQ.
+- **`CloudLibraryView`** — manual recovery screen (Settings → Cloud Library). Own-book orphans get a "Locate…" file picker; free-book orphans get a "Stream" button that re-enables streaming.
+- **`isStreamingOnly` tiebreaker** — `Audiobook.isStreamingOnly` excludes own-book orphans (`!isDownloaded && !isFreeBook`) so they appear in Cloud Library, not treated as streaming books.
 
 ### CarPlay
 - `CarPlaySceneDelegate` — connects CarPlay scene to `CarPlayCoordinator`

@@ -21,6 +21,7 @@ struct CloudLibraryView: View {
     @State private var fileImporterPresented = false
     @State private var alertMessage: String?
     @State private var streamRestoreInFlight: Set<UUID> = []
+    @State private var navigateToBook: Audiobook?
 
     private var ownOrphans: [Audiobook] {
         allBooks
@@ -63,7 +64,7 @@ struct CloudLibraryView: View {
 
             if ownOrphans.isEmpty && freeOrphans.isEmpty && iCloudSyncEnabled {
                 Section {
-                    Text("Nothing to restore — every book in your library has its audio on this device.")
+                    Text("Empty, no books missing from iCloud.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
@@ -72,6 +73,9 @@ struct CloudLibraryView: View {
         }
         .navigationTitle("Cloud Library")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $navigateToBook) { book in
+            AudiobookDetailView(audiobook: book) {}
+        }
         .fileImporter(
             isPresented: $fileImporterPresented,
             allowedContentTypes: [.audio],
@@ -206,6 +210,7 @@ struct CloudLibraryView: View {
                     }
                     _ = try OrphanRestoreService.adopt(orphan: book, pending: pending, modelContext: modelContext)
                     pickingForBook = nil
+                    navigateToBook = book
                 } catch {
                     alertMessage = error.localizedDescription
                 }
