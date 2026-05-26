@@ -99,17 +99,13 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
 
-        #if DEBUG
-        Purchases.logLevel = .info
-        let rcAPIKey = "test_qeiEKewUdXbJfItZAOSWMKUiCcz"
-        #else
-        let rcAPIKey = "appl_fLJZEZIjoyasIHSFeJyYlqHmfzx"
-        #endif
+        #if !DEBUG
         Purchases.configure(
-            with: Configuration.Builder(withAPIKey: rcAPIKey)
+            with: Configuration.Builder(withAPIKey: "appl_fLJZEZIjoyasIHSFeJyYlqHmfzx")
                 .with(purchasesAreCompletedBy: .myApp, storeKitVersion: .storeKit2)
                 .build()
         )
+        #endif
     }
 
     nonisolated func application(
