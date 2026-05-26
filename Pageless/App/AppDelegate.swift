@@ -4,6 +4,7 @@
 //
 
 import CarPlay
+import CoreData
 import OSLog
 import RevenueCat
 import SwiftData
@@ -20,6 +21,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     let audioPlayer: AudioPlayerManager
     let freeBookDownloader: FreeBookDownloadService
     var backgroundSessionCompletionHandler: (() -> Void)?
+    private var cloudKitImportObserver: NSObjectProtocol?
 
     override init() {
         // Synced models live in the default store and optionally back onto the user's private
@@ -76,6 +78,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
         FingerprintBackfillService.runIfNeeded(modelContainer: modelContainer)
         OrphanDetectionService.runIfNeeded(modelContainer: modelContainer)
+
+        // Re-run orphan detection whenever CloudKit finishes an import. Books synced from
+        // iCloud arrive with isDownloaded = true; we need to flip that flag for any book
+        // whose audio files don't exist locally, or they'll appear in the main library.
+        if syncEnabled {
+            cloudKitImportObserver = NotificationCenter.default.addObserver(
+                forName: NSPersistentCloudKitContainer.eventChangedNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] notification in
+                guard let self,
+                      let event = notification.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
+                        as? NSPersistentCloudKitContainer.Event,
+                      event.type == .import,
+                      event.endDate != nil,
+                      event.succeeded
+                else { return }
+                OrphanDetectionService.runIfNeeded(modelContainer: self.modelContainer)
+            }
+        }
 
         #if DEBUG
         Purchases.logLevel = .info

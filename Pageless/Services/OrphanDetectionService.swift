@@ -39,12 +39,13 @@ enum OrphanDetectionService {
             if book.tracks.contains(where: { $0.remoteURL != nil && $0.storedFileName.isEmpty }) { continue }
 
             let folderURL = libraryURL.appendingPathComponent(book.folderName, isDirectory: true)
-            let exists = fm.fileExists(atPath: folderURL.path())
-            let hasFiles: Bool = {
-                guard exists else { return false }
-                let contents = (try? fm.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? []
-                return !contents.isEmpty
-            }()
+            let exists = fm.fileExists(atPath: folderURL.path(percentEncoded: false))
+            let contents = exists
+                ? ((try? fm.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? [])
+                : []
+            let hasFiles = !contents.isEmpty
+
+            log.info("Inspect '\(book.title, privacy: .public)' folder=\(folderURL.path(), privacy: .public) exists=\(exists, privacy: .public) hasFiles=\(hasFiles, privacy: .public) fileCount=\(contents.count, privacy: .public) trackCount=\(book.tracks.count, privacy: .public)")
 
             if !hasFiles {
                 book.isDownloaded = false

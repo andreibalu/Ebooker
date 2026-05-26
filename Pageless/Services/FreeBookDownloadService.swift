@@ -136,7 +136,7 @@ final class FreeBookDownloadService: FreeBookDownloading {
             let storedFileName = String(format: "%03d", context.trackEntry.orderIndex + 1) + "-" + context.trackEntry.fileName
             let destinationURL = folderURL.appendingPathComponent(storedFileName)
 
-            if FileManager.default.fileExists(atPath: destinationURL.path()) {
+            if FileManager.default.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
             try FileManager.default.moveItem(at: location, to: destinationURL)

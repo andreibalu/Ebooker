@@ -147,11 +147,24 @@ final class Audiobook: Identifiable {
         return String(data: data, encoding: .utf8)
     }
 
-    @Relationship(deleteRule: .cascade, inverse: \AudioTrack.audiobook)
-    var tracks: [AudioTrack] = []
+    // CloudKit requires to-many relationships to be optional. We keep the public API
+    // non-optional via computed wrappers so existing callsites don't have to change.
+    // `originalName` preserves data from the pre-iCloud store where these were named `tracks`/`moments`.
+    @Relationship(deleteRule: .cascade, originalName: "tracks", inverse: \AudioTrack.audiobook)
+    private var _tracks: [AudioTrack]? = []
 
-    @Relationship(deleteRule: .cascade, inverse: \Moment.audiobook)
-    var moments: [Moment] = []
+    @Relationship(deleteRule: .cascade, originalName: "moments", inverse: \Moment.audiobook)
+    private var _moments: [Moment]? = []
+
+    var tracks: [AudioTrack] {
+        get { _tracks ?? [] }
+        set { _tracks = newValue }
+    }
+
+    var moments: [Moment] {
+        get { _moments ?? [] }
+        set { _moments = newValue }
+    }
 
     init(
         title: String,
@@ -187,7 +200,7 @@ final class Audiobook: Identifiable {
         self._isFreeBook = isFreeBook
         self._catalogId = catalogId
         self._isDownloaded = isDownloaded
-        self.tracks = tracks
+        self._tracks = tracks
     }
 
     var sortedTracks: [AudioTrack] {

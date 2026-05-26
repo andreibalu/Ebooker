@@ -185,7 +185,7 @@ enum LibraryImportService {
     ) throws {
         if deleteFiles {
             let folderURL = try storageFolderURL(for: audiobook.folderName)
-            if FileManager.default.fileExists(atPath: folderURL.path()) {
+            if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
                 try FileManager.default.removeItem(at: folderURL)
             }
         }
@@ -211,7 +211,7 @@ enum LibraryImportService {
             .appendingPathComponent("Audiobooks", isDirectory: true)
             .appendingPathComponent(audiobook.folderName, isDirectory: true)
 
-        guard FileManager.default.fileExists(atPath: folderURL.path()) else { return nil }
+        guard FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) else { return nil }
 
         var totalBytes: Int64 = 0
         let enumerator = FileManager.default.enumerator(
@@ -354,7 +354,7 @@ enum LibraryImportService {
 
     private static func copyFile(from sourceURL: URL, to destinationURL: URL) throws {
         try withSecurityScopedAccess(to: sourceURL) {
-            if FileManager.default.fileExists(atPath: destinationURL.path()) {
+            if FileManager.default.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
                 try FileManager.default.removeItem(at: destinationURL)
             }
 

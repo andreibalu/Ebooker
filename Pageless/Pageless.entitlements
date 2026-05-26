@@ -12,9 +12,5 @@
 	<array>
 		<string>CloudKit</string>
 	</array>
-	<key>com.apple.developer.ubiquity-container-identifiers</key>
-	<array>
-		<string>iCloud.andreibaludev.Pageless</string>
-	</array>
 </dict>
 </plist>

@@ -123,7 +123,11 @@ enum OrphanRestoreService {
         }
 
         try modelContext.save()
-        log.info("Adopted orphan '\(orphan.title, privacy: .public)' with \(rewrittenTracks.count, privacy: .public) track(s)")
+        let firstStored = rewrittenTracks.first?.storedFileName ?? ""
+        let firstExists = !firstStored.isEmpty && FileManager.default.fileExists(
+            atPath: folderURL.appendingPathComponent(firstStored).path(percentEncoded: false)
+        )
+        log.info("Adopted orphan '\(orphan.title, privacy: .public)' folder=\(folderURL.path(), privacy: .public) tracks=\(rewrittenTracks.count, privacy: .public) firstFileExists=\(firstExists, privacy: .public) isDownloaded=\(orphan.isDownloaded, privacy: .public)")
         return orphan
     }
 
@@ -156,7 +160,7 @@ enum OrphanRestoreService {
         let accessed = sourceURL.startAccessingSecurityScopedResource()
         defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
 
-        if FileManager.default.fileExists(atPath: destinationURL.path()) {
+        if FileManager.default.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
             try FileManager.default.removeItem(at: destinationURL)
         }
         try FileManager.default.copyItem(at: sourceURL, to: destinationURL)

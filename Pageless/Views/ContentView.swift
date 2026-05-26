@@ -500,11 +500,15 @@ struct ContentView: View {
     // MARK: - Computed
 
     private func displayedBooks(for tab: LibraryTab) -> [Audiobook] {
+        // Owned books synced from iCloud may exist without their audio on this device.
+        // Hide those from the main grid — they only surface in Cloud Library for manual restore.
+        // Free books stay visible: they keep remote URLs after sync and remain streamable.
+        let playable = audiobooks.filter { $0.isDownloaded || $0.isFreeBook }
         let base: [Audiobook]
         if tab == .favorites {
-            base = audiobooks.filter { $0.isFavorite }
+            base = playable.filter { $0.isFavorite }
         } else {
-            base = Array(audiobooks)
+            base = playable
         }
         return viewModel.sorted(base, by: sortOptionRawValue)
     }

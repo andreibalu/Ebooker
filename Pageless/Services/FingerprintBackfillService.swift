@@ -36,7 +36,7 @@ enum FingerprintBackfillService {
             if track.remoteURL != nil, (track.storedFileName.isEmpty) { continue }
             guard let book = track.audiobook else { continue }
             guard let fileURL = try? LibraryImportService.fileURL(for: track, in: book),
-                  FileManager.default.fileExists(atPath: fileURL.path()) else {
+                  FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else {
                 continue
             }
             if let hex = await LibraryImportService.fingerprint(url: fileURL, durationSeconds: track.duration) {

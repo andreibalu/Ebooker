@@ -63,7 +63,7 @@ enum LibriVoxDownloadService {
 
                 let (tempURL, _) = try await URLSession.shared.download(from: remoteURL)
                 // Move from temp location (URLSession cleans up temp automatically on move)
-                if FileManager.default.fileExists(atPath: destURL.path()) {
+                if FileManager.default.fileExists(atPath: destURL.path(percentEncoded: false)) {
                     try FileManager.default.removeItem(at: destURL)
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destURL)
@@ -128,7 +128,7 @@ enum LibriVoxDownloadService {
                 let destURL = folderURL.appendingPathComponent(storedFileName)
 
                 let (tempURL, _) = try await URLSession.shared.download(from: remoteURL)
-                if FileManager.default.fileExists(atPath: destURL.path()) {
+                if FileManager.default.fileExists(atPath: destURL.path(percentEncoded: false)) {
                     try FileManager.default.removeItem(at: destURL)
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destURL)
