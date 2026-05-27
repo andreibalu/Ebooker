@@ -181,7 +181,7 @@ struct StatsHeroSection: View {
             StatsEyebrow(text: eyebrowText)
                 .revealOnAppear(delay: 0.05, y: 12)
 
-            SerifDisplay(text: "Page by quiet\npage.", size: 38)
+            SerifDisplay(text: "Page by page.", size: 38)
                 .lineSpacing(2)
                 .padding(.top, 8)
                 .multilineTextAlignment(.leading)
