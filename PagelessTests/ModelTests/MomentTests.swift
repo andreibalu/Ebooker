@@ -18,7 +18,7 @@ struct MomentTests {
 
     @Test func defaultCategoriesIsEmpty() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -28,7 +28,7 @@ struct MomentTests {
 
     @Test func categoriesRoundTripsThroughJSONStorage() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -40,7 +40,7 @@ struct MomentTests {
 
     @Test func categoriesWithMultipleValues() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -51,7 +51,7 @@ struct MomentTests {
 
     @Test func defaultCharactersIsEmpty() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -61,7 +61,7 @@ struct MomentTests {
 
     @Test func charactersRoundTripsThroughJSONStorage() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -73,7 +73,7 @@ struct MomentTests {
 
     @Test func defaultMoodIsNil() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -83,7 +83,7 @@ struct MomentTests {
 
     @Test func moodRoundTripsThroughRawValue() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book, mood: .mysterious)
@@ -94,7 +94,7 @@ struct MomentTests {
 
     @Test func quoteLineRoundTrips() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book, quoteLine: "She opened the door.")
@@ -105,7 +105,7 @@ struct MomentTests {
 
     @Test func aiGeneratedNameDefaultsFalse() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -115,7 +115,7 @@ struct MomentTests {
 
     @Test func notesDefaultsNil() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -125,7 +125,7 @@ struct MomentTests {
 
     @Test func isPinnedDefaultsFalse() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(trackIndex: 0, time: 1, label: "L", audiobook: book)
@@ -135,7 +135,7 @@ struct MomentTests {
 
     @Test func initSetsAllFieldsCorrectly() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = makeBook(in: context)
         let moment = Moment(

@@ -93,7 +93,7 @@ struct OrphanRestoreServiceTests {
         // The file should now exist in the orphan's folder.
         let folder = try storageFolder(for: orphan.folderName)
         let storedURL = folder.appendingPathComponent(adopted.tracks.first!.storedFileName)
-        #expect(FileManager.default.fileExists(atPath: storedURL.path()))
+        #expect(FileManager.default.fileExists(atPath: storedURL.path(percentEncoded: false)))
 
         // Cleanup
         try? FileManager.default.removeItem(at: folder)
@@ -103,7 +103,7 @@ struct OrphanRestoreServiceTests {
 
     private func makeInMemoryContext() throws -> ModelContext {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self, ReadingSession.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [config])
         return ModelContext(container)
     }

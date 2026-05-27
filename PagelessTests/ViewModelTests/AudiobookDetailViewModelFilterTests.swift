@@ -21,7 +21,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func filterBySingleCategoryRetainsMatchingMoments() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "filter-cat", totalDuration: 100)
         context.insert(book)
@@ -42,7 +42,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func filterByCategoryExcludesNonMatching() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "filter-ex", totalDuration: 100)
         context.insert(book)
@@ -60,7 +60,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func filterByCharacterIsCaseInsensitive() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "filter-char", totalDuration: 100)
         context.insert(book)
@@ -79,7 +79,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func filterByMoodRetainsMatch() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "filter-mood", totalDuration: 100)
         context.insert(book)
@@ -98,7 +98,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func filterByMoodExcludesNonMatch() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "filter-mood-ex", totalDuration: 100)
         context.insert(book)
@@ -114,7 +114,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func combinedCategoryAndMoodFilter() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "filter-combo", totalDuration: 100)
         context.insert(book)
@@ -148,7 +148,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func hasAiAnalyzedMomentsReturnsTrueWithCategories() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "ai-cat", totalDuration: 100)
         context.insert(book)
@@ -161,7 +161,7 @@ struct AudiobookDetailViewModelFilterTests {
 
     @Test func hasAiAnalyzedMomentsReturnsTrueWithMood() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "F", author: "", folderName: "ai-mood", totalDuration: 100)
         context.insert(book)

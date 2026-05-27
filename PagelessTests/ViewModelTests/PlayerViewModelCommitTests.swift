@@ -11,7 +11,7 @@ import Testing
 struct PlayerViewModelCommitTests {
     private func makeContextAndBook() throws -> (ModelContext, Audiobook, AudioTrack) {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true)])
+        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
         let book = Audiobook(title: "Commit Book", author: "", folderName: "commit-vm", totalDuration: 1_000)
         let track = AudioTrack(

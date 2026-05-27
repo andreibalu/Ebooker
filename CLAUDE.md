@@ -34,10 +34,12 @@ After editing, remind the user to push the new content to their public Gist(s) �
 
 Use XcodeBuildMCP tools for all build/run operations:
 
-- **Build & run on simulator**: `mcp__XcodeBuildMCP__build_run_sim` (scheme: `Pageless`)
-- **Build only**: `mcp__XcodeBuildMCP__build_sim`
-- **Run tests**: `mcp__XcodeBuildMCP__test_sim`
+- **Build & run on device**: `mcp__XcodeBuildMCP__build_run_device` (scheme: `Pageless`)
+- **Build only**: `mcp__XcodeBuildMCP__build_device`
+- **Run tests**: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]` (Mac can't handle parallel destinations)
 - **Clean**: `mcp__XcodeBuildMCP__clean`
+
+Only device tools are enabled in this project's MCP profile — there is no `*_sim` variant.
 
 Always call `mcp__XcodeBuildMCP__session_show_defaults` first to verify project/scheme/simulator settings before building.
 
@@ -411,6 +413,7 @@ All enums are `CaseIterable, Identifiable`.
 - **Streaming vs downloaded**: Treat `Audiobook.isStreamingOnly` as load-bearing — anything that touches the on-disk path must check it. Promotion to downloaded goes through `LibriVoxDownloadService`.
 - **Cover fallback**: Any view that displays cover art must fall through to `GeneratedCoverView(title:)` when `coverArtData == nil` — not a gradient + SF Symbol. `NowPlayingUpdater` mirrors this for lock screen / CarPlay artwork via `GeneratedCoverView.renderImage(title:side:)` with a `[title: UIImage]` cache so it doesn't re-render every periodic tick.
 - **CarPlay permission constraint**: Mic + speech permission prompts cannot appear on the CarPlay screen, so `VoiceSearchPermissions.primeIfNeeded()` runs at iPhone launch. Don't add new permission requests that can fire only on CarPlay.
+- **Now-Playing metadata convention** (`NowPlayingUpdater.update`): track title → `MPMediaItemPropertyTitle`, book title → `MPMediaItemPropertyAlbumTitle` (do NOT concatenate author into this), author → `MPMediaItemPropertyArtist`. Always set `MPNowPlayingInfoCenter.default().playbackState` after writing `nowPlayingInfo` — Siri uses it to route pause/resume intents.
 
 ## Testing
 
@@ -420,3 +423,7 @@ Mock implementations live in `PagelessTests/Mocks/`:
 - `MockTranscriptionService`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService`
 
 All protocol-backed services have corresponding mocks for ViewModel tests. New LibriVox-path code is currently exercised through integration-style tests against SwiftData in-memory containers rather than via mocks — if you add a new protocol there, add a matching mock under `PagelessTests/Mocks/`.
+
+**In-memory test containers**: always pass `cloudKitDatabase: .none` to `ModelConfiguration`. The default is `.automatic`, which on device picks up the host app's CloudKit entitlement and triggers CloudKit-shape validation that fails even with everything defaulted — the test bundle's view of the schema differs from production. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one place that intentionally exercises `.private(...)` validation, via a file-backed temp store.
+
+**Hold the container in a local**: `let container = try makeContainer(); let context = container.mainContext` — never `try makeContainer().mainContext`. The container is released immediately and the mainContext crashes the host app at the first fetch.

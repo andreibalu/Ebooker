@@ -38,7 +38,7 @@ struct SiriIntentTests {
     private func makeContainer() throws -> ModelContainer {
         try ModelContainer(
             for: Audiobook.self, AudioTrack.self, Moment.self,
-            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         )
     }
 
@@ -51,12 +51,14 @@ struct SiriIntentTests {
     }
 
     @Test func fetchReturnsNilForEmptyLibrary() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
         #expect(try fetchLatest(from: context) == nil)
     }
 
     @Test func fetchReturnsSingleBook() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
         let book = Audiobook(title: "Only Book", folderName: "only", totalDuration: 100)
         book.lastPlayedAt = Date(timeIntervalSinceNow: -300)
         context.insert(book)
@@ -66,7 +68,8 @@ struct SiriIntentTests {
     }
 
     @Test func fetchSelectsMostRecentlyPlayedBook() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
 
         let older = Audiobook(title: "Older Book", folderName: "older", totalDuration: 100)
         older.lastPlayedAt = Date(timeIntervalSinceNow: -7200) // 2 hours ago
@@ -81,7 +84,8 @@ struct SiriIntentTests {
     }
 
     @Test func fetchSelectsMostRecentAmongManyBooks() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
 
         let dates: [TimeInterval] = [-86400, -3600, -300, -7200, -600]
         for (i, offset) in dates.enumerated() {
@@ -94,7 +98,8 @@ struct SiriIntentTests {
     }
 
     @Test func fetchPreferredPlayedBookOverNeverPlayedBook() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
 
         let neverPlayed = Audiobook(title: "Never Played", folderName: "new", totalDuration: 100)
         // lastPlayedAt = nil
@@ -110,7 +115,8 @@ struct SiriIntentTests {
     }
 
     @Test func fetchLimitIsOne() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
 
         for i in 0..<5 {
             let book = Audiobook(title: "Book \(i)", folderName: "b\(i)", totalDuration: 100)
@@ -134,7 +140,8 @@ struct SiriIntentTests {
     /// progress marker, we must start there — not from `currentTime` (which may be wherever
     /// the playhead was parked, e.g. after scrubbing).
     @Test func siriResumesFromSavedProgressMarkerWhenPresent() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
         let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 300)
         let book = Audiobook(
             title: "Latest",
@@ -157,7 +164,8 @@ struct SiriIntentTests {
     }
 
     @Test func siriFallsBackToStandardPlaybackWhenNoMarker() throws {
-        let context = try makeContainer().mainContext
+        let container = try makeContainer()
+        let context = container.mainContext
         let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 300)
         let book = Audiobook(
             title: "No Marker",

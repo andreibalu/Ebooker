@@ -116,19 +116,18 @@ struct NowPlayingUpdater {
         playbackRate: Double,
         isPlaying: Bool
     ) {
-        var albumTitle = audiobook.title
-        if !audiobook.author.isEmpty {
-            albumTitle += " · \(audiobook.author)"
-        }
-
         var nowPlayingInfo: [String: Any] = [
             MPMediaItemPropertyTitle: track.title,
-            MPMediaItemPropertyAlbumTitle: albumTitle,
+            MPMediaItemPropertyAlbumTitle: audiobook.title,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPMediaItemPropertyPlaybackDuration: duration,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? playbackRate : 0,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? playbackRate : Double(0),
             MPNowPlayingInfoPropertyDefaultPlaybackRate: playbackRate
         ]
+
+        if !audiobook.author.isEmpty {
+            nowPlayingInfo[MPMediaItemPropertyArtist] = audiobook.author
+        }
 
         if let coverArtData = audiobook.coverArtData, let image = UIImage(data: coverArtData) {
             nowPlayingInfo[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
@@ -137,6 +136,7 @@ struct NowPlayingUpdater {
         }
 
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nowPlayingInfo
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
     @MainActor

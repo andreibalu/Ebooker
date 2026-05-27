@@ -10,9 +10,11 @@ import Testing
 
 /// Guardrail: catches accidental reintroduction of `@Attribute(.unique)` on synced models or
 /// missing relationship inverses. Builds the same multi-configuration container shape used by
-/// `AppDelegate` against an in-memory store.
+/// `AppDelegate` — once in-memory (smoke test) and once file-backed with the real CloudKit
+/// `.private(...)` database (validates the synced schema actually satisfies CloudKit constraints
+/// the way it will when the app launches with iCloud sync enabled).
 struct SchemaCompatibilityTests {
-    @Test func canBuildSyncedAndLocalConfigurationsTogether() throws {
+    @Test func canBuildSyncedAndLocalConfigurationsInMemory() throws {
         let syncedSchema = Schema([
             Audiobook.self,
             AudioTrack.self,
@@ -24,12 +26,14 @@ struct SchemaCompatibilityTests {
         let syncedConfig = ModelConfiguration(
             "synced-test",
             schema: syncedSchema,
-            isStoredInMemoryOnly: true
+            isStoredInMemoryOnly: true,
+            cloudKitDatabase: .none
         )
         let localConfig = ModelConfiguration(
             "local-test",
             schema: localSchema,
-            isStoredInMemoryOnly: true
+            isStoredInMemoryOnly: true,
+            cloudKitDatabase: .none
         )
 
         let container = try ModelContainer(
@@ -68,6 +72,40 @@ struct SchemaCompatibilityTests {
         #expect(audiobooks.count == 1)
         #expect(audiobooks.first?.tracks.count == 1)
         #expect(audiobooks.first?.moments.count == 1)
+    }
+
+    /// File-backed container with the production `.private(...)` CloudKit database. CloudKit
+    /// validates the schema at store-load time — a missing default on a non-optional attribute
+    /// or a missing relationship inverse on a synced model would fail this test, which is the
+    /// regression we want to catch before it crashes a launch with sync enabled.
+    @Test func syncedSchemaSatisfiesCloudKitConstraints() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("schema-cloudkit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let syncedSchema = Schema([
+            Audiobook.self,
+            AudioTrack.self,
+            Moment.self,
+            ReadingSession.self,
+        ])
+        let syncedStoreURL = tempDir.appendingPathComponent("synced.store")
+        let syncedConfig = ModelConfiguration(
+            "synced-cloudkit-test",
+            schema: syncedSchema,
+            url: syncedStoreURL,
+            cloudKitDatabase: .private(IcloudSyncGate.containerIdentifier)
+        )
+
+        // Building the container is the assertion — CloudKit shape validation happens at load.
+        _ = try ModelContainer(
+            for: Audiobook.self,
+            AudioTrack.self,
+            Moment.self,
+            ReadingSession.self,
+            configurations: syncedConfig
+        )
     }
 
     @Test func contentFingerprintRoundTripsThroughModel() throws {

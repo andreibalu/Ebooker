@@ -81,7 +81,7 @@ struct AudiobookDetailViewModelTests {
 
     @Test func filteredMomentsPlacesPinnedBeforeUnpinnedPreservingCreatedAtOrder() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
 
@@ -109,7 +109,7 @@ struct AudiobookDetailViewModelTests {
 
     @Test func filteredMomentsSortsPinnedByCreatedAtDescending() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
 
@@ -170,7 +170,7 @@ struct AudiobookDetailViewModelTests {
 
     @Test func reconcileStoredRecapClearsMismatchedPersistedRecap() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
 
@@ -194,7 +194,7 @@ struct AudiobookDetailViewModelTests {
 
     @Test func loadRecapStoresRecapOnAudiobook() async throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
 
@@ -236,7 +236,7 @@ struct AudiobookDetailViewModelTests {
 
     @Test func loadRecapWithoutHeadlineStoresNilHeadlineOnAudiobook() async throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [configuration])
         let context = ModelContext(container)
 

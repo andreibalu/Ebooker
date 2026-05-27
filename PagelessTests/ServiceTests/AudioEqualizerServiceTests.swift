@@ -13,7 +13,7 @@ struct AudioEqualizerServiceTests {
 
     private func makeContext() throws -> ModelContext {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let config = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [config])
         return ModelContext(container)
     }
