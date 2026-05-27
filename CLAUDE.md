@@ -82,7 +82,7 @@ Pageless/
 │   ├── LibriVoxBook.swift         SwiftData @Model for the cached LibriVox catalog (20k+ rows)
 │   ├── CachedLibriVoxTrack.swift  Lightweight non-persisted track snapshot embedded JSON-encoded inside `LibriVoxBook.cachedTracks`
 │   ├── ReadingSession.swift       SwiftData @Model; per-chunk listening row (book snapshot + hour bucket + minutes) feeding the Reading Activity heatmap
-│   ├── ReadingStats.swift         Non-persisted `ReadingStats` aggregate (`compute(sessions:booksFinished:)`) + `ReadingDayActivity` per-day rollup
+│   ├── ReadingStats.swift         Non-persisted `ReadingStats` aggregate (`compute(sessions:booksFinished:)`) + `ReadingDayActivity` per-day rollup; also exposes `onboardingPreview` synthetic stats for the spotlight
 │   └── FreeBookCatalogEntry.swift Legacy non-persisted struct for the 5-seed CarPlay free-book catalog
 ├── ViewModels/
 │   ├── PlayerViewModel.swift                Moment creation, AI naming workflow, smart save warning
@@ -119,7 +119,7 @@ Pageless/
 │   │   ├── ReadingStatsSections.swift    Hero, totals, best day, polar best-time-of-day chart, longest book, streaks, metrics, free-books ring
 │   │   └── ReadingHeatmap.swift          Reusable heatmap renderer + `HeatmapPalette` (uses `.amber` by default)
 │   └── Onboarding/
-│       ├── OnboardingStep.swift          Enum defining 7 onboarding phases
+│       ├── OnboardingStep.swift          Enum defining the 7 onboarding steps (5 phase-1 + 2 phase-2)
 │       └── SpotlightOverlayView.swift    Spotlight tutorial overlay
 ├── Services/
 │   ├── Protocols/
@@ -179,8 +179,7 @@ PagelessTests/
 │   ├── AudioTrackTests.swift
 │   ├── EqualizerSettingsTests.swift
 │   ├── FreeBookCatalogEntryTests.swift
-│   └── MomentTests.swift
-├── ModelTests/
+│   ├── MomentTests.swift
 │   └── SchemaCompatibilityTests.swift   CloudKit schema constraint checks (no `.unique` on synced models, explicit inverses)
 ├── ServiceTests/
 │   ├── AudioEqualizerServiceTests.swift
@@ -335,8 +334,10 @@ The app contains **two independent free-book paths** that coexist by design:
 - `EqualizerSheet` is the user-facing UI; reads/writes via `@EnvironmentObject AudioEqualizerService`
 
 ### Onboarding
-- `OnboardingManager` — 4 phases: `phase1`, `waitingForBook`, `phase2`, `completed` (UserDefaults persistence)
-- `OnboardingStep` — 7 steps: `p1AddButton`, `p1Settings`, `p1AILink`, `p1AIPage`, `p1DeviceCapability`, `p2Progress`, `p2Moments`
+- `OnboardingManager` — 4 phases: `phase1`, `waitingForBook`, `phase2`, `completed` (UserDefaults persistence). Drives the Settings sheet open/close via `requestOpenSettings` / `requestDismissSettings` flags observed by `ContentView` / `SettingsView`.
+- `OnboardingStep` — 7 steps. **Phase 1 is a single 5-step path for every device** (`p1AddButton`, `p1Settings`, `p1AILink`, `p1iCloudSync`, `p1ReadingStats`); the AI step's body copy adapts when the hardware/OS can't run Apple Intelligence, but the step itself is always shown so every user learns the feature exists. **Phase 2** is `p2Progress`, `p2Moments`.
+- Phase-1 anchors: `p1AddButton` lives on the toolbar; `p1Settings` highlights the gear button; `p1AILink` and `p1iCloudSync` highlight hero cards inside the Settings sheet (sheet auto-presents at step 2, auto-dismisses at step 4); `p1ReadingStats` highlights the `ReadingActivityCard` on the Favorites tab and uses `ReadingStats.onboardingPreview` when the user has no real activity yet.
+- Relaunch handling: stepping back into a Settings-sheet-anchored step on cold launch rewinds to `p1Settings` so the sheet-open transition replays naturally.
 - `SpotlightOverlayView` — spotlight tutorial overlay rendered over content
 
 ### iCloud Sync

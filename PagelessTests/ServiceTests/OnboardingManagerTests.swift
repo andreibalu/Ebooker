@@ -19,7 +19,9 @@ struct OnboardingManagerTests {
         return ud
     }
 
-    @Test func aiCapablePhase1AdvanceMatchesOriginalFlow() {
+    @Test func phase1AdvancesThroughAllFiveSteps() {
+        // Phase 1 is unified: same 5 steps for every device. The AI step's copy adapts
+        // but the step list does not.
         OnboardingManager._unitTestDeviceSupportsOnboardingAI = true
         defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
 
@@ -27,7 +29,7 @@ struct OnboardingManagerTests {
         let m = OnboardingManager(defaults: ud)
 
         #expect(m.currentStep == .p1AddButton)
-        #expect(m.totalStepsInPhase == 4)
+        #expect(m.totalStepsInPhase == 5)
 
         m.advance()
         #expect(m.currentStep == .p1Settings)
@@ -39,42 +41,38 @@ struct OnboardingManagerTests {
         m.requestOpenSettings = false
 
         m.advance()
-        #expect(m.currentStep == .p1AIPage)
-        #expect(m.requestNavigateToAISettings == true)
-        m.requestNavigateToAISettings = false
+        #expect(m.currentStep == .p1iCloudSync)
+        // Sheet stays open between AI and iCloud — no open/dismiss requests should fire.
+        #expect(m.requestOpenSettings == false)
+        #expect(m.requestDismissSettings == false)
+
+        m.advance()
+        #expect(m.currentStep == .p1ReadingStats)
+        #expect(m.requestDismissSettings == true)
+        m.requestDismissSettings = false
 
         m.advance()
         #expect(m.currentStep == nil)
         #expect(m.phaseRaw == 1) // waitingForBook
         #expect(m.stepIndex == 0)
-        #expect(m.requestDismissSettings == true)
     }
 
-    @Test func nonAIPhase1CompletesAfterDeviceCapabilityStep() {
+    @Test func phase1StepCountIsFiveOnUnsupportedDeviceToo() {
         OnboardingManager._unitTestDeviceSupportsOnboardingAI = false
         defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
 
         let ud = isolatedDefaults()
         let m = OnboardingManager(defaults: ud)
 
-        #expect(m.totalStepsInPhase == 3)
-
+        #expect(m.totalStepsInPhase == 5)
         m.advance()
         m.advance()
-        #expect(m.currentStep == .p1DeviceCapability)
-        #expect(m.requestOpenSettings == true)
-        m.requestOpenSettings = false
-
-        m.advance()
-        #expect(m.currentStep == nil)
-        #expect(m.phaseRaw == 1)
-        #expect(m.requestDismissSettings == true)
+        #expect(m.currentStep == .p1AILink) // Same step on unsupported devices; copy adapts.
     }
 
-    @Test func aiCapableRelaunchFromStep3Or4ResetsToStep1() {
-        OnboardingManager._unitTestDeviceSupportsOnboardingAI = true
-        defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
-
+    @Test func relaunchInsideSettingsSheetRewindsToSettingsStep() {
+        // Steps 2 (.p1AILink) and 3 (.p1iCloudSync) live inside the Settings sheet.
+        // On relaunch the sheet isn't presented yet, so we rewind to step 1 (.p1Settings).
         let ud = isolatedDefaults()
         ud.set(0, forKey: "onboardingPhase")
         ud.set(3, forKey: "onboardingStepIndex")
@@ -84,23 +82,45 @@ struct OnboardingManagerTests {
         #expect(m.currentStep == .p1Settings)
     }
 
-    @Test func nonAIRelaunchAtStep2RequestsSettings() {
-        OnboardingManager._unitTestDeviceSupportsOnboardingAI = false
-        defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
-
+    @Test func relaunchAtReadingStatsStaysPut() {
+        // p1ReadingStats lives on ContentView with the Settings sheet closed —
+        // relaunch matches that state, so it should not rewind.
         let ud = isolatedDefaults()
         ud.set(0, forKey: "onboardingPhase")
-        ud.set(2, forKey: "onboardingStepIndex")
+        ud.set(4, forKey: "onboardingStepIndex")
 
         let m = OnboardingManager(defaults: ud)
+        #expect(m.stepIndex == 4)
+        #expect(m.currentStep == .p1ReadingStats)
+        #expect(m.requestOpenSettings == false)
+    }
+
+    @Test func goBackFromReadingStatsReopensSettings() {
+        let ud = isolatedDefaults()
+        ud.set(0, forKey: "onboardingPhase")
+        ud.set(4, forKey: "onboardingStepIndex")
+
+        let m = OnboardingManager(defaults: ud)
+        m.goBack()
+        #expect(m.currentStep == .p1iCloudSync)
         #expect(m.requestOpenSettings == true)
-        #expect(m.currentStep == .p1DeviceCapability)
+    }
+
+    @Test func goBackFromAILinkDismissesSettings() {
+        let ud = isolatedDefaults()
+        ud.set(0, forKey: "onboardingPhase")
+        // Force the manager to step 2 via advance() (init would clamp 2→1).
+        let m = OnboardingManager(defaults: ud)
+        m.advance() // 0 → 1
+        m.advance() // 1 → 2 (.p1AILink), requestOpenSettings = true
+        m.requestOpenSettings = false
+
+        m.goBack()
+        #expect(m.currentStep == .p1Settings)
+        #expect(m.requestDismissSettings == true)
     }
 
     @Test func phase2AndSkipUnchanged() {
-        OnboardingManager._unitTestDeviceSupportsOnboardingAI = true
-        defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
-
         let ud = isolatedDefaults()
         ud.set(2, forKey: "onboardingPhase")
         ud.set(0, forKey: "onboardingStepIndex")

@@ -50,12 +50,12 @@ struct SettingsView: View {
         .presentationDetents([.medium, .large], selection: $selectedDetent)
         .onAppear {
             if let step = onboarding.currentStep,
-               step == .p1AILink || step == .p1AIPage || step == .p1DeviceCapability {
+               step == .p1AILink || step == .p1iCloudSync {
                 selectedDetent = .large
             }
         }
         .onChange(of: onboarding.currentStep) { _, step in
-            if step == .p1AILink || step == .p1DeviceCapability {
+            if step == .p1AILink || step == .p1iCloudSync {
                 withAnimation { selectedDetent = .large }
             }
         }
@@ -90,12 +90,6 @@ struct SettingsView: View {
             await aiEntitlement.loadProduct()
             await icloudSubscription.loadProduct()
             await icloudSubscription.refreshEntitlements()
-        }
-        .onChange(of: onboarding.requestNavigateToAISettings) { _, shouldNavigate in
-            if shouldNavigate {
-                navigationPath = [.ai]
-                onboarding.requestNavigateToAISettings = false
-            }
         }
         .alert(
             "Purchase",
@@ -201,7 +195,7 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .spotlightTarget(.p1DeviceCapability)
+        .spotlightTarget(.p1AILink)
     }
 
     private var iCloudHeroCard: some View {
@@ -226,6 +220,7 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
+        .spotlightTarget(.p1iCloudSync)
     }
 
     @ViewBuilder

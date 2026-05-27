@@ -76,7 +76,6 @@ struct AISettingsView: View {
                     }
 
                     togglesCard
-                        .spotlightTarget(.p1AIPage)
 
                     footerCopy
 

@@ -30,11 +30,12 @@ final class OnboardingManager {
         AppleIntelligenceCapability.availabilityState == .needsIOSUpgrade
     }
 
-    private var phase1Steps: [OnboardingStep] {
-        deviceSupportsOnboardingAI
-            ? [.p1AddButton, .p1Settings, .p1AILink, .p1AIPage]
-            : [.p1AddButton, .p1Settings, .p1DeviceCapability]
-    }
+    /// Phase 1 is a single 5-step path for all devices. The AI step's body copy adapts to whether the
+    /// hardware/OS can run Apple Intelligence — but the step itself is always shown so every user
+    /// learns the feature exists.
+    private let phase1Steps: [OnboardingStep] = [
+        .p1AddButton, .p1Settings, .p1AILink, .p1iCloudSync, .p1ReadingStats
+    ]
 
     // MARK: - Stored properties (tracked by @Observable)
 
@@ -56,7 +57,6 @@ final class OnboardingManager {
     // MARK: - Navigation Commands (observed by views)
 
     var requestOpenSettings = false
-    var requestNavigateToAISettings = false
     var requestDismissSettings = false
 
     // MARK: - Phase
@@ -117,14 +117,11 @@ final class OnboardingManager {
             stepIndex = maxIndex
         }
 
-        // Relaunch mid-phase1 on AI-capable devices: replay from settings so the sheet + AI navigation reopen cleanly.
-        if deviceSupportsOnboardingAI, stepIndex >= 2 {
+        // Steps 2 (.p1AILink) and 3 (.p1iCloudSync) are anchored to hero cards inside the Settings sheet.
+        // On relaunch the sheet isn't presented, so rewind to step 1 (.p1Settings) and let the user
+        // replay the open-Settings transition naturally.
+        if stepIndex >= 2, stepIndex <= 3 {
             stepIndex = 1
-        }
-
-        // Non-AI path: step 2 is only meaningful with Settings open (anchor for .p1DeviceCapability).
-        if !deviceSupportsOnboardingAI, stepIndex == 2 {
-            requestOpenSettings = true
         }
     }
 
@@ -134,25 +131,19 @@ final class OnboardingManager {
         switch phase {
         case .phase1:
             switch stepIndex {
-            case 0:
+            case 0: // p1AddButton → p1Settings
                 stepIndex = 1
-            case 1:
+            case 1: // p1Settings → p1AILink (open the sheet so the AI hero card is on screen)
                 stepIndex = 2
                 requestOpenSettings = true
-            case 2:
-                if deviceSupportsOnboardingAI {
-                    stepIndex = 3
-                    requestNavigateToAISettings = true
-                } else {
-                    phase = .waitingForBook
-                    stepIndex = 0
-                    requestDismissSettings = true
-                }
-            case 3:
-                guard deviceSupportsOnboardingAI else { break }
+            case 2: // p1AILink → p1iCloudSync (sheet stays open, anchor shifts to iCloud card)
+                stepIndex = 3
+            case 3: // p1iCloudSync → p1ReadingStats (close the sheet so the activity card is on screen)
+                stepIndex = 4
+                requestDismissSettings = true
+            case 4: // p1ReadingStats done → waitingForBook
                 phase = .waitingForBook
                 stepIndex = 0
-                requestDismissSettings = true
             default:
                 break
             }
@@ -173,8 +164,17 @@ final class OnboardingManager {
 
     func goBack() {
         guard stepIndex > 0 else { return }
-        if phase == .phase1, stepIndex == 2, !deviceSupportsOnboardingAI {
-            requestDismissSettings = true
+        if phase == .phase1 {
+            switch stepIndex {
+            case 2:
+                // p1AILink → p1Settings: dismiss the sheet so the gear button anchor is visible again.
+                requestDismissSettings = true
+            case 4:
+                // p1ReadingStats → p1iCloudSync: the sheet was dismissed on entering ReadingStats; reopen it.
+                requestOpenSettings = true
+            default:
+                break
+            }
         }
         stepIndex -= 1
     }

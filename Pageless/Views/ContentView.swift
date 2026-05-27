@@ -137,6 +137,13 @@ struct ContentView: View {
                 onboarding.requestDismissSettings = false
             }
         }
+        .onChange(of: onboarding.currentStep) { _, newStep in
+            if newStep == .p1ReadingStats {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedTab = .favorites
+                }
+            }
+        }
         .alert(
             deleteAlertTitle,
             isPresented: deleteConfirmationBinding
@@ -383,6 +390,19 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
+            .spotlightTarget(.p1ReadingStats)
+        } else if onboarding.currentStep == .p1ReadingStats {
+            // Spotlight anchor goes *before* the outer .padding so the cutout hugs the card
+            // instead of extending across the padding region to the screen edges.
+            ReadingActivityCard(
+                stats: .onboardingPreview,
+                palette: .amber,
+                morphNamespace: readingStatsNamespace,
+                morphID: "reading-activity-onboarding-preview"
+            )
+            .allowsHitTesting(false)
+            .spotlightTarget(.p1ReadingStats)
+            .padding(.horizontal, 20)
         }
     }
 
