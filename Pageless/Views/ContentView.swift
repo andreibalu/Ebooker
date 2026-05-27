@@ -572,6 +572,7 @@ struct ContentView: View {
                     isImporterPresented = true
                 }
                 .buttonStyle(.borderedProminent)
+                .foregroundStyle(Color(UIColor.systemBackground))
 
                 Button("Browse Free Books") {
                     withAnimation(.easeInOut(duration: 0.2)) {
