@@ -12,8 +12,10 @@ import SwiftUI
 struct PagelessApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var aiEntitlementStore = AIEntitlementStore()
+    @StateObject private var icloudSubscriptionStore = ICloudSubscriptionStore.shared
     @State private var onboardingManager = OnboardingManager()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("forceDarkMode") private var forceDarkMode = false
 
     var body: some Scene {
         WindowGroup {
@@ -21,8 +23,10 @@ struct PagelessApp: App {
                 .environmentObject(appDelegate.audioPlayer)
                 .environmentObject(appDelegate.audioPlayer.equalizer)
                 .environmentObject(aiEntitlementStore)
+                .environmentObject(icloudSubscriptionStore)
                 .environment(onboardingManager)
                 .environment(appDelegate.freeBookDownloader)
+                .preferredColorScheme(forceDarkMode ? .dark : nil)
                 .onAppear {
                     appDelegate.freeBookDownloader.configure(modelContext: appDelegate.modelContainer.mainContext)
                 }

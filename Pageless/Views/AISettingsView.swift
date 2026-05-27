@@ -7,6 +7,11 @@ import StoreKit
 import SwiftUI
 
 struct AISettingsView: View {
+    /// Closure passed down from `SettingsView` so the "Done" pill in the header
+    /// can dismiss the entire sheet (not just pop this pushed view).
+    var onDismissSheet: () -> Void = {}
+
+    @Environment(\.dismiss) private var dismiss
     @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
 
@@ -23,12 +28,10 @@ struct AISettingsView: View {
         AppleIntelligenceCapability.availabilityState
     }
 
-    /// Sub-toggles: need master on, runtime AI available, and paid or trial quota left.
     private var aiSubTogglesDisabled: Bool {
         !useLocalAIFeatures || !aiEntitlement.canUseAIFeatures || !isSmartNamingAvailable
     }
 
-    /// Master toggle: when trial is exhausted (not purchased), user cannot turn “try” back on.
     private var masterToggleDisabled: Bool {
         if aiEntitlement.isUnlocked {
             return !isSmartNamingAvailable
@@ -54,27 +57,39 @@ struct AISettingsView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                statusCard
+        VStack(spacing: 0) {
+            SettingsSheetHeader(
+                title: "AI Features",
+                titleStyle: .subview,
+                backLabel: "Settings",
+                onBack: { dismiss() },
+                onDone: onDismissSheet
+            )
+            .padding(.top, 8)
 
-                if availabilityState == .ready, !aiEntitlement.isUnlocked {
-                    trialBadge
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    paywallCard
+
+                    if availabilityState == .ready, !aiEntitlement.isUnlocked {
+                        trialPill
+                    }
+
+                    togglesCard
+                        .spotlightTarget(.p1AIPage)
+
+                    footerCopy
+
+                    SettingsLegalLinks()
                 }
-
-                togglesCard
-                    .spotlightTarget(.p1AIPage)
-
-                footerCopy
-
-                legalLinks
+                .padding(.horizontal, 20)
+                .padding(.top, 4)
+                .padding(.bottom, 24)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 16)
         }
         .background(Color.cream.ignoresSafeArea())
-        .navigationTitle("AI Features")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
         .task {
             await aiEntitlement.loadProduct()
         }
@@ -106,9 +121,7 @@ struct AISettingsView: View {
                 set: { if !$0 { aiEntitlement.purchaseError = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {
-                aiEntitlement.purchaseError = nil
-            }
+            Button("OK", role: .cancel) { aiEntitlement.purchaseError = nil }
         } message: {
             Text(aiEntitlement.purchaseError ?? "")
         }
@@ -119,165 +132,31 @@ struct AISettingsView: View {
                 set: { if !$0 { aiEntitlement.restoreError = nil } }
             )
         ) {
-            Button("OK", role: .cancel) {
-                aiEntitlement.restoreError = nil
-            }
+            Button("OK", role: .cancel) { aiEntitlement.restoreError = nil }
         } message: {
             Text(aiEntitlement.restoreError ?? "")
         }
     }
 
-    private var statusCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            aiPurchaseBlock
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-    }
+    // MARK: - Paywall card
 
-    private var trialBadge: some View {
-        HStack {
-            Text(
-                aiEntitlement.trialUsesRemaining > 0
-                    ? "\(aiEntitlement.trialUsesRemaining) of \(AIEntitlementStore.initialTrialUses) free uses remaining"
-                    : "No free uses left"
-            )
-            .font(.subheadline.weight(.medium))
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.primary.opacity(0.06), in: Capsule())
-    }
-
-    private var togglesCard: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Toggle(isOn: $useLocalAIFeatures) {
-                toggleLabel(title: masterToggleTitle, caption: masterToggleCaption)
+    @ViewBuilder
+    private var paywallCard: some View {
+        SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
+            VStack(alignment: .leading, spacing: 12) {
+                aiPurchaseBlock
             }
-            .disabled(masterToggleDisabled)
-            .padding(.vertical, 10)
-            .padding(.horizontal, 4)
-
-            if useLocalAIFeatures {
-                Divider()
-                    .padding(.leading, 4)
-
-                Toggle(isOn: $useSmartMomentNaming) {
-                    toggleLabel(
-                        title: "Smart moment naming",
-                        caption: "Suggest names for saved moments based on the audio"
-                    )
-                }
-                .disabled(aiSubTogglesDisabled)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 4)
-
-                Divider()
-                    .padding(.leading, 4)
-
-                Toggle(isOn: $useSmartSummary) {
-                    toggleLabel(
-                        title: "Smart summary",
-                        caption: "Summarize where you left off on the book detail screen"
-                    )
-                }
-                .disabled(aiSubTogglesDisabled)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 4)
-
-                if useSmartSummary {
-                    Divider()
-                        .padding(.leading, 4)
-
-                    Toggle(isOn: $shortenSummary) {
-                        toggleLabel(
-                            title: "Short progress headline",
-                            caption: "Replace “Your progress” with a 3–4 word summary on one line"
-                        )
-                    }
-                    .disabled(aiSubTogglesDisabled)
-                    .padding(.vertical, 10)
-                    .padding(.horizontal, 4)
-                }
-            }
-
-            if !aiEntitlement.isUnlocked {
-                Divider()
-                Text("Purchase the AI unlock for unlimited use on a compatible device.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 8)
-                    .padding(.horizontal, 4)
-            } else if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
-                Divider()
-                Text(reason)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 8)
-                    .padding(.horizontal, 4)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
         }
-        .padding(12)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
-    }
-
-    private var legalLinks: some View {
-        HStack(spacing: 6) {
-            Link("Privacy Policy", destination: LegalURLs.privacyPolicy)
-            Text("·")
-                .foregroundStyle(.tertiary)
-            Link("Terms of Use", destination: LegalURLs.termsOfUse)
-            Spacer()
-        }
-        .font(.caption)
-        .padding(.top, 4)
-    }
-
-    private var footerCopy: some View {
-        Group {
-            if aiEntitlement.isUnlocked, isSmartNamingAvailable {
-                Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if !aiEntitlement.isUnlocked {
-                Text("Unlock once per Apple ID. Restore purchases if you reinstall or use a new device.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func toggleLabel(title: String, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.body)
-            Text(caption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func refreshTogglesIfAccessLost() {
-        guard !aiEntitlement.canUseAIFeatures, !aiEntitlement.isUnlocked else { return }
-        guard useLocalAIFeatures else { return }
-        useLocalAIFeatures = false
-        useSmartMomentNaming = false
-        useSmartSummary = false
-        shortenSummary = false
     }
 
     @ViewBuilder
     private var aiPurchaseBlock: some View {
         if aiEntitlement.isUnlocked {
             Label("AI features unlocked", systemImage: "checkmark.circle.fill")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 14))
+                .foregroundStyle(SettingsDesign.secondaryLabel)
             restorePurchasesButton
         } else {
             switch availabilityState {
@@ -296,21 +175,25 @@ struct AISettingsView: View {
     @ViewBuilder
     private var readyPurchaseBlock: some View {
         Text("Unlock smart moment naming and progress summaries powered by on-device Apple Intelligence.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-        if aiEntitlement.isLoadingProduct {
-            ProgressView()
-                .padding(.vertical, 4)
-        }
+            .font(.system(size: 12))
+            .foregroundStyle(SettingsDesign.secondaryLabel)
+            .lineSpacing(1)
 
         if let loadError = aiEntitlement.loadError {
             Text(loadError)
-                .font(.caption)
+                .font(.system(size: 12))
                 .foregroundStyle(.red)
         }
 
-        unlockButton(disabledReason: nil)
+        SettingsPrimaryButton(
+            title: "Unlock — \(aiEntitlement.unlockPriceDisplay)",
+            isLoading: aiEntitlement.isPurchasing,
+            isDisabled: aiEntitlement.product == nil
+                || aiEntitlement.isLoadingProduct
+                || !aiEntitlement.canMakePayments
+        ) {
+            Task { await aiEntitlement.purchase() }
+        }
 
         restorePurchasesButton
     }
@@ -318,11 +201,13 @@ struct AISettingsView: View {
     @ViewBuilder
     private var needsActivationPurchaseBlock: some View {
         Text(AIAvailabilityState.needsActivation.explanation)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .foregroundStyle(SettingsDesign.secondaryLabel)
 
-        // Buy stays visible (price intact) but disabled until the user activates Apple Intelligence.
-        unlockButton(disabledReason: .needsActivation)
+        SettingsPrimaryButton(
+            title: "Unlock — \(aiEntitlement.unlockPriceDisplay)",
+            isDisabled: true
+        ) {}
 
         restorePurchasesButton
     }
@@ -330,12 +215,12 @@ struct AISettingsView: View {
     @ViewBuilder
     private var needsIOSUpgradePurchaseBlock: some View {
         Text(AIAvailabilityState.needsIOSUpgrade.explanation)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .foregroundStyle(SettingsDesign.secondaryLabel)
 
         Text("If you already purchased on another device, use Restore purchases.")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .font(.system(size: 11))
+            .foregroundStyle(SettingsDesign.tertiaryLabel)
 
         restorePurchasesButton
     }
@@ -343,45 +228,115 @@ struct AISettingsView: View {
     @ViewBuilder
     private var unsupportedDevicePurchaseBlock: some View {
         Text(AIAvailabilityState.unsupportedDevice.explanation)
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            .font(.system(size: 12))
+            .foregroundStyle(SettingsDesign.secondaryLabel)
 
         Text("If you already purchased on another device, use Restore purchases.")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+            .font(.system(size: 11))
+            .foregroundStyle(SettingsDesign.tertiaryLabel)
 
         restorePurchasesButton
     }
 
-    @ViewBuilder
-    private func unlockButton(disabledReason: AIAvailabilityState?) -> some View {
-        Button {
-            Task { await aiEntitlement.purchase() }
-        } label: {
-            if let product = aiEntitlement.product {
-                Text("Unlock — \(product.displayPrice)")
-                    .frame(maxWidth: .infinity)
-            } else {
-                Text("Unlock — \(aiEntitlement.unlockPriceDisplay)")
-                    .frame(maxWidth: .infinity)
-            }
-        }
-        .buttonStyle(.borderedProminent)
-        .foregroundStyle(Color.cream)
-        .disabled(
-            disabledReason != nil
-                || aiEntitlement.product == nil
-                || aiEntitlement.isPurchasing
-                || aiEntitlement.isLoadingProduct
-                || !aiEntitlement.canMakePayments
-        )
-    }
-
     private var restorePurchasesButton: some View {
-        Button("Restore purchases") {
+        SettingsTextLinkButton(title: "Restore purchases") {
             Task { await aiEntitlement.restorePurchases() }
         }
-        .font(.subheadline)
+    }
+
+    // MARK: - Trial pill
+
+    private var trialPill: some View {
+        Text(
+            aiEntitlement.trialUsesRemaining > 0
+                ? "\(aiEntitlement.trialUsesRemaining) of \(AIEntitlementStore.initialTrialUses) free uses remaining"
+                : "No free uses left"
+        )
+        .font(.system(size: 13, weight: .medium))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(SettingsDesign.chipFill, in: Capsule())
+    }
+
+    // MARK: - Toggles card
+
+    private var togglesCard: some View {
+        SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
+            VStack(alignment: .leading, spacing: 0) {
+                SettingsToggleRow(isOn: $useLocalAIFeatures, isDisabled: masterToggleDisabled) {
+                    SettingsRowLabel(title: masterToggleTitle, caption: masterToggleCaption)
+                }
+
+                if useLocalAIFeatures {
+                    dividerInset
+                    SettingsToggleRow(isOn: $useSmartMomentNaming, isDisabled: aiSubTogglesDisabled) {
+                        SettingsRowLabel(
+                            title: "Smart moment naming",
+                            caption: "Suggest names for saved moments based on the audio"
+                        )
+                    }
+                    dividerInset
+                    SettingsToggleRow(isOn: $useSmartSummary, isDisabled: aiSubTogglesDisabled) {
+                        SettingsRowLabel(
+                            title: "Smart summary",
+                            caption: "Summarize where you left off on the book detail screen"
+                        )
+                    }
+                    if useSmartSummary {
+                        dividerInset
+                        SettingsToggleRow(isOn: $shortenSummary, isDisabled: aiSubTogglesDisabled) {
+                            SettingsRowLabel(
+                                title: "Short progress headline",
+                                caption: "Replace \u{201C}Your progress\u{201D} with a 3\u{2013}4 word summary"
+                            )
+                        }
+                    }
+                }
+
+                if !aiEntitlement.isUnlocked {
+                    dividerInset
+                    Text("Purchase the AI unlock for unlimited use on a compatible device.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SettingsDesign.secondaryLabel)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 4)
+                } else if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
+                    dividerInset
+                    Text(reason)
+                        .font(.system(size: 11))
+                        .foregroundStyle(SettingsDesign.secondaryLabel)
+                        .padding(.top, 8)
+                        .padding(.horizontal, 4)
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    private var dividerInset: some View {
+        SettingsHairline().padding(.leading, 4)
+    }
+
+    @ViewBuilder
+    private var footerCopy: some View {
+        if aiEntitlement.isUnlocked, isSmartNamingAvailable {
+            Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
+                .font(.system(size: 11))
+                .foregroundStyle(SettingsDesign.secondaryLabel)
+        } else if !aiEntitlement.isUnlocked {
+            Text("Unlock once per Apple ID. Restore purchases if you reinstall or use a new device.")
+                .font(.system(size: 11))
+                .foregroundStyle(SettingsDesign.secondaryLabel)
+        }
+    }
+
+    private func refreshTogglesIfAccessLost() {
+        guard !aiEntitlement.canUseAIFeatures, !aiEntitlement.isUnlocked else { return }
+        guard useLocalAIFeatures else { return }
+        useLocalAIFeatures = false
+        useSmartMomentNaming = false
+        useSmartSummary = false
+        shortenSummary = false
     }
 }
 
@@ -389,5 +344,6 @@ struct AISettingsView: View {
     NavigationStack {
         AISettingsView()
             .environmentObject(AIEntitlementStore())
+            .environment(OnboardingManager())
     }
 }

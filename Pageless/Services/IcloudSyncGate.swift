@@ -13,9 +13,11 @@ enum IcloudSyncGate {
     static let preferenceKey = "iCloudSyncEnabled"
     static let containerIdentifier = "iCloud.andreibaludev.Pageless"
 
-    /// True when (a) the user has flipped the toggle on AND (b) the device has a signed-in iCloud account.
-    /// When this returns false the SwiftData container is built without `cloudKitDatabase`.
+    /// True when (a) the iCloud Sync subscription is active, (b) the user has flipped
+    /// the toggle on, AND (c) the device has a signed-in iCloud account. When this
+    /// returns false the SwiftData container is built without `cloudKitDatabase`.
     static func isEnabled() -> Bool {
+        guard ICloudSubscriptionStore.isSubscribedAtLaunch() else { return false }
         guard UserDefaults.standard.bool(forKey: preferenceKey) else { return false }
         return hasUbiquityIdentity()
     }
