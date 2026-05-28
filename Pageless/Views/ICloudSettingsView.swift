@@ -146,7 +146,7 @@ struct ICloudSettingsView: View {
         }
 
         SettingsPrimaryButton(
-            title: "Start \(subscriptionStore.trialPeriodDisplay)",
+            title: subscriptionStore.introOfferDisplay.map { "Start \($0)" } ?? "Subscribe",
             isLoading: subscriptionStore.isPurchasing,
             isDisabled: subscriptionStore.product == nil
                 || subscriptionStore.isLoadingProduct
@@ -156,7 +156,9 @@ struct ICloudSettingsView: View {
         }
         .padding(.top, 4)
 
-        Text("Then \(subscriptionStore.unlockPriceDisplay)/month. Cancel anytime.")
+        Text(subscriptionStore.introOfferDisplay == nil
+             ? "\(subscriptionStore.unlockPriceDisplay)/month. Cancel anytime."
+             : "Then \(subscriptionStore.unlockPriceDisplay)/month. Cancel anytime.")
             .font(.system(size: 12))
             .foregroundStyle(SettingsDesign.secondaryLabel)
             .frame(maxWidth: .infinity, alignment: .center)

@@ -52,9 +52,14 @@ Yes. Browse your library, play and pause, skip between tracks, and save bookmark
 
 Anything you've downloaded plays offline, including LibriVox titles. Streaming-only library entries and the LibriVox catalog browser require an internet connection.
 
-### How do I restore my AI purchase on a new device?
+### How do I restore my purchases on a new device?
 
-Open the **AI Settings** sheet inside the app and tap **Restore Purchases**. As long as you're signed in with the same Apple ID, the unlock will reactivate.
+As long as you're signed in with the same Apple ID, your purchases reactivate via **Restore Purchases**:
+
+- **AI Features unlock** — open the **AI Settings** sheet and tap **Restore Purchases**.
+- **iCloud Sync subscription** — open **Settings → iCloud Sync** and tap **Restore Purchases**.
+
+You can cancel or change the iCloud Sync subscription anytime from **Settings → iCloud Sync → Manage Subscription**, or in your Apple ID subscription settings.
 
 ### How do I delete an audiobook?
 
@@ -62,7 +67,7 @@ Long-press the book cover in your library and choose **Delete**. This removes al
 
 ### Will my bookmarks and progress sync to other devices?
 
-Yes — opt-in iCloud sync is built in. Open **Settings** inside Unpaged and turn on **Sync library with iCloud**. The first time you toggle it on you'll be asked to quit and reopen the app so the new iCloud-backed store takes effect. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ.
+Yes — opt-in iCloud sync is available as an auto-renewing subscription (US$0.99/month, billed through your Apple ID; prices vary by region). Open **Settings** inside Unpaged, tap the **iCloud Sync** card, and subscribe, then turn on **Sync library with iCloud**. The first time you toggle it on you'll be asked to quit and reopen the app so the new iCloud-backed store takes effect. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ. Cancel anytime in your Apple ID subscription settings; access continues through the end of the billing period. Everything else in Unpaged stays free.
 
 ### How do I restore my library on a new iPhone (or after reinstalling)?
 

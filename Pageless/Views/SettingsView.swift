@@ -234,7 +234,7 @@ struct SettingsView: View {
                 .padding(.vertical, 5)
                 .background(SettingsDesign.systemGreen.opacity(0.28), in: Capsule())
         } else {
-            Text(icloudSubscription.trialPeriodDisplay)
+            Text(icloudSubscription.introOfferDisplay ?? "\(icloudSubscription.unlockPriceDisplay)/month")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 10)

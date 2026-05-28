@@ -5,7 +5,8 @@
 
 import Combine
 import Foundation
-import RevenueCat
+// RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable purchase analytics.
+// import RevenueCat
 import StoreKit
 
 /// StoreKit 2 state for the auto-renewable iCloud Sync subscription.
@@ -43,13 +44,14 @@ final class ICloudSubscriptionStore: ObservableObject {
         product?.displayPrice ?? "$0.99"
     }
 
-    var trialPeriodDisplay: String {
-        guard let intro = product?.subscription?.introductoryOffer else {
-            return "7-day free trial"
-        }
+    /// Non-nil only when the App Store product actually carries a free-trial introductory
+    /// offer. Returns nil otherwise so the UI never promises a trial that doesn't exist.
+    var introOfferDisplay: String? {
+        guard let intro = product?.subscription?.introductoryOffer,
+              intro.paymentMode == .freeTrial else { return nil }
         let value = intro.period.value
         switch intro.period.unit {
-        case .day: return "\(value)-day free trial"
+        case .day: return value == 7 ? "7-day free trial" : "\(value)-day free trial"
         case .week: return value == 1 ? "7-day free trial" : "\(value)-week free trial"
         case .month: return "\(value)-month free trial"
         case .year: return "\(value)-year free trial"
@@ -104,9 +106,10 @@ final class ICloudSubscriptionStore: ObservableObject {
         defer { isPurchasing = false }
         do {
             let result = try await product.purchase()
-            if Purchases.isConfigured {
-                _ = try? await Purchases.shared.recordPurchase(result)
-            }
+            // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
+            // if Purchases.isConfigured {
+            //     _ = try? await Purchases.shared.recordPurchase(result)
+            // }
             switch result {
             case .success(let verification):
                 switch verification {
@@ -133,9 +136,10 @@ final class ICloudSubscriptionStore: ObservableObject {
         restoreError = nil
         do {
             try await AppStore.sync()
-            if Purchases.isConfigured {
-                _ = try? await Purchases.shared.syncPurchases()
-            }
+            // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
+            // if Purchases.isConfigured {
+            //     _ = try? await Purchases.shared.syncPurchases()
+            // }
             await refreshEntitlements()
         } catch {
             restoreError = error.localizedDescription
@@ -158,9 +162,10 @@ final class ICloudSubscriptionStore: ObservableObject {
             case .verified(let transaction):
                 guard transaction.productID == ICloudSyncProductID.monthly else { continue }
                 await transaction.finish()
-                if Purchases.isConfigured {
-                    _ = try? await Purchases.shared.syncPurchases()
-                }
+                // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
+                // if Purchases.isConfigured {
+                //     _ = try? await Purchases.shared.syncPurchases()
+                // }
                 await refreshEntitlements()
             case .unverified:
                 break

@@ -6,9 +6,9 @@
 import Foundation
 
 /// Central decision point for "is iCloud sync currently active for this user?".
-/// Today this is the AppStorage toggle in `SettingsView`; later this will also factor in a
-/// paid subscription check, so every call site that branches on sync availability must go
-/// through this gate rather than reading the toggle directly.
+/// Factors in the paid subscription, the AppStorage toggle, and the iCloud account.
+/// Every call site that branches on sync availability must go through this gate
+/// rather than reading the toggle directly.
 enum IcloudSyncGate {
     static let preferenceKey = "iCloudSyncEnabled"
     static let containerIdentifier = "iCloud.andreibaludev.Pageless"

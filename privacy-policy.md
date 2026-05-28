@@ -1,8 +1,8 @@
 # Unpaged — Privacy Policy
 
-_Last updated: May 21, 2026_
+_Last updated: May 28, 2026_
 
-Unpaged ("the app") is an audiobook player developed by Andrei Balu. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, transmit, sell, or share any personal data about you.**
+Unpaged ("the app") is an audiobook player developed by Andrei Balu. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data about you, and the app has no backend server of its own.** The only data that leaves your device goes to Apple (for in-app purchases) and to LibriVox/Internet Archive (when you browse or download free books) — never your name, email, or payment details. Details below.
 
 ## What stays on your device
 
@@ -26,9 +26,9 @@ This data is stored in the app's private container on your iPhone. Unpaged does 
 
 If you decline these permissions, the relevant features (CarPlay voice search, AI moment naming) are disabled. The rest of the app continues to work.
 
-## iCloud Sync (optional)
+## iCloud Sync (optional, paid)
 
-Unpaged offers an opt-in iCloud Sync feature you can enable in Settings. When on, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
+Unpaged offers an opt-in iCloud Sync feature, available as an auto-renewing monthly subscription (US$0.99/month; prices vary by region), that you can enable in Settings. The subscription is processed by Apple via StoreKit — Unpaged never sees your payment information. When on, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
 
 - Audiobook titles, authors, cover art, and your favorite/finished flags
 - Per-book progress, playback rate, equalizer state, and progress recaps
@@ -39,7 +39,7 @@ Unpaged offers an opt-in iCloud Sync feature you can enable in Settings. When on
 
 The audio files themselves are **never** uploaded — they stay on each device. Audio you imported continues to be local-only; on a new device you re-add the file and Unpaged matches it to the synced book record using the fingerprint described above.
 
-Sync is off by default and is gated by your iCloud account on the device. When sync is off, Unpaged behaves exactly as the original local-only experience. You can turn sync off at any time in Settings; doing so stops further uploads but does not delete previously synced data from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
+Sync is off by default and is gated by an active iCloud Sync subscription plus your iCloud account on the device. When sync is off (or you have no subscription), Unpaged behaves exactly as the original local-only experience. You can turn sync off at any time in Settings; doing so stops further uploads but does not delete previously synced data from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
 
 Apple's [iCloud privacy](https://www.apple.com/legal/privacy/data/en/icloud/) covers transport, storage, and access on Apple's side. Unpaged never sees a backend copy of this data — there is no Unpaged server.
 
@@ -49,7 +49,12 @@ Unpaged uses Apple's on-device foundation model (Apple Intelligence) to generate
 
 ## In-app purchases
 
-The "AI Features" unlock is a one-time non-consumable purchase processed by Apple via StoreKit. Unpaged never sees your payment information. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
+Unpaged offers two in-app purchases, both processed by Apple via StoreKit:
+
+- **AI Features** — a one-time non-consumable unlock.
+- **iCloud Sync** — an auto-renewing monthly subscription (US$0.99/month; prices vary by region) that turns on cross-device sync.
+
+Both are handled entirely by Apple's StoreKit. Unpaged never sees your payment information, and no purchase data is sent to any third party. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
 
 ## LibriVox content
 

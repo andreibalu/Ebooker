@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		BC744B342F83D03C0007E60E /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC744B332F83D03C0007E60E /* StoreKit.framework */; };
-		BC95BC732FBF03DE00B5979D /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = BC95BC722FBF03DE00B5979D /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,7 +57,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BC95BC732FBF03DE00B5979D /* RevenueCat in Frameworks */,
 				BC744B342F83D03C0007E60E /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -129,7 +127,6 @@
 			);
 			name = Pageless;
 			packageProductDependencies = (
-				BC95BC722FBF03DE00B5979D /* RevenueCat */,
 			);
 			productName = Pageless;
 			productReference = BC74D7E62F6986AC0070910C /* Pageless.app */;
@@ -214,7 +211,6 @@
 			mainGroup = BC74D7DD2F6986AC0070910C;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				BC95BC712FBF03DE00B5979D /* XCRemoteSwiftPackageReference "purchases-ios-spm" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BC74D7E72F6986AC0070910C /* Products */;
@@ -617,25 +613,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
-/* Begin XCRemoteSwiftPackageReference section */
-		BC95BC712FBF03DE00B5979D /* XCRemoteSwiftPackageReference "purchases-ios-spm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/RevenueCat/purchases-ios-spm.git";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.73.1;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		BC95BC722FBF03DE00B5979D /* RevenueCat */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BC95BC712FBF03DE00B5979D /* XCRemoteSwiftPackageReference "purchases-ios-spm" */;
-			productName = RevenueCat;
-		};
-/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = BC74D7DE2F6986AC0070910C /* Project object */;
 }

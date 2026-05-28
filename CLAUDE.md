@@ -45,7 +45,7 @@ Always call `mcp__XcodeBuildMCP__session_show_defaults` first to verify project/
 
 **Device target**: Always build and run on **Andrei's iPhone 15 Pro** — identifier `00008130-000471A80C81001C` (UDID `BAE98D59-834B-5B20-8E9A-8943DCE6F7FD`). Use `mcp__XcodeBuildMCP__build_run_device` / `mcp__XcodeBuildMCP__build_device` instead of simulator tools. Use the `xcode-device-build` skill if needed for device setup. Apple Intelligence (`FoundationModels`) only runs on 15 Pro / 16+ hardware, so the simulator can't exercise AI surfaces.
 
-External packages: **RevenueCat** (`purchases-ios-spm`) for purchase analytics in observer mode. All other code uses native Apple frameworks only (AVFoundation, MediaToolbox, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI, StoreKit, Intents, CarPlay, Network).
+External packages: **none.** All code uses native Apple frameworks only (AVFoundation, MediaToolbox, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI, StoreKit, Intents, CarPlay, Network). RevenueCat (`purchases-ios-spm`) was previously bundled for observer-mode purchase analytics but has been **removed** — the SPM package is gone and every call site is commented out (search `// RevenueCat disabled` in `AppDelegate`, `AIEntitlementStore`, `ICloudSubscriptionStore`). Purchases are StoreKit-only. See "In-App Purchases" below for how to re-enable it.
 
 ## Info.plist Highlights (App Store relevant)
 
@@ -73,7 +73,8 @@ Pageless/
 ├── AppIntents/
 │   └── AudiobookIntents.swift     `PlayLatestBookIntent` + `UnpagedAppShortcuts` provider ("Play Latest Book")
 ├── Configuration/
-│   └── AIProductID.swift          StoreKit product ID constant for AI unlock
+│   ├── AIProductID.swift          StoreKit product IDs: `AIProductID.unlock` (non-consumable AI unlock) + `ICloudSyncProductID.monthly` (auto-renewable iCloud Sync subscription)
+│   └── Products.storekit          Local StoreKit test config (AI unlock non-consumable + iCloudSync subscription group, no intro offer)
 ├── Models/
 │   ├── Audiobook.swift            SwiftData @Model; playback, progress marker, recap, EQ, streaming-vs-downloaded, free-book metadata
 │   ├── AudioTrack.swift           SwiftData @Model; per-track metadata (supports remote URLs for streaming); `contentFingerprint` (SHA-256 hex) for iCloud orphan matching
@@ -104,8 +105,9 @@ Pageless/
 │   ├── MomentEditSheet.swift      Modal for naming moments + AI-generated metadata display
 │   ├── MomentFilterSheet.swift    Category/character/mood filtering UI
 │   ├── ImportAudiobookSheet.swift Import workflow with file preview
-│   ├── SettingsView.swift         Playback preferences + iCloud Sync section (toggle + Cloud Library link)
+│   ├── SettingsView.swift         Playback preferences + two "Unlock" hero cards (AI → AISettingsView, iCloud Sync → ICloudSettingsView); iCloud card shown unconditionally for IAP reachability
 │   ├── AISettingsView.swift       AI feature toggles, trial management, IAP unlock
+│   ├── ICloudSettingsView.swift   iCloud Sync subscription purchase/restore UI + sync toggle + Cloud Library/Manage Subscription links (pushed from SettingsView)
 │   ├── CoverCropView.swift        Image cropping interface for cover art
 │   ├── CloudLibraryView.swift     iCloud orphan recovery: own-book "Locate…" file picker + free-book one-tap stream restore
 │   ├── RestoreMatchSheet.swift    Shown on import when fingerprint matches a synced orphan; prompts "Restore from iCloud" vs "Add as new"
@@ -156,7 +158,8 @@ Pageless/
 │   ├── VoiceSearchPermissions.swift        Centralised mic + speech permission gating (primed at app launch)
 │   ├── AudiobookSavedProgressResume.swift  Resume-from-bookmark logic (enum)
 │   ├── AppleIntelligenceCapability.swift   Runtime AI feature detection; iOS-18-safe (internal `#available(iOS 26, *)` branches, returns `.unsupportedDevice` below iOS 26)
-│   ├── AIEntitlementStore.swift            StoreKit 2 IAP + trial-use tracking
+│   ├── AIEntitlementStore.swift            StoreKit 2 IAP (non-consumable AI unlock) + trial-use tracking
+│   ├── ICloudSubscriptionStore.swift       StoreKit 2 store for the auto-renewable iCloud Sync subscription (singleton `.shared`); `isSubscribedAtLaunch()` cache read by `IcloudSyncGate`
 │   ├── IcloudSyncGate.swift                Opt-in iCloud sync gate: reads `iCloudSyncEnabled` UserDefaults toggle + ubiquity identity check; holds CloudKit container ID
 │   ├── FingerprintBackfillService.swift    One-shot background pass to SHA-256-fingerprint pre-existing tracks for orphan matching after upgrade
 │   ├── OrphanDetectionService.swift        At launch (and after each CloudKit import batch), flips `isDownloaded=false` for books whose storage folder is absent on this device
@@ -299,7 +302,21 @@ Protocol implementations are typically `struct`. `LibraryImportService` is a con
 - `RecapService: RecapProviding` — generates `RecapGenerationResult` (recap text + optional `progressHeadline`) (`@available(iOS 26, *)`)
 - `TranscriptionService: TranscriptionProviding` — Speech framework wrapper with `withCheckedContinuation` bridge
 - `AppleIntelligenceCapability` — runtime detection for showing/hiding AI UI buttons; iOS-18-safe (internal `if #available(iOS 26, *)` branches)
-- `AIEntitlementStore` — StoreKit 2: trial uses tracking + IAP unlock (`AIProductID`). Entitlement state is owned by StoreKit (`Transaction.currentEntitlements`); RevenueCat runs in observer mode (`purchasesAreCompletedBy: .myApp`, SK2) purely for dashboard metrics. After each verified SK2 transaction, `AIEntitlementStore` calls `Purchases.shared.recordPurchase(_:)` / `syncPurchases()` so RC sees the event. `Purchases.configure(...)` runs **only in Release builds** (`#if !DEBUG` in `AppDelegate`) because Xcode's local `Products.storekit` configuration produces simulated receipts that RC's backend cannot validate. DEBUG runs do not initialize RC at all; per-purchase calls are guarded by `if Purchases.isConfigured`. End-to-end RC verification therefore requires a TestFlight build with a Sandbox tester signed in.
+- `AIEntitlementStore` — StoreKit 2: trial uses tracking + IAP unlock (`AIProductID`). Entitlement state is owned entirely by StoreKit (`Transaction.currentEntitlements`); the app reads it directly. (RevenueCat observer-mode mirroring was removed — the `recordPurchase`/`syncPurchases` calls remain commented out for future re-enable.)
+
+### In-App Purchases (two products)
+
+The app sells **two IAPs**, both StoreKit-owned. The app gates on StoreKit directly — it reads `Transaction.currentEntitlements`, with no third-party purchase SDK involved:
+
+| Product | Store ID | Type | Owner store |
+|---------|----------|------|-------------|
+| AI Features unlock | `andreibaludev.Pageless.ai_unlock` | Non-consumable | `AIEntitlementStore` |
+| iCloud Sync | `andreibaludev.Pageless.icloudsync.monthly` | Auto-renewable monthly ($0.99, **no free trial**) | `ICloudSubscriptionStore.shared` |
+
+- **`ICloudSubscriptionStore`** mirrors `AIEntitlementStore`'s shape: `loadProduct()` (`Product.products(for:)`), `refreshEntitlements()` (`Transaction.currentEntitlements`), `purchase()`, `restorePurchases()`, and a `Transaction.updates` listener. It's a **singleton** because `AppDelegate.init` reads `isSubscribedAtLaunch()` (a UserDefaults cache) when choosing the SwiftData CloudKit database before SwiftUI env objects exist.
+- **No free trial.** `introOfferDisplay` returns nil unless the App Store product actually carries a `.freeTrial` introductory offer, so the UI shows "Subscribe" + "$0.99/month" rather than promising a trial that ASC isn't configured for. Don't reintroduce a hardcoded trial string.
+- **Reachability (Apple 3.1.1).** The iCloud Sync purchase must be reachable in the reviewed build: Settings → "iCloud Sync" hero card (shown **unconditionally** in `SettingsView.unlockSection`) → `ICloudSettingsView` → "Subscribe". It is **not** hidden behind an iCloud sign-in. A prior build was rejected under 3.1.1 for shipping the subscription product without an in-app purchase path.
+- **RevenueCat (removed — re-enable notes).** RC ran in observer mode (`purchasesAreCompletedBy: .myApp`, SK2) purely for dashboard metrics; the app never gated on it. To bring it back: re-add the `purchases-ios-spm` SPM package, uncomment the `// RevenueCat disabled`-marked blocks in `AppDelegate` (`Purchases.configure(...)`, `#if !DEBUG`-gated), `AIEntitlementStore`, and `ICloudSubscriptionStore` (`recordPurchase`/`syncPurchases`, guarded by `if Purchases.isConfigured`), then re-add the RevenueCat disclosures to `privacy-policy.md`. RC config still exists server-side (project `proj0c83cb7e`, app `app5156e9dfbb`; entitlements `andreibaludev.Pageless.ai_unlock`/`$rc_lifetime` and `icloud_sync`/`$rc_monthly` on the `default` offering). RC only configures in Release builds (Xcode's local `Products.storekit` produces simulated receipts RC's backend can't validate), so end-to-end verification needs a TestFlight build with a Sandbox tester.
 - AI features are isolated behind protocols; app works fully without Apple Intelligence
 - **iOS 18 deployment-target rule.** The deployment target is `18.0` but `FoundationModels` is iOS 26-only. The two service types (`MomentNamingService`, `RecapService`) carry `@available(iOS 26, *)`; `MomentAnalysis`/`MomentNamingError`/`RecapError`/`RecapGenerationResult` live in the protocol files so iOS-18 callers and mocks can use them without availability gating. ViewModel default initializers (`PlayerViewModel`, `AudiobookDetailViewModel`) branch on `if #available(iOS 26, *)` to construct the real service vs. the `Unavailable…` no-op stub. Any new AI-only API must follow the same pattern — never reference `FoundationModels` symbols outside an `@available`-gated type or an `if #available(iOS 26, *)` block.
 - **`SystemLanguageModel.default` has a ~4096-token budget shared between input and output.** When designing a `@Generable` struct, order fields so cheap structured outputs (single-token enums, short arrays) come first and the longest prose field is last — the model generates fields in declaration order and the trailing field is what gets clipped when the budget runs out. Post-process any free-text field to handle mid-sentence truncation (see `MomentNamingService.trimToCompleteSentences` / `sanitizedQuoteLine`); never trust the model to honor word/sentence-count guides on the long tail.
@@ -344,9 +361,9 @@ The app contains **two independent free-book paths** that coexist by design:
 
 ### iCloud Sync
 
-Library metadata, progress, moments, EQ configuration, and reading sessions sync across devices via CloudKit private database. Audio files are not synced — they must be re-acquired on each device.
+Library metadata, progress, moments, EQ configuration, and reading sessions sync across devices via CloudKit private database. Audio files are not synced — they must be re-acquired on each device. **iCloud Sync is a paid feature** — an auto-renewable monthly subscription ($0.99, no trial); see "In-App Purchases" above.
 
-- **`IcloudSyncGate`** — single decision point: reads the `iCloudSyncEnabled` UserDefaults toggle AND checks `FileManager.ubiquityIdentityToken`. When disabled, `AppDelegate` builds the SwiftData container with `.none` database. Container ID: `iCloud.andreibaludev.Pageless`.
+- **`IcloudSyncGate`** — single decision point: requires an active subscription (`ICloudSubscriptionStore.isSubscribedAtLaunch()`) AND the `iCloudSyncEnabled` UserDefaults toggle AND `FileManager.ubiquityIdentityToken`. When any is false, `AppDelegate` builds the SwiftData container with `.none` database. Container ID: `iCloud.andreibaludev.Pageless`.
 - **Split `ModelContainer`** — `AppDelegate` creates two configurations: `"synced"` (Audiobook/AudioTrack/Moment/ReadingSession → CloudKit private DB when enabled) and `"local"` (LibriVoxBook → never synced).
 - **Orphan detection** — `OrphanDetectionService` runs at launch and after every `NSPersistentCloudKitContainer.eventChangedNotification` import event. Any book marked `isDownloaded = true` whose storage folder is absent gets flipped to `isDownloaded = false`, making it a recoverable orphan.
 - **Fingerprinting** — `LibraryImportService` computes a SHA-256 content fingerprint (truncated to 16 bytes of audio data) for each imported track, stored on `AudioTrack.contentFingerprint`. `FingerprintBackfillService` backfills existing tracks on first launch after upgrade.

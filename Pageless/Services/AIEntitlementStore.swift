@@ -5,7 +5,8 @@
 
 import Combine
 import Foundation
-import RevenueCat
+// RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable purchase analytics.
+// import RevenueCat
 import StoreKit
 
 /// StoreKit 2 state for the non-consumable AI feature unlock.
@@ -101,9 +102,10 @@ final class AIEntitlementStore: ObservableObject {
         defer { isPurchasing = false }
         do {
             let result = try await product.purchase()
-            if Purchases.isConfigured {
-                _ = try? await Purchases.shared.recordPurchase(result)
-            }
+            // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
+            // if Purchases.isConfigured {
+            //     _ = try? await Purchases.shared.recordPurchase(result)
+            // }
             switch result {
             case .success(let verification):
                 switch verification {
@@ -130,9 +132,10 @@ final class AIEntitlementStore: ObservableObject {
         restoreError = nil
         do {
             try await AppStore.sync()
-            if Purchases.isConfigured {
-                _ = try? await Purchases.shared.syncPurchases()
-            }
+            // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
+            // if Purchases.isConfigured {
+            //     _ = try? await Purchases.shared.syncPurchases()
+            // }
             await refreshEntitlements()
         } catch {
             restoreError = error.localizedDescription
@@ -145,9 +148,10 @@ final class AIEntitlementStore: ObservableObject {
             case .verified(let transaction):
                 guard transaction.productID == AIProductID.unlock else { continue }
                 await transaction.finish()
-                if Purchases.isConfigured {
-                    _ = try? await Purchases.shared.syncPurchases()
-                }
+                // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
+                // if Purchases.isConfigured {
+                //     _ = try? await Purchases.shared.syncPurchases()
+                // }
                 await refreshEntitlements()
             case .unverified:
                 break
