@@ -437,15 +437,9 @@ struct SettingsView: View {
                 VStack(spacing: 0) {
                     linkRow(title: "Privacy Policy", destination: LegalURLs.privacyPolicy, isLast: false)
                     linkRow(title: "Terms of Use", destination: LegalURLs.termsOfUse, isLast: true)
-                    SettingsCardFooter(text: aboutFooterText)
                 }
             }
         }
-    }
-
-    private var aboutFooterText: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2"
-        return "Unpaged · v\(version) \u{2014} handcrafted for slow listening."
     }
 
     private func linkRow(title: String, destination: URL, isLast: Bool) -> some View {
