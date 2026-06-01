@@ -169,51 +169,10 @@ Pageless/
     ├── BookDescriptionFormatting.swift     HTML fragment → plain text (entity decoding, block breaks)
     └── Color+Theme.swift                   Cream/cardWhite theme with dark mode
 
-PagelessTests/
-├── Mocks/
-│   ├── MockTranscriptionService.swift
-│   ├── MockMomentAnalyzer.swift
-│   ├── MockRecapService.swift
-│   ├── MockAudioExtractor.swift
-│   └── MockFreeBookDownloadService.swift
-├── ModelTests/
-│   ├── AudiobookTests.swift
-│   ├── AudiobookAdditionalTests.swift
-│   ├── AudiobookEqualizerTests.swift
-│   ├── AudiobookFreeBookTests.swift
-│   ├── AudioTrackTests.swift
-│   ├── EqualizerSettingsTests.swift
-│   ├── FreeBookCatalogEntryTests.swift
-│   ├── MomentTests.swift
-│   └── SchemaCompatibilityTests.swift   CloudKit schema constraint checks (no `.unique` on synced models, explicit inverses)
-├── ServiceTests/
-│   ├── AudioEqualizerServiceTests.swift
-│   ├── AudioPlayerManagerSkipTests.swift
-│   ├── AudioSessionInterruptionTests.swift
-│   ├── AudiobookSavedProgressResumeTests.swift
-│   ├── FreeBookCatalogServiceTests.swift
-│   ├── FreeBookDownloadServiceTests.swift
-│   ├── LibraryImportFingerprintTests.swift  SHA-256 fingerprint generation + backfill logic
-│   ├── MomentNamingServiceLogicTests.swift
-│   ├── NowPlayingUpdaterTests.swift
-│   ├── OnboardingManagerTests.swift
-│   ├── OrphanRestoreServiceTests.swift      Orphan adopt / fingerprint matching
-│   ├── PlaybackPersistenceTests.swift
-│   ├── RecapServiceLogicTests.swift
-│   └── SiriIntentTests.swift
-├── ServicesTests/
-│   └── PlaybackPersistenceRecapTests.swift
-└── ViewModelTests/
-    ├── AudiobookDetailViewModelFilterTests.swift
-    ├── AudiobookDetailViewModelTests.swift
-    ├── LibraryViewModelFreeBookTests.swift
-    ├── LibraryViewModelTests.swift
-    ├── PlayerViewModelCommitTests.swift
-    └── PlayerViewModelTests.swift
-
-PagelessUITests/
-├── PagelessUITests.swift
-└── PagelessUITestsLaunchTests.swift
+PagelessTests/ — Swift Testing. Mocks/ (one per protocol service), ModelTests/,
+  ServiceTests/, ViewModelTests/. SchemaCompatibilityTests validates CloudKit
+  constraints (no `.unique` on synced models, explicit inverses).
+PagelessUITests/ — launch + UI tests.
 ```
 
 ## Data Layer (SwiftData)
@@ -222,37 +181,7 @@ PagelessUITests/
 
 Audio files for downloaded books are stored at `Application Support/Audiobooks/[UUID]/`. Cover images use SwiftData external storage. Streaming-only books store remote URLs on `AudioTrack` and have `Audiobook.isDownloaded == false`.
 
-```
-Audiobook (@Model final)
-├── id: UUID, title, author, folderName, coverArtData (external storage), createdAt, lastPlayedAt
-├── Playback state: currentTrackIndex, currentTime, playbackRate, isFinished, totalDuration
-├── Progress marker: progressTrackIndex?, progressTime?, progressUpdatedAt?
-├── Progress recap: progressRecapText?, progressRecapHeadline?, progressRecapAnchorTrackIndex?, progressRecapAnchorTime?
-├── Free-book metadata: isFavorite, isFreeBook, catalogId?, isDownloaded (false ⇒ streaming-only)
-├── Equalizer state (per-book): equalizerConfiguration → {isEnabled, preset, preampDB, bandGainsDB[5]} (JSON-backed)
-├── Computed: listenedDuration, progress, remainingDuration, currentTrackTitle, displayAuthor, castList, isStreamingOnly
-├── Recap helpers: clearProgressRecap(), storeProgressRecap(...), discardProgressRecapIfAnchorMismatched()
-└── @Relationship: tracks[] + moments[] (both cascade delete)
-
-AudioTrack (@Model final)
-└── id, title, originalFileName, storedFileName, orderIndex, duration, contentFingerprint? (SHA-256 hex, used for iCloud orphan matching), audiobook?
-
-Moment (@Model final)
-├── id, trackIndex, time, createdAt
-├── label, transcript?, aiGeneratedName, notes, isPinned
-├── AI fields (JSON-serialized): categories[], quoteLine?, characters[], mood?
-└── audiobook?
-
-LibriVoxBook (@Model final)
-├── id (unique), title, authorDisplay, bookDescription, language, totalTimeSecs
-├── genres (JSON-backed), cachedTracks (JSON-backed [CachedLibriVoxTrack]), cover URLs, RSS URL
-└── Computed: formattedDuration, estimatedDownloadSizeMB, bestCoverURL
-
-ReadingSession (@Model final)
-├── id (unique), date (start-of-day), dayKey ("YYYY-MM-DD"), hour (0...23), minutes (≥1)
-├── Book snapshot (so stats survive book deletion): bookID, bookTitle, bookAuthor, isFreeBook
-└── createdAt
-```
+Model field listings live in the model source files (`Models/`). Non-obvious points: `Audiobook` cascade-deletes its `tracks[]` + `moments[]`; `AudioTrack.contentFingerprint` (SHA-256 hex) drives iCloud orphan matching; `Moment` stores AI fields (categories/quoteLine/characters/mood) JSON-serialized; `ReadingSession` snapshots book metadata (bookID/title/author/isFreeBook) so stats survive book deletion.
 
 **Schema evolution**: New columns use private backing fields with computed getters/setters (e.g., `_isFavorite`, `_isFreeBook`, `_isDownloaded`, `_progressRecap*`, `_eqBandGainsJSON`, `_eqPresetRaw`, `_contentFingerprint`) for SwiftData lightweight migration. All post-launch fields are nullable on disk and given safe defaults in the computed accessor.
 
@@ -380,35 +309,6 @@ Library metadata, progress, moments, EQ configuration, and reading sessions sync
 
 ### Siri / App Intents
 - `AudiobookIntents.swift` — `PlayLatestBookIntent` exposed via `UnpagedAppShortcuts: AppShortcutsProvider` ("Play Latest Book"). Triggered shortcut writes a UserDefaults flag and `PagelessApp` consumes it on `scenePhase == .active`.
-
-## View Hierarchy
-
-```
-PagelessApp (@main)
-└── WindowGroup → ContentView (LibraryViewModel)
-    ├── EnvironmentObjects: AudioPlayerManager, AudioEqualizerService, AIEntitlementStore
-    ├── Environment: OnboardingManager, FreeBookDownloadService
-    ├── NavigationStack
-    │   ├── libraryHeader (sort options)
-    │   ├── tabPicker (Favorites / All Books / Free Books)
-    │   ├── (Favorites tab only) ReadingActivityCard → NavigationLink → ReadingStatsView (zoom transition)
-    │   └── booksGrid OR BrowseLibriVoxView
-    │       ├── (library tabs) LazyVGrid → AudiobookCardView[] → AudiobookDetailView (AudiobookDetailViewModel)
-    │       │   ├── resumeAnchorRow (play from progress or recap)
-    │       │   ├── MomentRow[] → MomentEditSheet
-    │       │   ├── MomentFilterSheet
-    │       │   └── AudiobookTrackRow[]
-    │       └── (free-books tab) BrowseLibriVoxView (BrowseLibriVoxViewModel)
-    │           ├── LibriVoxBookRow[] (with inline SamplePlayer button)
-    │           └── LibriVoxBookDetailView (LibriVoxBookDetailViewModel)
-    ├── MiniPlayerBar (when currentAudiobook != nil)
-    ├── PlayerView (.sheet, full-screen) → PlayerViewModel
-    │   ├── MomentEditSheet (.sheet)
-    │   └── EqualizerSheet (.sheet)
-    ├── ImportAudiobookSheet (.sheet)
-    ├── SettingsView (.sheet)
-    └── AISettingsView (.sheet)
-```
 
 ## Settings & Preferences
 
