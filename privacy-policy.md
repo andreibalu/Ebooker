@@ -2,7 +2,7 @@
 
 _Last updated: May 28, 2026_
 
-Unpaged ("the app") is an audiobook player developed by Andrei Balu. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data about you, and the app has no backend server of its own.** The only data that leaves your device goes to Apple (for in-app purchases) and to LibriVox/Internet Archive (when you browse or download free books) — never your name, email, or payment details. Details below.
+Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data about you, and the app has no backend server of its own.** The only data that leaves your device goes to Apple (for in-app purchases) and to LibriVox/Internet Archive (when you browse or download free books) — never your name, email, or payment details. Details below.
 
 ## What stays on your device
 

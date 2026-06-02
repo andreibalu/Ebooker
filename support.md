@@ -63,20 +63,40 @@ You can cancel or change the iCloud Sync subscription anytime from **Settings �
 
 ### How do I delete an audiobook?
 
-Long-press the book cover in your library and choose **Delete**. This removes all associated files, bookmarks, and progress.
+Long-press the book cover in your library and choose **Delete**.
+
+- **With iCloud Sync on**, this removes the audio from *this iPhone* but keeps the book in your **iCloud Library** — your progress, bookmarks, recaps, and equalizer settings stay safely backed up, and you can restore the book anytime (see "How do I restore my library" below). A book is only ever permanently erased from iCloud when you swipe to delete it inside **Settings → iCloud Library**.
+- **With iCloud Sync off**, you choose whether to remove the book from Unpaged only, or also delete its imported audio files from local storage. Nothing is backed up.
+
+**Free books work the same way.** With iCloud Sync on, removing a free (LibriVox) book from your library keeps its progress and bookmarks in your **iCloud Library**. There are three ways to pick up where you left off:
+
+- **Re-add it from the Free Books tab.** Because every free book carries its LibriVox ID, Unpaged recognises the book automatically and asks whether to **Import from iCloud** (restoring your progress and bookmarks) or **Add as New** — whether you stream it or download it.
+- **From iCloud Library.** Open **Settings → iCloud Library**, find it under **Free books**, and tap **Stream**.
+- **If you chose "Add as New"** and later change your mind, open the book and tap the **iCloud** button in the top-right corner to import your backup.
+
+With sync off, removing a free book simply takes it out of your library; you can always add it again from the **Free Books** tab.
 
 ### Will my bookmarks and progress sync to other devices?
 
 Yes — opt-in iCloud sync is available as an auto-renewing subscription (US$0.99/month, billed through your Apple ID; prices vary by region). Open **Settings** inside Unpaged, tap the **iCloud Sync** card, and subscribe, then turn on **Sync library with iCloud**. The first time you toggle it on you'll be asked to quit and reopen the app so the new iCloud-backed store takes effect. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ. Cancel anytime in your Apple ID subscription settings; access continues through the end of the billing period. Everything else in Unpaged stays free.
 
+### How do I know a book is backed up to iCloud?
+
+When iCloud Sync is on, every book shows a small **iCloud checkmark** — on its cover in the library and as a "Backed up to iCloud" line on its detail screen. Subscribers also get a quick **iCloud button at the top of the library** (and the same screen under **Settings → iCloud Library**) showing a complete list of everything that's backed up. If you're not subscribed (or sync is off), the badge doesn't appear, because nothing is being backed up.
+
 ### How do I restore my library on a new iPhone (or after reinstalling)?
 
 1. Sign in to the same iCloud account on the new device and install Unpaged.
 2. Open **Settings → Sync library with iCloud** and turn it on. Within a minute or two your library titles and metadata will appear.
-3. Open **Settings → Cloud Library** to see every book waiting to be re-acquired:
-   - **Free books** — tap **Stream** to start listening immediately, or open the book and re-download for offline listening. Your bookmarks, progress, EQ, and recaps are already restored.
-   - **Your own imports** — tap **Locate…**, pick the same audio file from Files / iCloud Drive, and Unpaged will fingerprint-match it. If the file matches, your bookmarks and progress flow straight back onto it. If it doesn't match exactly, you'll see a warning and can still adopt the file if you're confident it's the right book.
+3. Open **Settings → iCloud Library** to see **every book you've ever added** — nothing is hidden. Books are grouped so you can tell at a glance what's backed up and what's on this device:
+   - **On this iPhone** — books whose audio is downloaded here (your own imports and downloaded free books). These show a checkmark; they're safe in iCloud and ready to play offline.
+   - **Streaming** — free books you're keeping as streaming entries. No download, but fully backed up.
+   - **In iCloud only** — your own imports that synced down without their audio. Tap **Locate…**, pick the same audio file from Files / iCloud Drive, and Unpaged will fingerprint-match it. If the file matches, your bookmarks and progress flow straight back onto it. If it doesn't match exactly, you'll see a warning and can still adopt the file if you're confident it's the right book.
+   - **Removed free books** — free books you removed from your library. Tap **Stream** to bring one back instantly, or open it and re-download for offline listening. Your bookmarks, progress, EQ, and recaps are already restored.
 4. You can also just re-import a book the normal way (tap **+** in the library) — if the file matches an iCloud copy, Unpaged offers to restore it for you on the spot.
+5. If you added a book as new and only later realized it has an older iCloud backup, open the book and tap the **iCloud** button in the top-right corner to pick the matching entry and pull its progress and bookmarks onto your copy. (The button appears only when iCloud Sync is on and there's a matching backup to merge into.)
+
+Your iCloud Library keeps every book forever — it's only emptied when you swipe to delete a row inside **Settings → iCloud Library**, which permanently removes that book from iCloud on all your devices.
 
 ## Troubleshooting
 

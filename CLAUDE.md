@@ -14,19 +14,20 @@ The three names are intentional historical layers — do not "fix" them. New use
 
 ## External-facing docs
 
-The repo ships two markdown files that are hosted publicly (currently via GitHub Gist) and linked from the App Store listing:
+The repo ships three markdown files that are hosted publicly (currently via GitHub Gist) and linked from the App Store listing:
 
 - `support.md` — Support URL contents (FAQ, troubleshooting, contact)
 - `privacy-policy.md` — Privacy Policy URL contents
+- `EULA.md` — End User License Agreement (Apple standard EULA + IAP/subscription terms)
 
 **Keep these in sync with the app.** Whenever a change touches any of the following, update the relevant file(s) in the same commit:
 
-- Permissions requested (`Info.plist` `NS*UsageDescription` keys) → both files
+- Permissions requested (`Info.plist` `NS*UsageDescription` keys) → support + privacy
 - Network behavior, third-party services, or data collected → `privacy-policy.md`
-- AI features, IAP terms, trial mechanics → both files
+- AI features, IAP terms, trial mechanics → all three (EULA §3 carries subscription/IAP terms)
 - Supported devices, minimum iOS version (`IPHONEOS_DEPLOYMENT_TARGET`, `TARGETED_DEVICE_FAMILY`) → `support.md`
 - New user-visible features that warrant a FAQ entry → `support.md`
-- Contact email or developer name → both files
+- Contact email or developer name → all three (use the same "Andrei Baluta" spelling everywhere)
 
 After editing, remind the user to push the new content to their public Gist(s) — the repo files are the source of truth, but the App Store points to the Gist URLs.
 
@@ -64,116 +65,55 @@ External packages: **none.** All code uses native Apple frameworks only (AVFound
 
 ### Folder Structure
 
+Navigation map only — per-file detail lives in the topical sections below (Data Layer,
+ViewModels, Services, Feature Systems). Non-obvious hints kept inline; self-evident files listed bare.
+
 ```
 Pageless/
 ├── App/
-│   ├── PagelessApp.swift          @main; ModelContainer, scene wiring, env injection, voice-permission priming, Siri shortcut handoff
-│   ├── AppDelegate.swift          Owns split ModelContainer (synced+local configs), AudioPlayerManager, FreeBookDownloadService; background URLSession handler; CarPlay scene config; observes NSPersistentCloudKitContainer.eventChangedNotification to re-run orphan detection after CloudKit import batches
-│   └── CarPlaySceneDelegate.swift CarPlay interface controller connector
-├── AppIntents/
-│   └── AudiobookIntents.swift     `PlayLatestBookIntent` + `UnpagedAppShortcuts` provider ("Play Latest Book")
+│   ├── PagelessApp.swift          @main; ModelContainer, scene wiring, voice-permission priming, Siri handoff
+│   ├── AppDelegate.swift          Split ModelContainer (synced+local); re-runs orphan detection on CloudKit import batches
+│   └── CarPlaySceneDelegate.swift
+├── AppIntents/AudiobookIntents.swift   `PlayLatestBookIntent` + `UnpagedAppShortcuts`
 ├── Configuration/
-│   ├── AIProductID.swift          StoreKit product IDs: `AIProductID.unlock` (non-consumable AI unlock) + `ICloudSyncProductID.monthly` (auto-renewable iCloud Sync subscription)
-│   └── Products.storekit          Local StoreKit test config (AI unlock non-consumable + iCloudSync subscription group, no intro offer)
-├── Models/
-│   ├── Audiobook.swift            SwiftData @Model; playback, progress marker, recap, EQ, streaming-vs-downloaded, free-book metadata
-│   ├── AudioTrack.swift           SwiftData @Model; per-track metadata (supports remote URLs for streaming); `contentFingerprint` (SHA-256 hex) for iCloud orphan matching
-│   ├── Moment.swift               SwiftData @Model; bookmarks with AI metadata
-│   ├── MomentEnums.swift          `MomentCategory` (10 types), `MomentMood` (8 types)
-│   ├── PlaybackSettings.swift     `LibrarySortOption`, `SkipIntervalOption`, `ResumeBacktrackOption`, `MomentBacktrackOption`, `SleepTimerOption`
-│   ├── EqualizerSettings.swift    `EqualizerBand`, `EqualizerPreset` (flat/voiceBoost/bassBoost/trebleBoost/podcast/custom), `EqualizerConfiguration`
-│   ├── LibriVoxBook.swift         SwiftData @Model for the cached LibriVox catalog (20k+ rows)
-│   ├── CachedLibriVoxTrack.swift  Lightweight non-persisted track snapshot embedded JSON-encoded inside `LibriVoxBook.cachedTracks`
-│   ├── ReadingSession.swift       SwiftData @Model; per-chunk listening row (book snapshot + hour bucket + minutes) feeding the Reading Activity heatmap
-│   ├── ReadingStats.swift         Non-persisted `ReadingStats` aggregate (`compute(sessions:booksFinished:)`) + `ReadingDayActivity` per-day rollup; also exposes `onboardingPreview` synthetic stats for the spotlight
-│   └── FreeBookCatalogEntry.swift Legacy non-persisted struct for the 5-seed CarPlay free-book catalog
-├── ViewModels/
-│   ├── PlayerViewModel.swift                Moment creation, AI naming workflow, smart save warning
-│   ├── AudiobookDetailViewModel.swift       Moment filtering, recap generation
-│   ├── LibraryViewModel.swift               Import workflow, delete/rename, legacy free-book downloads (CarPlay/seed catalog)
-│   ├── BrowseLibriVoxViewModel.swift        Catalog sync, search, filters (language/genre/duration), featured books, downloads-in-progress tracking
-│   ├── LibriVoxBookDetailViewModel.swift    Per-book "Download" and "Add to Library (streaming)" state machines
-│   └── StreamedBookDownloadViewModel.swift  Promotes a streaming-only `Audiobook` to a fully downloaded one
-├── Views/
-│   ├── ContentView.swift          Root tabs (Favorites / All Books / Free Books), sort, mini player, sheet routing
-│   ├── PlayerView.swift           Full-screen player with controls, moment saving, EQ entry
-│   ├── AudiobookDetailView.swift  Tracks, moments grid, recap, cover editing
-│   ├── AudiobookCardView.swift    Library grid cell
-│   ├── AudiobookTrackRow.swift    Track list item
-│   ├── MiniPlayerBar.swift        Persistent bottom playback bar
-│   ├── MomentRow.swift            Moment list item with play/edit
-│   ├── MomentEditSheet.swift      Modal for naming moments + AI-generated metadata display
-│   ├── MomentFilterSheet.swift    Category/character/mood filtering UI
-│   ├── ImportAudiobookSheet.swift Import workflow with file preview
-│   ├── SettingsView.swift         Playback preferences + two "Unlock" hero cards (AI → AISettingsView, iCloud Sync → ICloudSettingsView); iCloud card shown unconditionally for IAP reachability
-│   ├── AISettingsView.swift       AI feature toggles, trial management, IAP unlock
-│   ├── ICloudSettingsView.swift   iCloud Sync subscription purchase/restore UI + sync toggle + Cloud Library/Manage Subscription links (pushed from SettingsView)
-│   ├── CoverCropView.swift        Image cropping interface for cover art
-│   ├── CloudLibraryView.swift     iCloud orphan recovery: own-book "Locate…" file picker + free-book one-tap stream restore
-│   ├── RestoreMatchSheet.swift    Shown on import when fingerprint matches a synced orphan; prompts "Restore from iCloud" vs "Add as new"
-│   ├── GeneratedCoverView.swift   Deterministic letter-template cover used as universal fallback when `coverArtData == nil`; also renders to UIImage for MPNowPlayingInfoCenter / CarPlay artwork
-│   ├── EqualizerSheet.swift       5-band EQ + preamp + presets UI; mounted from player
-│   ├── FreeBooks/
-│   │   ├── BrowseLibriVoxView.swift       Search + filters + featured + active downloads
-│   │   ├── LibriVoxBookDetailView.swift   Cover/metadata, sample preview, download/add-to-library
-│   │   └── LibriVoxBookRow.swift          Search result row with inline sample button
-│   ├── ReadingStats/
-│   │   ├── ReadingActivityCard.swift     Compact heatmap card pinned at the top of the Favorites tab; tap pushes the full screen
-│   │   ├── ReadingStatsView.swift        Full-screen stats view (zoom-transitions out of the card)
-│   │   ├── ReadingStatsSections.swift    Hero, totals, best day, polar best-time-of-day chart, longest book, streaks, metrics, free-books ring
-│   │   └── ReadingHeatmap.swift          Reusable heatmap renderer + `HeatmapPalette` (uses `.amber` by default)
-│   └── Onboarding/
-│       ├── OnboardingStep.swift          Enum defining the 7 onboarding steps (5 phase-1 + 2 phase-2)
-│       └── SpotlightOverlayView.swift    Spotlight tutorial overlay
+│   ├── AIProductID.swift          `AIProductID.unlock` + `ICloudSyncProductID.monthly`
+│   └── Products.storekit          Local StoreKit test config
+├── Models/                        Audiobook, AudioTrack, Moment, MomentEnums, PlaybackSettings,
+│                                  EqualizerSettings, LibriVoxBook, CachedLibriVoxTrack,
+│                                  ReadingSession, ReadingStats, FreeBookCatalogEntry (legacy)
+├── ViewModels/                    Player, AudiobookDetail, Library, BrowseLibriVox,
+│                                  LibriVoxBookDetail, StreamedBookDownload  (see ViewModels table)
+├── Views/                         ContentView (root tabs + per-tab sort + header iCloud button),
+│   │                              Player, AudiobookDetail, AudiobookCard/TrackRow, MiniPlayerBar,
+│   │                              Moment{Row,EditSheet,FilterSheet}, ImportAudiobookSheet,
+│   │                              Settings/AISettings/ICloudSettings, CoverCropView, CloudLibraryView,
+│   │                              ICloudBackupBadge, RestoreMatchSheet, GeneratedCoverView, EqualizerSheet
+│   ├── FreeBooks/                 BrowseLibriVoxView, LibriVoxBookDetailView, LibriVoxBookRow
+│   ├── ReadingStats/              ReadingActivityCard, ReadingStatsView, ReadingStatsSections, ReadingHeatmap
+│   └── Onboarding/                OnboardingStep, SpotlightOverlayView
 ├── Services/
-│   ├── Protocols/
-│   │   ├── TranscriptionProviding.swift
-│   │   ├── MomentAnalyzing.swift              (also defines `MomentAnalysis`, `MomentNamingError`, and `UnavailableMomentAnalyzer` fallback for iOS < 26)
-│   │   ├── AudioExtracting.swift
-│   │   ├── RecapProviding.swift               (also defines `RecapGenerationResult`, `RecapError`, and `UnavailableRecapProvider` fallback for iOS < 26)
-│   │   └── FreeBookDownloading.swift          (legacy seed-catalog download protocol)
-│   ├── AudioPlayerManager.swift            Central playback state (ObservableObject); owns `equalizer: AudioEqualizerService`
-│   ├── PlaybackPersistence.swift           Progress tracking, high-water mark, SwiftData saves
-│   ├── NowPlayingUpdater.swift             MPRemoteCommandCenter + MPNowPlayingInfoCenter
-│   ├── LibraryImportService.swift          User-file import with security-scoped access (enum + static methods)
-│   ├── TranscriptionService.swift          Speech framework wrapper
-│   ├── MomentNamingService.swift           FoundationModels AI moment analysis — `@available(iOS 26, *)`
-│   ├── RecapService.swift                  FoundationModels progress recap generation — `@available(iOS 26, *)`
-│   ├── ReadingSessionRecorder.swift        Accumulates wall-clock playback time and flushes `ReadingSession` rows (5-min chunks, lifecycle boundaries)
-│   ├── ReadingActivitySeeder.swift         DEBUG-only synthetic-activity seeder (113 days) for stats screen iteration
-│   ├── AudioExtractionService.swift        AVAssetExportSession audio segment extraction (50s segments)
-│   ├── AudioEqualizerService.swift         Live 5-band EQ + preamp orchestration; builds AVAudioMix; @Published bindings to UI
-│   ├── EqualizerTap.swift                  C-level MTAudioProcessingTap: biquad filters + soft limiter (realtime audio thread)
-│   ├── FreeBookCatalogService.swift        Legacy 5-seed catalog (Internet Archive) — still used by CarPlay
-│   ├── FreeBookDownloadService.swift       Legacy background URLSession seed-catalog downloader — used by CarPlay
-│   ├── LibriVoxAPIClient.swift             HTTP client for librivox.org (catalog pages, incremental sync, track lists)
-│   ├── LibriVoxCatalogSync.swift           Incremental + full sync into SwiftData (`LibriVoxBook`); 24h cadence
-│   ├── LibriVoxDownloadService.swift       Downloads LibriVox tracks → creates local `Audiobook`; also promotes streaming → downloaded
-│   ├── StreamingLibraryService.swift       Adds a streaming-only `Audiobook` (no files; remote URLs persisted on `AudioTrack`)
-│   ├── SamplePlayer.swift                  Singleton 20-second track preview (one book at a time)
-│   ├── NetworkMonitor.swift                Network framework reachability; `shared.isConnected`
-│   ├── OnboardingManager.swift             Multi-phase onboarding state (UserDefaults)
-│   ├── CarPlayCoordinator.swift            CarPlay UI templates, now-playing, moment saving, legacy free-book browsing
-│   ├── CarPlayVoiceSearch.swift            Hands-free dictation: mic → Speech framework with silence auto-stop
-│   ├── VoiceSearchPermissions.swift        Centralised mic + speech permission gating (primed at app launch)
-│   ├── AudiobookSavedProgressResume.swift  Resume-from-bookmark logic (enum)
-│   ├── AppleIntelligenceCapability.swift   Runtime AI feature detection; iOS-18-safe (internal `#available(iOS 26, *)` branches, returns `.unsupportedDevice` below iOS 26)
-│   ├── AIEntitlementStore.swift            StoreKit 2 IAP (non-consumable AI unlock) + trial-use tracking
-│   ├── ICloudSubscriptionStore.swift       StoreKit 2 store for the auto-renewable iCloud Sync subscription (singleton `.shared`); `isSubscribedAtLaunch()` cache read by `IcloudSyncGate`
-│   ├── IcloudSyncGate.swift                Opt-in iCloud sync gate: reads `iCloudSyncEnabled` UserDefaults toggle + ubiquity identity check; holds CloudKit container ID
-│   ├── FingerprintBackfillService.swift    One-shot background pass to SHA-256-fingerprint pre-existing tracks for orphan matching after upgrade
-│   ├── OrphanDetectionService.swift        At launch (and after each CloudKit import batch), flips `isDownloaded=false` for books whose storage folder is absent on this device
-│   └── OrphanRestoreService.swift          Fingerprint-matches a pending import to a synced orphan and rewrites its `AudioTrack` records in-place, preserving moments/progress/EQ
-└── Utilities/
-    ├── TimeFormatter.swift                 Clock string formatting, duration summaries
-    ├── BookDescriptionFormatting.swift     HTML fragment → plain text (entity decoding, block breaks)
-    └── Color+Theme.swift                   Cream/cardWhite theme with dark mode
-
-PagelessTests/ — Swift Testing. Mocks/ (one per protocol service), ModelTests/,
-  ServiceTests/, ViewModelTests/. SchemaCompatibilityTests validates CloudKit
-  constraints (no `.unique` on synced models, explicit inverses).
-PagelessUITests/ — launch + UI tests.
+│   ├── Protocols/                 TranscriptionProviding, MomentAnalyzing, AudioExtracting,
+│   │                              RecapProviding, FreeBookDownloading
+│   │                              (MomentAnalyzing/RecapProviding also hold the iOS<26 Unavailable… fallbacks)
+│   ├── AudioPlayerManager.swift   Central playback state; owns `equalizer: AudioEqualizerService`
+│   ├── (playback)                 PlaybackPersistence, NowPlayingUpdater, AudiobookSavedProgressResume
+│   ├── (import/AI)                LibraryImportService, TranscriptionService, MomentNamingService²⁶,
+│   │                              RecapService²⁶, AudioExtractionService, AppleIntelligenceCapability
+│   ├── (stats)                    ReadingSessionRecorder, ReadingActivitySeeder (DEBUG-only)
+│   ├── (EQ)                       AudioEqualizerService, EqualizerTap (C MTAudioProcessingTap)
+│   ├── (LibriVox)                 LibriVoxAPIClient, LibriVoxCatalogSync, LibriVoxDownloadService,
+│   │                              StreamingLibraryService, SamplePlayer, NetworkMonitor
+│   ├── (CarPlay/legacy)           CarPlayCoordinator, CarPlayVoiceSearch, VoiceSearchPermissions,
+│   │                              FreeBookCatalogService, FreeBookDownloadService
+│   ├── (IAP)                      AIEntitlementStore, ICloudSubscriptionStore, IcloudSyncGate
+│   ├── (iCloud sync)              FingerprintBackfillService, OrphanDetectionService, OrphanRestoreService
+│   └── OnboardingManager.swift
+└── Utilities/                     TimeFormatter, BookDescriptionFormatting, Color+Theme (`amber` accent)
 ```
+`²⁶` = `@available(iOS 26, *)`.
+
+PagelessTests/ — Swift Testing. Mocks/ (one per protocol service), ModelTests/, ServiceTests/,
+  ViewModelTests/. SchemaCompatibilityTests validates CloudKit constraints. PagelessUITests/ — launch + UI tests.
 
 ## Data Layer (SwiftData)
 
@@ -245,7 +185,7 @@ The app sells **two IAPs**, both StoreKit-owned. The app gates on StoreKit direc
 - **`ICloudSubscriptionStore`** mirrors `AIEntitlementStore`'s shape: `loadProduct()` (`Product.products(for:)`), `refreshEntitlements()` (`Transaction.currentEntitlements`), `purchase()`, `restorePurchases()`, and a `Transaction.updates` listener. It's a **singleton** because `AppDelegate.init` reads `isSubscribedAtLaunch()` (a UserDefaults cache) when choosing the SwiftData CloudKit database before SwiftUI env objects exist.
 - **No free trial.** `introOfferDisplay` returns nil unless the App Store product actually carries a `.freeTrial` introductory offer, so the UI shows "Subscribe" + "$0.99/month" rather than promising a trial that ASC isn't configured for. Don't reintroduce a hardcoded trial string.
 - **Reachability (Apple 3.1.1).** The iCloud Sync purchase must be reachable in the reviewed build: Settings → "iCloud Sync" hero card (shown **unconditionally** in `SettingsView.unlockSection`) → `ICloudSettingsView` → "Subscribe". It is **not** hidden behind an iCloud sign-in. A prior build was rejected under 3.1.1 for shipping the subscription product without an in-app purchase path.
-- **RevenueCat (removed — re-enable notes).** RC ran in observer mode (`purchasesAreCompletedBy: .myApp`, SK2) purely for dashboard metrics; the app never gated on it. To bring it back: re-add the `purchases-ios-spm` SPM package, uncomment the `// RevenueCat disabled`-marked blocks in `AppDelegate` (`Purchases.configure(...)`, `#if !DEBUG`-gated), `AIEntitlementStore`, and `ICloudSubscriptionStore` (`recordPurchase`/`syncPurchases`, guarded by `if Purchases.isConfigured`), then re-add the RevenueCat disclosures to `privacy-policy.md`. RC config still exists server-side (project `proj0c83cb7e`, app `app5156e9dfbb`; entitlements `andreibaludev.Pageless.ai_unlock`/`$rc_lifetime` and `icloud_sync`/`$rc_monthly` on the `default` offering). RC only configures in Release builds (Xcode's local `Products.storekit` produces simulated receipts RC's backend can't validate), so end-to-end verification needs a TestFlight build with a Sandbox tester.
+- **RevenueCat (removed).** RC ran in observer mode purely for dashboard metrics; the app never gated on it. To re-enable: re-add the `purchases-ios-spm` package and uncomment the `// RevenueCat disabled` blocks (Release-only / `if Purchases.isConfigured`-guarded) in `AppDelegate`, `AIEntitlementStore`, `ICloudSubscriptionStore`, then restore the RC disclosures in `privacy-policy.md`. Server-side config still exists (project `proj0c83cb7e`, app `app5156e9dfbb`). End-to-end verification needs a TestFlight build (local `Products.storekit` receipts can't be validated by RC's backend).
 - AI features are isolated behind protocols; app works fully without Apple Intelligence
 - **iOS 18 deployment-target rule.** The deployment target is `18.0` but `FoundationModels` is iOS 26-only. The two service types (`MomentNamingService`, `RecapService`) carry `@available(iOS 26, *)`; `MomentAnalysis`/`MomentNamingError`/`RecapError`/`RecapGenerationResult` live in the protocol files so iOS-18 callers and mocks can use them without availability gating. ViewModel default initializers (`PlayerViewModel`, `AudiobookDetailViewModel`) branch on `if #available(iOS 26, *)` to construct the real service vs. the `Unavailable…` no-op stub. Any new AI-only API must follow the same pattern — never reference `FoundationModels` symbols outside an `@available`-gated type or an `if #available(iOS 26, *)` block.
 - **`SystemLanguageModel.default` has a ~4096-token budget shared between input and output.** When designing a `@Generable` struct, order fields so cheap structured outputs (single-token enums, short arrays) come first and the longest prose field is last — the model generates fields in declaration order and the trailing field is what gets clipped when the budget runs out. Post-process any free-text field to handle mid-sentence truncation (see `MomentNamingService.trimToCompleteSentences` / `sanitizedQuoteLine`); never trust the model to honor word/sentence-count guides on the long tail.
@@ -258,7 +198,7 @@ The app contains **two independent free-book paths** that coexist by design:
 
 1. **LibriVox catalog (primary, iPhone)** — 20,000+ books from librivox.org. Cached locally in `LibriVoxBook` via `LibriVoxCatalogSync` (24h incremental sync). UI is the "Free Books" tab in `ContentView`, driven by `BrowseLibriVoxView` → `LibriVoxBookDetailView`. Supports:
    - **Add to Library (streaming)** via `StreamingLibraryService` — creates an `Audiobook` with `isDownloaded == false` and remote URLs on each `AudioTrack`. No files written. Requires network at playback time.
-   - **Download** via `LibriVoxDownloadService` — fetches all tracks, creates a normal local `Audiobook`. Also used by `StreamedBookDownloadViewModel` to promote an already-added streaming book to downloaded.
+   - **Download** via `LibriVoxDownloadService` — fetches all tracks, creates a downloaded `Audiobook` tagged as a free book (`isFreeBook = true`, `catalogId = book.id`, and each `AudioTrack` keeps its `remoteURLString`) so it shares the same iCloud identity as a streaming entry and can be matched/re-streamed by id after removal. Also used by `StreamedBookDownloadViewModel` to promote an already-added streaming book to downloaded.
    - **Sample preview** via `SamplePlayer` — 20s preview of a track without committing.
    - **Network gating** — `NetworkMonitor.shared.isConnected` checked before sample play, sync, and streaming.
    - **Covers are intentionally not fetched.** LibriVox cover URLs are unreliable, so both `LibriVoxDownloadService` and `StreamingLibraryService` always set `coverArtData = nil` and let `GeneratedCoverView` render the letter template. Don't reintroduce remote cover fetches here.
@@ -296,8 +236,11 @@ Library metadata, progress, moments, EQ configuration, and reading sessions sync
 - **Split `ModelContainer`** — `AppDelegate` creates two configurations: `"synced"` (Audiobook/AudioTrack/Moment/ReadingSession → CloudKit private DB when enabled) and `"local"` (LibriVoxBook → never synced).
 - **Orphan detection** — `OrphanDetectionService` runs at launch and after every `NSPersistentCloudKitContainer.eventChangedNotification` import event. Any book marked `isDownloaded = true` whose storage folder is absent gets flipped to `isDownloaded = false`, making it a recoverable orphan.
 - **Fingerprinting** — `LibraryImportService` computes a SHA-256 content fingerprint (truncated to 16 bytes of audio data) for each imported track, stored on `AudioTrack.contentFingerprint`. `FingerprintBackfillService` backfills existing tracks on first launch after upgrade.
-- **Restore on re-import** — when a user imports files on a new device, `LibraryViewModel` calls `OrphanRestoreService.findMatch` to fingerprint-compare against orphan candidates. A match triggers `RestoreMatchSheet` ("Restore from iCloud" / "Add as new"). `OrphanRestoreService.adopt` rewrites the orphan's `AudioTrack` records in-place, preserving all moments/progress/EQ.
-- **`CloudLibraryView`** — manual recovery screen (Settings → Cloud Library). Own-book orphans get a "Locate…" file picker; free-book orphans get a "Stream" button that re-enables streaming.
+- **Restore on re-import (own books)** — when a user imports files on a new device, `LibraryViewModel` calls `OrphanRestoreService.findMatch` to fingerprint-compare against orphan candidates. A match triggers `RestoreMatchSheet` ("Restore from iCloud" / "Add as new"). `OrphanRestoreService.adopt` rewrites the orphan's `AudioTrack` records in-place, preserving all moments/progress/EQ.
+- **Match by id (free books)** — free books carry no file fingerprint, so they match on `catalogId` instead. Removing a free book with sync on calls `LibraryImportService.archiveFreeBook` (drops files, sets `isArchived = true`, keeps the synced record + remote URLs). Re-adding the same book from the Free Books tab — streaming **or** downloading — calls `OrphanRestoreService.fetchFreeBackup(catalogId:)`; a hit raises a confirmation in `LibriVoxBookDetailView` ("Import from iCloud" reuses/re-downloads the backup in place, "Add as New" creates a fresh copy). If the user added as new, `AudiobookDetailView`'s iCloud button restores later via `OrphanRestoreService.restoreFreeBackup` (cloud-wins, no files to copy). `isArchived` is the free-book analogue of an own book's `!isDownloaded` orphan state — needed because free `!isDownloaded` alone is ambiguous (active streaming vs removed).
+- **`CloudLibraryView`** — the full iCloud Library, not just orphans: every book the user has ever added is always listed so backup is visibly verifiable. Reachable two ways: Settings → iCloud Library, **and** a dedicated iCloud button in the main library header that is shown only when `ICloudSubscriptionStore.isSubscribedAtLaunch()` (it replaced the old header sort button — sort moved to per-tab chevron menus). Four mutually-exclusive buckets — **On this iPhone** (`isDownloaded && !isArchived`, own + free), **Streaming** (`!isDownloaded && isFreeBook && !isArchived`, status-only), **In iCloud only** (`!isDownloaded && !isFreeBook`, "Locate…" picker), **Removed free books** (`isArchived && isFreeBook`, "Stream"). Swipe-to-delete on own rows is the **only** permanent cloud-delete path.
+- **`ICloudBackupBadge` (sync assurance)** — a subtle "Backed up to iCloud" affordance shown on each book (cover overlay + detail inline) whenever `IcloudSyncGate.isEnabled()`. NSPersistentCloudKitContainer exposes no per-object "synced" flag, so this is an honest *static* badge (sync on ⇒ every synced-store record is backed up), not a real-time pulse — gated on subscription+toggle so it never promises backup to non-subscribers.
+- **Delete copy is subscription-aware** — `ContentView`'s delete dialog branches all six paths (streaming-only / downloaded-free / own × sync-on/off) on `IcloudSyncGate.isEnabled()`. Subscriber own-book delete is a single non-destructive **"Remove from this iPhone"** (soft-delete: drops local audio, keeps the iCloud backup); there is intentionally no second local option (a "files-on-disk-but-not-in-library" state has no sensible meaning). Non-subscribers keep the two-option hard delete ("Remove from App" / "Also Delete Files").
 - **`isStreamingOnly` tiebreaker** — `Audiobook.isStreamingOnly` excludes own-book orphans (`!isDownloaded && !isFreeBook`) so they appear in Cloud Library, not treated as streaming books.
 
 ### CarPlay
@@ -334,7 +277,7 @@ All enums are `CaseIterable, Identifiable`.
 
 ## Testing
 
-Tests use Swift Testing framework (`import Testing`). To run: use `mcp__XcodeBuildMCP__test_sim` or `xcodebuild test`.
+Tests use Swift Testing framework (`import Testing`). To run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]` (there is no `*_sim` variant — see Build & Run).
 
 Mock implementations live in `PagelessTests/Mocks/`:
 - `MockTranscriptionService`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService`
