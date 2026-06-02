@@ -33,6 +33,16 @@ struct AudiobookCardView: View {
                         .padding(10)
                 }
 
+                // iCloud backup assurance (top leading of cover) — self-hides unless sync is active.
+                VStack {
+                    HStack {
+                        ICloudBackupBadge(style: .overlayIcon)
+                            .padding(10)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+
                 // Favorite heart button (bottom trailing of cover)
                 VStack {
                     Spacer()

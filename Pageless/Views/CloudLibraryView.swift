@@ -7,9 +7,14 @@ import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Manual recovery surface for books whose audio is missing from this device.
-/// Free books expose a one-tap re-download / stream action; own books point the user at
-/// the file importer with a fingerprint check.
+/// The user-facing iCloud Library: every book the user has ever added lives here permanently —
+/// shown whether or not its audio is present on this device — so the user can always confirm their
+/// data is backed up. Four buckets cover every possible state with nothing hidden:
+///   • "On this iPhone"     — downloaded own + free books (audio present locally).
+///   • "Streaming"          — active free books kept as streaming entries (backed up, no local files).
+///   • "In iCloud only"     — own books synced without their audio; restore via a "Locate…" picker.
+///   • "Removed free books" — free books the user removed; one-tap "Stream" brings them back.
+/// A row is only ever removed from iCloud by an explicit swipe-to-delete here.
 struct CloudLibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -22,56 +27,98 @@ struct CloudLibraryView: View {
     @State private var alertMessage: String?
     @State private var streamRestoreInFlight: Set<UUID> = []
     @State private var navigateToBook: Audiobook?
+    @State private var deleteCandidate: Audiobook?
 
-    private var ownOrphans: [Audiobook] {
-        allBooks
-            .filter { !$0.isDownloaded && !$0.isFreeBook }
-            .sorted { ($0.lastPlayedAt ?? $0.createdAt) > ($1.lastPlayedAt ?? $1.createdAt) }
+    private func byRecency(_ books: [Audiobook]) -> [Audiobook] {
+        books.sorted { ($0.lastPlayedAt ?? $0.createdAt) > ($1.lastPlayedAt ?? $1.createdAt) }
     }
 
-    private var freeOrphans: [Audiobook] {
-        allBooks
-            .filter { !$0.isDownloaded && $0.isFreeBook }
-            .sorted { ($0.lastPlayedAt ?? $0.createdAt) > ($1.lastPlayedAt ?? $1.createdAt) }
+    // Everything whose audio is present on this device — own imports and downloaded free books alike.
+    private var onThisPhone: [Audiobook] {
+        byRecency(allBooks.filter { $0.isDownloaded && !$0.isArchived })
+    }
+
+    // Active free books kept in the library as streaming entries (no local files, but fully backed up).
+    // Surfacing these is the whole point of "I always see every book": a streaming free book is safe
+    // in iCloud even though nothing is downloaded.
+    private var streamingFree: [Audiobook] {
+        byRecency(allBooks.filter { !$0.isDownloaded && $0.isFreeBook && !$0.isArchived })
+    }
+
+    // Own books that synced down without their audio on this device — restorable via "Locate…".
+    private var ownOrphans: [Audiobook] {
+        byRecency(allBooks.filter { !$0.isDownloaded && !$0.isFreeBook })
+    }
+
+    // Free books the user removed from their library but that stay backed up in iCloud ("Stream" to
+    // bring them back).
+    private var archivedFree: [Audiobook] {
+        byRecency(allBooks.filter { $0.isArchived && $0.isFreeBook })
     }
 
     var body: some View {
         List {
             if !iCloudSyncEnabled {
                 Section {
-                    Text("Turn on iCloud sync in Settings to see your library across devices.")
+                    Text("Turn on iCloud sync in Settings to back up your library and see it across devices.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 }
             }
 
-            if !ownOrphans.isEmpty {
-                Section("Your imports") {
-                    ForEach(ownOrphans) { book in
-                        ownBookRow(book)
+            if !onThisPhone.isEmpty {
+                Section("On this iPhone") {
+                    ForEach(onThisPhone) { book in
+                        downloadedRow(book)
+                            .swipeActions(edge: .trailing) {
+                                Button("Delete", role: .destructive) {
+                                    deleteCandidate = book
+                                }
+                            }
                     }
                 }
             }
 
-            if !freeOrphans.isEmpty {
-                Section("Free books") {
-                    ForEach(freeOrphans) { book in
+            if !streamingFree.isEmpty {
+                Section("Streaming") {
+                    ForEach(streamingFree) { book in
+                        streamingFreeRow(book)
+                    }
+                }
+            }
+
+            if !ownOrphans.isEmpty {
+                Section("In iCloud only") {
+                    ForEach(ownOrphans) { book in
+                        ownBookRow(book)
+                            .swipeActions(edge: .trailing) {
+                                Button("Delete", role: .destructive) {
+                                    deleteCandidate = book
+                                }
+                            }
+                    }
+                }
+            }
+
+            if !archivedFree.isEmpty {
+                Section("Removed free books") {
+                    ForEach(archivedFree) { book in
                         freeBookRow(book)
                     }
                 }
             }
 
-            if ownOrphans.isEmpty && freeOrphans.isEmpty && iCloudSyncEnabled {
+            if onThisPhone.isEmpty && streamingFree.isEmpty && ownOrphans.isEmpty && archivedFree.isEmpty && iCloudSyncEnabled {
                 Section {
-                    Text("Empty, no books missing from iCloud.")
+                    Text("Your iCloud Library is empty. Books you import will be backed up here automatically.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 }
             }
         }
-        .navigationTitle("Cloud Library")
+        .navigationTitle("iCloud Library")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $navigateToBook) { book in
             AudiobookDetailView(audiobook: book) {}
@@ -83,7 +130,22 @@ struct CloudLibraryView: View {
         ) { result in
             handleFileSelection(result)
         }
-        .alert("Cloud Library", isPresented: Binding(
+        .confirmationDialog(
+            "Remove from iCloud?",
+            isPresented: Binding(
+                get: { deleteCandidate != nil },
+                set: { if !$0 { deleteCandidate = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Permanently", role: .destructive) {
+                if let book = deleteCandidate { permanentlyDelete(book) }
+            }
+            Button("Cancel", role: .cancel) { deleteCandidate = nil }
+        } message: {
+            Text("Permanently removes ‘\(deleteCandidate?.title ?? "this book")’ and its progress, moments, and EQ from iCloud and all your devices. This can’t be undone.")
+        }
+        .alert("iCloud Library", isPresented: Binding(
             get: { alertMessage != nil },
             set: { if !$0 { alertMessage = nil } }
         )) {
@@ -91,6 +153,54 @@ struct CloudLibraryView: View {
         } message: {
             Text(alertMessage ?? "")
         }
+    }
+
+    @ViewBuilder
+    private func downloadedRow(_ book: Audiobook) -> some View {
+        HStack(spacing: 12) {
+            cover(for: book)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title)
+                    .font(.body.weight(.medium))
+                    .lineLimit(2)
+                Text(book.displayAuthor)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                metaLine(for: book)
+            }
+            Spacer()
+            Label("Saved", systemImage: "checkmark.icloud")
+                .labelStyle(.iconOnly)
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func streamingFreeRow(_ book: Audiobook) -> some View {
+        HStack(spacing: 12) {
+            cover(for: book)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(book.title)
+                    .font(.body.weight(.medium))
+                    .lineLimit(2)
+                Text(book.displayAuthor)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                metaLine(for: book)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 4) {
+                Label("Streaming", systemImage: "antenna.radiowaves.left.and.right")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Label("Backed up", systemImage: "checkmark.icloud")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.primary)
+            }
+            .labelStyle(.titleAndIcon)
+        }
+        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -177,14 +287,24 @@ struct CloudLibraryView: View {
         book.tracks.contains { $0.remoteURL != nil }
     }
 
+    private func permanentlyDelete(_ book: Audiobook) {
+        deleteCandidate = nil
+        do {
+            try LibraryImportService.deleteAudiobook(book, deleteFiles: true, modelContext: modelContext)
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+
     private func restoreStreaming(book: Audiobook) {
-        // The track URLs are already on the record — just flip isDownloaded back to false
-        // (no-op since it's already false here) and let the user tap play.
+        // Archived free books keep their remote track URLs — clearing the archive flag returns the
+        // book to the library as a streaming entry the user can play again (or re-download).
         streamRestoreInFlight.insert(book.id)
         defer { streamRestoreInFlight.remove(book.id) }
+        book.isArchived = false
         book.isDownloaded = false
         try? modelContext.save()
-        alertMessage = "‘\(book.title)’ is ready to stream — open it from your library."
+        alertMessage = "‘\(book.title)’ is back in your library — open it to stream."
     }
 
     private func handleFileSelection(_ result: Result<[URL], Error>) {

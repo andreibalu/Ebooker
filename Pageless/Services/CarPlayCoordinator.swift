@@ -219,8 +219,11 @@ final class CarPlayCoordinator: NSObject {
             return
         }
 
-        let favoriteBooks = libraryViewModel.sorted(all.filter(\.isFavorite), by: sortRaw)
-        let sortedAll = libraryViewModel.sorted(Array(all), by: sortRaw)
+        // Mirror the iPhone grid: only books playable on this device — never cloud-only own
+        // orphans or archived (user-removed) free books that live solely in the iCloud Library.
+        let library = all.filter { ($0.isDownloaded || $0.isFreeBook) && !$0.isArchived }
+        let favoriteBooks = libraryViewModel.sorted(library.filter(\.isFavorite), by: sortRaw)
+        let sortedAll = libraryViewModel.sorted(library, by: sortRaw)
 
         carPlayLog.info("refresh: favorites=\(favoriteBooks.count, privacy: .public) all=\(sortedAll.count, privacy: .public)")
 
@@ -592,6 +595,11 @@ final class CarPlayCoordinator: NSObject {
             // Reuse existing library entry if we already added this book.
             // `catalogId` is computed (wraps `_catalogId`), so #Predicate can't use it.
             if let existing = self.fetchAudiobook(catalogId: book.id) {
+                // If it was removed (archived) but kept in iCloud, bring it back to the library.
+                if existing.isArchived {
+                    existing.isArchived = false
+                    try? context.save()
+                }
                 await self.audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
                 self.presentNowPlayingIfNeeded()
                 return

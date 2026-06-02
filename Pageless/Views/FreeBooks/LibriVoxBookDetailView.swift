@@ -34,6 +34,26 @@ struct LibriVoxBookDetailView: View {
         .background(Color.cream.ignoresSafeArea())
         .navigationTitle(book.title)
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "Import your saved progress?",
+            isPresented: Binding(
+                get: { viewModel.pendingRestore != nil },
+                set: { if !$0 { viewModel.pendingRestore = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Import from iCloud") {
+                viewModel.confirmRestore(modelContext: modelContext)
+            }
+            Button("Add as New") {
+                viewModel.declineRestoreAddAsNew(modelContext: modelContext)
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.pendingRestore = nil
+            }
+        } message: {
+            Text("You have a backup of this book in your iCloud Library with your progress and bookmarks. Import it, or add a fresh copy?")
+        }
     }
 
     // MARK: - Header

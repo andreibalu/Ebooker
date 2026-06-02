@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 
 struct ImportAudiobookSheet: View {
@@ -10,6 +11,7 @@ struct ImportAudiobookSheet: View {
     let onImport: (String, String) throws -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Query private var allBooks: [Audiobook]
     @State private var title: String
     @State private var author: String
     @State private var isImporting = false
@@ -50,6 +52,19 @@ struct ImportAudiobookSheet: View {
 
                     LabeledContent("Files", value: "\(pending.tracks.count)")
                     LabeledContent("Total length", value: TimeFormatter.durationSummary(seconds: pending.totalDuration))
+                }
+
+                if showsCloudMatchHint {
+                    Section {
+                        Label {
+                            Text("Already listened to this before? After adding, open the book and tap the **iCloud** button (top right) to match it with your backup and restore your old progress and moments.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } icon: {
+                            Image(systemName: "icloud.and.arrow.down")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
 
                 Section("Imported Files") {
@@ -95,6 +110,13 @@ struct ImportAudiobookSheet: View {
                 Text(errorMessage)
             }
         }
+    }
+
+    /// Shown only when sync is active and at least one cloud-only own book exists to match against —
+    /// this is the fallback path when import couldn't auto-match the files to a backup.
+    private var showsCloudMatchHint: Bool {
+        IcloudSyncGate.isEnabled()
+            && allBooks.contains { !$0.isDownloaded && !$0.isFreeBook }
     }
 
     private func importAudiobook() {

@@ -50,11 +50,15 @@ struct PagelessApp: App {
         guard UserDefaults.standard.bool(forKey: "intent.playLatestBook") else { return }
         UserDefaults.standard.removeObject(forKey: "intent.playLatestBook")
         let context = appDelegate.modelContainer.mainContext
-        var descriptor = FetchDescriptor<Audiobook>(
+        let descriptor = FetchDescriptor<Audiobook>(
             sortBy: [SortDescriptor(\.lastPlayedAt, order: .reverse)]
         )
-        descriptor.fetchLimit = 1
-        guard let latest = try? context.fetch(descriptor).first else { return }
+        // Pick the most-recently-played book that's actually in the library on this device —
+        // skip cloud-only own orphans and archived (removed) free books. The flags are computed
+        // over private backing fields, so they can't be expressed in #Predicate; filter in memory.
+        guard let latest = try? context.fetch(descriptor).first(where: {
+            ($0.isDownloaded || $0.isFreeBook) && !$0.isArchived
+        }) else { return }
         let player = appDelegate.audioPlayer
         Task { @MainActor in
             await player.startPlaybackFromSavedProgress(for: latest)

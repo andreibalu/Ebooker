@@ -131,6 +131,70 @@ enum OrphanRestoreService {
         return orphan
     }
 
+    /// Merges a downloaded local book INTO a cloud-only entry (cloud-wins). Copies the local audio
+    /// files into the cloud entry's folder and rewrites its track pointers (via `adopt`), then deletes
+    /// the now-redundant local record. The SURVIVING record is `cloudEntry`, so its synced progress,
+    /// moments, recap, and EQ are what the user keeps; the local book's divergent state is discarded.
+    @discardableResult
+    static func merge(
+        localBook: Audiobook,
+        into cloudEntry: Audiobook,
+        modelContext: ModelContext
+    ) throws -> Audiobook {
+        // Build a pending import that points at the local book's on-disk files.
+        let previews: [TrackImportPreview] = try localBook.sortedTracks.map { track in
+            let url = try LibraryImportService.fileURL(for: track, in: localBook)
+            return TrackImportPreview(
+                sourceURL: url,
+                title: track.title,
+                originalFileName: track.originalFileName,
+                duration: track.duration,
+                contentFingerprint: track.contentFingerprint
+            )
+        }
+        let pending = PendingImportSelection(
+            sourceURLs: previews.map(\.sourceURL),
+            suggestedTitle: localBook.title,
+            suggestedAuthor: localBook.author,
+            coverArtData: localBook.coverArtData,
+            tracks: previews
+        )
+
+        _ = try adopt(orphan: cloudEntry, pending: pending, modelContext: modelContext)
+
+        // Remove the duplicate local record and its (now-copied) files.
+        try LibraryImportService.deleteAudiobook(localBook, deleteFiles: true, modelContext: modelContext)
+
+        log.info("Merged local '\(localBook.title, privacy: .public)' into cloud entry '\(cloudEntry.title, privacy: .public)'")
+        return cloudEntry
+    }
+
+    // MARK: - Free-book matching (by catalog id)
+
+    /// Finds an archived free-book backup that matches a LibriVox catalog id — i.e. a free book the
+    /// user removed from this device but kept in their iCloud Library. Used to auto-match on re-add
+    /// and behind the manual "Match with iCloud backup" button. `catalogId` is computed over a private
+    /// backing field, so it can't be expressed in a `#Predicate`; we filter in memory.
+    static func fetchFreeBackup(catalogId: String, modelContext: ModelContext) -> Audiobook? {
+        guard !catalogId.isEmpty else { return nil }
+        guard let all = try? modelContext.fetch(FetchDescriptor<Audiobook>()) else { return nil }
+        return all.first { $0.isFreeBook && $0.isArchived && $0.catalogId == catalogId }
+    }
+
+    /// Free-book analogue of `merge` (cloud-wins) with no files to copy: discards the just-added
+    /// duplicate and brings the archived iCloud backup back into the library as a streaming entry,
+    /// preserving its synced progress, moments, recap, and EQ. The surviving record is `backup`.
+    static func restoreFreeBackup(
+        replacing current: Audiobook,
+        with backup: Audiobook,
+        modelContext: ModelContext
+    ) throws {
+        backup.isArchived = false
+        backup.isDownloaded = false
+        try LibraryImportService.deleteAudiobook(current, deleteFiles: current.isDownloaded, modelContext: modelContext)
+        log.info("Restored free backup '\(backup.title, privacy: .public)' (catalogId match), discarded duplicate '\(current.title, privacy: .public)'")
+    }
+
     // MARK: - Private helpers (duplicated minimally from LibraryImportService to avoid widening its API)
 
     private static func storageFolderURL(for folderName: String) throws -> URL {

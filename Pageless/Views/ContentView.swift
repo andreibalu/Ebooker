@@ -23,7 +23,10 @@ struct ContentView: View {
     @Namespace private var readingStatsNamespace
     private let readingStatsMorphID = "reading-activity-heatmap"
 
-    @AppStorage("librarySortOption") private var sortOptionRawValue = LibrarySortOption.recent.rawValue
+    // Each library tab keeps its own sort preference. "librarySortOption" is retained as the All Books
+    // key so existing users keep their saved choice; Favorites gets its own independent key.
+    @AppStorage("librarySortOption") private var allBooksSortRaw = LibrarySortOption.recent.rawValue
+    @AppStorage("favoritesSortOption") private var favoritesSortRaw = LibrarySortOption.recent.rawValue
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
@@ -36,6 +39,7 @@ struct ContentView: View {
     @State private var isClosingPlayer = false
     @State private var playerYOffset: CGFloat = UIScreen.main.bounds.height
     @State private var isSettingsPresented = false
+    @State private var isCloudLibraryPresented = false
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
     private let screenHeight = UIScreen.main.bounds.height
 
@@ -125,6 +129,14 @@ struct ContentView: View {
             .environmentObject(aiEntitlementStore)
             .environment(onboarding)
         }
+        .sheet(isPresented: $isCloudLibraryPresented) {
+            NavigationStack {
+                CloudLibraryView()
+            }
+            .environmentObject(player)
+            .environmentObject(aiEntitlementStore)
+            .environment(onboarding)
+        }
         .onChange(of: onboarding.requestOpenSettings) { _, shouldOpen in
             if shouldOpen {
                 isSettingsPresented = true
@@ -162,6 +174,10 @@ struct ContentView: View {
                         viewModel.deleteCandidate = nil
                     }
                 }
+            } else if IcloudSyncGate.isEnabled() {
+                Button("Remove from this iPhone", role: .destructive) {
+                    viewModel.softDeleteAudiobook(modelContext: modelContext)
+                }
             } else {
                 Button("Remove from App", role: .destructive) {
                     viewModel.deleteAudiobook(alsoDeleteFiles: false, modelContext: modelContext)
@@ -175,9 +191,19 @@ struct ContentView: View {
             }
         } message: {
             if viewModel.deleteCandidate?.isStreamingOnly == true {
-                Text("This will remove the book from your library. You can add it again from the free books section.")
+                if IcloudSyncGate.isEnabled() {
+                    Text("Removes this book from your library on this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream it again anytime.")
+                } else {
+                    Text("This will remove the book from your library. You can add it again from the free books section.")
+                }
             } else if viewModel.deleteCandidate?.isFreeBook == true {
-                Text("This will remove the downloaded audiobook. You can download it again from the free books section.")
+                if IcloudSyncGate.isEnabled() {
+                    Text("Removes the download from this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream or re-download it anytime.")
+                } else {
+                    Text("This will remove the downloaded audiobook. You can download it again from the free books section.")
+                }
+            } else if IcloudSyncGate.isEnabled() {
+                Text("Removes the audio from this iPhone. The book stays in your iCloud Library, and you can restore it anytime.")
             } else {
                 Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
             }
@@ -257,14 +283,14 @@ struct ContentView: View {
             Spacer()
 
             HStack(spacing: 6) {
-                Menu {
-                    Picker("Sort by", selection: $sortOptionRawValue) {
-                        ForEach(LibrarySortOption.allCases) { option in
-                            Text(option.title).tag(option.rawValue)
-                        }
+                // iCloud Library — only for active subscribers, who are the only users with books
+                // backed up to iCloud to browse. Opens the full backed-up library.
+                if ICloudSubscriptionStore.isSubscribedAtLaunch() {
+                    Button {
+                        isCloudLibraryPresented = true
+                    } label: {
+                        toolbarIconButton(systemName: "icloud")
                     }
-                } label: {
-                    toolbarIconButton(systemName: "arrow.up.arrow.down")
                 }
 
                 Button {
@@ -296,11 +322,64 @@ struct ContentView: View {
 
     private var tabPicker: some View {
         HStack(spacing: 0) {
-            tabButton(title: "Favorites", tab: .favorites)
-            tabButton(title: "All Books", tab: .allBooks)
+            sortableTabButton(title: "Favorites", tab: .favorites, sortRaw: $favoritesSortRaw)
+            sortableTabButton(title: "All Books", tab: .allBooks, sortRaw: $allBooksSortRaw)
             tabButton(title: "Free Books", tab: .freeBooks)
         }
         .padding(.bottom, 1)
+    }
+
+    /// A tab that owns its own sort preference. Tapping it while it's *not* the active tab simply
+    /// switches to it; tapping it *while already active* opens its sort menu (a chevron appears beside
+    /// the title to hint this). Each sortable tab keeps an independent `sortRaw`.
+    @ViewBuilder
+    private func sortableTabButton(title: String, tab: LibraryTab, sortRaw: Binding<String>) -> some View {
+        let isSelected = selectedTab == tab
+        Group {
+            if isSelected {
+                Menu {
+                    Picker("Sort by", selection: sortRaw) {
+                        ForEach(LibrarySortOption.allCases) { option in
+                            Text(option.title).tag(option.rawValue)
+                        }
+                    }
+                } label: {
+                    tabColumn(title: title, isSelected: true, showsChevron: true)
+                }
+            } else {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                } label: {
+                    tabColumn(title: title, isSelected: false, showsChevron: false)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func tabColumn(title: String, isSelected: Bool, showsChevron: Bool) -> some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                if showsChevron {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 12)
+
+            Rectangle()
+                .fill(isSelected ? Color.primary : Color.clear)
+                .frame(height: 2)
+                .cornerRadius(1)
+        }
+        .contentShape(Rectangle())
     }
 
     private func tabButton(title: String, tab: LibraryTab) -> some View {
@@ -310,17 +389,7 @@ struct ContentView: View {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: 8) {
-                Text(title)
-                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                    .foregroundStyle(isSelected ? .primary : .secondary)
-                    .padding(.top, 12)
-
-                Rectangle()
-                    .fill(isSelected ? Color.primary : Color.clear)
-                    .frame(height: 2)
-                    .cornerRadius(1)
-            }
+            tabColumn(title: title, isSelected: isSelected, showsChevron: false)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
@@ -523,14 +592,19 @@ struct ContentView: View {
         // Owned books synced from iCloud may exist without their audio on this device.
         // Hide those from the main grid — they only surface in Cloud Library for manual restore.
         // Free books stay visible: they keep remote URLs after sync and remain streamable.
-        let playable = audiobooks.filter { $0.isDownloaded || $0.isFreeBook }
+        // Archived free books (removed by the user but kept in iCloud) are hidden here too; they
+        // surface only in the iCloud Library, where "Stream" un-archives them.
+        let playable = audiobooks.filter { ($0.isDownloaded || $0.isFreeBook) && !$0.isArchived }
         let base: [Audiobook]
+        let sortRaw: String
         if tab == .favorites {
             base = playable.filter { $0.isFavorite }
+            sortRaw = favoritesSortRaw
         } else {
             base = playable
+            sortRaw = allBooksSortRaw
         }
-        return viewModel.sorted(base, by: sortOptionRawValue)
+        return viewModel.sorted(base, by: sortRaw)
     }
 
     private var deleteAlertTitle: String {
@@ -538,6 +612,8 @@ struct ContentView: View {
             return "Remove from Library?"
         } else if viewModel.deleteCandidate?.isFreeBook == true {
             return "Remove Download?"
+        } else if IcloudSyncGate.isEnabled() {
+            return "Remove from this iPhone?"
         } else {
             return "Remove Audiobook?"
         }

@@ -58,6 +58,18 @@ final class Audiobook: Identifiable {
         set { _isDownloaded = newValue }
     }
 
+    // Nullable for lightweight migration. Marks a FREE book the user removed from this device's
+    // library while keeping its synced record (progress, moments, EQ, remote URLs) in the iCloud
+    // Library. Archived free books are hidden from the main grid and surface only in the iCloud
+    // Library, where "Stream" un-archives them. Own books never set this — they orphan via
+    // isDownloaded, which is unambiguous for them (an own book is only ever downloaded or orphaned).
+    private var _isArchived: Bool?
+
+    var isArchived: Bool {
+        get { _isArchived ?? false }
+        set { _isArchived = newValue }
+    }
+
     // Own books that synced from iCloud but lack local files have isDownloaded==false too —
     // isFreeBook distinguishes them from genuinely streaming LibriVox entries.
     var isStreamingOnly: Bool { !isDownloaded && isFreeBook }

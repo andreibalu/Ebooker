@@ -68,25 +68,34 @@ enum LibriVoxDownloadService {
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destURL)
 
-                audioTracks.append(AudioTrack(
+                let audioTrack = AudioTrack(
                     title: safeTitle,
                     originalFileName: remoteURL.lastPathComponent,
                     storedFileName: storedFileName,
                     orderIndex: index,
                     duration: track.durationSeconds
-                ))
+                )
+                // Keep the streaming URL even though we downloaded a local copy: if the user later
+                // removes the download, the book stays a streamable free-book backup in iCloud and
+                // can be re-streamed or re-downloaded without re-resolving the catalog.
+                audioTrack.remoteURLString = track.listenURL
+                audioTracks.append(audioTrack)
 
                 onProgress(index + 1, tracks.count)
             }
 
             // Build Audiobook
             let totalDuration = audioTracks.reduce(0) { $0 + $1.duration }
+            // A downloaded LibriVox book is still a free book — stamp its catalog id so it keeps the
+            // same iCloud identity as a streaming entry and can be matched/restored by id later.
             let audiobook = Audiobook(
                 title: book.title,
                 author: book.authorDisplay,
                 folderName: folderName,
                 coverArtData: nil,
-                totalDuration: totalDuration
+                totalDuration: totalDuration,
+                isFreeBook: true,
+                catalogId: book.id
             )
 
             modelContext.insert(audiobook)

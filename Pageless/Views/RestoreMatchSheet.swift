@@ -73,10 +73,13 @@ struct RestoreMatchSheet: View {
                             dismiss()
                         } label: {
                             Text("Restore from iCloud")
+                                .font(.headline)
                                 .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.primary, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .foregroundStyle(Color.cream)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
+                        .buttonStyle(.plain)
 
                         Button {
                             onAddAsNew()

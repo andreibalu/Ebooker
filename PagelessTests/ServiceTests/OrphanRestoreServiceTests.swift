@@ -99,6 +99,100 @@ struct OrphanRestoreServiceTests {
         try? FileManager.default.removeItem(at: folder)
     }
 
+    @Test func mergeMovesLocalFilesIntoCloudEntryAndDeletesLocalRecord() throws {
+        let context = try makeInMemoryContext()
+
+        // Cloud-only entry the user wants to keep (its moments/progress win).
+        let cloudFolder = "cloud-\(UUID().uuidString)"
+        let cloudEntry = makeOrphan(in: context, title: "Cloud Backup", folderName: cloudFolder, fingerprints: ["fp-1"])
+        cloudEntry.progressTrackIndex = 0
+        cloudEntry.progressTime = 99.0
+        let cloudMoment = Moment(trackIndex: 0, time: 33.0, label: "Cloud moment", audiobook: cloudEntry)
+        context.insert(cloudMoment)
+        cloudEntry.moments.append(cloudMoment)
+        try context.save()
+
+        // Downloaded local book with a real file on disk that the user added as new.
+        let localFolder = "local-\(UUID().uuidString)"
+        let localBook = Audiobook(title: "Local Copy", folderName: localFolder, isDownloaded: true)
+        context.insert(localBook)
+        let localTrack = AudioTrack(
+            title: "Chapter 1",
+            originalFileName: "ch01.m4a",
+            storedFileName: "001-ch01.m4a",
+            orderIndex: 0,
+            duration: 60,
+            audiobook: localBook
+        )
+        localTrack.contentFingerprint = "fp-1"
+        localBook.tracks.append(localTrack)
+        context.insert(localTrack)
+        try context.save()
+
+        let localStorage = try storageFolder(for: localFolder)
+        try FileManager.default.createDirectory(at: localStorage, withIntermediateDirectories: true)
+        try Data(repeating: 0xAB, count: 1024).write(to: localStorage.appendingPathComponent("001-ch01.m4a"))
+
+        let localID = localBook.id
+        let survivor = try OrphanRestoreService.merge(localBook: localBook, into: cloudEntry, modelContext: context)
+
+        #expect(survivor === cloudEntry)
+        #expect(cloudEntry.isDownloaded == true)
+        #expect(cloudEntry.progressTime == 99.0)
+        #expect(cloudEntry.moments.first?.label == "Cloud moment")
+
+        // The file now lives in the cloud entry's folder.
+        let cloudStorage = try storageFolder(for: cloudFolder)
+        let stored = cloudEntry.tracks.first!.storedFileName
+        #expect(FileManager.default.fileExists(atPath: cloudStorage.appendingPathComponent(stored).path(percentEncoded: false)))
+
+        // The duplicate local record is gone.
+        let remaining = try context.fetch(FetchDescriptor<Audiobook>())
+        #expect(!remaining.contains { $0.id == localID })
+
+        try? FileManager.default.removeItem(at: cloudStorage)
+        try? FileManager.default.removeItem(at: localStorage)
+    }
+
+    @Test func softDeleteRemovesFilesButPreservesRecord() throws {
+        let context = try makeInMemoryContext()
+
+        let folderName = "soft-\(UUID().uuidString)"
+        let book = Audiobook(title: "Keep Me", folderName: folderName, isDownloaded: true)
+        context.insert(book)
+        let track = AudioTrack(
+            title: "Chapter 1",
+            originalFileName: "ch01.m4a",
+            storedFileName: "001-ch01.m4a",
+            orderIndex: 0,
+            duration: 60,
+            audiobook: book
+        )
+        track.contentFingerprint = "fp-keep"
+        book.tracks.append(track)
+        context.insert(track)
+        let moment = Moment(trackIndex: 0, time: 5.0, label: "Saved moment", audiobook: book)
+        context.insert(moment)
+        book.moments.append(moment)
+        try context.save()
+
+        let storage = try storageFolder(for: folderName)
+        try FileManager.default.createDirectory(at: storage, withIntermediateDirectories: true)
+        try Data(repeating: 0xCD, count: 512).write(to: storage.appendingPathComponent("001-ch01.m4a"))
+
+        let bookID = book.id
+        try LibraryImportService.softDeleteAudiobook(book, modelContext: context)
+
+        #expect(book.isDownloaded == false)
+        #expect(book.moments.first?.label == "Saved moment")
+        #expect(book.tracks.first?.contentFingerprint == "fp-keep")
+        #expect(!FileManager.default.fileExists(atPath: storage.path(percentEncoded: false)))
+
+        // The record itself survives in the store (it's now a restorable orphan).
+        let remaining = try context.fetch(FetchDescriptor<Audiobook>())
+        #expect(remaining.contains { $0.id == bookID })
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryContext() throws -> ModelContext {

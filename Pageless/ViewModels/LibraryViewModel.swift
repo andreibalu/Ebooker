@@ -131,13 +131,33 @@ final class LibraryViewModel {
         }
     }
 
+    /// Sync-on path: removes the audio from this iPhone but keeps the synced record in the
+    /// iCloud Library so it can be restored later. Mirrors `deleteAudiobook` but never deletes
+    /// the record.
+    func softDeleteAudiobook(modelContext: ModelContext) {
+        guard let deleteCandidate else { return }
+        do {
+            try LibraryImportService.softDeleteAudiobook(deleteCandidate, modelContext: modelContext)
+            self.deleteCandidate = nil
+        } catch {
+            presentAlert(message: error.localizedDescription)
+        }
+    }
+
     func deleteFreeBook(_ audiobook: Audiobook, modelContext: ModelContext) {
         do {
-            try LibraryImportService.deleteAudiobook(
-                audiobook,
-                deleteFiles: audiobook.isDownloaded,
-                modelContext: modelContext
-            )
+            if IcloudSyncGate.isEnabled() {
+                // Sync on: keep the synced record in the iCloud Library (same permanence guarantee
+                // as own books) so the user can re-stream it later. Drop local files + archive.
+                try LibraryImportService.archiveFreeBook(audiobook, modelContext: modelContext)
+            } else {
+                // Sync off: no cloud copy to preserve, so hard-delete as before.
+                try LibraryImportService.deleteAudiobook(
+                    audiobook,
+                    deleteFiles: audiobook.isDownloaded,
+                    modelContext: modelContext
+                )
+            }
         } catch {
             presentAlert(message: error.localizedDescription)
         }

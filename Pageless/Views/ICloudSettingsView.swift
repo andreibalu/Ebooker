@@ -231,8 +231,8 @@ struct ICloudSettingsView: View {
                 } label: {
                     HStack(spacing: 12) {
                         SettingsRowLabel(
-                            title: "Cloud Library",
-                            caption: "Restore books that came down from iCloud"
+                            title: "iCloud Library",
+                            caption: "See and manage everything backed up to iCloud"
                         )
                         Spacer(minLength: 8)
                         Image(systemName: "chevron.right")

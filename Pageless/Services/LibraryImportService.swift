@@ -194,6 +194,35 @@ enum LibraryImportService {
         try modelContext.save()
     }
 
+    /// Removes the on-disk audio for this device but PRESERVES the synced record (tracks, moments,
+    /// progress, recap, EQ) so the book remains in the iCloud Library as a restorable backup.
+    /// The book becomes a cloud-only orphan (`isDownloaded = false`); its tracks keep their
+    /// `contentFingerprint` so a later re-import can auto-match and restore it.
+    static func softDeleteAudiobook(_ audiobook: Audiobook, modelContext: ModelContext) throws {
+        let folderURL = try storageFolderURL(for: audiobook.folderName)
+        if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
+            try FileManager.default.removeItem(at: folderURL)
+        }
+        audiobook.isDownloaded = false
+        try modelContext.save()
+    }
+
+    /// Soft-removes a FREE book from this device's library while preserving the synced record
+    /// (progress, moments, recap, EQ, and the tracks' remote streaming URLs) in the iCloud Library.
+    /// Drops any downloaded files, flips `isDownloaded = false`, and marks it archived so it leaves
+    /// the main grid but can be re-streamed from the iCloud Library. The free-book analogue of
+    /// `softDeleteAudiobook`: free `!isDownloaded` alone is ambiguous (active streaming vs removed),
+    /// so the archive flag is what distinguishes a removed book from one the user is still streaming.
+    static func archiveFreeBook(_ audiobook: Audiobook, modelContext: ModelContext) throws {
+        let folderURL = try storageFolderURL(for: audiobook.folderName)
+        if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
+            try FileManager.default.removeItem(at: folderURL)
+        }
+        audiobook.isDownloaded = false
+        audiobook.isArchived = true
+        try modelContext.save()
+    }
+
     static func fileURL(for track: AudioTrack, in audiobook: Audiobook) throws -> URL {
         try storageFolderURL(for: audiobook.folderName).appendingPathComponent(track.storedFileName)
     }

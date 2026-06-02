@@ -14,6 +14,7 @@ struct AudiobookDetailView: View {
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
     @Environment(OnboardingManager.self) private var onboarding
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
@@ -29,11 +30,58 @@ struct AudiobookDetailView: View {
     @State private var momentsExpanded = false
     @State private var folderSizeMB: Int?
     @State private var streamDownloadVM = StreamedBookDownloadViewModel()
+    @State private var showMatchSheet = false
+    @State private var hasCloudCandidates = false
+    @State private var freeBackup: Audiobook?
+    @State private var showFreeRestoreConfirm = false
+
+    /// The "Match with iCloud backup" affordance only appears when sync is active (which itself
+    /// requires an active iCloud subscription), this is a downloaded own book, and there's at least
+    /// one cloud-only backup to match against. When the user isn't subscribed, `IcloudSyncGate` is
+    /// false and the button is simply absent.
+    private var canMatchWithCloud: Bool {
+        IcloudSyncGate.isEnabled()
+            && audiobook.isDownloaded
+            && !audiobook.isFreeBook
+            && hasCloudCandidates
+    }
+
+    /// Free-book counterpart: this book was added as new even though an archived iCloud backup with
+    /// the same catalog id exists. The button lets the user import that backup's progress/moments.
+    private var canRestoreFreeBackup: Bool {
+        IcloudSyncGate.isEnabled()
+            && audiobook.isFreeBook
+            && freeBackup != nil
+    }
 
     init(audiobook: Audiobook, openPlayer: @escaping () -> Void) {
         self.audiobook = audiobook
         self.openPlayer = openPlayer
         self._viewModel = State(initialValue: AudiobookDetailViewModel(audiobook: audiobook))
+    }
+
+    /// Non-`@Query` fetch (a live query on this view would re-render on a deleted model and crash):
+    /// just checks whether any cloud-only own book exists to offer as a match target.
+    private func refreshCloudCandidates() {
+        hasCloudCandidates = OrphanRestoreService
+            .fetchOrphanCandidates(modelContext: modelContext)
+            .contains { $0.id != audiobook.id }
+        if audiobook.isFreeBook, let catalogId = audiobook.catalogId {
+            let match = OrphanRestoreService.fetchFreeBackup(catalogId: catalogId, modelContext: modelContext)
+            freeBackup = match?.id == audiobook.id ? nil : match
+        } else {
+            freeBackup = nil
+        }
+    }
+
+    private func restoreFreeBackup() {
+        guard let backup = freeBackup else { return }
+        do {
+            try OrphanRestoreService.restoreFreeBackup(replacing: audiobook, with: backup, modelContext: modelContext)
+            dismiss()
+        } catch {
+            // Leave the view in place; the book is unchanged on failure.
+        }
     }
 
     var body: some View {
@@ -78,6 +126,43 @@ struct AudiobookDetailView: View {
                     }
                 }
             }
+            if canMatchWithCloud {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showMatchSheet = true
+                    } label: {
+                        Image(systemName: "icloud.and.arrow.down")
+                    }
+                    .accessibilityLabel("Match with iCloud backup")
+                }
+            }
+            if canRestoreFreeBackup {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showFreeRestoreConfirm = true
+                    } label: {
+                        Image(systemName: "icloud.and.arrow.down")
+                    }
+                    .accessibilityLabel("Match with iCloud backup")
+                }
+            }
+        }
+        .sheet(isPresented: $showMatchSheet) {
+            MatchCloudEntrySheet(localBook: audiobook) {
+                dismiss()
+            }
+        }
+        .confirmationDialog(
+            "Import from iCloud backup?",
+            isPresented: $showFreeRestoreConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Import Everything", role: .destructive) {
+                restoreFreeBackup()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your current progress and moments for ‘\(audiobook.title)’ will be replaced by your iCloud backup.")
         }
         .sheet(isPresented: $showFilterSheet) {
             MomentFilterSheet(audiobook: audiobook, viewModel: viewModel)
@@ -86,6 +171,7 @@ struct AudiobookDetailView: View {
             viewModel.reconcileStoredRecap(modelContext: modelContext)
             onboarding.notifyBookImported()
             folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
+            refreshCloudCandidates()
         }
     }
 
@@ -172,6 +258,8 @@ struct AudiobookDetailView: View {
                     Text(currentTimestampLabel)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
+
+                    ICloudBackupBadge(style: .inlineLabel)
 
                     Button {
                         Task {
