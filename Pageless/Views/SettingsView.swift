@@ -42,23 +42,7 @@ struct SettingsView: View {
                     }
                 }
         }
-        .spotlightOverlay(
-            onboarding: onboarding,
-            totalPhaseSteps: onboarding.totalStepsInPhase,
-            currentPhaseIndex: onboarding.currentPhaseIndex
-        )
         .presentationDetents([.medium, .large], selection: $selectedDetent)
-        .onAppear {
-            if let step = onboarding.currentStep,
-               step == .p1AILink || step == .p1iCloudSync {
-                selectedDetent = .large
-            }
-        }
-        .onChange(of: onboarding.currentStep) { _, step in
-            if step == .p1AILink || step == .p1iCloudSync {
-                withAnimation { selectedDetent = .large }
-            }
-        }
     }
 
     // MARK: - Root screen
@@ -154,7 +138,6 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
-        .spotlightTarget(.p1AILink)
     }
 
     @ViewBuilder
@@ -195,7 +178,6 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .spotlightTarget(.p1AILink)
     }
 
     private var iCloudHeroCard: some View {
@@ -220,7 +202,6 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
-        .spotlightTarget(.p1iCloudSync)
     }
 
     @ViewBuilder
@@ -401,7 +382,7 @@ struct SettingsView: View {
                         isPresented: $showResetConfirmation
                     ) {
                         Button("Reset", role: .destructive) {
-                            onboarding.resetOnboarding()
+                            onboarding.reset()
                             dismiss()
                         }
                         Button("Cancel", role: .cancel) {}

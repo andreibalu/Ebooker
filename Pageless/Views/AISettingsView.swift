@@ -12,7 +12,6 @@ struct AISettingsView: View {
     var onDismissSheet: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
-    @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
@@ -343,6 +342,5 @@ struct AISettingsView: View {
     NavigationStack {
         AISettingsView()
             .environmentObject(AIEntitlementStore())
-            .environment(OnboardingManager())
     }
 }

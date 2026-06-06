@@ -15,7 +15,6 @@ struct AudiobookDetailView: View {
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
-    @Environment(OnboardingManager.self) private var onboarding
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartSummary") private var useSmartSummary = false
@@ -88,13 +87,11 @@ struct AudiobookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                    .spotlightTarget(.p2Progress)
                 if audiobook.isStreamingOnly {
                     streamingDownloadSection
                 }
                 resumeAnchorRow
                 momentsSection
-                    .spotlightTarget(.p2Moments)
                 tracksDisclosureSection
             }
             .padding(20)
@@ -169,7 +166,6 @@ struct AudiobookDetailView: View {
         }
         .onAppear {
             viewModel.reconcileStoredRecap(modelContext: modelContext)
-            onboarding.notifyBookImported()
             folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
             refreshCloudCandidates()
         }

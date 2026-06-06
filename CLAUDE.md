@@ -90,7 +90,7 @@ Pageless/
 │   │                              ICloudBackupBadge, RestoreMatchSheet, GeneratedCoverView, EqualizerSheet
 │   ├── FreeBooks/                 BrowseLibriVoxView, LibriVoxBookDetailView, LibriVoxBookRow
 │   ├── ReadingStats/              ReadingActivityCard, ReadingStatsView, ReadingStatsSections, ReadingHeatmap
-│   └── Onboarding/                OnboardingStep, SpotlightOverlayView
+│   └── Onboarding/                OnboardingFlowView (host), OnboardingScenes (6 scenes + widgets), OnboardingTheme (tokens/primitives)
 ├── Services/
 │   ├── Protocols/                 TranscriptionProviding, MomentAnalyzing, AudioExtracting,
 │   │                              RecapProviding, FreeBookDownloading
@@ -222,11 +222,15 @@ The app contains **two independent free-book paths** that coexist by design:
 - `EqualizerSheet` is the user-facing UI; reads/writes via `@EnvironmentObject AudioEqualizerService`
 
 ### Onboarding
-- `OnboardingManager` — 4 phases: `phase1`, `waitingForBook`, `phase2`, `completed` (UserDefaults persistence). Drives the Settings sheet open/close via `requestOpenSettings` / `requestDismissSettings` flags observed by `ContentView` / `SettingsView`.
-- `OnboardingStep` — 7 steps. **Phase 1 is a single 5-step path for every device** (`p1AddButton`, `p1Settings`, `p1AILink`, `p1iCloudSync`, `p1ReadingStats`); the AI step's body copy adapts when the hardware/OS can't run Apple Intelligence, but the step itself is always shown so every user learns the feature exists. **Phase 2** is `p2Progress`, `p2Moments`.
-- Phase-1 anchors: `p1AddButton` lives on the toolbar; `p1Settings` highlights the gear button; `p1AILink` and `p1iCloudSync` highlight hero cards inside the Settings sheet (sheet auto-presents at step 2, auto-dismisses at step 4); `p1ReadingStats` highlights the `ReadingActivityCard` on the Favorites tab and uses `ReadingStats.onboardingPreview` when the user has no real activity yet.
-- Relaunch handling: stepping back into a Settings-sheet-anchored step on cold launch rewinds to `p1Settings` so the sheet-open transition replays naturally.
-- `SpotlightOverlayView` — spotlight tutorial overlay rendered over content
+
+A **standalone welcome flow** shown once on first launch (and on demand via Settings → "Reset Onboarding"). It replaced the old phase-based spotlight walkthrough — there is no longer any `OnboardingStep` / `SpotlightOverlayView` / `.spotlightTarget()` machinery; don't reintroduce it.
+
+- **`OnboardingManager`** — now just a completion gate: `isComplete` (persisted to `onboardingComplete`), `complete()`, `reset()`. Init migrates legacy users — anyone with the old `onboardingPhase == 3` (completed) is treated as complete so they don't re-see onboarding. `ContentView` presents `OnboardingFlowView` via `.fullScreenCover` while `!isComplete`.
+- **`OnboardingFlowView`** (host) — a paged vertical `ScrollView` (`.scrollTargetBehavior(.paging)` + `.scrollPosition(id:)`) of six full-screen scenes with a floating right-edge progress-dot rail. The active scene index drives each scene's reveal/count-up/stagger animations (triggering on `.onAppear` is wrong here — paged rows instantiate before they center).
+- **Preference controls bind live to the app's existing `@AppStorage` keys** (`resumeBacktrackSeconds`, `skipBackSeconds`, `skipForwardSeconds`, `momentBacktrackSeconds`) — so persistence is automatic, the scene-6 summary shares one source of truth, and the choice is freely reversible. "Open Library" calls `onboarding.complete()` and routes into the chosen home tab (free → Free Books, own → All Books); it does **not** persist a home-tab override, so relaunched/legacy users still land on Favorites.
+- **Scenes 4 (Apple Intelligence) and 5 (iCloud Sync) are informational only** — no paywall, no toggles. Don't wire purchase/sync state into them.
+- **`OnboardingScenes`** holds the six scenes + widgets (choice cards, drag `OBRulerPicker`, chip rows, stepper, `OBHeatmap`, moment-naming card, `OBSyncGraphic`, summary). **`OnboardingTheme`** holds the design tokens (`OB.*` colors, `OBMotion`), type primitives (`OBEyebrow`/`OBHeadline`/`OBSub`/`obSerif`), and the `obReveal` / `obParallax` modifiers.
+- **Requirement: identical on every device/iOS version.** Fixed point sizes throughout, a fixed 402pt content column centered on wider screens, a `.dynamicTypeSize(.large)` clamp at the root (never Dynamic Type), and the app's own light/dark theme via `preferredColorScheme(forceDarkMode ? .dark : nil)`. All animations honor Reduce Motion.
 
 ### iCloud Sync
 

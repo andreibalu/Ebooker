@@ -86,11 +86,6 @@ struct ContentView: View {
                     .ignoresSafeArea()
             }
         }
-        .spotlightOverlay(
-            onboarding: onboarding,
-            totalPhaseSteps: onboarding.totalStepsInPhase,
-            currentPhaseIndex: onboarding.currentPhaseIndex
-        )
         .fileImporter(
             isPresented: $isImporterPresented,
             allowedContentTypes: [.audio],
@@ -104,7 +99,6 @@ struct ContentView: View {
         }) { pending in
             ImportAudiobookSheet(pending: pending) { title, author in
                 try viewModel.importAudiobook(pending, title: title, author: author, modelContext: modelContext)
-                onboarding.notifyBookImported()
             }
         }
         .sheet(item: $viewModel.restoreMatch) { candidate in
@@ -112,7 +106,6 @@ struct ContentView: View {
                 candidate: candidate,
                 onRestore: {
                     viewModel.adoptRestoreMatch(modelContext: modelContext)
-                    onboarding.notifyBookImported()
                 },
                 onAddAsNew: {
                     viewModel.dismissRestoreMatchAndAddAsNew()
@@ -137,23 +130,19 @@ struct ContentView: View {
             .environmentObject(aiEntitlementStore)
             .environment(onboarding)
         }
-        .onChange(of: onboarding.requestOpenSettings) { _, shouldOpen in
-            if shouldOpen {
-                isSettingsPresented = true
-                onboarding.requestOpenSettings = false
-            }
-        }
-        .onChange(of: onboarding.requestDismissSettings) { _, shouldDismiss in
-            if shouldDismiss {
-                isSettingsPresented = false
-                onboarding.requestDismissSettings = false
-            }
-        }
-        .onChange(of: onboarding.currentStep) { _, newStep in
-            if newStep == .p1ReadingStats {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    selectedTab = .favorites
+        .overlay {
+            // Welcome onboarding. Gated with an `if` read directly in `body` so the dependency on
+            // `onboarding.isComplete` is tracked (a no-op `fullScreenCover` binding may not re-trigger),
+            // and so it's present from the first frame on a cold launch (no library flash).
+            if !onboarding.isComplete {
+                OnboardingFlowView { homeTab in
+                    selectedTab = homeTab
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        onboarding.complete()
+                    }
                 }
+                .ignoresSafeArea()
+                .transition(.opacity)
             }
         }
         .alert(
@@ -298,14 +287,12 @@ struct ContentView: View {
                 } label: {
                     toolbarIconButton(systemName: "slider.horizontal.3")
                 }
-                .spotlightTarget(.p1Settings)
 
                 Button {
                     isImporterPresented = true
                 } label: {
                     toolbarIconButton(systemName: "plus")
                 }
-                .spotlightTarget(.p1AddButton)
             }
         }
     }
@@ -459,19 +446,6 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
-            .spotlightTarget(.p1ReadingStats)
-        } else if onboarding.currentStep == .p1ReadingStats {
-            // Spotlight anchor goes *before* the outer .padding so the cutout hugs the card
-            // instead of extending across the padding region to the screen edges.
-            ReadingActivityCard(
-                stats: .onboardingPreview,
-                palette: .amber,
-                morphNamespace: readingStatsNamespace,
-                morphID: "reading-activity-onboarding-preview"
-            )
-            .allowsHitTesting(false)
-            .spotlightTarget(.p1ReadingStats)
-            .padding(.horizontal, 20)
         }
     }
 

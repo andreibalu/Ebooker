@@ -19,124 +19,62 @@ struct OnboardingManagerTests {
         return ud
     }
 
-    @Test func phase1AdvancesThroughAllFiveSteps() {
-        // Phase 1 is unified: same 5 steps for every device. The AI step's copy adapts
-        // but the step list does not.
-        OnboardingManager._unitTestDeviceSupportsOnboardingAI = true
-        defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
-
+    @Test func freshInstallShowsOnboarding() {
         let ud = isolatedDefaults()
         let m = OnboardingManager(defaults: ud)
-
-        #expect(m.currentStep == .p1AddButton)
-        #expect(m.totalStepsInPhase == 5)
-
-        m.advance()
-        #expect(m.currentStep == .p1Settings)
-        #expect(m.requestOpenSettings == false)
-
-        m.advance()
-        #expect(m.currentStep == .p1AILink)
-        #expect(m.requestOpenSettings == true)
-        m.requestOpenSettings = false
-
-        m.advance()
-        #expect(m.currentStep == .p1iCloudSync)
-        // Sheet stays open between AI and iCloud — no open/dismiss requests should fire.
-        #expect(m.requestOpenSettings == false)
-        #expect(m.requestDismissSettings == false)
-
-        m.advance()
-        #expect(m.currentStep == .p1ReadingStats)
-        #expect(m.requestDismissSettings == true)
-        m.requestDismissSettings = false
-
-        m.advance()
-        #expect(m.currentStep == nil)
-        #expect(m.phaseRaw == 1) // waitingForBook
-        #expect(m.stepIndex == 0)
+        #expect(m.isComplete == false)
     }
 
-    @Test func phase1StepCountIsFiveOnUnsupportedDeviceToo() {
-        OnboardingManager._unitTestDeviceSupportsOnboardingAI = false
-        defer { OnboardingManager._unitTestDeviceSupportsOnboardingAI = nil }
+    @Test func completePersistsAcrossRelaunch() {
+        let ud = isolatedDefaults()
 
+        let first = OnboardingManager(defaults: ud)
+        first.complete()
+        #expect(first.isComplete == true)
+
+        // A new manager reading the same defaults should stay complete.
+        let relaunched = OnboardingManager(defaults: ud)
+        #expect(relaunched.isComplete == true)
+    }
+
+    @Test func resetReshowsOnboarding() {
         let ud = isolatedDefaults()
         let m = OnboardingManager(defaults: ud)
+        m.complete()
+        m.reset()
+        #expect(m.isComplete == false)
 
-        #expect(m.totalStepsInPhase == 5)
-        m.advance()
-        m.advance()
-        #expect(m.currentStep == .p1AILink) // Same step on unsupported devices; copy adapts.
+        let relaunched = OnboardingManager(defaults: ud)
+        #expect(relaunched.isComplete == false)
     }
 
-    @Test func relaunchInsideSettingsSheetRewindsToSettingsStep() {
-        // Steps 2 (.p1AILink) and 3 (.p1iCloudSync) live inside the Settings sheet.
-        // On relaunch the sheet isn't presented yet, so we rewind to step 1 (.p1Settings).
+    @Test func legacyCompletedWalkthroughCountsAsComplete() {
+        // Users who finished the old spotlight walkthrough (legacy phase == 3) must not be
+        // shown the new onboarding again.
+        let ud = isolatedDefaults()
+        ud.set(3, forKey: "onboardingPhase")
+
+        let m = OnboardingManager(defaults: ud)
+        #expect(m.isComplete == true)
+    }
+
+    @Test func legacyUnfinishedWalkthroughStillShowsOnboarding() {
+        // A user mid-walkthrough (legacy phase != 3) sees the new onboarding.
         let ud = isolatedDefaults()
         ud.set(0, forKey: "onboardingPhase")
-        ud.set(3, forKey: "onboardingStepIndex")
+        ud.set(2, forKey: "onboardingStepIndex")
 
         let m = OnboardingManager(defaults: ud)
-        #expect(m.stepIndex == 1)
-        #expect(m.currentStep == .p1Settings)
+        #expect(m.isComplete == false)
     }
 
-    @Test func relaunchAtReadingStatsStaysPut() {
-        // p1ReadingStats lives on ContentView with the Settings sheet closed —
-        // relaunch matches that state, so it should not rewind.
+    @Test func explicitFlagWinsOverLegacyPhase() {
+        // Once the new flag is written it is authoritative, regardless of any legacy phase value.
         let ud = isolatedDefaults()
-        ud.set(0, forKey: "onboardingPhase")
-        ud.set(4, forKey: "onboardingStepIndex")
+        ud.set(3, forKey: "onboardingPhase")
+        ud.set(false, forKey: "onboardingComplete")
 
         let m = OnboardingManager(defaults: ud)
-        #expect(m.stepIndex == 4)
-        #expect(m.currentStep == .p1ReadingStats)
-        #expect(m.requestOpenSettings == false)
-    }
-
-    @Test func goBackFromReadingStatsReopensSettings() {
-        let ud = isolatedDefaults()
-        ud.set(0, forKey: "onboardingPhase")
-        ud.set(4, forKey: "onboardingStepIndex")
-
-        let m = OnboardingManager(defaults: ud)
-        m.goBack()
-        #expect(m.currentStep == .p1iCloudSync)
-        #expect(m.requestOpenSettings == true)
-    }
-
-    @Test func goBackFromAILinkDismissesSettings() {
-        let ud = isolatedDefaults()
-        ud.set(0, forKey: "onboardingPhase")
-        // Force the manager to step 2 via advance() (init would clamp 2→1).
-        let m = OnboardingManager(defaults: ud)
-        m.advance() // 0 → 1
-        m.advance() // 1 → 2 (.p1AILink), requestOpenSettings = true
-        m.requestOpenSettings = false
-
-        m.goBack()
-        #expect(m.currentStep == .p1Settings)
-        #expect(m.requestDismissSettings == true)
-    }
-
-    @Test func phase2AndSkipUnchanged() {
-        let ud = isolatedDefaults()
-        ud.set(2, forKey: "onboardingPhase")
-        ud.set(0, forKey: "onboardingStepIndex")
-
-        let m = OnboardingManager(defaults: ud)
-        #expect(m.currentStep == .p2Progress)
-
-        m.advance()
-        #expect(m.currentStep == .p2Moments)
-
-        m.advance()
-        #expect(m.phaseRaw == 3)
-        #expect(m.stepIndex == 0)
-
-        m.resetOnboarding()
-        m.skipOnboarding()
-        #expect(m.phaseRaw == 3)
+        #expect(m.isComplete == false)
     }
 }
