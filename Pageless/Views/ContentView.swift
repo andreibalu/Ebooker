@@ -27,6 +27,9 @@ struct ContentView: View {
     // key so existing users keep their saved choice; Favorites gets its own independent key.
     @AppStorage("librarySortOption") private var allBooksSortRaw = LibrarySortOption.recent.rawValue
     @AppStorage("favoritesSortOption") private var favoritesSortRaw = LibrarySortOption.recent.rawValue
+    // When the user chose "Free books" in onboarding, the app always opens on Free Books and the
+    // tabs reorder to Favorites / Free Books / All Books. Default false = unchanged behavior.
+    @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
@@ -34,6 +37,7 @@ struct ContentView: View {
     @State private var viewModel = LibraryViewModel()
     @State private var browseViewModel = BrowseLibriVoxViewModel()
     @State private var selectedTab: LibraryTab = .favorites
+    @State private var didApplyInitialTab = false
     @State private var isImporterPresented = false
     @State private var isPlayerVisible = false
     @State private var isClosingPlayer = false
@@ -215,6 +219,14 @@ struct ContentView: View {
             Text(viewModel.alertMessage)
         }
         .onAppear {
+            // One-time launch-tab application for relaunched users (first-run routing is handled by
+            // the onboarding onFinish closure). Free-books choosers open on Free Books every launch.
+            if !didApplyInitialTab {
+                didApplyInitialTab = true
+                if onboarding.isComplete && startOnFreeBooks {
+                    selectedTab = .freeBooks
+                }
+            }
             player.configure(modelContext: modelContext)
             player.applyPlaybackDefaults(
                 resumeBacktrack: resumeBacktrackSeconds,
@@ -307,13 +319,31 @@ struct ContentView: View {
 
     // MARK: - Tab Picker
 
+    /// Tab order is fixed for own-book users (Favorites / All Books / Free Books). Users who chose
+    /// "Free books" in onboarding get Free Books promoted to the center (Favorites / Free Books / All Books).
+    private var tabOrder: [LibraryTab] {
+        startOnFreeBooks ? [.favorites, .freeBooks, .allBooks] : [.favorites, .allBooks, .freeBooks]
+    }
+
     private var tabPicker: some View {
         HStack(spacing: 0) {
-            sortableTabButton(title: "Favorites", tab: .favorites, sortRaw: $favoritesSortRaw)
-            sortableTabButton(title: "All Books", tab: .allBooks, sortRaw: $allBooksSortRaw)
-            tabButton(title: "Free Books", tab: .freeBooks)
+            ForEach(tabOrder, id: \.self) { tab in
+                tabPickerButton(for: tab)
+            }
         }
         .padding(.bottom, 1)
+    }
+
+    @ViewBuilder
+    private func tabPickerButton(for tab: LibraryTab) -> some View {
+        switch tab {
+        case .favorites:
+            sortableTabButton(title: "Favorites", tab: .favorites, sortRaw: $favoritesSortRaw)
+        case .allBooks:
+            sortableTabButton(title: "All Books", tab: .allBooks, sortRaw: $allBooksSortRaw)
+        case .freeBooks:
+            tabButton(title: "Free Books", tab: .freeBooks)
+        }
     }
 
     /// A tab that owns its own sort preference. Tapping it while it's *not* the active tab simply
@@ -387,18 +417,26 @@ struct ContentView: View {
     @ViewBuilder
     private var libraryContent: some View {
         TabView(selection: $selectedTab) {
+            ForEach(tabOrder, id: \.self) { tab in
+                tabPage(for: tab)
+                    .tag(tab)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    @ViewBuilder
+    private func tabPage(for tab: LibraryTab) -> some View {
+        switch tab {
+        case .favorites:
             booksGrid(for: .favorites)
-                .tag(LibraryTab.favorites)
-
+        case .allBooks:
             booksGrid(for: .allBooks)
-                .tag(LibraryTab.allBooks)
-
+        case .freeBooks:
             BrowseLibriVoxView(onOpenPlayer: {
                 openPlayer()
             }, viewModel: browseViewModel)
-            .tag(LibraryTab.freeBooks)
         }
-        .tabViewStyle(.page(indexDisplayMode: .never))
     }
 
     @ViewBuilder

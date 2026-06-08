@@ -51,6 +51,9 @@ final class BrowseLibriVoxViewModel {
     var activeDownloads: [String: ActiveLibriVoxDownload] = [:]
     var featuredBooks: [LibriVoxBook] = []
 
+    /// True while the curated-classics preload is fetching, before anything is on screen.
+    var isPreloadingFeatured: Bool = false
+
     // MARK: - Filter state
 
     var selectedLanguage: String? = nil
@@ -124,26 +127,65 @@ final class BrowseLibriVoxViewModel {
 
     var catalogCount: Int { LibriVoxCatalogSync.syncedBookCount }
 
-    /// True while the very first catalog download is running (no data cached yet).
-    var isFirstTimeLoading: Bool {
+    /// Blocking overlay: there is nothing on screen yet (no classics, no search results, not
+    /// offline) and we are actively loading. As soon as the curated classics arrive this turns
+    /// false and the full catalog continues loading behind a non-blocking inline banner.
+    var isInitialLoading: Bool {
+        guard featuredBooks.isEmpty,
+              searchResults.isEmpty,
+              searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !isOfflineWithNoData else { return false }
+        if isPreloadingFeatured { return true }
         if case .syncing = syncState { return LibriVoxCatalogSync.syncedBookCount == 0 }
         return false
     }
 
-    /// Network is unreachable and there is no cached catalog to search.
+    /// Non-blocking: the full catalog is streaming in while classics (or cached data) are visible.
+    var isLoadingFullCatalog: Bool {
+        guard !isInitialLoading else { return false }
+        if case .syncing = syncState { return true }
+        return false
+    }
+
+    /// True while the very first full catalog download is running (no data cached yet) — used to
+    /// phrase the background banner as a first build vs. an incremental refresh.
+    var isFirstFullSync: Bool {
+        LibriVoxCatalogSync.syncedBookCount == 0
+    }
+
+    /// Network is unreachable and there is nothing cached at all — no full catalog and not
+    /// even the curated classics — so the tab has nothing to show.
     var isOfflineWithNoData: Bool {
         if case .failed(_, let offline) = syncState {
-            return offline && LibriVoxCatalogSync.syncedBookCount == 0
+            return offline && LibriVoxCatalogSync.syncedBookCount == 0 && featuredBooks.isEmpty
         }
         return false
     }
 
-    /// Network is unreachable but there is a cached catalog the user can still search.
+    /// Network is unreachable but something is cached (full catalog and/or the classics) so
+    /// the user still has books to browse.
     var isOfflineWithCachedData: Bool {
         if case .failed(_, let offline) = syncState {
-            return offline && LibriVoxCatalogSync.syncedBookCount > 0
+            return offline && (LibriVoxCatalogSync.syncedBookCount > 0 || !featuredBooks.isEmpty)
         }
         return false
+    }
+
+    /// A non-connectivity load failure (server error, unreadable response) with nothing
+    /// cached and no classics to fall back on — shown as a retriable error state.
+    var loadFailedWithNoData: Bool {
+        if case .failed(_, let offline) = syncState {
+            return !offline
+                && LibriVoxCatalogSync.syncedBookCount == 0
+                && featuredBooks.isEmpty
+        }
+        return false
+    }
+
+    /// The friendly message from the most recent failure, if any.
+    var failureMessage: String? {
+        if case .failed(let message, _) = syncState { return message }
+        return nil
     }
 
     // MARK: - Search
@@ -303,7 +345,67 @@ final class BrowseLibriVoxViewModel {
         "The Odyssey"
     ]
 
-    static let featuredBooksTarget = 4
+    static let featuredBooksTarget = 5
+
+    /// Curated LibriVox project IDs for well-known classics, used to preload a handful
+    /// of featured books on a fresh install *before* the full catalog sync finishes.
+    /// More than `featuredBooksTarget` so the shown set can still be shuffled for variety.
+    /// IDs verified against the live LibriVox feed API (librivox.org/api/feed/audiobooks).
+    static let curatedClassicIDs: [String] = [
+        "314", // Adventures of Sherlock Holmes — Arthur Conan Doyle
+        "253", // Pride and Prejudice — Jane Austen
+        "133", // Jane Eyre — Charlotte Brontë
+        "381", // Frankenstein, or The Modern Prometheus — Mary Shelley
+        "271", // Dracula — Bram Stoker
+        "449", // Treasure Island — Robert Louis Stevenson
+        "436", // War of the Worlds — H. G. Wells
+        "510", // Tale of Two Cities — Charles Dickens
+    ]
+
+    private var preloadTask: Task<Void, Never>?
+
+    /// Preloads a handful of curated classics so the Free Books tab shows content
+    /// immediately on a fresh install, before the multi-minute full catalog sync.
+    /// Idempotent and offline-safe: skips work if featured books are already shown
+    /// or the curated rows already exist locally, and silently degrades (no featured)
+    /// if the network is unavailable.
+    @MainActor
+    func preloadFeaturedClassics(modelContext: ModelContext) {
+        guard featuredBooks.isEmpty, preloadTask == nil else { return }
+        preloadTask = Task { [weak self] in
+            await self?.performPreload(modelContext: modelContext)
+            self?.preloadTask = nil
+        }
+    }
+
+    @MainActor
+    private func performPreload(modelContext: ModelContext) async {
+        guard featuredBooks.isEmpty, !isPreloadingFeatured else { return }
+        isPreloadingFeatured = true
+        defer { isPreloadingFeatured = false }
+        let ids = Self.curatedClassicIDs
+
+        // Already present locally (relaunch / partial-or-full sync) — no network needed.
+        // Capture the array (not a Set) — `Array.contains` is the form SwiftData predicates support.
+        let existingPredicate = #Predicate<LibriVoxBook> { ids.contains($0.id) }
+        if let existing = try? modelContext.fetch(FetchDescriptor(predicate: existingPredicate)),
+           existing.count >= Self.featuredBooksTarget {
+            featuredBooks = Array(existing.shuffled().prefix(Self.featuredBooksTarget))
+            return
+        }
+
+        // Fetch curated metadata and seed it into the store. On failure (offline),
+        // degrade gracefully: leave featuredBooks empty.
+        guard let apiBooks = try? await LibriVoxAPIClient.fetchBooks(ids: ids),
+              !apiBooks.isEmpty else { return }
+        try? LibriVoxCatalogSync.seed(apiBooks, into: modelContext)
+
+        // Re-fetch the now-persisted rows so featuredBooks holds context-managed
+        // instances rather than the throwaway decoded API objects.
+        guard let rows = try? modelContext.fetch(FetchDescriptor(predicate: existingPredicate)),
+              !rows.isEmpty else { return }
+        featuredBooks = Array(rows.shuffled().prefix(Self.featuredBooksTarget))
+    }
 
     @MainActor
     func loadFeaturedBooks(modelContext: ModelContext) async {
@@ -329,11 +431,20 @@ final class BrowseLibriVoxViewModel {
 
     // MARK: - Sync
 
+    @MainActor
     func triggerSyncIfNeeded(modelContext: ModelContext) {
-        guard syncTask == nil else { return }
+        guard syncTask == nil else {
+            // A sync is already in flight; just make sure the curated classics are populated.
+            if featuredBooks.isEmpty { preloadFeaturedClassics(modelContext: modelContext) }
+            return
+        }
         switch syncState {
         case .idle, .failed:
             syncTask = Task { [weak self] in
+                // 1. Curated classics first — fast and shown the instant they arrive, so the tab
+                //    has content immediately after onboarding.
+                await self?.performPreload(modelContext: modelContext)
+                // 2. Only then start the multi-minute full catalog sync, in the background.
                 await self?.performSync(modelContext: modelContext, force: false)
             }
         default:
@@ -343,11 +454,17 @@ final class BrowseLibriVoxViewModel {
         }
     }
 
+    @MainActor
     func forceRefresh(modelContext: ModelContext) {
         syncTask?.cancel()
         availableLanguages = []
         availableGenres = []
         syncTask = Task { [weak self] in
+            // If we still have no classics (retry from an offline/error state), grab them first
+            // so the tab shows content quickly before the full re-sync runs.
+            if self?.featuredBooks.isEmpty == true {
+                await self?.performPreload(modelContext: modelContext)
+            }
             await self?.performSync(modelContext: modelContext, force: true)
         }
     }

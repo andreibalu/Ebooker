@@ -43,6 +43,18 @@ enum LibriVoxCatalogSync {
         try await fullSync(modelContext: modelContext, onProgress: onProgress)
     }
 
+    /// Upserts a small set of pre-fetched API books into the store and saves.
+    /// Used by the featured-classics preload so the curated rows exist before the
+    /// full catalog sync runs. Reuses the same `upsert` path, so a later full sync
+    /// matches these rows by `id` and does not create duplicates.
+    static func seed(_ apiBooks: [LibriVoxAPIBook], into context: ModelContext) throws {
+        guard !apiBooks.isEmpty else { return }
+        for apiBook in apiBooks {
+            try upsert(apiBook, into: context)
+        }
+        try context.save()
+    }
+
     // MARK: - Private
 
     private static func fullSync(
@@ -58,7 +70,7 @@ enum LibriVoxCatalogSync {
         var totalFetched = 0
 
         while true {
-            let page = try await LibriVoxAPIClient.fetchCatalogPage(offset: offset)
+            let page = try await fetchPageWithRetry(offset: offset)
             guard !page.isEmpty else { break }
 
             for apiBook in page {
@@ -114,6 +126,31 @@ enum LibriVoxCatalogSync {
         try modelContext.save()
         onProgress(upserted)
         UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
+    }
+
+    /// Fetches one catalog page, retrying briefly on a transient failure so a single flaky
+    /// response from the LibriVox feed doesn't abort the whole multi-thousand-book sync.
+    /// Cancellation and offline conditions are not retried — they propagate immediately.
+    private static func fetchPageWithRetry(offset: Int, attempts: Int = 3) async throws -> [LibriVoxAPIBook] {
+        var lastError: Error?
+        for attempt in 0..<attempts {
+            try Task.checkCancellation()
+            do {
+                return try await LibriVoxAPIClient.fetchCatalogPage(offset: offset)
+            } catch let urlError as URLError where urlError.code == .notConnectedToInternet {
+                throw urlError // offline — no point retrying
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                lastError = error
+                // Linear backoff: 0.5s, 1.0s — short enough to stay responsive. No sleep after
+                // the final attempt so the error surfaces immediately.
+                if attempt < attempts - 1 {
+                    try? await Task.sleep(for: .milliseconds(500 * (attempt + 1)))
+                }
+            }
+        }
+        throw lastError ?? LibriVoxAPIError.unreadableResponse
     }
 
     private static func upsert(_ apiBook: LibriVoxAPIBook, into context: ModelContext) throws {

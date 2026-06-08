@@ -19,12 +19,18 @@ struct SettingsView: View {
     @State private var navigationPath: [SettingsDestination] = []
     @State private var selectedDetent: PresentationDetent = .medium
     @State private var showResetConfirmation = false
+    @State private var expandedPicker: PlaybackPicker?
 
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
+    @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
     @AppStorage("forceDarkMode") private var forceDarkMode = false
+
+    /// Identifies which inline playback picker (if any) is currently expanded, so only one
+    /// option tray is open at a time.
+    private enum PlaybackPicker { case resume, moment, skipBack, skipForward }
 
     private var hideAIEntirely: Bool {
         AppleIntelligenceCapability.availabilityState == .unsupportedDevice
@@ -56,8 +62,8 @@ struct SettingsView: View {
                 LazyVStack(spacing: 22) {
                     unlockSection
                     playbackSection
-                    librarySection
                     appSection
+                    librarySection
                     aboutSection
                     #if DEBUG
                     developerSection
@@ -237,60 +243,48 @@ struct SettingsView: View {
 
             SettingsCard {
                 VStack(spacing: 0) {
-                    playbackRow(
+                    HomeTabRow(startOnFreeBooks: $startOnFreeBooks)
+
+                    SettingsHairline()
+
+                    SettingsInlinePicker(
                         title: "On Resume",
                         caption: "Rewind a bit when you press play after a break",
-                        value: ResumeBacktrackOption(rawValue: resumeBacktrackSeconds)?.title ?? "",
-                        destination: AnyView(
-                            SettingsDoubleOptionList(
-                                navigationTitle: "On Resume",
-                                selection: $resumeBacktrackSeconds,
-                                options: Array(ResumeBacktrackOption.allCases),
-                                rowTitle: \.title
-                            )
-                        ),
+                        selection: $resumeBacktrackSeconds,
+                        options: Array(ResumeBacktrackOption.allCases),
+                        rowTitle: \.title,
+                        isExpanded: expandedPicker == .resume,
+                        onToggle: { togglePicker(.resume) },
                         isLast: false
                     )
-                    playbackRow(
+                    SettingsInlinePicker(
                         title: "Save Moment Offset",
                         caption: "How far back the timestamp is set when you save a moment",
-                        value: MomentBacktrackOption(rawValue: momentBacktrackSeconds)?.title ?? "",
-                        destination: AnyView(
-                            SettingsDoubleOptionList(
-                                navigationTitle: "Save Moment Offset",
-                                selection: $momentBacktrackSeconds,
-                                options: Array(MomentBacktrackOption.allCases),
-                                rowTitle: \.title
-                            )
-                        ),
+                        selection: $momentBacktrackSeconds,
+                        options: Array(MomentBacktrackOption.allCases),
+                        rowTitle: \.title,
+                        isExpanded: expandedPicker == .moment,
+                        onToggle: { togglePicker(.moment) },
                         isLast: false
                     )
-                    playbackRow(
+                    SettingsInlinePicker(
                         title: "Skip Backward",
                         caption: "How far the back button jumps",
-                        value: SkipIntervalOption(rawValue: skipBackSeconds)?.title ?? "",
-                        destination: AnyView(
-                            SettingsDoubleOptionList(
-                                navigationTitle: "Skip Backward",
-                                selection: $skipBackSeconds,
-                                options: Array(SkipIntervalOption.allCases),
-                                rowTitle: \.title
-                            )
-                        ),
+                        selection: $skipBackSeconds,
+                        options: Array(SkipIntervalOption.allCases),
+                        rowTitle: \.title,
+                        isExpanded: expandedPicker == .skipBack,
+                        onToggle: { togglePicker(.skipBack) },
                         isLast: false
                     )
-                    playbackRow(
+                    SettingsInlinePicker(
                         title: "Skip Forward",
                         caption: "How far the forward button jumps",
-                        value: SkipIntervalOption(rawValue: skipForwardSeconds)?.title ?? "",
-                        destination: AnyView(
-                            SettingsDoubleOptionList(
-                                navigationTitle: "Skip Forward",
-                                selection: $skipForwardSeconds,
-                                options: Array(SkipIntervalOption.allCases),
-                                rowTitle: \.title
-                            )
-                        ),
+                        selection: $skipForwardSeconds,
+                        options: Array(SkipIntervalOption.allCases),
+                        rowTitle: \.title,
+                        isExpanded: expandedPicker == .skipForward,
+                        onToggle: { togglePicker(.skipForward) },
                         isLast: true
                     )
                 }
@@ -298,45 +292,11 @@ struct SettingsView: View {
         }
     }
 
-    private func playbackRow(
-        title: String,
-        caption: String,
-        value: String,
-        destination: AnyView,
-        isLast: Bool
-    ) -> some View {
-        NavigationLink {
-            destination
-        } label: {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(.primary)
-                    Text(caption)
-                        .font(.system(size: 11))
-                        .foregroundStyle(SettingsDesign.secondaryLabel)
-                        .lineSpacing(1)
-                        .multilineTextAlignment(.leading)
-                }
-                Spacer(minLength: 8)
-                Text(value)
-                    .font(.system(size: 15))
-                    .foregroundStyle(SettingsDesign.secondaryLabel)
-                    .multilineTextAlignment(.trailing)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .heavy))
-                    .foregroundStyle(SettingsDesign.tertiaryLabel)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .bottom) {
-            if !isLast {
-                SettingsHairline()
-            }
+    /// Opens the tapped picker (closing any other) or closes it if already open. The whole
+    /// transition is animated in one place so the option tray slides rather than pops.
+    private func togglePicker(_ picker: PlaybackPicker) {
+        withAnimation(.snappy(duration: 0.34, extraBounce: 0.04)) {
+            expandedPicker = (expandedPicker == picker) ? nil : picker
         }
     }
 
@@ -585,42 +545,161 @@ enum SettingsDestination: Hashable {
     case icloud
 }
 
-// MARK: - Cream-styled option list (reused destination for playback rows)
+// MARK: - Inline expanding option picker (replaces the pushed option list)
 
-private struct SettingsDoubleOptionList<Option: Identifiable & RawRepresentable>: View
+/// A playback-preference row that reveals its choices in place. Tapping the header slides an
+/// option tray open beneath it instead of pushing a new screen — keeping everything inside the
+/// detented sheet so the surface never jumps/resizes.
+private struct SettingsInlinePicker<Option: Identifiable & RawRepresentable>: View
     where Option.RawValue == Double {
-    let navigationTitle: String
+    let title: String
+    let caption: String
     @Binding var selection: Double
     let options: [Option]
     let rowTitle: KeyPath<Option, String>
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    let isLast: Bool
+
+    private var currentTitle: String {
+        options.first { $0.rawValue == selection }?[keyPath: rowTitle] ?? ""
+    }
 
     var body: some View {
-        List {
-            ForEach(options) { option in
-                Button {
-                    selection = option.rawValue
-                } label: {
-                    HStack {
-                        Text(option[keyPath: rowTitle])
+        VStack(spacing: 0) {
+            Button(action: onToggle) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(title)
+                            .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(.primary)
-                        Spacer()
-                        if selection == option.rawValue {
-                            Image(systemName: "checkmark")
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.tint)
-                        }
+                        Text(caption)
+                            .font(.system(size: 11))
+                            .foregroundStyle(SettingsDesign.secondaryLabel)
+                            .lineSpacing(1)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer(minLength: 8)
+                    Text(currentTitle)
+                        .font(.system(size: 14, weight: isExpanded ? .semibold : .regular))
+                        .foregroundStyle(isExpanded ? Color.amber : SettingsDesign.secondaryLabel)
+                        .multilineTextAlignment(.trailing)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundStyle(isExpanded ? Color.amber : SettingsDesign.tertiaryLabel)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(spacing: 2) {
+                    ForEach(options) { option in
+                        optionRow(option)
                     }
                 }
-                .listRowBackground(Color.cardWhite)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
             }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(Color.cream.ignoresSafeArea())
-        .navigationTitle(navigationTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.cream, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .clipped()
+        .overlay(alignment: .bottom) {
+            if !isLast {
+                SettingsHairline()
+            }
+        }
+    }
+
+    private func optionRow(_ option: Option) -> some View {
+        let isSelected = selection == option.rawValue
+        return Button {
+            selection = option.rawValue
+            onToggle()
+        } label: {
+            HStack(spacing: 10) {
+                Text(option[keyPath: rowTitle])
+                    .font(.system(size: 14, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? .primary : SettingsDesign.secondaryLabel)
+                Spacer(minLength: 8)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.amber)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isSelected ? Color.amber.opacity(0.12) : SettingsDesign.chipFill.opacity(0.5))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Home-tab selector (mirrors the onboarding landing-page choice)
+
+/// A two-segment sliding selector for the launch tab, bound to the same `startOnFreeBooks`
+/// `@AppStorage` key the onboarding writes — so the choice stays editable after onboarding.
+private struct HomeTabRow: View {
+    @Binding var startOnFreeBooks: Bool
+    @Namespace private var pill
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Open To")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.primary)
+                Text("The library that greets you when you launch Unpaged")
+                    .font(.system(size: 11))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
+                    .lineSpacing(1)
+            }
+
+            HStack(spacing: 4) {
+                segment(title: "Free Books", icon: "books.vertical.fill", isOn: startOnFreeBooks) {
+                    startOnFreeBooks = true
+                }
+                segment(title: "All Books", icon: "square.stack.fill", isOn: !startOnFreeBooks) {
+                    startOnFreeBooks = false
+                }
+            }
+            .padding(4)
+            .background(SettingsDesign.chipFill, in: Capsule())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+    }
+
+    private func segment(title: String, icon: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.snappy(duration: 0.3, extraBounce: 0.08)) { action() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(isOn ? .white : SettingsDesign.secondaryLabel)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .background {
+                if isOn {
+                    Capsule()
+                        .fill(Color.amber)
+                        .matchedGeometryEffect(id: "homeTabPill", in: pill)
+                }
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -26,6 +26,10 @@ struct OnboardingFlowView: View {
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
 
+    // Persists the "Free books" home choice so relaunched users open on Free Books and get the
+    // reordered tab layout (Favorites / Free Books / All Books). Default false = unchanged behavior.
+    @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
+
     @State private var choice: OnboardingChoice?
     @State private var activeID: Int? = 0
 
@@ -123,6 +127,7 @@ struct OnboardingFlowView: View {
 
     private func finish() {
         let tab: LibraryTab = (choice == .own) ? .allBooks : .freeBooks
+        startOnFreeBooks = (choice == .free)
         onFinish(tab)
     }
 }

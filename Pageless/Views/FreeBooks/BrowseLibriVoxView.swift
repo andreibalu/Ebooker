@@ -37,12 +37,13 @@ struct BrowseLibriVoxView: View {
             }
             .background(Color.cream.ignoresSafeArea())
 
-            if viewModel.isFirstTimeLoading {
+            if viewModel.isInitialLoading {
                 firstLoadOverlay
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.35), value: viewModel.isFirstTimeLoading)
+        .animation(.easeInOut(duration: 0.35), value: viewModel.isInitialLoading)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.featuredBooks.count)
         .onAppear {
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
         }
@@ -138,19 +139,15 @@ struct BrowseLibriVoxView: View {
                     .tint(.primary)
 
                 VStack(spacing: 6) {
-                    Text("Building Your Free Library")
+                    Text(viewModel.isPreloadingFeatured ? "Finding Classics" : "Building Your Free Library")
                         .font(.headline)
 
-                    if case .syncing(let fetched) = viewModel.syncState, fetched > 0 {
-                        Text("\(fetched.formatted()) books loaded…")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text("Downloading catalog of 20,000+ public-domain audiobooks")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
+                    Text(viewModel.isPreloadingFeatured
+                         ? "Loading a handful of timeless audiobooks to get you started"
+                         : "Downloading the catalog of 20,000+ public-domain audiobooks")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
             }
             .padding(32)
@@ -293,11 +290,13 @@ struct BrowseLibriVoxView: View {
 
     @ViewBuilder
     private var syncBanner: some View {
-        // Incremental refresh in progress (only when catalog already has data)
-        if case .syncing(let fetched) = viewModel.syncState, !viewModel.isFirstTimeLoading {
+        // Full catalog streaming in behind already-visible classics/cached data (non-blocking).
+        if viewModel.isLoadingFullCatalog, case .syncing(let fetched) = viewModel.syncState {
             HStack(spacing: 6) {
                 ProgressView().scaleEffect(0.75)
-                Text("Refreshing catalog… \(fetched.formatted()) updated")
+                Text(viewModel.isFirstFullSync
+                     ? "Loading the full library… \(fetched.formatted()) books"
+                     : "Refreshing catalog… \(fetched.formatted()) updated")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -309,7 +308,7 @@ struct BrowseLibriVoxView: View {
             HStack(spacing: 6) {
                 Image(systemName: "wifi.slash")
                     .foregroundStyle(.orange)
-                Text("Offline — showing cached catalog")
+                Text("Offline — showing saved books")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -318,8 +317,9 @@ struct BrowseLibriVoxView: View {
             }
             .padding(.vertical, 6)
 
-        // Online error (not an offline / no-data situation)
-        } else if case .failed(let message, false) = viewModel.syncState {
+        // Online error (not an offline / no-data situation). Suppressed when the full-screen
+        // failed state is already showing it, to avoid doubling up.
+        } else if case .failed(let message, false) = viewModel.syncState, !viewModel.loadFailedWithNoData {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(.orange)
@@ -352,10 +352,14 @@ struct BrowseLibriVoxView: View {
     private var contentArea: some View {
         if viewModel.isOfflineWithNoData {
             noInternetState
+        } else if viewModel.loadFailedWithNoData {
+            loadFailedState
         } else if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                && !viewModel.hasActiveFilters {
             if !viewModel.featuredBooks.isEmpty {
                 featuredBooksList
+            } else if viewModel.isInitialLoading {
+                Spacer() // overlay is covering the screen; keep layout stable
             } else {
                 emptySearch
             }
@@ -397,9 +401,22 @@ struct BrowseLibriVoxView: View {
         ContentUnavailableView {
             Label("No Internet Connection", systemImage: "wifi.slash")
         } description: {
-            Text("Free Books needs a connection on first launch to download the catalog. Connect and tap Retry.")
+            Text("Free Books needs a connection the first time to load audiobooks from LibriVox. Connect to Wi‑Fi or cellular and tap Retry.")
         } actions: {
             Button("Retry") {
+                viewModel.forceRefresh(modelContext: modelContext)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var loadFailedState: some View {
+        ContentUnavailableView {
+            Label("Couldn’t Load Free Books", systemImage: "exclamationmark.icloud")
+        } description: {
+            Text(viewModel.failureMessage ?? "Something went wrong reaching LibriVox. Please try again in a moment.")
+        } actions: {
+            Button("Try Again") {
                 viewModel.forceRefresh(modelContext: modelContext)
             }
             .buttonStyle(.borderedProminent)

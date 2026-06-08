@@ -21,6 +21,30 @@ struct LibriVoxAPIGenre: Decodable {
     enum CodingKeys: String, CodingKey { case id, name }
 }
 
+// MARK: - Errors
+
+/// Typed, user-presentable failures from the LibriVox feed API.
+///
+/// The point of this type is to never let a raw `DecodingError` ("The data couldn't be
+/// read because it isn't in the correct format.") reach the UI. LibriVox routinely returns
+/// non-`books`/`sections` payloads — an `{"error": "..."}` body with HTTP 200 when a query
+/// matches nothing, or an HTML maintenance page on server hiccups — and the strict decoders
+/// below would otherwise surface that confusing message. `URLError` is intentionally NOT
+/// wrapped here so the view model's offline classification still works.
+enum LibriVoxAPIError: LocalizedError {
+    case serverUnavailable(status: Int)
+    case unreadableResponse
+
+    var errorDescription: String? {
+        switch self {
+        case .serverUnavailable:
+            "LibriVox is temporarily unavailable. Please try again in a moment."
+        case .unreadableResponse:
+            "LibriVox returned an unexpected response. Please try again in a moment."
+        }
+    }
+}
+
 // MARK: - Response envelopes
 
 private struct CatalogResponse: Decodable {
@@ -29,6 +53,12 @@ private struct CatalogResponse: Decodable {
 
 private struct TracksResponse: Decodable {
     let sections: [LibriVoxAPITrack]?
+}
+
+/// LibriVox returns this shape (with HTTP 200) when a query matches nothing, e.g.
+/// `{"error": "Audiobooks could not be found"}`. Treated as an empty result, not a failure.
+private struct LibriVoxErrorEnvelope: Decodable {
+    let error: String
 }
 
 // MARK: - API models
@@ -197,6 +227,36 @@ enum LibriVoxAPIClient {
         return allBooks
     }
 
+    /// Fetches catalog metadata for a specific set of LibriVox project IDs.
+    ///
+    /// The LibriVox feed API does not reliably support fetching multiple IDs in a
+    /// single request, so each ID is fetched individually (concurrently). Failures
+    /// for individual IDs are skipped rather than failing the whole batch — the
+    /// caller degrades gracefully when the network is unavailable.
+    static func fetchBooks(ids: [String]) async throws -> [LibriVoxAPIBook] {
+        guard !ids.isEmpty else { return [] }
+        return try await withThrowingTaskGroup(of: LibriVoxAPIBook?.self) { group in
+            for id in ids {
+                group.addTask { try? await fetchBook(id: id) }
+            }
+            var books: [LibriVoxAPIBook] = []
+            for try await book in group {
+                if let book { books.append(book) }
+            }
+            return books
+        }
+    }
+
+    /// Fetches catalog metadata for a single LibriVox project ID.
+    private static func fetchBook(id: String) async throws -> LibriVoxAPIBook? {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "id", value: id),
+        ]
+        items.append(contentsOf: catalogFields)
+        return try await fetchBooks(queryItems: items).first
+    }
+
     /// Fetches all tracks for a LibriVox project ID.
     static func fetchTracks(projectID: String) async throws -> [LibriVoxAPITrack] {
         var components = URLComponents(string: "\(baseURL)/audiotracks")!
@@ -205,9 +265,9 @@ enum LibriVoxAPIClient {
             URLQueryItem(name: "project_id", value: projectID),
         ]
         guard let url = components.url else { throw URLError(.badURL) }
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try JSONDecoder().decode(TracksResponse.self, from: data)
-        return (response.sections ?? []).sorted { $0.sectionNumber < $1.sectionNumber }
+        let data = try await fetchData(from: url)
+        let sections = try decode(data) { (r: TracksResponse) in r.sections }
+        return sections.sorted { $0.sectionNumber < $1.sectionNumber }
     }
 
     // MARK: - Private
@@ -216,8 +276,39 @@ enum LibriVoxAPIClient {
         var components = URLComponents(string: "\(baseURL)/audiobooks")!
         components.queryItems = queryItems
         guard let url = components.url else { throw URLError(.badURL) }
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try JSONDecoder().decode(CatalogResponse.self, from: data)
-        return response.books ?? []
+        let data = try await fetchData(from: url)
+        return try decode(data) { (r: CatalogResponse) in r.books }
+    }
+
+    /// Performs the request and validates the HTTP status. `URLError`s (offline, timeout,
+    /// DNS) propagate untouched so callers can classify connectivity problems; any non-2xx
+    /// status becomes a friendly `LibriVoxAPIError.serverUnavailable`.
+    private static func fetchData(from url: URL) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(from: url)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw LibriVoxAPIError.serverUnavailable(status: http.statusCode)
+        }
+        return data
+    }
+
+    /// Lenient decode that tolerates the three things LibriVox actually returns:
+    ///   1. The expected envelope → its elements (or `[]` if the array key is absent/null).
+    ///   2. An `{"error": "..."}` body (HTTP 200, no match) → `[]`, a normal empty result.
+    ///   3. Anything else — an HTML maintenance page, a truncated body → `unreadableResponse`,
+    ///      a friendly retriable error instead of a raw `DecodingError`.
+    private static func decode<Envelope: Decodable, Element>(
+        _ data: Data,
+        _ extract: (Envelope) -> [Element]?
+    ) throws -> [Element] where Element: Decodable {
+        let decoder = JSONDecoder()
+        if let envelope = try? decoder.decode(Envelope.self, from: data) {
+            return extract(envelope) ?? []
+        }
+        // Optional array keys mean the envelope usually decodes even for the no-results body,
+        // but if the shape differs this still catches the explicit error sentinel.
+        if (try? decoder.decode(LibriVoxErrorEnvelope.self, from: data)) != nil {
+            return []
+        }
+        throw LibriVoxAPIError.unreadableResponse
     }
 }

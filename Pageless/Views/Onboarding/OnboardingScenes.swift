@@ -46,9 +46,15 @@ private func momentStepperLabel(_ option: MomentBacktrackOption) -> String {
 /// optional radial accent tint near the top, and gentle parallax drift away from center.
 struct OBSceneShell<Content: View>: View {
     var tint: Bool = false
+    /// Centers content both horizontally and vertically (used by the Done scene).
     var centered: Bool = false
+    /// Centers content vertically only, keeping the default left alignment. Use for short scenes
+    /// that otherwise hug the top.
+    var verticalCenter: Bool = false
     let reduceMotion: Bool
     @ViewBuilder let content: () -> Content
+
+    private var addSpacers: Bool { centered || verticalCenter }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -64,9 +70,9 @@ struct OBSceneShell<Content: View>: View {
             }
 
             VStack(alignment: centered ? .center : .leading, spacing: 0) {
-                if centered { Spacer(minLength: 0) }
+                if addSpacers { Spacer(minLength: 0) }
                 content()
-                if centered { Spacer(minLength: 0) }
+                if addSpacers { Spacer(minLength: 0) }
             }
             .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
             .padding(.horizontal, 26)
@@ -109,8 +115,8 @@ struct OBChoiceScene: View {
                         .frame(width: 26, height: 26)
                         .overlay(Image(systemName: "book.pages.fill").font(.system(size: 13)).foregroundStyle(.white))
                     Text("Unpaged")
-                        .font(.system(size: 15, weight: .bold))
-                        .tracking(-0.15)
+                        .font(.system(size: 22, weight: .bold))
+                        .tracking(-0.3)
                         .foregroundStyle(OB.label)
                 }
                 .padding(.bottom, 22)
@@ -258,7 +264,7 @@ struct OBPlaybackScene: View {
                     prefBlock(icon: "play.circle", title: "On resume",
                               caption: "Rewind a little when you press play after a break.",
                               delay: 0.08) {
-                        OBRulerPicker(selection: $resume, reduceMotion: reduceMotion)
+                        OBResumeSlider(selection: $resume, reduceMotion: reduceMotion)
                     }
 
                     prefBlock(icon: "gobackward.30", title: "Skip buttons",
@@ -308,116 +314,126 @@ struct OBPlaybackScene: View {
     }
 }
 
-/// Drag-to-number ruler. Fine ticks scroll under a fixed accent caret; snaps to nearest value.
-private struct OBRulerPicker: View {
+/// Resume-rewind amount as a magnetic snap slider. Four stops (Exact → 1 min); the thumb locks to
+/// the nearest stop as you drag — no free glide to fight, no value to "land" — and the whole track
+/// is tappable. The amber fill is the rewind amount: more fill = more rewind. The serif value above
+/// updates live so it doubles as a readout while dragging.
+private struct OBResumeSlider: View {
     @Binding var selection: Double
     let reduceMotion: Bool
 
-    private let options = ResumeBacktrackOption.allCases
-    private let step: CGFloat = 84
-    @State private var dragOffset: CGFloat = 0
-    @State private var isDragging = false
+    private let options = ResumeBacktrackOption.allCases   // .exact, 15s, 30s, 1 min (left → right)
+    private let inset: CGFloat = 17           // half the thumb — keeps the thumb fully on-track at the ends
+    private let thumbSize: CGFloat = 34
+    private let trackHeight: CGFloat = 8
 
-    private var index: Int { options.firstIndex(where: { $0.rawValue == selection }) ?? 0 }
+    /// Live stop while dragging; falls back to the committed selection when idle.
+    @State private var dragIndex: Int? = nil
+    @State private var lastHaptic = -1
+    private let haptics = UISelectionFeedbackGenerator()
 
-    private func liveIndex(width: CGFloat) -> Int {
-        max(0, min(options.count - 1, Int((CGFloat(index) - dragOffset / step).rounded())))
+    private var index: Int {
+        options.firstIndex(where: { $0.rawValue == selection }) ?? options.count - 1
     }
+    private var liveIndex: Int { dragIndex ?? index }
 
     var body: some View {
-        GeometryReader { geo in
-            let width = geo.size.width
-            let live = liveIndex(width: width)
-            let baseX = width / 2 - CGFloat(index) * step + dragOffset
+        VStack(spacing: 15) {
+            obSerif(resumeShort(options[liveIndex]), size: 40, color: OB.accent)
 
-            VStack(spacing: 10) {
-                obSerif(resumeShort(options[live]), size: 40, color: OB.accent)
+            GeometryReader { geo in
+                let w = geo.size.width
+                let span = max(1, w - inset * 2)
+                let midY = thumbSize / 2
+                let x: (Int) -> CGFloat = { i in inset + span * CGFloat(i) / CGFloat(options.count - 1) }
+                let thumbX = x(liveIndex)
 
                 ZStack {
-                    strip(live: live)
-                        .offset(x: baseX)
-                        .animation(isDragging ? nil : OBMotion.settle, value: baseX)
+                    // Base track (runs between the first and last stops)
+                    Capsule()
+                        .fill(OB.fill(0.08))
+                        .frame(width: span, height: trackHeight)
+                        .position(x: w / 2, y: midY)
 
-                    // Fixed center caret
-                    VStack(spacing: 0) {
-                        Triangle()
-                            .fill(OB.accent)
-                            .frame(width: 10, height: 6)
-                        Capsule()
-                            .fill(OB.accent)
-                            .frame(width: 2.5, height: 34)
+                    // Amber fill from the first stop up to the thumb
+                    Capsule()
+                        .fill(OB.accent)
+                        .frame(width: max(0, thumbX - inset), height: trackHeight)
+                        .position(x: inset + max(0, thumbX - inset) / 2, y: midY)
+
+                    // Stop dots — white once the fill has passed them, faint otherwise
+                    ForEach(options.indices, id: \.self) { i in
+                        Circle()
+                            .fill(i <= liveIndex ? Color.white.opacity(0.9) : OB.fill(0.22))
+                            .frame(width: 5, height: 5)
+                            .position(x: x(i), y: midY)
                     }
-                    .frame(maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 0)
+
+                    // Thumb
+                    Circle()
+                        .fill(Color.cardWhite)
+                        .frame(width: thumbSize, height: thumbSize)
+                        .overlay(Circle().strokeBorder(OB.accent, lineWidth: 2.5))
+                        .overlay(Circle().fill(OB.accent).frame(width: 12, height: 12))
+                        .shadow(color: OB.accent.opacity(0.3), radius: 6, y: 3)
+                        .position(x: thumbX, y: midY)
                 }
-                .frame(height: 64)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .black, location: 0.16),
-                            .init(color: .black, location: 0.84),
-                            .init(color: .clear, location: 1)
-                        ],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
+                .frame(width: w, height: thumbSize)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
-                        .onChanged { v in
-                            isDragging = true
-                            dragOffset = v.translation.width
-                        }
-                        .onEnded { _ in
-                            let snapped = liveIndex(width: width)
-                            isDragging = false
-                            dragOffset = 0
-                            selection = options[snapped].rawValue
-                        }
+                        .onChanged { v in update(toX: v.location.x, span: span) }
+                        .onEnded { _ in commit() }
                 )
             }
-        }
-        .frame(height: 116)
-    }
+            .frame(height: thumbSize)
 
-    private func strip(live: Int) -> some View {
-        ZStack(alignment: .topLeading) {
-            // Decorative fine ticks
-            let totalW = CGFloat(options.count - 1) * step + step * 2
-            let count = Int(totalW / (step / 6)) + 1
-            ForEach(0..<count, id: \.self) { i in
-                let x = -step + CGFloat(i) * (step / 6)
-                let major = abs((x.truncatingRemainder(dividingBy: step) + step).truncatingRemainder(dividingBy: step)) < 1
-                Capsule()
-                    .fill(major ? OB.fill(0.25) : OB.fill(0.10))
-                    .frame(width: major ? 2 : 1.5, height: major ? 30 : 14)
-                    .offset(x: x, y: major ? 8 : 18)
-            }
-            // Value short labels
-            ForEach(options.indices, id: \.self) { i in
-                Text(resumeShort(options[i]))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(i == live ? OB.accent : OB.tertiary)
-                    .fixedSize()
-                    .offset(x: CGFloat(i) * step - 20, y: 42)
-                    .frame(width: 40)
+            // Stop labels, aligned under each dot
+            HStack(spacing: 0) {
+                ForEach(options.indices, id: \.self) { i in
+                    Text(resumeShort(options[i]))
+                        .font(.system(size: 11.5, weight: i == liveIndex ? .bold : .semibold))
+                        .foregroundStyle(i == liveIndex ? OB.accent : OB.tertiary)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
-        .frame(width: 1, height: 64, alignment: .topLeading)
+        .onAppear { haptics.prepare() }
     }
-}
 
-private struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: rect.midX, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.closeSubpath()
-        return p
+    /// Nearest stop to a touch x within the track span.
+    private func nearestIndex(toX px: CGFloat, span: CGFloat) -> Int {
+        let frac = (px - inset) / span
+        let raw = frac * CGFloat(options.count - 1)
+        return max(0, min(options.count - 1, Int(raw.rounded())))
+    }
+
+    private func update(toX px: CGFloat, span: CGFloat) {
+        let i = nearestIndex(toX: px, span: span)
+        if i != lastHaptic {
+            lastHaptic = i
+            if !reduceMotion { haptics.selectionChanged() }
+        }
+        guard i != dragIndex else { return }
+        if reduceMotion {
+            dragIndex = i
+        } else {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) { dragIndex = i }
+        }
+    }
+
+    private func commit() {
+        let target = dragIndex ?? index
+        lastHaptic = -1
+        if reduceMotion {
+            selection = options[target].rawValue
+            dragIndex = nil
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.78)) {
+                selection = options[target].rawValue
+                dragIndex = nil
+            }
+        }
     }
 }
 
@@ -650,7 +666,7 @@ struct OBIntelligenceScene: View {
     let reduceMotion: Bool
 
     var body: some View {
-        OBSceneShell(reduceMotion: reduceMotion) {
+        OBSceneShell(verticalCenter: true, reduceMotion: reduceMotion) {
             VStack(alignment: .leading, spacing: 0) {
                 Group {
                     HStack(spacing: 7) {
@@ -777,7 +793,7 @@ struct OBCloudScene: View {
     let reduceMotion: Bool
 
     var body: some View {
-        OBSceneShell(tint: true, reduceMotion: reduceMotion) {
+        OBSceneShell(tint: true, verticalCenter: true, reduceMotion: reduceMotion) {
             VStack(alignment: .leading, spacing: 0) {
                 Group {
                     HStack(spacing: 7) {
@@ -820,33 +836,34 @@ struct OBCloudScene: View {
 }
 
 /// Three device glyphs across the top, a central pulsing iCloud badge, dotted accent connectors.
-/// Requirement C: each connector stops at the *bottom edge* of its device glyph and never crosses
-/// the device box or its caption.
+/// Requirement C: captions sit *above* each glyph and connectors run from the glyph's bottom edge
+/// down to the cloud, so a line never crosses a device box or its caption.
 private struct OBSyncGraphic: View {
     let active: Bool
     let reduceMotion: Bool
 
     private let canvasW: CGFloat = 360
-    private let canvasH: CGFloat = 158
+    private let canvasH: CGFloat = 168
 
-    // Device glyph centers and box sizes.
+    // Device glyph centers and box sizes. Tops aligned so all captions share one row above them.
     private struct Device { let center: CGPoint; let size: CGSize; let cornerRadius: CGFloat; let label: String }
     private var devices: [Device] {
-        [
-            Device(center: CGPoint(x: 58, y: 34), size: CGSize(width: 30, height: 46), cornerRadius: 7, label: "iPhone"),
-            Device(center: CGPoint(x: canvasW / 2, y: 24), size: CGSize(width: 52, height: 38), cornerRadius: 6, label: "iPad"),
-            Device(center: CGPoint(x: canvasW - 58, y: 34), size: CGSize(width: 60, height: 38), cornerRadius: 6, label: "Mac")
+        let topY: CGFloat = 30
+        return [
+            Device(center: CGPoint(x: 56, y: topY + 23), size: CGSize(width: 30, height: 46), cornerRadius: 7, label: "iPhone"),
+            Device(center: CGPoint(x: canvasW / 2, y: topY + 19), size: CGSize(width: 52, height: 38), cornerRadius: 6, label: "iPad"),
+            Device(center: CGPoint(x: canvasW - 56, y: topY + 19), size: CGSize(width: 60, height: 38), cornerRadius: 6, label: "Mac")
         ]
     }
-    private var cloudCenter: CGPoint { CGPoint(x: canvasW / 2, y: 120) }
+    private var cloudCenter: CGPoint { CGPoint(x: canvasW / 2, y: 122) }
 
     @State private var pulse = false
     @State private var drawn = false
 
     var body: some View {
         ZStack {
-            // Dotted connectors — terminate at the bottom edge of each device box (+ gap), so the
-            // line never overlaps the glyph or its label.
+            // Dotted connectors — run from the cloud up to the bottom edge of each device box
+            // (+ small gap). Captions live above the boxes, so a line never reaches a label.
             ForEach(devices.indices, id: \.self) { i in
                 let d = devices[i]
                 let end = CGPoint(x: d.center.x, y: d.center.y + d.size.height / 2 + 6)
@@ -859,8 +876,8 @@ private struct OBSyncGraphic: View {
                         style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5, 6]))
             }
 
-            // Device glyphs — box centered exactly at `d.center`; caption placed below the box so
-            // the connector (ending at box-bottom + 6) lands between the two without overlapping either.
+            // Device glyphs — box centered at `d.center`; caption placed *above* the box so neither
+            // the box nor the label sits on the downward connector path.
             ForEach(devices.indices, id: \.self) { i in
                 let d = devices[i]
                 RoundedRectangle(cornerRadius: d.cornerRadius, style: .continuous)
@@ -877,7 +894,7 @@ private struct OBSyncGraphic: View {
                 Text(d.label)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(OB.tertiary)
-                    .position(x: d.center.x, y: d.center.y + d.size.height / 2 + 16)
+                    .position(x: d.center.x, y: d.center.y - d.size.height / 2 - 11)
                     .opacity(drawn ? 1 : 0)
             }
 
