@@ -1,5 +1,8 @@
-# Claude Code agent worktrees — ephemeral, never commit
-.claude/worktrees/
+# Claude Code skill infra — local only, never commit
+.claude/
+.agents/
+skills-lock.json
+CLAUDE.original.md
 
 # Xcode / macOS noise
 .DS_Store

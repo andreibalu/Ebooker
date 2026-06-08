@@ -8,7 +8,7 @@ Guidance for Claude Code (claude.ai/code) working in this repo.
 - **Xcode scheme**: `Pageless`
 - **Source module folder**: `Pageless/`
 - **Bundle identifier prefix**: `andreibaludev.Pageless`
-- **Current marketing version**: see `VERSION` (currently 1.2.1)
+- **Current marketing version**: see `VERSION` (currently 1.3)
 
 Three names = intentional historical layers — no "fix". New user-facing copy say "Unpaged".
 
@@ -280,7 +280,8 @@ All enums `CaseIterable, Identifiable`.
 - **Streaming vs downloaded**: Treat `Audiobook.isStreamingOnly` as load-bearing — anything touching on-disk path must check it. Promotion to downloaded goes through `LibriVoxDownloadService`.
 - **Cover fallback**: Any view displaying cover art must fall through to `GeneratedCoverView(title:)` when `coverArtData == nil` — not gradient + SF Symbol. `NowPlayingUpdater` mirrors this for lock screen / CarPlay artwork via `GeneratedCoverView.renderImage(title:side:)` with `[title: UIImage]` cache so it doesn't re-render every periodic tick.
 - **CarPlay permission constraint**: Mic + speech permission prompts cannot appear on CarPlay screen, so `VoiceSearchPermissions.primeIfNeeded()` runs at iPhone launch. Don't add new permission requests that can fire only on CarPlay.
-- **Now-Playing metadata convention** (`NowPlayingUpdater.update`): track title → `MPMediaItemPropertyTitle`, book title → `MPMediaItemPropertyAlbumTitle` (do NOT concatenate author into this), author → `MPMediaItemPropertyArtist`. Always set `MPNowPlayingInfoCenter.default().playbackState` after writing `nowPlayingInfo` — Siri uses it to route pause/resume intents.
+- **Now-Playing metadata convention** (`NowPlayingUpdater.update`): track title → `MPMediaItemPropertyTitle` (use `track.displayTitle`, not raw `track.title` — see Title display below), book title → `MPMediaItemPropertyAlbumTitle` (do NOT concatenate author into this), author → `MPMediaItemPropertyArtist`. Always set `MPNowPlayingInfoCenter.default().playbackState` after writing `nowPlayingInfo` — Siri uses it to route pause/resume intents.
+- **Title display / rename propagation**: Every playback surface (`PlayerView` big title, `NowPlayingUpdater` lock screen + CarPlay now-playing) reads `AudioTrack.displayTitle`, NOT `track.title`. Single-track books: `displayTitle` falls back to renamable `Audiobook.title` — lone track title usually file-metadata noise ("Chapter 1") no rename touches (`commitRename` writes only `audiobook.title`). Multi-track keeps per-chapter `title`. `MiniPlayerBar` shows book title primary line, drops duplicate single-track chapter line via `miniSecondaryLine`. Make rename universal via display-side fallback — do NOT mutate `AudioTrack.title` rows on rename (no migration, fixes existing books instantly). CarPlay chapter-list rows still show raw per-track `title`.
 
 ## Testing
 
