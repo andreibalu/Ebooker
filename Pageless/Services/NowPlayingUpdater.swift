@@ -117,7 +117,7 @@ struct NowPlayingUpdater {
         isPlaying: Bool
     ) {
         var nowPlayingInfo: [String: Any] = [
-            MPMediaItemPropertyTitle: track.title,
+            MPMediaItemPropertyTitle: track.displayTitle,
             MPMediaItemPropertyAlbumTitle: audiobook.title,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
             MPMediaItemPropertyPlaybackDuration: duration,

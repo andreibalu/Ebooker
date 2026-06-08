@@ -12,6 +12,18 @@ struct MiniPlayerBar: View {
 
     @EnvironmentObject private var player: AudioPlayerManager
 
+    // Secondary chapter line. Single-track books already show the (renamable) book title
+    // on the line above, so the lone "Chapter 1" file-metadata title is dropped to avoid
+    // a duplicate; only distinct multi-track chapter names render here.
+    private var miniSecondaryLine: String? {
+        guard let track = player.currentTrack else { return nil }
+        guard (player.currentAudiobook?.tracks.count ?? 0) > 1 else { return nil }
+        let bookTitle = player.currentAudiobook?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trackTitle = track.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trackTitle.isEmpty || trackTitle == bookTitle { return nil }
+        return trackTitle
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Full-width progress strip flush at the very top
@@ -35,10 +47,12 @@ struct MiniPlayerBar: View {
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
 
-                    Text(player.currentTrack?.title ?? "Choose an audiobook")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    if let secondary = miniSecondaryLine {
+                        Text(secondary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 8)

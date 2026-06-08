@@ -169,7 +169,7 @@ struct PlayerView: View {
 
     private var titleSection: some View {
         VStack(spacing: 6) {
-            Text(player.currentTrack?.title ?? "Choose something to play")
+            Text(player.currentTrack?.displayTitle ?? "Choose something to play")
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
 

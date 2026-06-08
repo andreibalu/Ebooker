@@ -31,6 +31,18 @@ final class AudioTrack: Identifiable {
         return URL(string: s)
     }
 
+    /// Title to surface in player / mini-player / now-playing (CarPlay + lock screen).
+    /// For single-track audiobooks the lone track title is usually file-metadata noise
+    /// (e.g. "Chapter 1"), so fall back to the user-renamable book title — keeps a rename
+    /// universal across every playback surface. Multi-track books keep per-chapter titles.
+    var displayTitle: String {
+        if let book = audiobook, book.tracks.count <= 1 {
+            let bookTitle = book.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !bookTitle.isEmpty { return bookTitle }
+        }
+        return title
+    }
+
     // SHA-256 hex digest of a content snapshot (first 1MB || last 1MB || filesize || durationMs).
     // Used to auto-match this track to a cloud-synced Audiobook when the user re-imports the same
     // file after a reinstall or on a new device. Nullable for lightweight migration and because
