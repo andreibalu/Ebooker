@@ -20,6 +20,10 @@ The **Free Books** tab streams or downloads public-domain audiobooks from [Libri
 
 At the top of the tab, **Collections** are hand-picked shelves of classics grouped by theme — for example Gothic & Horror, Detective & Mystery, or Short Listens you can finish in an afternoon. Every collection book streams, downloads, and samples exactly like the rest of the free catalog.
 
+### Can I choose a different narrator for a free book?
+
+Often, yes. Many classics were recorded more than once by LibriVox volunteers. When other recordings of the same book exist, the book's detail page shows an **Other Recordings** section listing every alternative version in the same language — each with its length and a 20-second sample button so you can compare narrators before downloading. This works both from the Free Books tab and from a free book already in your library.
+
 ### Why don't covers load for some LibriVox books?
 
 LibriVox cover URLs are inconsistent, so Unpaged intentionally generates a clean letter-template cover for every book in the free catalog. This is by design — your library stays visually consistent.

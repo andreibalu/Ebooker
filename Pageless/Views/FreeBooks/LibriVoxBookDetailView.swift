@@ -28,6 +28,7 @@ struct LibriVoxBookDetailView: View {
                 descriptionSection
                 actionSection
                 completionSection
+                LibriVoxAlternativesSection(book: book, onOpenPlayer: onOpenPlayer)
             }
             .padding(20)
         }

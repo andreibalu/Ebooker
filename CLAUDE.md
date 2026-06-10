@@ -6,7 +6,7 @@ Guidance for Claude Code (claude.ai/code) working in this repo.
 
 - **Marketing name (App Store / home screen)**: Unpaged
 - **Xcode scheme**: `Pageless` · **source folder**: `Pageless/` · **bundle id prefix**: `andreibaludev.Pageless`
-- **Marketing version**: see `VERSION` (currently 1.3)
+- **Marketing version**: see `VERSION` (currently 1.3.1)
 
 Three names = intentional historical layers — no "fix". New user-facing copy says "Unpaged".
 
@@ -145,6 +145,7 @@ Both StoreKit-owned; the app gates on `Transaction.currentEntitlements` directly
    - **Hardened API client — never surface raw `DecodingError`.** The feed returns `{"error":"…"}` with HTTP 200 (no match) or HTML (server hiccup); `fetchData` validates status (→ `LibriVoxAPIError.serverUnavailable`), the lenient `decode` helper maps error-envelope/empty to `[]` and unparseable to `.unreadableResponse`. `URLError` deliberately **not** wrapped so `isNetworkUnavailable` offline classification still works. `LibriVoxCatalogSync.fetchPageWithRetry` retries transient page failures (3 attempts, linear backoff).
    - **Offline/empty states** (`BrowseLibriVoxView`): `isOfflineWithNoData` / `isOfflineWithCachedData` / `loadFailedWithNoData`, all featured-aware (cached classics count as "has data").
    - **Collections** — `LibriVoxCollection.all`: hand-curated static shelves (struct + bundled LibriVox project IDs, no backend), horizontal card rail atop `featuredBooksList` → `LibriVoxCollectionView`. `LibriVoxCollectionViewModel.load` resolves local-first from the `LibriVoxBook` cache, fetches only missing IDs via `LibriVoxAPIClient.fetchBooks(ids:)` and seeds through `LibriVoxCatalogSync.seed` (so the full sync dedupes by `id`); curated ID order preserved; offline-with-partial-cache degrades to cached subset. IDs must be verified against the live feed API before adding.
+   - **Other Recordings** — `LibriVoxAlternativesFinder`: groups re-recordings of the same text from the local cache (zero network). Normalized title key strips only *known* LibriVox suffixes — `(version N)`, `(dramatic reading)`, `(version N dramatic reading)`, `(abridged)`, `(unabridged)`, `(solo)`, `(group)`, stacked OK — then folds case/diacritics; unknown parentheticals (translations) never merge. Match = same `language` + same `authorDisplay` (#Predicate) + equal key, excluding self; sort original → versions ascending → other readings. `LibriVoxAlternativesSection` (rows: version badge / duration / inline 20s sample / push to detail) shared by `LibriVoxBookDetailView` (bottom) and `AudiobookDetailView` (free books, resolved via `catalogId`). **Empty state must render a zero-height anchor, not nothing** — a structurally absent view never fires the `.task` that loads alternatives.
 
 2. **Legacy seed catalog (CarPlay)** — `FreeBookCatalogService`: 5 hand-picked Internet Archive classics, downloaded via `FreeBookDownloadService` (background URLSession; published progress/errors). Consumed only by `CarPlayCoordinator` + `LibraryViewModel`. **Don't extend this path for new iPhone features — use the LibriVox path.**
 

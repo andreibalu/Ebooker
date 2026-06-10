@@ -33,6 +33,7 @@ struct AudiobookDetailView: View {
     @State private var hasCloudCandidates = false
     @State private var freeBackup: Audiobook?
     @State private var showFreeRestoreConfirm = false
+    @State private var catalogBook: LibriVoxBook?
 
     /// The "Match with iCloud backup" affordance only appears when sync is active (which itself
     /// requires an active iCloud subscription), this is a downloaded own book, and there's at least
@@ -73,6 +74,16 @@ struct AudiobookDetailView: View {
         }
     }
 
+    /// Free books carry the LibriVox project id; the cached catalog row (local store,
+    /// same split container) drives the "Other Recordings" section. Missing row
+    /// (catalog not yet synced) just hides the section.
+    private func resolveCatalogBook() {
+        guard audiobook.isFreeBook, let catalogId = audiobook.catalogId else { return }
+        var descriptor = FetchDescriptor<LibriVoxBook>(predicate: #Predicate { $0.id == catalogId })
+        descriptor.fetchLimit = 1
+        catalogBook = try? modelContext.fetch(descriptor).first
+    }
+
     private func restoreFreeBackup() {
         guard let backup = freeBackup else { return }
         do {
@@ -93,6 +104,9 @@ struct AudiobookDetailView: View {
                 resumeAnchorRow
                 momentsSection
                 tracksDisclosureSection
+                if let catalogBook {
+                    LibriVoxAlternativesSection(book: catalogBook, onOpenPlayer: openPlayer)
+                }
             }
             .padding(20)
         }
@@ -168,6 +182,7 @@ struct AudiobookDetailView: View {
             viewModel.reconcileStoredRecap(modelContext: modelContext)
             folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
             refreshCloudCandidates()
+            resolveCatalogBook()
         }
     }
 
