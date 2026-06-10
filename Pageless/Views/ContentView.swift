@@ -120,9 +120,14 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(onRefreshCatalog: {
-                browseViewModel.forceRefresh(modelContext: modelContext)
-            })
+            SettingsView(
+                onRefreshCatalog: {
+                    browseViewModel.forceRefresh(modelContext: modelContext)
+                },
+                onResetCatalog: {
+                    browseViewModel.resetCatalog(modelContext: modelContext)
+                }
+            )
             .environmentObject(aiEntitlementStore)
             .environment(onboarding)
         }

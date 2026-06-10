@@ -12,6 +12,11 @@ struct BrowseLibriVoxView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
 
+    @AppStorage("freeBooksCollectionsHidden") private var collectionsHiddenStored = false
+    /// Mirrors `collectionsHiddenStored` — @AppStorage writes don't participate in
+    /// animation transactions, so the view animates this local state and persists separately.
+    @State private var collectionsHidden = false
+
     var body: some View {
         @Bindable var vm = viewModel
         ZStack {
@@ -45,6 +50,7 @@ struct BrowseLibriVoxView: View {
         .animation(.easeInOut(duration: 0.35), value: viewModel.isInitialLoading)
         .animation(.easeInOut(duration: 0.3), value: viewModel.featuredBooks.count)
         .onAppear {
+            collectionsHidden = collectionsHiddenStored
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
         }
         .onChange(of: scenePhase) { _, phase in
@@ -161,52 +167,48 @@ struct BrowseLibriVoxView: View {
 
     private var filterChipsRow: some View {
         HStack(spacing: 8) {
-            if !viewModel.availableLanguages.isEmpty {
-                Menu {
-                    Button("All Languages") {
-                        viewModel.selectedLanguage = nil
+            Menu {
+                Button("All Languages") {
+                    viewModel.selectedLanguage = nil
+                    viewModel.triggerSearch(modelContext: modelContext)
+                }
+                Divider()
+                ForEach(viewModel.languageOptions, id: \.self) { lang in
+                    Button {
+                        viewModel.selectedLanguage = viewModel.selectedLanguage == lang ? nil : lang
                         viewModel.triggerSearch(modelContext: modelContext)
-                    }
-                    Divider()
-                    ForEach(viewModel.availableLanguages, id: \.self) { lang in
-                        Button {
-                            viewModel.selectedLanguage = viewModel.selectedLanguage == lang ? nil : lang
-                            viewModel.triggerSearch(modelContext: modelContext)
-                        } label: {
-                            if viewModel.selectedLanguage == lang {
-                                Label(lang, systemImage: "checkmark")
-                            } else {
-                                Text(lang)
-                            }
+                    } label: {
+                        if viewModel.selectedLanguage == lang {
+                            Label(lang, systemImage: "checkmark")
+                        } else {
+                            Text(lang)
                         }
                     }
-                } label: {
-                    filterDropdownLabel(viewModel.selectedLanguage ?? "Language", isSelected: viewModel.selectedLanguage != nil)
                 }
+            } label: {
+                filterDropdownLabel(viewModel.selectedLanguage ?? "Language", isSelected: viewModel.selectedLanguage != nil)
             }
 
-            if !viewModel.availableGenres.isEmpty {
-                Menu {
-                    Button("All Genres") {
-                        viewModel.selectedGenre = nil
+            Menu {
+                Button("All Genres") {
+                    viewModel.selectedGenre = nil
+                    viewModel.triggerSearch(modelContext: modelContext)
+                }
+                Divider()
+                ForEach(viewModel.genreOptions, id: \.self) { genre in
+                    Button {
+                        viewModel.selectedGenre = viewModel.selectedGenre == genre ? nil : genre
                         viewModel.triggerSearch(modelContext: modelContext)
-                    }
-                    Divider()
-                    ForEach(viewModel.availableGenres, id: \.self) { genre in
-                        Button {
-                            viewModel.selectedGenre = viewModel.selectedGenre == genre ? nil : genre
-                            viewModel.triggerSearch(modelContext: modelContext)
-                        } label: {
-                            if viewModel.selectedGenre == genre {
-                                Label(genre, systemImage: "checkmark")
-                            } else {
-                                Text(genre)
-                            }
+                    } label: {
+                        if viewModel.selectedGenre == genre {
+                            Label(genre, systemImage: "checkmark")
+                        } else {
+                            Text(genre)
                         }
                     }
-                } label: {
-                    filterDropdownLabel(viewModel.selectedGenre ?? "Genre", isSelected: viewModel.selectedGenre != nil)
                 }
+            } label: {
+                filterDropdownLabel(viewModel.selectedGenre ?? "Genre", isSelected: viewModel.selectedGenre != nil)
             }
 
             Menu {
@@ -372,34 +374,47 @@ struct BrowseLibriVoxView: View {
 
     // MARK: - Collections shelf
 
-    private var collectionsShelf: some View {
-        Section {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(LibriVoxCollection.all) { collection in
-                        NavigationLink {
-                            LibriVoxCollectionView(
-                                collection: collection,
-                                onOpenPlayer: onOpenPlayer,
-                                browseViewModel: viewModel
-                            )
-                        } label: {
-                            collectionCard(collection)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
+    private var collectionsHeaderButton: some View {
+        Button {
+            withAnimation(.spring(duration: 0.45, bounce: 0.12)) {
+                collectionsHidden.toggle()
             }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
-        } header: {
-            Text("Collections")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .textCase(nil)
+            collectionsHiddenStored = collectionsHidden
+        } label: {
+            HStack(spacing: 6) {
+                Text("Collections")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(collectionsHidden ? -90 : 0))
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var collectionsRail: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(LibriVoxCollection.all) { collection in
+                    NavigationLink {
+                        LibriVoxCollectionView(
+                            collection: collection,
+                            onOpenPlayer: onOpenPlayer,
+                            browseViewModel: viewModel
+                        )
+                    } label: {
+                        collectionCard(collection)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
         }
     }
 
@@ -417,7 +432,7 @@ struct BrowseLibriVoxView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 132, alignment: .leading)
+        .frame(width: 132, height: 68, alignment: .topLeading)
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
@@ -425,30 +440,58 @@ struct BrowseLibriVoxView: View {
 
     // MARK: - Featured Books
 
+    /// Plain ScrollView rather than List: List can't animate row-height changes (the
+    /// collapse snapped) and enforces a minimum row height that left a dead gap under
+    /// the collapsed rail. In a VStack the conditional rail collapses smoothly, same
+    /// as the DisclosureGroups in AudiobookDetailView.
     private var featuredBooksList: some View {
-        List {
-            collectionsShelf
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                collectionsHeaderButton
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
 
-            Section {
-                ForEach(viewModel.featuredBooks) { book in
-                    NavigationLink {
-                        LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
-                    } label: {
-                        LibriVoxBookRow(book: book, browseViewModel: viewModel)
-                    }
-                    .listRowBackground(Color.cardWhite)
-                    .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+                if !collectionsHidden {
+                    collectionsRail
+                        .transition(.opacity)
                 }
-            } header: {
+
                 Text("Popular Classics")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .textCase(nil)
-            }
+                    .padding(.horizontal, 20)
+                    .padding(.top, collectionsHidden ? 14 : 8)
+                    .padding(.bottom, 8)
 
-            librivoxAttribution
+                VStack(spacing: 0) {
+                    ForEach(Array(viewModel.featuredBooks.enumerated()), id: \.element.id) { index, book in
+                        NavigationLink {
+                            LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+                        } label: {
+                            HStack(spacing: 8) {
+                                LibriVoxBookRow(book: book, browseViewModel: viewModel)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 5)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if index < viewModel.featuredBooks.count - 1 {
+                            Divider()
+                                .padding(.leading, 86)
+                        }
+                    }
+                }
+                .background(Color.cardWhite)
+
+                librivoxAttribution
+            }
+            .animation(.spring(duration: 0.45, bounce: 0.12), value: collectionsHidden)
         }
-        .listStyle(.plain)
         .scrollDismissesKeyboard(.immediately)
     }
 

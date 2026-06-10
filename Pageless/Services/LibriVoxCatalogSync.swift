@@ -9,6 +9,9 @@ import SwiftData
 enum LibriVoxCatalogSync {
     private static let lastSyncKey = "librivox.lastCatalogSyncDate"
     private static let syncedCountKey = "librivox.syncedBookCount"
+    /// Rows cached before the API client sent extended=1 have no genre data (the feed
+    /// ignored fields[]=genres without it). One forced full sync backfills them in place.
+    private static let genresBackfillKey = "librivox.genresBackfillDone"
 
     static var lastSyncDate: Date? {
         let ts = UserDefaults.standard.double(forKey: lastSyncKey)
@@ -27,6 +30,10 @@ enum LibriVoxCatalogSync {
         onProgress: @escaping (Int) -> Void
     ) async throws {
         if let last = lastSyncDate {
+            if !UserDefaults.standard.bool(forKey: genresBackfillKey) {
+                try await fullSync(modelContext: modelContext, onProgress: onProgress)
+                return
+            }
             let age = Date.now.timeIntervalSince(last)
             if age < 86_400 { return } // synced within 24 h, skip
             try await incrementalSync(since: last, modelContext: modelContext, onProgress: onProgress)
@@ -41,6 +48,16 @@ enum LibriVoxCatalogSync {
         onProgress: @escaping (Int) -> Void
     ) async throws {
         try await fullSync(modelContext: modelContext, onProgress: onProgress)
+    }
+
+    /// Deletes the entire cached catalog and clears sync bookkeeping so the next
+    /// sync rebuilds from scratch. Library audiobooks are untouched — only the
+    /// local-store `LibriVoxBook` cache is dropped.
+    static func reset(modelContext: ModelContext) throws {
+        try modelContext.delete(model: LibriVoxBook.self)
+        try modelContext.save()
+        UserDefaults.standard.removeObject(forKey: lastSyncKey)
+        UserDefaults.standard.removeObject(forKey: syncedCountKey)
     }
 
     /// Upserts a small set of pre-fetched API books into the store and saves.
@@ -61,45 +78,42 @@ enum LibriVoxCatalogSync {
         modelContext: ModelContext,
         onProgress: @escaping (Int) -> Void
     ) async throws {
-        // Pre-load all existing IDs so we can skip re-inserting them on re-syncs.
-        let existingIDs = Set(
-            (try modelContext.fetch(FetchDescriptor<LibriVoxBook>())).map { $0.id }
-        )
+        // Pre-load all existing rows once, keyed by id, so re-syncs update them in
+        // place (refreshing stale fields like genres) without a per-book fetch.
+        var booksByID: [String: LibriVoxBook] = [:]
+        for book in try modelContext.fetch(FetchDescriptor<LibriVoxBook>()) {
+            booksByID[book.id] = book
+        }
 
         var offset = 0
-        var totalFetched = 0
+        var processed = 0
 
         while true {
             let page = try await fetchPageWithRetry(offset: offset)
             guard !page.isEmpty else { break }
 
             for apiBook in page {
-                if existingIDs.contains(apiBook.id) { continue }
-                modelContext.insert(LibriVoxBook(
-                    id: apiBook.id,
-                    title: apiBook.title,
-                    authorDisplay: apiBook.authorDisplay,
-                    bookDescription: apiBook.description,
-                    language: apiBook.language,
-                    totalTimeSecs: apiBook.totalTimeSecs,
-                    genres: apiBook.genreNames,
-                    coverThumbnailURLString: apiBook.coverartThumbnail,
-                    librivoxURLString: apiBook.urlLibrivox,
-                    internetArchiveURLString: apiBook.urlIarchive,
-                    rssURLString: apiBook.urlRss
-                ))
+                if let existing = booksByID[apiBook.id] {
+                    apply(apiBook, to: existing)
+                } else {
+                    let book = makeBook(from: apiBook)
+                    modelContext.insert(book)
+                    booksByID[apiBook.id] = book
+                }
             }
 
             try modelContext.save()
-            totalFetched += page.count
-            UserDefaults.standard.set(existingIDs.count + totalFetched, forKey: syncedCountKey)
-            onProgress(totalFetched)
+            processed += page.count
+            // Distinct local rows — re-synced books don't inflate the count.
+            UserDefaults.standard.set(booksByID.count, forKey: syncedCountKey)
+            onProgress(processed)
 
             if page.count < 50 { break }
             offset += page.count
         }
 
         UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
+        UserDefaults.standard.set(true, forKey: genresBackfillKey)
     }
 
     private static func incrementalSync(
@@ -159,31 +173,39 @@ enum LibriVoxCatalogSync {
         let existing = try context.fetch(FetchDescriptor(predicate: predicate)).first
 
         if let book = existing {
-            book.title = apiBook.title
-            book.authorDisplay = apiBook.authorDisplay
-            book.bookDescription = apiBook.description
-            book.language = apiBook.language
-            book.totalTimeSecs = apiBook.totalTimeSecs
-            book.genres = apiBook.genreNames
-            book.coverThumbnailURLString = apiBook.coverartThumbnail
-            book.librivoxURLString = apiBook.urlLibrivox
-            book.internetArchiveURLString = apiBook.urlIarchive
-            book.rssURLString = apiBook.urlRss
-            book.lastSyncedAt = .now
+            apply(apiBook, to: book)
         } else {
-            context.insert(LibriVoxBook(
-                id: apiBook.id,
-                title: apiBook.title,
-                authorDisplay: apiBook.authorDisplay,
-                bookDescription: apiBook.description,
-                language: apiBook.language,
-                totalTimeSecs: apiBook.totalTimeSecs,
-                genres: apiBook.genreNames,
-                coverThumbnailURLString: apiBook.coverartThumbnail,
-                librivoxURLString: apiBook.urlLibrivox,
-                internetArchiveURLString: apiBook.urlIarchive,
-                rssURLString: apiBook.urlRss
-            ))
+            context.insert(makeBook(from: apiBook))
         }
+    }
+
+    private static func apply(_ apiBook: LibriVoxAPIBook, to book: LibriVoxBook) {
+        book.title = apiBook.title
+        book.authorDisplay = apiBook.authorDisplay
+        book.bookDescription = apiBook.description
+        book.language = apiBook.language
+        book.totalTimeSecs = apiBook.totalTimeSecs
+        book.genres = apiBook.genreNames
+        book.coverThumbnailURLString = apiBook.coverartThumbnail
+        book.librivoxURLString = apiBook.urlLibrivox
+        book.internetArchiveURLString = apiBook.urlIarchive
+        book.rssURLString = apiBook.urlRss
+        book.lastSyncedAt = .now
+    }
+
+    private static func makeBook(from apiBook: LibriVoxAPIBook) -> LibriVoxBook {
+        LibriVoxBook(
+            id: apiBook.id,
+            title: apiBook.title,
+            authorDisplay: apiBook.authorDisplay,
+            bookDescription: apiBook.description,
+            language: apiBook.language,
+            totalTimeSecs: apiBook.totalTimeSecs,
+            genres: apiBook.genreNames,
+            coverThumbnailURLString: apiBook.coverartThumbnail,
+            librivoxURLString: apiBook.urlLibrivox,
+            internetArchiveURLString: apiBook.urlIarchive,
+            rssURLString: apiBook.urlRss
+        )
     }
 }

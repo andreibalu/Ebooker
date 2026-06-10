@@ -66,6 +66,32 @@ final class BrowseLibriVoxViewModel {
         selectedLanguage != nil || selectedGenre != nil || selectedDuration != nil
     }
 
+    /// Static fallbacks so the filter menus are never empty — shown until synced rows
+    /// carry real genre/language data (rows cached before the genres API field was added
+    /// only backfill on a refresh or reset). Names match LibriVox genre strings.
+    static let fallbackGenres: [String] = [
+        "General Fiction", "Historical Fiction", "Science Fiction", "Fantastic Fiction",
+        "Detective Fiction", "Romance", "Short Stories", "Poetry", "Children's Fiction",
+        "Action & Adventure", "Humorous Fiction", "Plays", "Literary Fiction",
+        "War & Military Fiction", "Westerns", "History", "Biography & Autobiography",
+        "Philosophy", "Religion", "Science", "Travel & Geography"
+    ]
+
+    static let fallbackLanguages: [String] = [
+        "English", "German", "French", "Spanish", "Italian", "Dutch", "Portuguese", "Russian"
+    ]
+
+    /// What the filter menus show: catalog-derived lists when available, static fallbacks
+    /// otherwise. Genres capped to the most common 40 — the full taxonomy is 100+ entries,
+    /// too long for a usable Menu.
+    var genreOptions: [String] {
+        availableGenres.isEmpty ? Self.fallbackGenres : Array(availableGenres.prefix(40))
+    }
+
+    var languageOptions: [String] {
+        availableLanguages.isEmpty ? Self.fallbackLanguages : availableLanguages
+    }
+
     var sortedActiveDownloads: [ActiveLibriVoxDownload] {
         activeDownloads.values.sorted { $0.book.title < $1.book.title }
     }
@@ -148,10 +174,9 @@ final class BrowseLibriVoxViewModel {
     }
 
     /// True while the very first full catalog download is running (no data cached yet) — used to
-    /// phrase the background banner as a first build vs. an incremental refresh.
-    var isFirstFullSync: Bool {
-        LibriVoxCatalogSync.syncedBookCount == 0
-    }
+    /// phrase the background banner as a first build vs. an incremental refresh. Captured at
+    /// sync start: the per-page count updates would otherwise flip the banner text mid-sync.
+    private(set) var isFirstFullSync: Bool = false
 
     /// Network is unreachable and there is nothing cached at all — no full catalog and not
     /// even the curated classics — so the tab has nothing to show.
@@ -242,16 +267,17 @@ final class BrowseLibriVoxViewModel {
                 var d = FetchDescriptor(predicate: predicate)
                 d.fetchLimit = 150
                 raw = try modelContext.fetch(d)
-            } else if let lang {
-                // Language filter only
-                let predicate = #Predicate<LibriVoxBook> { book in book.language == lang }
-                var d = FetchDescriptor(predicate: predicate)
-                d.fetchLimit = 500
-                raw = try modelContext.fetch(d)
             } else {
-                // Genre / duration browse — fetch a capped sample
-                var d = FetchDescriptor<LibriVoxBook>()
-                d.fetchLimit = 500
+                // Filter-only browse. Language pushes to the DB predicate; genre (stored as
+                // a JSON string) and duration buckets can't, so fetch the whole (language-
+                // scoped) catalog and filter in memory — same cost as the filter-list
+                // computation, and a capped pre-filter fetch would miss most matches.
+                let d: FetchDescriptor<LibriVoxBook>
+                if let lang {
+                    d = FetchDescriptor(predicate: #Predicate { $0.language == lang })
+                } else {
+                    d = FetchDescriptor<LibriVoxBook>()
+                }
                 raw = try modelContext.fetch(d)
             }
 
@@ -269,7 +295,7 @@ final class BrowseLibriVoxViewModel {
                 let q = trimmed.lowercased()
                 searchResults = raw.sorted { rankScore($0, query: q) < rankScore($1, query: q) }
             } else {
-                searchResults = raw.sorted { $0.title < $1.title }
+                searchResults = Array(raw.sorted { $0.title < $1.title }.prefix(500))
             }
         } catch {
             searchResults = []
@@ -287,26 +313,27 @@ final class BrowseLibriVoxViewModel {
 
     // MARK: - Filters
 
+    /// Catalog size the filter lists were last computed from — recompute when the data
+    /// grows (sync progress, refresh) but skip the 20k-row fetch on every tab visit.
+    private var filtersComputedForCount: Int = -1
+
     @MainActor
     func loadAvailableFilters(modelContext: ModelContext) async {
-        guard LibriVoxCatalogSync.syncedBookCount > 0 else { return }
-        guard availableLanguages.isEmpty || availableGenres.isEmpty else { return }
+        let count = (try? modelContext.fetchCount(FetchDescriptor<LibriVoxBook>())) ?? 0
+        guard count > 0, count != filtersComputedForCount else { return }
         guard let books = try? modelContext.fetch(FetchDescriptor<LibriVoxBook>()) else { return }
+        filtersComputedForCount = count
 
-        if availableLanguages.isEmpty {
-            var langs = Array(Set(books.map(\.language).filter { !$0.isEmpty })).sorted()
-            if let idx = langs.firstIndex(of: "English") {
-                langs.remove(at: idx)
-                langs.insert("English", at: 0)
-            }
-            availableLanguages = langs
+        var langs = Array(Set(books.map(\.language).filter { !$0.isEmpty })).sorted()
+        if let idx = langs.firstIndex(of: "English") {
+            langs.remove(at: idx)
+            langs.insert("English", at: 0)
         }
+        availableLanguages = langs
 
-        if availableGenres.isEmpty {
-            var counts: [String: Int] = [:]
-            for g in books.flatMap(\.genres) { counts[g, default: 0] += 1 }
-            availableGenres = counts.sorted { $0.value > $1.value }.map(\.key)
-        }
+        var counts: [String: Int] = [:]
+        for g in books.flatMap(\.genres) { counts[g, default: 0] += 1 }
+        availableGenres = counts.sorted { $0.value > $1.value }.map(\.key)
     }
 
     // MARK: - Featured Books
@@ -448,9 +475,43 @@ final class BrowseLibriVoxViewModel {
                 await self?.performSync(modelContext: modelContext, force: false)
             }
         default:
-            if LibriVoxCatalogSync.syncedBookCount > 0 && featuredBooks.isEmpty {
-                Task { [weak self] in await self?.loadFeaturedBooks(modelContext: modelContext) }
+            if LibriVoxCatalogSync.syncedBookCount > 0 {
+                Task { [weak self] in
+                    if self?.featuredBooks.isEmpty == true {
+                        await self?.loadFeaturedBooks(modelContext: modelContext)
+                    }
+                    await self?.loadAvailableFilters(modelContext: modelContext)
+                }
             }
+        }
+    }
+
+    /// Erases the cached LibriVox catalog and rebuilds it from scratch: cancels any
+    /// in-flight sync, clears all derived browse state, drops the local rows, then
+    /// re-runs the classics preload followed by a forced full sync.
+    @MainActor
+    func resetCatalog(modelContext: ModelContext) {
+        syncTask?.cancel()
+        syncTask = nil
+        preloadTask?.cancel()
+        preloadTask = nil
+        searchTask?.cancel()
+        searchQuery = ""
+        searchResults = []
+        featuredBooks = []
+        availableLanguages = []
+        availableGenres = []
+        filtersComputedForCount = -1
+        selectedLanguage = nil
+        selectedGenre = nil
+        selectedDuration = nil
+        cachedFirstTrackURLs = [:]
+        isPreloadingFeatured = false
+        syncState = .idle
+        try? LibriVoxCatalogSync.reset(modelContext: modelContext)
+        syncTask = Task { [weak self] in
+            await self?.performPreload(modelContext: modelContext)
+            await self?.performSync(modelContext: modelContext, force: true)
         }
     }
 
@@ -459,6 +520,7 @@ final class BrowseLibriVoxViewModel {
         syncTask?.cancel()
         availableLanguages = []
         availableGenres = []
+        filtersComputedForCount = -1
         syncTask = Task { [weak self] in
             // If we still have no classics (retry from an offline/error state), grab them first
             // so the tab shows content quickly before the full re-sync runs.
@@ -471,16 +533,16 @@ final class BrowseLibriVoxViewModel {
 
     @MainActor
     private func performSync(modelContext: ModelContext, force: Bool) async {
-        let baseCount = LibriVoxCatalogSync.syncedBookCount
-        syncState = .syncing(fetched: baseCount)
+        isFirstFullSync = LibriVoxCatalogSync.syncedBookCount == 0
+        syncState = .syncing(fetched: 0)
         do {
             if force {
                 try await LibriVoxCatalogSync.forceFullSync(modelContext: modelContext) { [weak self] fetched in
-                    self?.syncState = .syncing(fetched: baseCount + fetched)
+                    self?.syncState = .syncing(fetched: fetched)
                 }
             } else {
                 try await LibriVoxCatalogSync.syncIfNeeded(modelContext: modelContext) { [weak self] fetched in
-                    self?.syncState = .syncing(fetched: baseCount + fetched)
+                    self?.syncState = .syncing(fetched: fetched)
                 }
             }
             syncState = .done

@@ -8,6 +8,7 @@ import SwiftUI
 
 struct SettingsView: View {
     var onRefreshCatalog: (() -> Void)? = nil
+    var onResetCatalog: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -19,6 +20,7 @@ struct SettingsView: View {
     @State private var navigationPath: [SettingsDestination] = []
     @State private var selectedDetent: PresentationDetent = .medium
     @State private var showResetConfirmation = false
+    @State private var showCatalogResetConfirmation = false
     @State private var expandedPicker: PlaybackPicker?
 
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
@@ -316,6 +318,29 @@ struct SettingsView: View {
                         onRefreshCatalog?()
                         dismiss()
                     }
+
+                    SettingsHairline()
+
+                    actionRow(
+                        title: "Reset Catalog",
+                        caption: "Erase the cached catalog and download it again",
+                        actionLabel: "Reset"
+                    ) {
+                        showCatalogResetConfirmation = true
+                    }
+                    .confirmationDialog(
+                        "Reset Free Books Catalog?",
+                        isPresented: $showCatalogResetConfirmation
+                    ) {
+                        Button("Reset & Re-download", role: .destructive) {
+                            onResetCatalog?()
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("The cached LibriVox catalog will be erased and downloaded fresh. Your library and downloaded books are not affected.")
+                    }
+
                     SettingsCardFooter(text: "Free books courtesy of LibriVox \u{2014} public-domain audio recorded by volunteers.")
                 }
             }
@@ -671,6 +696,18 @@ private struct HomeTabRow: View {
                 }
             }
             .padding(4)
+            // Single persistent pill tracking the selected segment's geometry. Keeping it out of
+            // the segments means selection changes never insert/remove it, so rapid taps retarget
+            // the spring instead of fighting a transition.
+            .background {
+                Capsule()
+                    .fill(Color.amber)
+                    .matchedGeometryEffect(
+                        id: startOnFreeBooks ? "Free Books" : "All Books",
+                        in: pill,
+                        isSource: false
+                    )
+            }
             .background(SettingsDesign.chipFill, in: Capsule())
         }
         .padding(.horizontal, 16)
@@ -679,7 +716,7 @@ private struct HomeTabRow: View {
 
     private func segment(title: String, icon: String, isOn: Bool, action: @escaping () -> Void) -> some View {
         Button {
-            withAnimation(.snappy(duration: 0.3, extraBounce: 0.08)) { action() }
+            withAnimation(.snappy(duration: 0.22, extraBounce: 0.04)) { action() }
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -690,13 +727,7 @@ private struct HomeTabRow: View {
             .foregroundStyle(isOn ? .white : SettingsDesign.secondaryLabel)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 9)
-            .background {
-                if isOn {
-                    Capsule()
-                        .fill(Color.amber)
-                        .matchedGeometryEffect(id: "homeTabPill", in: pill)
-                }
-            }
+            .matchedGeometryEffect(id: title, in: pill, isSource: true)
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)

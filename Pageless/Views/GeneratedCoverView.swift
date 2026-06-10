@@ -6,9 +6,10 @@
 import SwiftUI
 import UIKit
 
-/// Deterministic letter-based cover template used as the default artwork for every audiobook
-/// until the user replaces it via the cover picker. A curated palette is selected from the title
-/// hash so each book gets a stable, distinct look across launches.
+/// Deterministic "Solid Imprint" cover template used as the default artwork for every audiobook
+/// until the user replaces it via the cover picker: a full-bleed retro-pop color field with the
+/// title set large in New York, and the brand glyph + UNPAGED wordmark anchored at the foot.
+/// The palette is selected from the title hash so each book gets a stable look across launches.
 struct GeneratedCoverView: View {
     let title: String
     let cornerRadius: CGFloat
@@ -22,148 +23,104 @@ struct GeneratedCoverView: View {
         GeometryReader { geo in
             let side = min(geo.size.width, geo.size.height)
             let palette = GeneratedCoverPalette.palette(for: title)
+            // Layout ratios derived from the 380pt design comp.
+            let margin = side * 0.1
 
-            ZStack {
-                LinearGradient(
-                    colors: [palette.top, palette.bottom],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
+            ZStack(alignment: .topLeading) {
+                palette.background
 
-                // Big serif initial, centered.
-                Text(initial)
-                    .font(.system(size: side * 0.62, weight: .regular, design: .serif))
-                    .italic()
+                Text(title)
+                    .font(.system(size: side * 0.121, weight: .medium, design: .serif))
                     .foregroundStyle(palette.foreground)
-                    .shadow(color: .black.opacity(0.15), radius: side * 0.02, x: 0, y: side * 0.01)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.52)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, margin)
+                    .padding(.top, side * 0.155)
                     .accessibilityHidden(true)
 
-                // Stylized title tag in the top-left.
+                // Brand glyph, rule and wordmark at the foot — omitted at thumbnail sizes.
                 if side >= 60 {
-                    VStack {
-                        HStack {
-                            Text(title)
-                                .font(.system(size: max(side * 0.085, 11), weight: .medium, design: .serif))
-                                .italic()
-                                .foregroundStyle(palette.foreground.opacity(0.92))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .padding(.horizontal, side * 0.06)
-                                .padding(.vertical, side * 0.025)
-                                .background(palette.tagBackground, in: Capsule())
-                            Spacer(minLength: 0)
-                        }
+                    VStack(alignment: .leading, spacing: 0) {
                         Spacer(minLength: 0)
+                        Image(systemName: "book.pages.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: side * 0.095)
+                            .foregroundStyle(palette.foreground)
+                        Rectangle()
+                            .fill(palette.foreground.opacity(0.55))
+                            .frame(height: max(1, side * 0.0026))
+                            .padding(.top, side * 0.047)
+                        Text("UNPAGED")
+                            .font(.system(size: side * 0.0395, weight: .regular, design: .serif))
+                            .tracking(side * 0.0118)
+                            .foregroundStyle(palette.foreground.opacity(0.78))
+                            .padding(.top, side * 0.026)
                     }
-                    .padding(side * 0.06)
+                    .padding(.horizontal, margin)
+                    .padding(.bottom, side * 0.05)
+                    .accessibilityHidden(true)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
         .accessibilityLabel(Text("Cover for \(title)"))
     }
-
-    private var initial: String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let scalar = trimmed.unicodeScalars.first(where: { CharacterSet.letters.contains($0) }) else {
-            return "?"
-        }
-        return String(Character(scalar)).uppercased()
-    }
 }
 
 // MARK: - Palette
 
 struct GeneratedCoverPalette {
-    let top: Color
-    let bottom: Color
+    let background: Color
     let foreground: Color
-    let tagBackground: Color
+
+    /// Retro Pop family — bold 70s brights. Cream text on every field except mustard,
+    /// which flips to a dark cocoa foreground for contrast.
+    private static let cream = Color(red: 0.984, green: 0.953, blue: 0.894)   // #FBF3E4
 
     private static let palettes: [GeneratedCoverPalette] = [
-        // Indigo / purple (Pride & Prejudice in screenshot)
+        // Tangerine
         GeneratedCoverPalette(
-            top: Color(red: 0.34, green: 0.27, blue: 0.78),
-            bottom: Color(red: 0.46, green: 0.32, blue: 0.85),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.30)
+            background: Color(red: 0.851, green: 0.424, blue: 0.184),         // #D96C2F
+            foreground: cream
         ),
-        // Dark navy (Moby-Dick in screenshot)
+        // Mustard (dark foreground)
         GeneratedCoverPalette(
-            top: Color(red: 0.07, green: 0.10, blue: 0.20),
-            bottom: Color(red: 0.13, green: 0.17, blue: 0.30),
-            foreground: .white,
-            tagBackground: Color.white.opacity(0.10)
+            background: Color(red: 0.851, green: 0.631, blue: 0.231),         // #D9A13B
+            foreground: Color(red: 0.239, green: 0.173, blue: 0.071)          // #3D2C12
         ),
-        // Forest green
+        // Avocado
         GeneratedCoverPalette(
-            top: Color(red: 0.10, green: 0.32, blue: 0.24),
-            bottom: Color(red: 0.16, green: 0.45, blue: 0.32),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.25)
+            background: Color(red: 0.478, green: 0.549, blue: 0.180),         // #7A8C2E
+            foreground: cream
         ),
-        // Burgundy
+        // Burnt orange
         GeneratedCoverPalette(
-            top: Color(red: 0.45, green: 0.10, blue: 0.18),
-            bottom: Color(red: 0.62, green: 0.16, blue: 0.24),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.28)
+            background: Color(red: 0.761, green: 0.306, blue: 0.122),         // #C24E1F
+            foreground: cream
         ),
-        // Deep teal
+        // Teal pop
         GeneratedCoverPalette(
-            top: Color(red: 0.05, green: 0.30, blue: 0.36),
-            bottom: Color(red: 0.10, green: 0.44, blue: 0.50),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.25)
+            background: Color(red: 0.122, green: 0.541, blue: 0.478),         // #1F8A7A
+            foreground: cream
         ),
-        // Sepia / warm brown
+        // Raspberry
         GeneratedCoverPalette(
-            top: Color(red: 0.40, green: 0.26, blue: 0.18),
-            bottom: Color(red: 0.55, green: 0.36, blue: 0.22),
-            foreground: Color(red: 0.98, green: 0.94, blue: 0.85),
-            tagBackground: Color.black.opacity(0.25)
+            background: Color(red: 0.722, green: 0.227, blue: 0.369),         // #B83A5E
+            foreground: cream
         ),
-        // Plum
+        // Cobalt
         GeneratedCoverPalette(
-            top: Color(red: 0.32, green: 0.13, blue: 0.36),
-            bottom: Color(red: 0.50, green: 0.20, blue: 0.50),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.28)
+            background: Color(red: 0.141, green: 0.337, blue: 0.702),         // #2456B3
+            foreground: cream
         ),
-        // Slate blue
+        // Chocolate
         GeneratedCoverPalette(
-            top: Color(red: 0.22, green: 0.30, blue: 0.46),
-            bottom: Color(red: 0.32, green: 0.42, blue: 0.60),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.28)
-        ),
-        // Charcoal / graphite
-        GeneratedCoverPalette(
-            top: Color(red: 0.16, green: 0.16, blue: 0.18),
-            bottom: Color(red: 0.26, green: 0.27, blue: 0.30),
-            foreground: Color(red: 0.97, green: 0.92, blue: 0.80),
-            tagBackground: Color.white.opacity(0.10)
-        ),
-        // Sage / olive
-        GeneratedCoverPalette(
-            top: Color(red: 0.28, green: 0.34, blue: 0.20),
-            bottom: Color(red: 0.42, green: 0.48, blue: 0.28),
-            foreground: Color(red: 0.98, green: 0.96, blue: 0.88),
-            tagBackground: Color.black.opacity(0.25)
-        ),
-        // Sunset orange
-        GeneratedCoverPalette(
-            top: Color(red: 0.65, green: 0.28, blue: 0.10),
-            bottom: Color(red: 0.82, green: 0.42, blue: 0.18),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.28)
-        ),
-        // Royal blue
-        GeneratedCoverPalette(
-            top: Color(red: 0.10, green: 0.20, blue: 0.55),
-            bottom: Color(red: 0.18, green: 0.32, blue: 0.72),
-            foreground: .white,
-            tagBackground: Color.black.opacity(0.28)
+            background: Color(red: 0.420, green: 0.243, blue: 0.118),         // #6B3E1E
+            foreground: cream
         )
     ]
 

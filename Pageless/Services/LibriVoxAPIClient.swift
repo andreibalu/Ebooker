@@ -181,6 +181,10 @@ enum LibriVoxAPIClient {
     private static let baseURL = "https://librivox.org/api/feed"
 
     private static let catalogFields: [URLQueryItem] = [
+        // The feed silently omits `genres` from responses unless extended=1 is set,
+        // even when explicitly requested via fields[]. fields[] still limits the
+        // payload, so this does not pull in the heavy `sections` array.
+        URLQueryItem(name: "extended", value: "1"),
         URLQueryItem(name: "fields[]", value: "id"),
         URLQueryItem(name: "fields[]", value: "title"),
         URLQueryItem(name: "fields[]", value: "description"),
