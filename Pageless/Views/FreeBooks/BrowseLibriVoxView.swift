@@ -370,10 +370,65 @@ struct BrowseLibriVoxView: View {
         }
     }
 
+    // MARK: - Collections shelf
+
+    private var collectionsShelf: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(LibriVoxCollection.all) { collection in
+                        NavigationLink {
+                            LibriVoxCollectionView(
+                                collection: collection,
+                                onOpenPlayer: onOpenPlayer,
+                                browseViewModel: viewModel
+                            )
+                        } label: {
+                            collectionCard(collection)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 4)
+            }
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+        } header: {
+            Text("Collections")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .textCase(nil)
+        }
+    }
+
+    private func collectionCard(_ collection: LibriVoxCollection) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(systemName: collection.iconSystemName)
+                .font(.title3)
+                .foregroundStyle(Color.amber)
+                .frame(height: 24)
+            Text(collection.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            Text("\(collection.bookIDs.count) books")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 132, alignment: .leading)
+        .padding(14)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+    }
+
     // MARK: - Featured Books
 
     private var featuredBooksList: some View {
         List {
+            collectionsShelf
+
             Section {
                 ForEach(viewModel.featuredBooks) { book in
                     NavigationLink {

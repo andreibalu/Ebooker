@@ -18,6 +18,8 @@ Open Unpaged, tap **+**, and pick MP3, M4B, or AAC files from Files, iCloud Driv
 
 The **Free Books** tab streams or downloads public-domain audiobooks from [LibriVox](https://librivox.org). Over 20,000 titles are cached locally for fast browsing. You can stream a book without downloading it, or download for offline listening.
 
+At the top of the tab, **Collections** are hand-picked shelves of classics grouped by theme — for example Gothic & Horror, Detective & Mystery, or Short Listens you can finish in an afternoon. Every collection book streams, downloads, and samples exactly like the rest of the free catalog.
+
 ### Why don't covers load for some LibriVox books?
 
 LibriVox cover URLs are inconsistent, so Unpaged intentionally generates a clean letter-template cover for every book in the free catalog. This is by design — your library stays visually consistent.
