@@ -5,7 +5,6 @@
 
 import Foundation
 import FoundationModels
-import Speech
 
 /// Four real states the AI Settings UI cares about. Used to drive Buy-button
 /// visibility/enablement and explanatory copy.
@@ -45,11 +44,11 @@ enum AIAvailabilityState: Equatable {
 /// AI-capable hardware (iPhone 15 Pro and later) and `.unsupportedDevice` for the rest.
 enum AppleIntelligenceCapability {
     /// Whether the foundational local model is available for Smart Moment Naming.
-    /// Requires: iOS 26+, compatible device, Apple Intelligence enabled, and speech
-    /// recognition available.
+    /// Transcription uses the iOS 26 SpeechAnalyzer (with an SFSpeechRecognizer
+    /// fallback), so speech-recognizer availability is no longer a hard requirement.
     static var isSmartNamingAvailable: Bool {
         if #available(iOS 26, *) {
-            return SystemLanguageModel.default.isAvailable && isSpeechRecognitionAvailable
+            return SystemLanguageModel.default.isAvailable
         }
         return false
     }
@@ -91,7 +90,7 @@ enum AppleIntelligenceCapability {
 
         switch SystemLanguageModel.default.availability {
         case .available:
-            return isSpeechRecognitionAvailable ? nil : "Speech recognition is not available."
+            return nil
         case .unavailable(.deviceNotEligible):
             return "This device does not support Apple Intelligence."
         case .unavailable(.appleIntelligenceNotEnabled):
@@ -101,10 +100,6 @@ enum AppleIntelligenceCapability {
         case .unavailable:
             return "Apple Intelligence is not available."
         }
-    }
-
-    private static var isSpeechRecognitionAvailable: Bool {
-        SFSpeechRecognizer(locale: Locale.current)?.isAvailable ?? false
     }
 
     /// True when this iPhone's hardware can run Apple Intelligence (independent of iOS version).

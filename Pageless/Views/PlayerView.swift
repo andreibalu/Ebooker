@@ -84,6 +84,10 @@ struct PlayerView: View {
         }
         .onAppear {
             scrubValue = player.currentTime
+            if useSmartSave { viewModel.prewarmSmartSave() }
+        }
+        .onChange(of: useSmartSave) { _, enabled in
+            if enabled { viewModel.prewarmSmartSave() }
         }
         .onChange(of: player.currentTime) { _, newValue in
             if !isScrubbing {
