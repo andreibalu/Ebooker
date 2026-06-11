@@ -11,9 +11,13 @@ struct RecapGenerationResult: Sendable {
     var progressHeadline: String?
 }
 
-enum RecapError: LocalizedError {
+enum RecapError: LocalizedError, Equatable {
     case modelUnavailable
     case noAudioAvailable
+    /// The on-device model declined the content (guardrail or refusal).
+    case unsafeContent
+    /// Generation failed after retry (transient model error, decoding failure, …).
+    case generationFailed
 
     var errorDescription: String? {
         switch self {
@@ -21,6 +25,10 @@ enum RecapError: LocalizedError {
             "Apple Intelligence is not available."
         case .noAudioAvailable:
             "No audio available for recap."
+        case .unsafeContent:
+            "Apple Intelligence declined to summarize this passage."
+        case .generationFailed:
+            "Couldn't generate a recap. Please try again."
         }
     }
 }
