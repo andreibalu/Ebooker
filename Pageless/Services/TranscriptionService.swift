@@ -22,12 +22,19 @@ struct TranscriptionService: TranscriptionProviding {
     /// - Returns: Transcribed text, or empty string if transcription fails
     func transcribe(audioURL: URL) async throws -> String {
         let recognizer = SFSpeechRecognizer(locale: Locale.current)
+            ?? SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         guard let recognizer, recognizer.isAvailable else {
             throw TranscriptionError.recognizerUnavailable
         }
 
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
         request.shouldReportPartialResults = false
+        // Punctuated output keeps sentence-based post-processing working.
+        request.addsPunctuation = true
+        // Server-based recognition caps audio at ~1 minute; our segments are longer.
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
 
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
