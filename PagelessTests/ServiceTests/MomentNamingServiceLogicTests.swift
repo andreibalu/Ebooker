@@ -160,4 +160,60 @@ struct MomentNamingServiceLogicTests {
         #expect(service.trimToCompleteSentences("").isEmpty)
         #expect(service.trimToCompleteSentences("   \n  ").isEmpty)
     }
+
+    // MARK: - verifiedQuote
+
+    @Test func verifiedQuoteKeepsQuotePresentInTranscript() {
+        guard #available(iOS 26, *) else { return }
+        let service = MomentNamingService()
+        let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept. Morning came slowly."
+        let out = service.verifiedQuote("The storm broke over the harbor at midnight, and nobody slept.", transcript: transcript)
+        #expect(out == "The storm broke over the harbor at midnight, and nobody slept.")
+    }
+
+    @Test func verifiedQuoteIsCaseAndPunctuationInsensitive() {
+        guard #available(iOS 26, *) else { return }
+        let service = MomentNamingService()
+        let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept."
+        let out = service.verifiedQuote("the storm broke over the harbor at midnight and nobody slept.", transcript: transcript)
+        #expect(!out.isEmpty)
+    }
+
+    @Test func verifiedQuoteSnapsParaphraseToTranscriptSentence() {
+        guard #available(iOS 26, *) else { return }
+        let service = MomentNamingService()
+        let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept. Morning came slowly."
+        // Model dropped words — most of the words still come from one transcript sentence.
+        let out = service.verifiedQuote("Storm broke over harbor at midnight, nobody slept!", transcript: transcript)
+        #expect(out == "The storm broke over the harbor at midnight, and nobody slept.")
+    }
+
+    @Test func verifiedQuoteDropsFabricatedQuote() {
+        guard #available(iOS 26, *) else { return }
+        let service = MomentNamingService()
+        let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept."
+        let out = service.verifiedQuote("To be or not to be, that is the question.", transcript: transcript)
+        #expect(out.isEmpty)
+    }
+
+    @Test func verifiedQuoteDropsVeryShortNonVerbatimQuote() {
+        guard #available(iOS 26, *) else { return }
+        let service = MomentNamingService()
+        let transcript = "The storm broke over the harbor at midnight, and nobody slept."
+        let out = service.verifiedQuote("Harbor explosions!", transcript: transcript)
+        #expect(out.isEmpty)
+    }
+
+    // MARK: - matchKey / sentences
+
+    @Test func matchKeyFoldsCasePunctuationAndDiacritics() {
+        guard #available(iOS 26, *) else { return }
+        #expect(MomentNamingService.matchKey("Café—NIGHT, falls!") == "cafe night falls")
+    }
+
+    @Test func sentencesSplitsOnTerminators() {
+        guard #available(iOS 26, *) else { return }
+        let out = MomentNamingService.sentences(in: "One came first. Two came second! Three came third?")
+        #expect(out == ["One came first.", "Two came second!", "Three came third?"])
+    }
 }

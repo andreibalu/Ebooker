@@ -135,6 +135,61 @@ struct MomentNamingService: MomentAnalyzing {
         return lastCompleteSentence(in: normalized, minLength: 20)
     }
 
+    /// Sanitizes the model's quote, then guarantees it is verbatim from the transcript:
+    /// keeps it when the transcript contains it (ignoring case/punctuation/diacritics),
+    /// snaps near-misses to the best-matching transcript sentence, drops fabrications.
+    func verifiedQuote(_ rawQuote: String, transcript: String) -> String {
+        let sanitized = sanitizedQuoteLine(rawQuote, transcript: transcript)
+        guard !sanitized.isEmpty else { return "" }
+        let quoteKey = Self.matchKey(sanitized)
+        guard !quoteKey.isEmpty else { return "" }
+
+        if Self.matchKey(transcript).contains(quoteKey) {
+            return sanitized
+        }
+        return Self.bestMatchingSentence(for: sanitized, in: transcript) ?? ""
+    }
+
+    /// Lowercased, diacritic-folded, punctuation-stripped, whitespace-collapsed form
+    /// used for verbatim comparison.
+    static func matchKey(_ text: String) -> String {
+        let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        let mapped = folded.unicodeScalars.map { scalar -> Character in
+            CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : " "
+        }
+        return String(mapped).split(separator: " ").joined(separator: " ")
+    }
+
+    static func sentences(in text: String) -> [String] {
+        var result: [String] = []
+        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { substring, _, _, _ in
+            if let sentence = substring?.trimmingCharacters(in: .whitespacesAndNewlines), !sentence.isEmpty {
+                result.append(sentence)
+            }
+        }
+        return result
+    }
+
+    /// Transcript sentence sharing ≥ 70% of the quote's words; nil when the quote has
+    /// fewer than 3 words or nothing in the transcript comes close.
+    static func bestMatchingSentence(for quote: String, in transcript: String) -> String? {
+        let quoteWords = Set(matchKey(quote).split(separator: " "))
+        guard quoteWords.count >= 3 else { return nil }
+
+        var best: (sentence: String, score: Double)?
+        for sentence in sentences(in: transcript) {
+            guard sentence.count >= 20, sentence.count <= 220 else { continue }
+            let sentenceWords = Set(matchKey(sentence).split(separator: " "))
+            guard !sentenceWords.isEmpty else { continue }
+            let score = Double(quoteWords.intersection(sentenceWords).count) / Double(quoteWords.count)
+            if score > (best?.score ?? 0) {
+                best = (sentence, score)
+            }
+        }
+        guard let best, best.score >= 0.7 else { return nil }
+        return best.sentence
+    }
+
     /// Returns the input trimmed back to its last terminal-punctuation boundary.
     /// Used to repair model output truncated mid-sentence by the token cap.
     func trimToCompleteSentences(_ text: String) -> String {
