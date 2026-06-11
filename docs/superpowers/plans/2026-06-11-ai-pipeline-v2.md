@@ -59,7 +59,7 @@
 - Modify: `Pageless/Services/Protocols/MomentAnalyzing.swift`
 - Modify: `Pageless/Services/Protocols/RecapProviding.swift`
 
-- [ ] **Step 1.1: Extend `MomentNamingError` and add `prewarm()` to `MomentAnalyzing`**
+- [x] **Step 1.1: Extend `MomentNamingError` and add `prewarm()` to `MomentAnalyzing`**
 
 Replace the `MomentNamingError` enum and the protocol in `Pageless/Services/Protocols/MomentAnalyzing.swift`:
 
@@ -97,7 +97,7 @@ extension MomentAnalyzing {
 
 Leave `MomentAnalysis` and `UnavailableMomentAnalyzer` untouched (the stub inherits the no-op `prewarm()`).
 
-- [ ] **Step 1.2: Extend `RecapError`**
+- [x] **Step 1.2: Extend `RecapError`**
 
 In `Pageless/Services/Protocols/RecapProviding.swift`, replace the `RecapError` enum:
 
@@ -125,12 +125,12 @@ enum RecapError: LocalizedError, Equatable {
 }
 ```
 
-- [ ] **Step 1.3: Build**
+- [x] **Step 1.3: Build**
 
 Run: `mcp__XcodeBuildMCP__build_device` (scheme `Pageless`).
 Expected: BUILD SUCCEEDED.
 
-- [ ] **Step 1.4: Commit**
+- [x] **Step 1.4: Commit**
 
 ```bash
 git add Pageless/Services/Protocols/MomentAnalyzing.swift Pageless/Services/Protocols/RecapProviding.swift
@@ -145,7 +145,7 @@ git commit -m "feat(ai): typed unsafe/failed errors + analyzer prewarm hook"
 - Modify: `Pageless/Services/MomentNamingService.swift`
 - Test: `PagelessTests/ServiceTests/MomentNamingServiceLogicTests.swift`
 
-- [ ] **Step 2.1: Write failing tests**
+- [x] **Step 2.1: Write failing tests**
 
 Append inside `MomentNamingServiceLogicTests` (follow the file's existing `guard #available(iOS 26, *)` pattern):
 
@@ -207,12 +207,12 @@ Append inside `MomentNamingServiceLogicTests` (follow the file's existing `guard
 }
 ```
 
-- [ ] **Step 2.2: Run tests, verify the new ones fail to compile/fail**
+- [x] **Step 2.2: Run tests, verify the new ones fail to compile/fail**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: compile error — `verifiedQuote` does not exist yet. That is the failing state.
 
-- [ ] **Step 2.3: Implement in `MomentNamingService`**
+- [x] **Step 2.3: Implement in `MomentNamingService`**
 
 Add to `MomentNamingService` (below `sanitizedQuoteLine`):
 
@@ -273,12 +273,12 @@ static func bestMatchingSentence(for quote: String, in transcript: String) -> St
 }
 ```
 
-- [ ] **Step 2.4: Run tests, verify pass**
+- [x] **Step 2.4: Run tests, verify pass**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: all `MomentNamingServiceLogicTests` PASS (existing ones stay green).
 
-- [ ] **Step 2.5: Commit**
+- [x] **Step 2.5: Commit**
 
 ```bash
 git add Pageless/Services/MomentNamingService.swift PagelessTests/ServiceTests/MomentNamingServiceLogicTests.swift
@@ -292,7 +292,7 @@ git commit -m "feat(ai): verify moment quotes verbatim against transcript"
 **Files:**
 - Create: `Pageless/Services/FoundationModelGeneration.swift`
 
-- [ ] **Step 3.1: Create the helper**
+- [x] **Step 3.1: Create the helper**
 
 `Pageless/Services/FoundationModelGeneration.swift`:
 
@@ -358,12 +358,12 @@ enum FoundationModelGeneration {
 }
 ```
 
-- [ ] **Step 3.2: Build**
+- [x] **Step 3.2: Build**
 
 Run: `mcp__XcodeBuildMCP__build_device`.
 Expected: BUILD SUCCEEDED.
 
-- [ ] **Step 3.3: Commit**
+- [x] **Step 3.3: Commit**
 
 ```bash
 git add Pageless/Services/FoundationModelGeneration.swift
@@ -378,7 +378,7 @@ git commit -m "feat(ai): shared typed-error mapping and retry for generation"
 - Modify: `Pageless/Services/MomentNamingService.swift`
 - Test: `PagelessTests/ServiceTests/MomentNamingServiceLogicTests.swift`
 
-- [ ] **Step 4.1: Write failing guide-sync tests**
+- [x] **Step 4.1: Write failing guide-sync tests**
 
 Append to `MomentNamingServiceLogicTests`:
 
@@ -396,11 +396,11 @@ Append to `MomentNamingServiceLogicTests`:
 }
 ```
 
-- [ ] **Step 4.2: Run tests, verify compile failure** (`categoryGuideValues` missing).
+- [x] **Step 4.2: Run tests, verify compile failure** (`categoryGuideValues` missing).
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 
-- [ ] **Step 4.3: Rework `MomentNamingService` generation**
+- [x] **Step 4.3: Rework `MomentNamingService` generation**
 
 Replace the `@Generable` struct, instructions, and `analyzeMoment` in `Pageless/Services/MomentNamingService.swift` (keep `generateMomentName`, `sanitizedQuoteLine`, `verifiedQuote`, `trimToCompleteSentences`, `lastCompleteSentence`, `firstSentence`, `matchKey`, `sentences`, `bestMatchingSentence`):
 
@@ -576,12 +576,12 @@ enum PrewarmedMomentSession {
 }
 ```
 
-- [ ] **Step 4.4: Run tests**
+- [x] **Step 4.4: Run tests**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: all PASS (guide-sync tests now compile and pass; existing quote/note tests unaffected).
 
-- [ ] **Step 4.5: Commit**
+- [x] **Step 4.5: Commit**
 
 ```bash
 git add Pageless/Services/MomentNamingService.swift PagelessTests/ServiceTests/MomentNamingServiceLogicTests.swift
@@ -595,7 +595,7 @@ git commit -m "feat(ai): permissive guardrails, constrained guides, greedy sampl
 **Files:**
 - Modify: `Pageless/Services/RecapService.swift`
 
-- [ ] **Step 5.1: Rework `RecapService`**
+- [x] **Step 5.1: Rework `RecapService`**
 
 Replace the body of `Pageless/Services/RecapService.swift` (keep `sanitizeHeadline`):
 
@@ -705,12 +705,12 @@ struct RecapService: RecapProviding {
 }
 ```
 
-- [ ] **Step 5.2: Run tests** (RecapServiceLogicTests must stay green)
+- [x] **Step 5.2: Run tests** (RecapServiceLogicTests must stay green)
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: PASS.
 
-- [ ] **Step 5.3: Commit**
+- [x] **Step 5.3: Commit**
 
 ```bash
 git add Pageless/Services/RecapService.swift
@@ -725,7 +725,7 @@ git commit -m "feat(ai): permissive guardrails, greedy sampling, retry, headline
 - Create: `Pageless/Services/Protocols/SegmentTranscribing.swift`
 - Create: `PagelessTests/Mocks/MockSegmentTranscriber.swift`
 
-- [ ] **Step 6.1: Create the protocol file**
+- [x] **Step 6.1: Create the protocol file**
 
 `Pageless/Services/Protocols/SegmentTranscribing.swift`:
 
@@ -766,7 +766,7 @@ struct UnavailableSegmentTranscriber: SegmentTranscribing {
 }
 ```
 
-- [ ] **Step 6.2: Create the mock**
+- [x] **Step 6.2: Create the mock**
 
 `PagelessTests/Mocks/MockSegmentTranscriber.swift`:
 
@@ -794,12 +794,12 @@ final class MockSegmentTranscriber: SegmentTranscribing, @unchecked Sendable {
 }
 ```
 
-- [ ] **Step 6.3: Build**
+- [x] **Step 6.3: Build**
 
 Run: `mcp__XcodeBuildMCP__build_device`.
 Expected: BUILD SUCCEEDED.
 
-- [ ] **Step 6.4: Commit**
+- [x] **Step 6.4: Commit**
 
 ```bash
 git add Pageless/Services/Protocols/SegmentTranscribing.swift PagelessTests/Mocks/MockSegmentTranscriber.swift
@@ -814,7 +814,7 @@ git commit -m "feat(ai): SegmentTranscribing protocol with iOS 18 stub and test 
 - Create: `Pageless/Services/SpeechAnalyzerTranscriptionService.swift`
 - Test: `PagelessTests/ServiceTests/MomentNamingServiceLogicTests.swift` → new file `PagelessTests/ServiceTests/SpeechAnalyzerTranscriptionServiceTests.swift`
 
-- [ ] **Step 7.1: Write failing locale-matching tests**
+- [x] **Step 7.1: Write failing locale-matching tests**
 
 `PagelessTests/ServiceTests/SpeechAnalyzerTranscriptionServiceTests.swift`:
 
@@ -859,11 +859,11 @@ struct SpeechAnalyzerTranscriptionServiceTests {
 }
 ```
 
-- [ ] **Step 7.2: Run tests, verify compile failure** (type missing).
+- [x] **Step 7.2: Run tests, verify compile failure** (type missing).
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 
-- [ ] **Step 7.3: Create the service**
+- [x] **Step 7.3: Create the service**
 
 `Pageless/Services/SpeechAnalyzerTranscriptionService.swift`:
 
@@ -1058,7 +1058,7 @@ private final class AudioSegmentFeeder: @unchecked Sendable {
 }
 ```
 
-- [ ] **Step 7.4: Run tests**
+- [x] **Step 7.4: Run tests**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: locale tests PASS; full suite green.
@@ -1067,7 +1067,7 @@ If `analyzeSequence`/`makeStream`/actor-isolation produces compile errors, consu
 `$(xcrun --sdk iphoneos --show-sdk-path)/System/Library/Frameworks/Speech.framework/Modules/Speech.swiftmodule/arm64e-apple-ios.swiftinterface`
 — signatures listed in the header of this plan are authoritative.
 
-- [ ] **Step 7.5: Commit**
+- [x] **Step 7.5: Commit**
 
 ```bash
 git add Pageless/Services/SpeechAnalyzerTranscriptionService.swift PagelessTests/ServiceTests/SpeechAnalyzerTranscriptionServiceTests.swift
@@ -1081,7 +1081,7 @@ git commit -m "feat(ai): SpeechAnalyzer segment transcription (no export, no per
 **Files:**
 - Modify: `Pageless/Services/TranscriptionService.swift:23-29`
 
-- [ ] **Step 8.1: Harden `transcribe(audioURL:)`**
+- [x] **Step 8.1: Harden `transcribe(audioURL:)`**
 
 Replace the top of `transcribe(audioURL:)`:
 
@@ -1104,12 +1104,12 @@ Replace the top of `transcribe(audioURL:)`:
         // … rest unchanged …
 ```
 
-- [ ] **Step 8.2: Build**
+- [x] **Step 8.2: Build**
 
 Run: `mcp__XcodeBuildMCP__build_device`.
 Expected: BUILD SUCCEEDED.
 
-- [ ] **Step 8.3: Commit**
+- [x] **Step 8.3: Commit**
 
 ```bash
 git add Pageless/Services/TranscriptionService.swift
@@ -1126,7 +1126,7 @@ git commit -m "fix(ai): punctuation, on-device recognition, locale fallback in l
 - Modify: `PagelessTests/Mocks/MockTranscriptionService.swift`
 - Test: `PagelessTests/ViewModelTests/PlayerViewModelTests.swift`
 
-- [ ] **Step 9.1: Extend mocks**
+- [x] **Step 9.1: Extend mocks**
 
 `MockMomentAnalyzer` — add `errorToThrow` (keep `shouldThrow`):
 
@@ -1177,7 +1177,7 @@ final class MockTranscriptionService: TranscriptionProviding, @unchecked Sendabl
 }
 ```
 
-- [ ] **Step 9.2: Write failing tests**
+- [x] **Step 9.2: Write failing tests**
 
 Replace `makeViewModel` in `PlayerViewModelTests` and append tests:
 
@@ -1323,11 +1323,11 @@ private func makeViewModel(
 }
 ```
 
-- [ ] **Step 9.3: Run tests, verify compile failure** (new init param / methods missing).
+- [x] **Step 9.3: Run tests, verify compile failure** (new init param / methods missing).
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 
-- [ ] **Step 9.4: Rework `PlayerViewModel`**
+- [x] **Step 9.4: Rework `PlayerViewModel`**
 
 In `Pageless/ViewModels/PlayerViewModel.swift`:
 
@@ -1471,12 +1471,12 @@ Replace `performSmartSave` with the split pipeline:
 Note: the old up-front `transcription.requestAuthorization()` guard at the top of
 `performSmartSave` is **deleted** — authorization belongs to the legacy fallback only.
 
-- [ ] **Step 9.5: Run tests**
+- [x] **Step 9.5: Run tests**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: all PlayerViewModel tests PASS (including pre-existing ones).
 
-- [ ] **Step 9.6: Commit**
+- [x] **Step 9.6: Commit**
 
 ```bash
 git add Pageless/ViewModels/PlayerViewModel.swift PagelessTests/Mocks/MockMomentAnalyzer.swift PagelessTests/Mocks/MockTranscriptionService.swift PagelessTests/ViewModelTests/PlayerViewModelTests.swift
@@ -1492,7 +1492,7 @@ git commit -m "feat(ai): permission-free smart save pipeline with legacy fallbac
 - Modify: `PagelessTests/Mocks/MockRecapService.swift`
 - Test: `PagelessTests/ViewModelTests/AudiobookDetailViewModelTests.swift`
 
-- [ ] **Step 10.1: Extend `MockRecapService`**
+- [x] **Step 10.1: Extend `MockRecapService`**
 
 ```swift
 final class MockRecapService: RecapProviding, @unchecked Sendable {
@@ -1514,7 +1514,7 @@ final class MockRecapService: RecapProviding, @unchecked Sendable {
 }
 ```
 
-- [ ] **Step 10.2: Write failing tests**
+- [x] **Step 10.2: Write failing tests**
 
 In `AudiobookDetailViewModelTests`, update `makeViewModel` and the two direct `AudiobookDetailViewModel(...)` constructions (in `reconcileStoredRecapClearsMismatchedPersistedRecap`, `loadRecapStoresRecapOnAudiobook`, `loadRecapWithoutHeadlineStoresNilHeadlineOnAudiobook`) to pass `segmentTranscriber: MockSegmentTranscriber()`. Then append:
 
@@ -1611,11 +1611,11 @@ In `AudiobookDetailViewModelTests`, update `makeViewModel` and the two direct `A
 }
 ```
 
-- [ ] **Step 10.3: Run tests, verify compile failure.**
+- [x] **Step 10.3: Run tests, verify compile failure.**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 
-- [ ] **Step 10.4: Rework `AudiobookDetailViewModel`**
+- [x] **Step 10.4: Rework `AudiobookDetailViewModel`**
 
 Add the dependency (same init pattern as PlayerViewModel):
 
@@ -1749,12 +1749,12 @@ Replace `loadRecap` with the split pipeline:
     }
 ```
 
-- [ ] **Step 10.5: Run tests**
+- [x] **Step 10.5: Run tests**
 
 Run: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: all AudiobookDetailViewModel tests PASS, including pre-existing recap-persistence tests.
 
-- [ ] **Step 10.6: Commit**
+- [x] **Step 10.6: Commit**
 
 ```bash
 git add Pageless/ViewModels/AudiobookDetailViewModel.swift PagelessTests/Mocks/MockRecapService.swift PagelessTests/ViewModelTests/AudiobookDetailViewModelTests.swift
@@ -1769,7 +1769,7 @@ git commit -m "feat(ai): permission-free recap pipeline with legacy fallback and
 - Modify: `Pageless/Views/PlayerView.swift` (body modifier chain, near `.background(Color.cream.ignoresSafeArea())`)
 - Modify: `Pageless/Services/AppleIntelligenceCapability.swift:50-55,92-94`
 
-- [ ] **Step 11.1: Prewarm when the player appears with smart save enabled**
+- [x] **Step 11.1: Prewarm when the player appears with smart save enabled**
 
 In `PlayerView`'s body modifier chain (after `.contentShape(Rectangle())`), add:
 
@@ -1782,7 +1782,7 @@ In `PlayerView`'s body modifier chain (after `.contentShape(Rectangle())`), add:
         }
 ```
 
-- [ ] **Step 11.2: Relax the capability gate**
+- [x] **Step 11.2: Relax the capability gate**
 
 In `AppleIntelligenceCapability`, the primary transcription path no longer uses
 SFSpeechRecognizer, so model availability alone gates smart naming:
@@ -1808,12 +1808,12 @@ And in `unavailabilityReason`, the `.available` case becomes:
 
 Remove the now-unused `isSpeechRecognitionAvailable` private property.
 
-- [ ] **Step 11.3: Build + full test pass**
+- [x] **Step 11.3: Build + full test pass**
 
 Run: `mcp__XcodeBuildMCP__build_device`, then `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 Expected: BUILD SUCCEEDED; all tests PASS.
 
-- [ ] **Step 11.4: Commit**
+- [x] **Step 11.4: Commit**
 
 ```bash
 git add Pageless/Views/PlayerView.swift Pageless/Services/AppleIntelligenceCapability.swift
