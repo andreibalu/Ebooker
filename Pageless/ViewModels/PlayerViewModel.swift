@@ -32,14 +32,21 @@ final class PlayerViewModel {
 
     // MARK: - Dependencies
 
+    // Context window around "now": the moment is what the user just heard, so weight
+    // the window behind the playhead; future audio is noise/spoilers and costs time.
+    static let momentContextBackSeconds: Double = 75
+    static let momentContextForwardSeconds: Double = 15
+
     private let transcription: any TranscriptionProviding
     private let momentAnalyzer: any MomentAnalyzing
     private let audioExtractor: any AudioExtracting
+    private let segmentTranscriber: any SegmentTranscribing
 
     init(
         transcription: (any TranscriptionProviding)? = nil,
         momentAnalyzer: (any MomentAnalyzing)? = nil,
-        audioExtractor: (any AudioExtracting)? = nil
+        audioExtractor: (any AudioExtracting)? = nil,
+        segmentTranscriber: (any SegmentTranscribing)? = nil
     ) {
         self.transcription = transcription ?? TranscriptionService()
         if let momentAnalyzer {
@@ -50,6 +57,18 @@ final class PlayerViewModel {
             self.momentAnalyzer = UnavailableMomentAnalyzer()
         }
         self.audioExtractor = audioExtractor ?? AudioExtractionService()
+        if let segmentTranscriber {
+            self.segmentTranscriber = segmentTranscriber
+        } else if #available(iOS 26, *) {
+            self.segmentTranscriber = SpeechAnalyzerTranscriptionService()
+        } else {
+            self.segmentTranscriber = UnavailableSegmentTranscriber()
+        }
+    }
+
+    /// Loads model resources ahead of a likely smart save (called when the player opens).
+    func prewarmSmartSave() {
+        momentAnalyzer.prewarm()
     }
 
     // MARK: - Moment save workflow
@@ -87,56 +106,86 @@ final class PlayerViewModel {
         guard let audiobook = player.currentAudiobook,
               let track = player.currentTrack else { return }
 
-        let authStatus = await transcription.requestAuthorization()
-        guard authStatus == .authorized else {
-            resetMomentState()
-            pendingMomentTime = max(player.currentTime - momentBacktrackSeconds, 0)
-            return
-        }
-
         isProcessingSmartSave = true
         defer { isProcessingSmartSave = false }
 
+        guard let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook),
+              let transcript = await obtainTranscript(
+                  fileURL: fileURL,
+                  currentTime: player.currentTime,
+                  duration: player.duration
+              ),
+              !transcript.isEmpty
+        else {
+            resetMomentState()
+            pendingMomentTime = savedTime
+            return
+        }
+
+        await applyAnalysis(
+            transcript: transcript,
+            audiobookTitle: audiobook.title,
+            savedTime: savedTime,
+            onSuccessfulSmartAI: onSuccessfulSmartAI
+        )
+    }
+
+    /// SpeechAnalyzer first (no permission, no export); legacy export +
+    /// SFSpeechRecognizer fallback, which is the only path that needs authorization.
+    /// Internal for tests.
+    func obtainTranscript(fileURL: URL, currentTime: Double, duration: Double) async -> String? {
+        momentAnalyzer.prewarm() // overlap model load with transcription
+
+        let start = max(0, currentTime - Self.momentContextBackSeconds)
+        let end = min(duration, currentTime + Self.momentContextForwardSeconds)
+        if end > start,
+           let transcript = try? await segmentTranscriber.transcribeSegment(
+               fileURL: fileURL, startSeconds: start, endSeconds: end
+           ),
+           !transcript.isEmpty {
+            return transcript
+        }
+
+        let authStatus = await transcription.requestAuthorization()
+        guard authStatus == .authorized else { return nil }
         do {
-            let fileURL = try LibraryImportService.fileURL(for: track, in: audiobook)
             let audioURL = try await audioExtractor.extractSegment(
-                from: fileURL,
-                currentTime: player.currentTime,
-                duration: player.duration
+                from: fileURL, currentTime: currentTime, duration: duration
             )
             defer { try? FileManager.default.removeItem(at: audioURL) }
+            return try await transcription.transcribe(audioURL: audioURL)
+        } catch {
+            return nil
+        }
+    }
 
-            let transcript = try await transcription.transcribe(audioURL: audioURL)
-            if transcript.isEmpty {
-                resetMomentState()
-                pendingMomentTime = savedTime
-            } else {
-                do {
-                    let analysis = try await momentAnalyzer.analyzeMoment(
-                        transcript: transcript,
-                        audiobookTitle: audiobook.title
-                    )
-                    momentNameInput = analysis.name
-                    momentNoteInput = analysis.note
-                    pendingMomentTranscript = transcript
-                    pendingMomentAiGenerated = true
-                    pendingCategories = analysis.categories
-                    pendingQuoteLine = analysis.quoteLine
-                    pendingCharacters = analysis.characters
-                    pendingMood = analysis.mood
-                    pendingSmartSaveUnsafeWarning = false
-                    pendingMomentTime = savedTime
-                    onSuccessfulSmartAI?()
-                } catch {
-                    let isUnsafe = error.localizedDescription.localizedCaseInsensitiveContains("unsafe")
-                    resetMomentState()
-                    pendingMomentTranscript = transcript
-                    pendingSmartSaveUnsafeWarning = isUnsafe
-                    pendingMomentTime = savedTime
-                }
-            }
+    /// Runs the analyzer and fills the pending-moment fields. Internal for tests.
+    func applyAnalysis(
+        transcript: String,
+        audiobookTitle: String,
+        savedTime: Double,
+        onSuccessfulSmartAI: (() -> Void)? = nil
+    ) async {
+        do {
+            let analysis = try await momentAnalyzer.analyzeMoment(
+                transcript: transcript,
+                audiobookTitle: audiobookTitle
+            )
+            momentNameInput = analysis.name
+            momentNoteInput = analysis.note
+            pendingMomentTranscript = transcript
+            pendingMomentAiGenerated = true
+            pendingCategories = analysis.categories
+            pendingQuoteLine = analysis.quoteLine
+            pendingCharacters = analysis.characters
+            pendingMood = analysis.mood
+            pendingSmartSaveUnsafeWarning = false
+            pendingMomentTime = savedTime
+            onSuccessfulSmartAI?()
         } catch {
             resetMomentState()
+            pendingMomentTranscript = transcript
+            pendingSmartSaveUnsafeWarning = (error as? MomentNamingError) == .unsafeContent
             pendingMomentTime = savedTime
         }
     }
