@@ -20,7 +20,8 @@ struct AudiobookDetailViewModelTests {
             audiobook: book,
             transcription: MockTranscriptionService(),
             audioExtractor: MockAudioExtractor(),
-            recapProvider: MockRecapService()
+            recapProvider: MockRecapService(),
+            segmentTranscriber: MockSegmentTranscriber()
         )
     }
 
@@ -184,7 +185,8 @@ struct AudiobookDetailViewModelTests {
             audiobook: book,
             transcription: MockTranscriptionService(),
             audioExtractor: MockAudioExtractor(),
-            recapProvider: MockRecapService()
+            recapProvider: MockRecapService(),
+            segmentTranscriber: MockSegmentTranscriber()
         )
         vm.reconcileStoredRecap(modelContext: context)
 
@@ -218,7 +220,8 @@ struct AudiobookDetailViewModelTests {
             audiobook: book,
             transcription: MockTranscriptionService(),
             audioExtractor: MockAudioExtractor(),
-            recapProvider: recap
+            recapProvider: recap,
+            segmentTranscriber: MockSegmentTranscriber()
         )
         await vm.loadRecap(
             trackIndex: 0,
@@ -256,7 +259,8 @@ struct AudiobookDetailViewModelTests {
             audiobook: book,
             transcription: MockTranscriptionService(),
             audioExtractor: MockAudioExtractor(),
-            recapProvider: MockRecapService()
+            recapProvider: MockRecapService(),
+            segmentTranscriber: MockSegmentTranscriber()
         )
         await vm.loadRecap(
             trackIndex: 0,
@@ -268,6 +272,97 @@ struct AudiobookDetailViewModelTests {
         #expect(book.progressRecapText != nil)
         #expect(book.progressRecapHeadline == nil)
         #expect(vm.recapProgressHeadline == nil)
+    }
+
+    @Test func loadRecapPrimaryPathSkipsAuthorization() async throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "T3", author: "", folderName: "primary-path-test", totalDuration: 600)
+        let track = AudioTrack(
+            title: "Ch1",
+            originalFileName: "c.m4a",
+            storedFileName: "c.m4a",
+            orderIndex: 0,
+            duration: 600,
+            audiobook: book
+        )
+        book.tracks.append(track)
+        context.insert(book)
+
+        let transcription = MockTranscriptionService()
+        let segment = MockSegmentTranscriber()
+        let vm = AudiobookDetailViewModel(
+            audiobook: book,
+            transcription: transcription,
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: MockRecapService(),
+            segmentTranscriber: segment
+        )
+        await vm.loadRecap(trackIndex: 0, progressTime: 300, includeProgressHeadline: false, modelContext: context)
+
+        #expect(vm.recapText == "Mock recap of recent events.")
+        #expect(segment.callCount == 1)
+        #expect(segment.lastRange?.start == 100)  // 300 − 200
+        #expect(segment.lastRange?.end == 300)
+        #expect(transcription.authorizationRequestCount == 0)
+    }
+
+    @Test func loadRecapFallsBackToLegacyWhenPrimaryThrows() async throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "T4", author: "", folderName: "fallback-path-test", totalDuration: 600)
+        let track = AudioTrack(
+            title: "Ch1",
+            originalFileName: "d.m4a",
+            storedFileName: "d.m4a",
+            orderIndex: 0,
+            duration: 600,
+            audiobook: book
+        )
+        book.tracks.append(track)
+        context.insert(book)
+
+        let transcription = MockTranscriptionService()
+        let segment = MockSegmentTranscriber()
+        segment.shouldThrow = true
+        let vm = AudiobookDetailViewModel(
+            audiobook: book,
+            transcription: transcription,
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: MockRecapService(),
+            segmentTranscriber: segment
+        )
+        await vm.loadRecap(trackIndex: 0, progressTime: 300, includeProgressHeadline: false, modelContext: context)
+
+        #expect(vm.recapText == "Mock recap of recent events.")
+        #expect(transcription.authorizationRequestCount == 1)
+        #expect(transcription.transcribeCallCount == 1)
+    }
+
+    @Test func produceRecapSurfacesUnsafeContentCopy() async {
+        let recap = MockRecapService()
+        recap.errorToThrow = RecapError.unsafeContent
+        let vm = AudiobookDetailViewModel(
+            audiobook: makeAudiobook(),
+            transcription: MockTranscriptionService(),
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: recap,
+            segmentTranscriber: MockSegmentTranscriber()
+        )
+
+        await vm.produceRecap(
+            transcript: "t", includeProgressHeadline: false,
+            anchorTrackIndex: 0, anchorTime: 1, modelContext: nil, onSuccessfulRecap: nil
+        )
+
+        #expect(vm.recapError == "Apple Intelligence declined to summarize this passage.")
+        #expect(vm.recapText == nil)
     }
 }
 

@@ -31,12 +31,14 @@ final class AudiobookDetailViewModel {
     private let transcription: any TranscriptionProviding
     private let audioExtractor: any AudioExtracting
     private let recapProvider: any RecapProviding
+    private let segmentTranscriber: any SegmentTranscribing
 
     init(
         audiobook: Audiobook,
         transcription: (any TranscriptionProviding)? = nil,
         audioExtractor: (any AudioExtracting)? = nil,
-        recapProvider: (any RecapProviding)? = nil
+        recapProvider: (any RecapProviding)? = nil,
+        segmentTranscriber: (any SegmentTranscribing)? = nil
     ) {
         self.audiobook = audiobook
         self.transcription = transcription ?? TranscriptionService()
@@ -47,6 +49,13 @@ final class AudiobookDetailViewModel {
             self.recapProvider = RecapService()
         } else {
             self.recapProvider = UnavailableRecapProvider()
+        }
+        if let segmentTranscriber {
+            self.segmentTranscriber = segmentTranscriber
+        } else if #available(iOS 26, *) {
+            self.segmentTranscriber = SpeechAnalyzerTranscriptionService()
+        } else {
+            self.segmentTranscriber = UnavailableSegmentTranscriber()
         }
         syncRecapFromAudiobook()
     }
@@ -121,35 +130,68 @@ final class AudiobookDetailViewModel {
         isLoadingRecap = true
         defer { isLoadingRecap = false }
 
+        let tracks = audiobook.sortedTracks
+        guard tracks.indices.contains(trackIndex) else { return }
+        guard let fileURL = try? LibraryImportService.fileURL(for: tracks[trackIndex], in: audiobook) else {
+            recapError = "Audio for this book isn't on this iPhone."
+            return
+        }
+
+        let startSeconds = max(0, progressTime - 200)
+        guard progressTime > startSeconds else { return }
+
+        guard let transcript = await obtainTranscript(
+            fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime
+        ), !transcript.isEmpty else {
+            if recapError == nil { recapError = "Could not transcribe audio." }
+            return
+        }
+
+        await produceRecap(
+            transcript: transcript,
+            includeProgressHeadline: includeProgressHeadline,
+            anchorTrackIndex: trackIndex,
+            anchorTime: progressTime,
+            modelContext: modelContext,
+            onSuccessfulRecap: onSuccessfulRecap
+        )
+    }
+
+    /// SpeechAnalyzer first (no permission, no export); legacy export +
+    /// SFSpeechRecognizer fallback. Internal for tests.
+    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double) async -> String? {
+        if let transcript = try? await segmentTranscriber.transcribeSegment(
+            fileURL: fileURL, startSeconds: startSeconds, endSeconds: endSeconds
+        ), !transcript.isEmpty {
+            return transcript
+        }
+
+        let authStatus = await transcription.requestAuthorization()
+        guard authStatus == .authorized else {
+            recapError = "Speech recognition not authorized."
+            return nil
+        }
         do {
-            let tracks = audiobook.sortedTracks
-            guard tracks.indices.contains(trackIndex) else { return }
-            let track = tracks[trackIndex]
-            let fileURL = try LibraryImportService.fileURL(for: track, in: audiobook)
-
-            let startSeconds = max(0, progressTime - 200)
-            let endSeconds = progressTime
-            guard endSeconds > startSeconds else { return }
-
             let audioURL = try await audioExtractor.extractSegment(
-                from: fileURL,
-                startSeconds: startSeconds,
-                endSeconds: endSeconds
+                from: fileURL, startSeconds: startSeconds, endSeconds: endSeconds
             )
             defer { try? FileManager.default.removeItem(at: audioURL) }
+            return try await transcription.transcribe(audioURL: audioURL)
+        } catch {
+            return nil
+        }
+    }
 
-            let authStatus = await transcription.requestAuthorization()
-            guard authStatus == .authorized else {
-                recapError = "Speech recognition not authorized."
-                return
-            }
-
-            let transcript = try await transcription.transcribe(audioURL: audioURL)
-            guard !transcript.isEmpty else {
-                recapError = "Could not transcribe audio."
-                return
-            }
-
+    /// Runs the recap provider and persists the result. Internal for tests.
+    func produceRecap(
+        transcript: String,
+        includeProgressHeadline: Bool,
+        anchorTrackIndex: Int,
+        anchorTime: Double,
+        modelContext: ModelContext?,
+        onSuccessfulRecap: (() -> Void)?
+    ) async {
+        do {
             let result = try await recapProvider.generateRecap(
                 transcript: transcript,
                 audiobookTitle: audiobook.title,
@@ -161,13 +203,15 @@ final class AudiobookDetailViewModel {
             audiobook.storeProgressRecap(
                 text: result.recap,
                 headline: result.progressHeadline,
-                anchorTrackIndex: trackIndex,
-                anchorTime: progressTime
+                anchorTrackIndex: anchorTrackIndex,
+                anchorTime: anchorTime
             )
             try? modelContext?.save()
             onSuccessfulRecap?()
+        } catch let error as RecapError {
+            recapError = error.errorDescription
         } catch {
-            recapError = error.localizedDescription
+            recapError = RecapError.generationFailed.errorDescription
         }
     }
 }
