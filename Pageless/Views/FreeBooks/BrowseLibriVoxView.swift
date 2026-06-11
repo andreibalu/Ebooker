@@ -2,8 +2,59 @@
 //  BrowseLibriVoxView.swift
 //  Pageless
 //
+//  "Open Shelf" editorial browse surface: search + small-caps filters up top,
+//  a rotating Today's Pick hero, the collections rail, and a numbered classics
+//  chart set directly on the cream background with hairline rules — no boxed
+//  inset lists. Serif (New York) for titles/headlines, serif italic for authors
+//  and status copy, small-caps eyebrows for section labels and metadata.
 
 import SwiftUI
+
+/// The page's entire type scale — four text sizes, nothing else. Every label on
+/// this surface uses one of these so the editorial look never drifts into a
+/// dozen near-identical sizes.
+private enum FBType {
+    static let eyebrow: CGFloat = 10   // small-caps section labels & metadata
+    static let body: CGFloat = 12      // serif-italic authors, status copy, blurbs
+    static let title: CGFloat = 15     // serif row titles, rank numbers, search text
+    static let headline: CGFloat = 19  // hero title, overlay & empty-state headlines
+}
+
+/// Small-caps eyebrow label: SF, semibold, tracked, uppercased, tabular digits.
+private struct FBEyebrow: View {
+    let text: String
+    var color: Color = .secondary
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: FBType.eyebrow, weight: .semibold))
+            .tracking(FBType.eyebrow * 0.12)
+            .monospacedDigit()
+            .foregroundStyle(color)
+    }
+}
+
+/// Thin circular spinner — black arc on a 10% track, matching the prototype's
+/// custom spinner rather than the stock UIActivityIndicator.
+private struct FBSpinner: View {
+    var size: CGFloat = 22
+    @State private var spinning = false
+
+    var body: some View {
+        let lineWidth = max(2, size * 0.1)
+        Circle()
+            .stroke(Color.primary.opacity(0.1), lineWidth: lineWidth)
+            .overlay(
+                Circle()
+                    .trim(from: 0, to: 0.28)
+                    .stroke(Color.primary, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(spinning ? 360 : 0))
+                    .animation(.linear(duration: 0.7).repeatForever(autoreverses: false), value: spinning)
+            )
+            .frame(width: size, height: size)
+            .onAppear { spinning = true }
+    }
+}
 
 struct BrowseLibriVoxView: View {
     let onOpenPlayer: () -> Void
@@ -17,26 +68,26 @@ struct BrowseLibriVoxView: View {
     /// animation transactions, so the view animates this local state and persists separately.
     @State private var collectionsHidden = false
 
+    private var isSearching: Bool {
+        !viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || viewModel.hasActiveFilters
+    }
+
+    private var hairlineColor: Color { Color.primary.opacity(0.18) }
+
     var body: some View {
         @Bindable var vm = viewModel
         ZStack {
             VStack(spacing: 0) {
                 searchBar(vm: $vm.searchQuery)
                     .padding(.horizontal, 20)
-                    .padding(.top, 12)
-                    .padding(.bottom, 10)
+                    .padding(.top, 16)
 
-                filterChipsRow
-
-                syncBanner
+                filterRow
                     .padding(.horizontal, 20)
+                    .padding(.top, 4)
 
-                Divider()
-                    .padding(.horizontal, 20)
-
-                if !viewModel.activeDownloads.isEmpty {
-                    activeDownloadsSection
-                }
+                statusLine
 
                 contentArea
             }
@@ -60,113 +111,72 @@ struct BrowseLibriVoxView: View {
         }
     }
 
-    // MARK: - Active downloads pinned section
+    // MARK: - Building blocks
 
-    private var activeDownloadsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Downloading")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-
-            VStack(spacing: 8) {
-                ForEach(viewModel.sortedActiveDownloads) { download in
-                    NavigationLink {
-                        LibriVoxBookDetailView(book: download.book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
-                    } label: {
-                        activeDownloadCard(download)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 10)
-
-            Divider()
-                .padding(.horizontal, 20)
-        }
+    private var hairline: some View {
+        Rectangle()
+            .fill(hairlineColor)
+            .frame(height: 0.5)
     }
 
-    private func activeDownloadCard(_ download: ActiveLibriVoxDownload) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(download.book.title)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-                    Text(download.book.authorDisplay)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                Text(remainingSizeLabel(for: download))
-                    .font(.caption)
+    /// SF section title at the app's classic header size (semibold subheadline)
+    /// followed by a hairline rule stretching to the right edge.
+    private func sectionHeader(_ label: String) -> some View {
+        HStack(spacing: 10) {
+            Text(label)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+            hairline
+        }
+        .padding(.horizontal, 20)
+    }
+
+    // MARK: - Search bar
+
+    private func searchBar(vm: Binding<String>) -> some View {
+        HStack(spacing: 9) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+
+            TextField(
+                "",
+                text: vm,
+                prompt: Text("Search titles & authors…")
+                    .font(.system(size: FBType.title, design: .serif))
+                    .italic()
                     .foregroundStyle(.secondary)
-                    .monospacedDigit()
+            )
+            .font(.system(size: FBType.title, design: .serif))
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .onChange(of: viewModel.searchQuery) { _, new in
+                viewModel.onQueryChanged(new, modelContext: modelContext)
+            }
+
+            if !viewModel.searchQuery.isEmpty {
                 Button {
-                    viewModel.cancelDownload(bookId: download.id)
+                    viewModel.searchQuery = ""
+                    viewModel.searchResults = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
+                        .font(.system(size: 16))
                         .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .padding(.leading, 10)
             }
-            ProgressView(value: download.progress)
-                .tint(.primary)
         }
-        .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        .padding(.horizontal, 14)
+        .background(Color.cardWhite, in: Capsule())
+        .overlay(Capsule().strokeBorder(hairlineColor, lineWidth: 0.5))
+        .shadow(color: .black.opacity(0.04), radius: 1.5, y: 1)
     }
 
-    private func remainingSizeLabel(for download: ActiveLibriVoxDownload) -> String {
-        let totalMB = download.book.estimatedDownloadSizeMB
-        guard totalMB > 0 else { return "" }
-        let remaining = max(0, Int((Double(totalMB) * (1.0 - download.progress)).rounded()))
-        return "\(remaining) MB left"
-    }
+    // MARK: - Filter row
 
-    // MARK: - First-load overlay
-
-    private var firstLoadOverlay: some View {
-        ZStack {
-            Rectangle()
-                .fill(.regularMaterial)
-                .ignoresSafeArea()
-
-            VStack(spacing: 18) {
-                ProgressView()
-                    .scaleEffect(1.4)
-                    .tint(.primary)
-
-                VStack(spacing: 6) {
-                    Text(viewModel.isPreloadingFeatured ? "Finding Classics" : "Building Your Free Library")
-                        .font(.headline)
-
-                    Text(viewModel.isPreloadingFeatured
-                         ? "Loading a handful of timeless audiobooks to get you started"
-                         : "Downloading the catalog of 20,000+ public-domain audiobooks")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .padding(32)
-            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 20, y: 8)
-            .padding(.horizontal, 48)
-        }
-    }
-
-    // MARK: - Filter dropdowns
-
-    private var filterChipsRow: some View {
-        HStack(spacing: 8) {
+    private var filterRow: some View {
+        HStack(spacing: 22) {
             Menu {
                 Button("All Languages") {
                     viewModel.selectedLanguage = nil
@@ -186,7 +196,7 @@ struct BrowseLibriVoxView: View {
                     }
                 }
             } label: {
-                filterDropdownLabel(viewModel.selectedLanguage ?? "Language", isSelected: viewModel.selectedLanguage != nil)
+                filterLabel(viewModel.selectedLanguage ?? "Language", isSelected: viewModel.selectedLanguage != nil)
             }
 
             Menu {
@@ -208,7 +218,7 @@ struct BrowseLibriVoxView: View {
                     }
                 }
             } label: {
-                filterDropdownLabel(viewModel.selectedGenre ?? "Genre", isSelected: viewModel.selectedGenre != nil)
+                filterLabel(viewModel.selectedGenre ?? "Genre", isSelected: viewModel.selectedGenre != nil)
             }
 
             Menu {
@@ -230,121 +240,140 @@ struct BrowseLibriVoxView: View {
                     }
                 }
             } label: {
-                filterDropdownLabel(viewModel.selectedDuration?.rawValue ?? "Length", isSelected: viewModel.selectedDuration != nil)
+                filterLabel(viewModel.selectedDuration?.rawValue ?? "Length", isSelected: viewModel.selectedDuration != nil)
             }
 
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 6)
     }
 
-    private func filterDropdownLabel(_ text: String, isSelected: Bool) -> some View {
+    private func filterLabel(_ text: String, isSelected: Bool) -> some View {
         HStack(spacing: 4) {
-            Text(text)
-                .font(.caption.weight(isSelected ? .semibold : .regular))
+            Text(text.uppercased())
+                .font(.system(size: FBType.eyebrow, weight: .semibold))
+                .tracking(FBType.eyebrow * 0.12)
+                .lineLimit(1)
             Image(systemName: "chevron.down")
-                .font(.caption2.weight(.medium))
+                .font(.system(size: 9, weight: .semibold))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            isSelected ? Color.primary : Color.cardWhite,
-            in: Capsule()
-        )
-        .foregroundStyle(isSelected ? Color.cream : Color.primary)
-        .shadow(color: .black.opacity(0.06), radius: 3, y: 1)
-    }
-
-    // MARK: - Search bar
-
-    private func searchBar(vm: Binding<String>) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .font(.subheadline)
-
-            TextField("Search 20,000+ free audiobooks", text: vm)
-                .font(.subheadline)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .onChange(of: viewModel.searchQuery) { _, new in
-                    viewModel.onQueryChanged(new, modelContext: modelContext)
-                }
-
-            if !viewModel.searchQuery.isEmpty {
-                Button {
-                    viewModel.searchQuery = ""
-                    viewModel.searchResults = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                }
+        .foregroundStyle(Color.primary)
+        .padding(.top, 6)
+        .padding(.bottom, 5)
+        .overlay(alignment: .bottom) {
+            if isSelected {
+                Rectangle()
+                    .fill(Color.amber)
+                    .frame(height: 2)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.06), radius: 4, y: 2)
+        .contentShape(Rectangle())
     }
 
-    // MARK: - Sync banner
+    // MARK: - Status line (syncing / offline / error)
 
     @ViewBuilder
-    private var syncBanner: some View {
+    private var statusLine: some View {
         // Full catalog streaming in behind already-visible classics/cached data (non-blocking).
         if viewModel.isLoadingFullCatalog, case .syncing(let fetched) = viewModel.syncState {
-            HStack(spacing: 6) {
-                ProgressView().scaleEffect(0.75)
+            HStack(spacing: 8) {
+                FBSpinner(size: 12)
                 Text(viewModel.isFirstFullSync
-                     ? "Loading the full library… \(fetched.formatted()) books"
+                     ? "Fetching the catalog… \(fetched.formatted()) of 20,000"
                      : "Refreshing catalog… \(fetched.formatted()) updated")
-                    .font(.caption)
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
                 Spacer()
             }
-            .padding(.vertical, 6)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
 
         // Offline but catalog is cached — search still works
         } else if viewModel.isOfflineWithCachedData {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: "wifi.slash")
-                    .foregroundStyle(.orange)
-                Text("Offline — showing saved books")
-                    .font(.caption)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.amber)
+                Text("Offline — showing saved books.")
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Retry") { viewModel.forceRefresh(modelContext: modelContext) }
-                    .font(.caption.weight(.medium))
+                retryButton
             }
-            .padding(.vertical, 6)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
 
         // Online error (not an offline / no-data situation). Suppressed when the full-screen
         // failed state is already showing it, to avoid doubling up.
         } else if case .failed(let message, false) = viewModel.syncState, !viewModel.loadFailedWithNoData {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.amber)
                 Text(message)
-                    .font(.caption)
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer()
-                Button("Retry") { viewModel.forceRefresh(modelContext: modelContext) }
-                    .font(.caption.weight(.medium))
+                retryButton
             }
-            .padding(.vertical, 6)
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+        }
+    }
 
-        // Steady state: show last-sync timestamp
-        } else if viewModel.catalogCount > 0 {
-            if case .syncing = viewModel.syncState {
-                EmptyView() // first-time overlay is showing; don't double-up
-            } else {
-                Text(viewModel.lastSyncDescription)
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 6)
+    private var retryButton: some View {
+        Button {
+            viewModel.forceRefresh(modelContext: modelContext)
+        } label: {
+            Text("RETRY")
+                .font(.system(size: FBType.eyebrow, weight: .semibold))
+                .tracking(FBType.eyebrow * 0.12)
+                .foregroundStyle(.primary)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.25))
+                        .frame(height: 1)
+                        .offset(y: 2)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - First-load overlay
+
+    private var firstLoadOverlay: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(Color.cream.opacity(0.6))
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                FBSpinner(size: 28)
+
+                VStack(spacing: 8) {
+                    Text(viewModel.isPreloadingFeatured ? "Finding the classics." : "Building your free library.")
+                        .font(.system(size: FBType.headline, weight: .medium, design: .serif))
+
+                    Text(viewModel.isPreloadingFeatured
+                         ? "A handful of timeless audiobooks, on their way to you."
+                         : "Fetching the catalog of 20,000+ public-domain recordings.")
+                        .font(.system(size: FBType.body, design: .serif))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
             }
+            .padding(.vertical, 34)
+            .padding(.horizontal, 30)
+            .frame(maxWidth: 300)
+            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 24, y: 14)
+            .padding(.horizontal, 44)
         }
     }
 
@@ -356,10 +385,9 @@ struct BrowseLibriVoxView: View {
             noInternetState
         } else if viewModel.loadFailedWithNoData {
             loadFailedState
-        } else if viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-               && !viewModel.hasActiveFilters {
+        } else if !isSearching {
             if !viewModel.featuredBooks.isEmpty {
-                featuredBooksList
+                browseContent
             } else if viewModel.isInitialLoading {
                 Spacer() // overlay is covering the screen; keep layout stable
             } else {
@@ -372,16 +400,106 @@ struct BrowseLibriVoxView: View {
         }
     }
 
+    // MARK: - Browse content (hero, collections, chart)
+
+    /// Plain ScrollView rather than List: List can't animate row-height changes (the
+    /// collapse snapped) and enforces a minimum row height that left a dead gap under
+    /// the collapsed rail. In a VStack the conditional rail collapses smoothly.
+    private var browseContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if !viewModel.activeDownloads.isEmpty {
+                    downloadsSection
+                }
+
+                if let pick = viewModel.todaysPick {
+                    heroCard(pick)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 16)
+                }
+
+                collectionsHeaderButton
+                    .padding(.top, 22)
+
+                if !collectionsHidden {
+                    collectionsRail
+                        .transition(.opacity)
+                }
+
+                sectionHeader("Popular Classics")
+                    .padding(.top, collectionsHidden ? 16 : 20)
+
+                VStack(spacing: 0) {
+                    let chart = viewModel.chartBooks
+                    ForEach(Array(chart.enumerated()), id: \.element.id) { index, book in
+                        chartRow(book, index: index, isLast: index == chart.count - 1)
+                    }
+                }
+                .padding(.top, 2)
+
+                colophon
+            }
+            .animation(.easeInOut(duration: 0.32), value: collectionsHidden)
+        }
+        .scrollDismissesKeyboard(.immediately)
+    }
+
+    // MARK: - Today's Pick hero
+
+    private func heroCard(_ book: LibriVoxBook) -> some View {
+        NavigationLink {
+            LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+        } label: {
+            HStack(spacing: 16) {
+                GeneratedCoverView(title: book.title)
+                    .frame(width: 96, height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .rotationEffect(.degrees(-2.5))
+                    .shadow(color: .black.opacity(0.18), radius: 8, y: 6)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    FBEyebrow(text: "Today's Pick · \(book.formattedDuration)", color: .amber)
+
+                    Text(book.title)
+                        .font(.system(size: FBType.headline, weight: .medium, design: .serif))
+                        .lineLimit(2)
+                        .foregroundStyle(.primary)
+
+                    Text("by \(book.authorDisplay)")
+                        .font(.system(size: FBType.body, design: .serif))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    let blurb = BookDescriptionFormatting.plainText(fromHTMLFragment: book.bookDescription)
+                    if !blurb.isEmpty {
+                        Text(blurb)
+                            .font(.system(size: FBType.body))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .padding(.top, 1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(16)
+            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .shadow(color: .black.opacity(0.07), radius: 7, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Collections shelf
 
     private var collectionsHeaderButton: some View {
         Button {
-            withAnimation(.spring(duration: 0.45, bounce: 0.12)) {
+            withAnimation(.easeInOut(duration: 0.32)) {
                 collectionsHidden.toggle()
             }
             collectionsHiddenStored = collectionsHidden
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 10) {
                 Text("Collections")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
@@ -389,8 +507,9 @@ struct BrowseLibriVoxView: View {
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .rotationEffect(.degrees(collectionsHidden ? -90 : 0))
-                Spacer()
+                hairline
             }
+            .padding(.horizontal, 20)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -413,7 +532,7 @@ struct BrowseLibriVoxView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 10)
+            .padding(.top, 12)
             .padding(.bottom, 6)
         }
     }
@@ -438,62 +557,171 @@ struct BrowseLibriVoxView: View {
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
     }
 
-    // MARK: - Featured Books
+    // MARK: - Numbered chart row
 
-    /// Plain ScrollView rather than List: List can't animate row-height changes (the
-    /// collapse snapped) and enforces a minimum row height that left a dead gap under
-    /// the collapsed rail. In a VStack the conditional rail collapses smoothly, same
-    /// as the DisclosureGroups in AudiobookDetailView.
-    private var featuredBooksList: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                collectionsHeaderButton
-                    .padding(.horizontal, 20)
-                    .padding(.top, 14)
+    private func chartRow(_ book: LibriVoxBook, index: Int, isLast: Bool) -> some View {
+        NavigationLink {
+            LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+        } label: {
+            HStack(spacing: 13) {
+                Text(String(format: "%02d", index + 1))
+                    .font(.system(size: FBType.title, weight: .medium, design: .serif))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 24)
 
-                if !collectionsHidden {
-                    collectionsRail
-                        .transition(.opacity)
+                GeneratedCoverView(title: book.title)
+                    .frame(width: 48, height: 48)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(book.title)
+                        .font(.system(size: FBType.title, weight: .medium, design: .serif))
+                        .lineLimit(2)
+                        .foregroundStyle(.primary)
+                    Text(book.authorDisplay)
+                        .font(.system(size: FBType.body, design: .serif))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    FBEyebrow(text: chartMeta(book), color: Color(.tertiaryLabel))
+                        .padding(.top, 1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                LibriVoxSampleButton(book: book, browseViewModel: viewModel, size: 24)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            if !isLast { hairline }
+        }
+    }
+
+    private func chartMeta(_ book: LibriVoxBook) -> String {
+        guard book.totalTimeSecs > 0 else { return "Unknown length" }
+        return "\(book.formattedDuration) · \(book.estimatedDownloadSizeMB) MB"
+    }
+
+    // MARK: - Active downloads (pinned above the hero)
+
+    private var downloadsSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            sectionHeader("Downloading · \(viewModel.activeDownloads.count)")
+
+            VStack(spacing: 0) {
+                let downloads = viewModel.sortedActiveDownloads
+                ForEach(downloads) { download in
+                    downloadRow(download, isLast: download.id == downloads.last?.id)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 4)
+        }
+        .padding(.top, 14)
+    }
+
+    private func downloadRow(_ download: ActiveLibriVoxDownload, isLast: Bool) -> some View {
+        NavigationLink {
+            LibriVoxBookDetailView(book: download.book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text(download.book.title)
+                        .font(.system(size: FBType.title, weight: .medium, design: .serif))
+                        .lineLimit(1)
+                        .foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    FBEyebrow(text: remainingSizeLabel(for: download))
+
+                    Button {
+                        viewModel.cancelDownload(bookId: download.id)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
 
-                Text("Popular Classics")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 20)
-                    .padding(.top, collectionsHidden ? 14 : 8)
-                    .padding(.bottom, 8)
-
-                VStack(spacing: 0) {
-                    ForEach(Array(viewModel.featuredBooks.enumerated()), id: \.element.id) { index, book in
-                        NavigationLink {
-                            LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
-                        } label: {
-                            HStack(spacing: 8) {
-                                LibriVoxBookRow(book: book, browseViewModel: viewModel)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 5)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-
-                        if index < viewModel.featuredBooks.count - 1 {
-                            Divider()
-                                .padding(.leading, 86)
-                        }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.primary.opacity(0.08))
+                        Capsule()
+                            .fill(Color.amber)
+                            .frame(width: geo.size.width * download.progress)
                     }
                 }
-                .background(Color.cardWhite)
-
-                librivoxAttribution
+                .frame(height: 2)
+                .animation(.linear(duration: 0.2), value: download.progress)
             }
-            .animation(.spring(duration: 0.45, bounce: 0.12), value: collectionsHidden)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            if !isLast { hairline }
+        }
+    }
+
+    private func remainingSizeLabel(for download: ActiveLibriVoxDownload) -> String {
+        let totalMB = download.book.estimatedDownloadSizeMB
+        guard totalMB > 0 else { return "" }
+        let remaining = max(0, Int((Double(totalMB) * (1.0 - download.progress)).rounded()))
+        return "\(remaining) MB left"
+    }
+
+    // MARK: - Search & filter results
+
+    private var resultsList: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                sectionHeader(foundLabel)
+                    .padding(.top, 16)
+
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.id) { index, book in
+                        chartRow(book, index: index, isLast: index == viewModel.searchResults.count - 1)
+                    }
+                }
+                .padding(.top, 2)
+
+                colophon
+            }
         }
         .scrollDismissesKeyboard(.immediately)
     }
+
+    private var foundLabel: String {
+        let n = viewModel.searchResults.count
+        return "Found · \(n) Recording\(n == 1 ? "" : "s")"
+    }
+
+    private var noResults: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 30))
+                .foregroundStyle(.tertiary)
+            Text("Nothing on this shelf.")
+                .font(.system(size: FBType.headline, weight: .medium, design: .serif))
+                .padding(.top, 14)
+            Text("Try a different title or author, or clear a filter.")
+                .font(.system(size: FBType.body, design: .serif))
+                .italic()
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+        }
+        .padding(.horizontal, 44)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Empty / error states
 
     private var noInternetState: some View {
         ContentUnavailableView {
@@ -529,38 +757,24 @@ struct BrowseLibriVoxView: View {
         }
     }
 
-    private var noResults: some View {
-        ContentUnavailableView.search(text: viewModel.searchQuery)
-    }
+    // MARK: - Colophon
 
-    private var resultsList: some View {
-        List {
-            ForEach(viewModel.searchResults) { book in
-                NavigationLink {
-                    LibriVoxBookDetailView(book: book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
-                } label: {
-                    LibriVoxBookRow(book: book, browseViewModel: viewModel)
-                }
-                .listRowBackground(Color.cardWhite)
-                .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            }
+    private var colophon: some View {
+        VStack(spacing: 12) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.25))
+                .frame(width: 28, height: 0.5)
 
-            librivoxAttribution
+            Text("Every book here is read by [LibriVox](https://librivox.org) volunteers and free in the public domain — yours to keep, forever.")
+                .font(.system(size: FBType.body, design: .serif))
+                .italic()
+                .foregroundStyle(.secondary)
+                .tint(.primary)
+                .multilineTextAlignment(.center)
         }
-        .listStyle(.plain)
-        .scrollDismissesKeyboard(.immediately)
-    }
-
-    private var librivoxAttribution: some View {
-        Text("Free books courtesy of [LibriVox](https://librivox.org) \u{2014} public domain audio recorded by volunteers.")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.vertical, 16)
-            .padding(.horizontal, 24)
-            .multilineTextAlignment(.center)
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 36)
+        .padding(.top, 28)
+        .padding(.bottom, 14)
     }
 }

@@ -5,23 +5,14 @@
 
 import SwiftUI
 
-struct LibriVoxBookRow: View {
+/// Inline 20s sample play/stop toggle shared by the browse chart rows and the
+/// collection list rows. A standalone button so it never triggers row navigation.
+struct LibriVoxSampleButton: View {
     let book: LibriVoxBook
-    var browseViewModel: BrowseLibriVoxViewModel?
+    let browseViewModel: BrowseLibriVoxViewModel
+    var size: CGFloat = 22
 
     var body: some View {
-        HStack(spacing: 12) {
-            coverThumbnail
-            info
-            Spacer(minLength: 0)
-            if let browseViewModel {
-                sampleButton(browseViewModel: browseViewModel)
-            }
-        }
-        .padding(.vertical, 6)
-    }
-
-    private func sampleButton(browseViewModel: BrowseLibriVoxViewModel) -> some View {
         Button {
             if SamplePlayer.shared.isActive(for: book.id) {
                 SamplePlayer.shared.stop()
@@ -39,13 +30,30 @@ struct LibriVoxBookRow: View {
                         .controlSize(.small)
                 } else {
                     Image(systemName: SamplePlayer.shared.isActive(for: book.id) ? "stop.circle.fill" : "play.circle")
-                        .font(.title3)
+                        .font(.system(size: size))
                         .foregroundStyle(SamplePlayer.shared.isActive(for: book.id) ? .red : .primary)
                 }
             }
-            .frame(width: 30, height: 30)
+            .frame(width: size + 8, height: size + 8)
         }
         .buttonStyle(.plain)
+    }
+}
+
+struct LibriVoxBookRow: View {
+    let book: LibriVoxBook
+    var browseViewModel: BrowseLibriVoxViewModel?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            coverThumbnail
+            info
+            Spacer(minLength: 0)
+            if let browseViewModel {
+                LibriVoxSampleButton(book: book, browseViewModel: browseViewModel)
+            }
+        }
+        .padding(.vertical, 6)
     }
 
     private var coverThumbnail: some View {

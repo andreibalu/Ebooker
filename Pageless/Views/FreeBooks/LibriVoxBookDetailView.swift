@@ -13,6 +13,7 @@ struct LibriVoxBookDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = LibriVoxBookDetailViewModel()
     @State private var descriptionExpanded = false
+    @State private var sampleTrackURL: URL?
 
     init(book: LibriVoxBook, onOpenPlayer: @escaping () -> Void, browseViewModel: BrowseLibriVoxViewModel? = nil) {
         self.book = book
@@ -124,7 +125,7 @@ struct LibriVoxBookDetailView: View {
                 SamplePlayer.shared.stop()
             } else {
                 Task {
-                    if let url = await browseViewModel?.fetchFirstTrackURL(for: book) {
+                    if let url = await fetchSampleURL() {
                         SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
                     }
                 }
@@ -150,6 +151,28 @@ struct LibriVoxBookDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(!NetworkMonitor.shared.isConnected && !SamplePlayer.shared.isActive(for: book.id))
+    }
+
+    /// Resolves the first track URL without requiring a `browseViewModel` —
+    /// this view is also pushed from the alternatives section, which has none.
+    /// Same resolution order as `BrowseLibriVoxViewModel.fetchFirstTrackURL`:
+    /// cached tracks on the book first, then the audiotracks feed.
+    private func fetchSampleURL() async -> URL? {
+        if let sampleTrackURL { return sampleTrackURL }
+        if let browseViewModel, let url = await browseViewModel.fetchFirstTrackURL(for: book) {
+            sampleTrackURL = url
+            return url
+        }
+        if let cachedTracks = book.cachedTracks, let first = cachedTracks.first,
+           let url = URL(string: first.listenURL) {
+            sampleTrackURL = url
+            return url
+        }
+        guard let tracks = try? await LibriVoxAPIClient.fetchTracks(projectID: book.id),
+              let first = tracks.first,
+              let url = URL(string: first.listenURL) else { return nil }
+        sampleTrackURL = url
+        return url
     }
 
     // MARK: - Actions

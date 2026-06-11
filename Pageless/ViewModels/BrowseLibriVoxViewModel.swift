@@ -50,6 +50,14 @@ final class BrowseLibriVoxViewModel {
     var syncState: SyncState = .idle
     var activeDownloads: [String: ActiveLibriVoxDownload] = [:]
     var featuredBooks: [LibriVoxBook] = []
+    var todaysPick: LibriVoxBook? = nil
+
+    /// The featured chart with today's pick removed so the hero and the numbered
+    /// list never show the same book twice.
+    var chartBooks: [LibriVoxBook] {
+        guard let pick = todaysPick else { return featuredBooks }
+        return featuredBooks.filter { $0.id != pick.id }
+    }
 
     /// True while the curated-classics preload is fetching, before anything is on screen.
     var isPreloadingFeatured: Bool = false
@@ -391,6 +399,24 @@ final class BrowseLibriVoxViewModel {
 
     private var preloadTask: Task<Void, Never>?
 
+    /// Deterministic daily hero: same curated classic for everyone on a given day,
+    /// rotating through the verified ID list by day-of-year. Resolved from the local
+    /// cache only — the preload seeds these rows, so no extra network is needed.
+    @MainActor
+    func loadTodaysPick(modelContext: ModelContext) {
+        let ids = Self.curatedClassicIDs
+        guard !ids.isEmpty else { return }
+        let dayOfYear = Calendar.current.ordinality(of: .day, in: .year, for: .now) ?? 1
+        let id = ids[dayOfYear % ids.count]
+        guard todaysPick?.id != id else { return }
+        let predicate = #Predicate<LibriVoxBook> { $0.id == id }
+        var descriptor = FetchDescriptor(predicate: predicate)
+        descriptor.fetchLimit = 1
+        if let book = try? modelContext.fetch(descriptor).first {
+            todaysPick = book
+        }
+    }
+
     /// Preloads a handful of curated classics so the Free Books tab shows content
     /// immediately on a fresh install, before the multi-minute full catalog sync.
     /// Idempotent and offline-safe: skips work if featured books are already shown
@@ -418,6 +444,7 @@ final class BrowseLibriVoxViewModel {
         if let existing = try? modelContext.fetch(FetchDescriptor(predicate: existingPredicate)),
            existing.count >= Self.featuredBooksTarget {
             featuredBooks = Array(existing.shuffled().prefix(Self.featuredBooksTarget))
+            loadTodaysPick(modelContext: modelContext)
             return
         }
 
@@ -432,6 +459,7 @@ final class BrowseLibriVoxViewModel {
         guard let rows = try? modelContext.fetch(FetchDescriptor(predicate: existingPredicate)),
               !rows.isEmpty else { return }
         featuredBooks = Array(rows.shuffled().prefix(Self.featuredBooksTarget))
+        loadTodaysPick(modelContext: modelContext)
     }
 
     @MainActor
@@ -480,6 +508,7 @@ final class BrowseLibriVoxViewModel {
                     if self?.featuredBooks.isEmpty == true {
                         await self?.loadFeaturedBooks(modelContext: modelContext)
                     }
+                    self?.loadTodaysPick(modelContext: modelContext)
                     await self?.loadAvailableFilters(modelContext: modelContext)
                 }
             }
@@ -499,6 +528,7 @@ final class BrowseLibriVoxViewModel {
         searchQuery = ""
         searchResults = []
         featuredBooks = []
+        todaysPick = nil
         availableLanguages = []
         availableGenres = []
         filtersComputedForCount = -1
@@ -548,6 +578,7 @@ final class BrowseLibriVoxViewModel {
             syncState = .done
             await loadAvailableFilters(modelContext: modelContext)
             await loadFeaturedBooks(modelContext: modelContext)
+            loadTodaysPick(modelContext: modelContext)
         } catch {
             let offline = isNetworkUnavailable(error)
             let message = offline
