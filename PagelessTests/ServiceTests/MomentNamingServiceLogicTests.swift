@@ -216,4 +216,16 @@ struct MomentNamingServiceLogicTests {
         let out = MomentNamingService.sentences(in: "One came first. Two came second! Three came third?")
         #expect(out == ["One came first.", "Two came second!", "Three came third?"])
     }
+
+    // MARK: - Guide value sync (guards MomentEnums drift against the @Guide literals)
+
+    @Test func categoryGuideValuesMatchEnum() {
+        guard #available(iOS 26, *) else { return }
+        #expect(MomentNamingService.categoryGuideValues == MomentCategory.allCases.map(\.rawValue))
+    }
+
+    @Test func moodGuideValuesMatchEnum() {
+        guard #available(iOS 26, *) else { return }
+        #expect(MomentNamingService.moodGuideValues == MomentMood.allCases.map(\.rawValue))
+    }
 }
