@@ -184,6 +184,12 @@ struct AudiobookDetailView: View {
             refreshCloudCandidates()
             resolveCatalogBook()
         }
+        // A new progress marker (manual mark, high-water advance, or finish) invalidates
+        // the displayed recap; onAppear alone misses markers set while this view stays
+        // in the hierarchy under the player cover.
+        .onChange(of: audiobook.progressUpdatedAt) { _, _ in
+            viewModel.reconcileStoredRecap(modelContext: modelContext)
+        }
     }
 
     // MARK: - Streaming Download

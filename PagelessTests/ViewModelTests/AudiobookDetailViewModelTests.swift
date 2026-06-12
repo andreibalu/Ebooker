@@ -194,6 +194,53 @@ struct AudiobookDetailViewModelTests {
         #expect(vm.recapText == nil)
     }
 
+    @Test func reconcileStoredRecapClearsStaleError() throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(title: "T", author: "", folderName: "reconcile-error-test", totalDuration: 600)
+        context.insert(book)
+
+        let vm = makeViewModel(audiobook: book)
+        vm.recapError = "Could not transcribe audio."
+        vm.reconcileStoredRecap(modelContext: context)
+
+        #expect(vm.recapError == nil)
+    }
+
+    @Test func loadRecapOnUndownloadedBookExplainsMissingAudio() async throws {
+        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        let context = ModelContext(container)
+
+        let book = Audiobook(
+            title: "Streamed",
+            author: "",
+            folderName: "streaming-recap-test",
+            totalDuration: 600,
+            isDownloaded: false
+        )
+        let track = AudioTrack(
+            title: "Ch1",
+            originalFileName: "s.m4a",
+            storedFileName: "s.m4a",
+            orderIndex: 0,
+            duration: 600,
+            audiobook: book
+        )
+        book.tracks.append(track)
+        context.insert(book)
+
+        let vm = makeViewModel(audiobook: book)
+        await vm.loadRecap(trackIndex: 0, progressTime: 300, includeProgressHeadline: false, modelContext: context)
+
+        #expect(vm.recapError == "Audio for this book isn't on this iPhone.")
+        #expect(vm.recapText == nil)
+    }
+
     @Test func loadRecapStoresRecapOnAudiobook() async throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)

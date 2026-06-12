@@ -94,10 +94,12 @@ final class AudiobookDetailViewModel {
         filterMoods.removeAll()
     }
 
-    /// Call when the detail screen appears so stale persisted recap is removed if the marker moved without a save path that cleared it.
+    /// Call when the detail screen appears or the progress marker moves so stale
+    /// recap text/errors don't outlive the position they were generated for.
     func reconcileStoredRecap(modelContext: ModelContext) {
         audiobook.discardProgressRecapIfAnchorMismatched()
         syncRecapFromAudiobook()
+        recapError = nil
         try? modelContext.save()
     }
 
@@ -132,7 +134,12 @@ final class AudiobookDetailViewModel {
 
         let tracks = audiobook.sortedTracks
         guard tracks.indices.contains(trackIndex) else { return }
-        guard let fileURL = try? LibraryImportService.fileURL(for: tracks[trackIndex], in: audiobook) else {
+        // Streaming-only books and orphans have no local audio; without this check the
+        // path below builds a dead file URL and fails with the misleading
+        // "Could not transcribe audio."
+        guard audiobook.isDownloaded,
+              let fileURL = try? LibraryImportService.fileURL(for: tracks[trackIndex], in: audiobook)
+        else {
             recapError = "Audio for this book isn't on this iPhone."
             return
         }
