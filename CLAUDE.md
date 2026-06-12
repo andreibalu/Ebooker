@@ -48,7 +48,7 @@ XcodeBuildMCP for all build/run. Only device tools enabled in this MCP profile �
 
 ```
 Pageless/
-├── App/             PagelessApp (@main; scene wiring, voice-permission priming, Siri handoff),
+├── App/             PagelessApp (@main; scene wiring, Siri handoff),
 │                    AppDelegate (ModelContainer; re-runs orphan detection on CloudKit import batches),
 │                    CarPlaySceneDelegate
 ├── AppIntents/      AudiobookIntents — `PlayLatestBookIntent` + `UnpagedAppShortcuts`
@@ -173,10 +173,11 @@ Both StoreKit-owned; the app gates on `Transaction.currentEntitlements` directly
 Standalone welcome flow, shown once on first launch (and via Settings → "Reset Onboarding"). Replaced the old spotlight walkthrough — no `OnboardingStep` / `SpotlightOverlayView` / `.spotlightTarget()` machinery; don't reintroduce.
 
 - **`OnboardingManager`** — completion gate only: `isComplete` (persisted as `onboardingComplete`), `complete()`, `reset()`. Init migrates legacy users (old `onboardingPhase == 3` counts as complete). `ContentView` presents `OnboardingFlowView` via `.fullScreenCover` while `!isComplete`.
-- **`OnboardingFlowView`** — paged vertical `ScrollView` (`.scrollTargetBehavior(.paging)` + `.scrollPosition(id:)`), six full-screen scenes, right-edge progress-dot rail. The active scene index drives reveal/count-up/stagger animations — `.onAppear` is wrong here (paged rows instantiate before they center).
-- **Preference controls bind live to existing `@AppStorage` keys** (`resumeBacktrackSeconds`, `skipBackSeconds`, `skipForwardSeconds`, `momentBacktrackSeconds`) — persistence automatic, scene-6 summary shares one source of truth. "Open Library" calls `complete()` and routes to the chosen home tab. **"Free books" choice persists** via `@AppStorage("startOnFreeBooks")`: when true the app lands on Free Books on **every** launch (one-time `.onAppear` guard in `ContentView` applies it for relaunched users) and tab order becomes Favorites / Free Books / All Books (`tabOrder` computed property drives both `tabPicker` and the swipeable `libraryContent`). "My books" + all legacy users: false — Favorites first, order Favorites / All Books / Free Books.
-- **Scenes 4 (Apple Intelligence) and 5 (iCloud Sync) are informational only** — no paywall, no toggles; don't wire purchase/sync state into them.
-- **`OnboardingScenes`** = six scenes + widgets (choice cards, `OBRulerPicker`, chip rows, stepper, `OBHeatmap`, moment-naming card, `OBSyncGraphic`, summary). **`OnboardingTheme`** = tokens (`OB.*` colors, `OBMotion`), type primitives (`OBEyebrow`/`OBHeadline`/`OBSub`/`obSerif`), `obReveal`/`obParallax` modifiers.
+- **`OnboardingFlowView`** — paged vertical `ScrollView` (`.scrollTargetBehavior(.paging)` + `.scrollPosition(id:)`), seven full-screen scenes (Choice → Permissions → Playback → Stats → Apple Intelligence → iCloud → Done), right-edge progress-dot rail. The active scene index drives reveal/count-up/stagger animations — `.onAppear` is wrong here (paged rows instantiate before they center).
+- **Preference controls bind live to existing `@AppStorage` keys** (`resumeBacktrackSeconds`, `skipBackSeconds`, `skipForwardSeconds`, `momentBacktrackSeconds`) — persistence automatic, final-scene summary shares one source of truth. "Open Library" calls `complete()` and routes to the chosen home tab. **"Free books" choice persists** via `@AppStorage("startOnFreeBooks")`: when true the app lands on Free Books on **every** launch (one-time `.onAppear` guard in `ContentView` applies it for relaunched users) and tab order becomes Favorites / Free Books / All Books (`tabOrder` computed property drives both `tabPicker` and the swipeable `libraryContent`). "My books" + all legacy users: false — Favorites first, order Favorites / All Books / Free Books.
+- **Scene 2 (Permissions) is the app's only proactive permission request point** — `OBPermissionsScene`: two cards (Microphone via `AVAudioApplication.requestRecordPermission`, Speech Recognition via `SFSpeechRecognizer.requestAuthorization`); buttons animate to "Allowed" only when the system grants. `.denied`/`.restricted` taps open the app's Settings page — no extra error UI. Cards seed from live authorization status (re-seeded on `scenePhase == .active` to catch Settings grants). Skippable — never block scrolling; both-granted auto-advances after ~0.8s only if still on the scene. The Done summary's "Voice access" row (Allowed / Mic only / Speech only / Skipped) reads the same root state. Launch-time priming was removed; the lazy speech-auth request in `TranscriptionService` stays as the safety net.
+- **Scenes 5 (Apple Intelligence) and 6 (iCloud Sync) are informational only** — no paywall, no toggles; don't wire purchase/sync state into them.
+- **`OnboardingScenes`** = seven scenes + widgets (choice cards, permission cards, `OBRulerPicker`, chip rows, stepper, `OBHeatmap`, moment-naming card, `OBSyncGraphic`, summary). **`OnboardingTheme`** = tokens (`OB.*` colors, `OBMotion`), type primitives (`OBEyebrow`/`OBHeadline`/`OBSub`/`obSerif`), `obReveal`/`obParallax` modifiers.
 - **Must render identically on every device/iOS version**: fixed point sizes, fixed 402pt centered content column, `.dynamicTypeSize(.large)` clamp at root (never Dynamic Type), app's own theme via `preferredColorScheme(forceDarkMode ? .dark : nil)`. All animations honor Reduce Motion.
 
 ### iCloud Sync (paid feature)
@@ -197,7 +198,7 @@ Library metadata, progress, moments, EQ config, reading sessions sync via CloudK
 
 - `CarPlaySceneDelegate` → `CarPlayCoordinator` (templates, now-playing, moment saving, legacy seed catalog browsing)
 - `CarPlayVoiceSearch` — hands-free dictation (Speech framework), auto-stops on silence
-- `VoiceSearchPermissions.primeIfNeeded()` — primes mic + speech permissions at iPhone launch (`PagelessApp.task`) because permission prompts **cannot** appear on the CarPlay screen. Don't add permission requests that can fire only on CarPlay.
+- `VoiceSearchPermissions.status` — synchronous mic + speech authorization check for the CarPlay path; voice search refuses with an info alert when not granted, because permission prompts **cannot** appear on the CarPlay screen. The onboarding Permissions scene is the only proactive request point (launch-time priming removed). Don't add permission requests that can fire only on CarPlay.
 - `AppDelegate` — background URL session handler + CarPlay scene registration
 
 ### Siri / App Intents

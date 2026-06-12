@@ -2,12 +2,14 @@
 //  OnboardingScenes.swift
 //  Pageless
 //
-//  The six full-screen scenes of the welcome flow and their widgets.
+//  The seven full-screen scenes of the welcome flow and their widgets.
 //  Native rebuild of the prototype's `onboarding-scenes.jsx`. Preference controls bind
 //  live to the app's existing @AppStorage keys (passed in as Bindings from the host), so
-//  persistence, reversibility, and the scene-6 summary all share one source of truth.
+//  persistence, reversibility, and the final summary all share one source of truth.
 //
 
+import AVFoundation
+import Speech
 import SwiftUI
 
 // MARK: - Choice model
@@ -240,7 +242,209 @@ private struct OBBounceChevron: View {
     }
 }
 
-// MARK: - Scene 2 · Playback
+// MARK: - Scene 2 · Permissions
+
+/// Asks for the two voice permissions (microphone + speech recognition) with real system prompts.
+/// Skippable — scrolling is never blocked. Cards seed from the current authorization status, so a
+/// returning user (or an onboarding re-run) starts with the right cards already "Allowed".
+struct OBPermissionsScene: View {
+    let isActive: Bool
+    let reduceMotion: Bool
+    @Binding var micGranted: Bool
+    @Binding var speechGranted: Bool
+    /// Called ~0.8s after the second permission lands; the host advances to the next scene.
+    let onAllGranted: () -> Void
+
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var bothGranted: Bool { micGranted && speechGranted }
+
+    var body: some View {
+        OBSceneShell(tint: true, verticalCenter: true, reduceMotion: reduceMotion) {
+            VStack(alignment: .leading, spacing: 0) {
+                Group {
+                    OBEyebrow(text: "Permissions")
+                    OBHeadline(text: "Two quick permissions.", size: 30).padding(.top, 10)
+                    OBSub(text: "Voice features need these. Everything is processed on your device.")
+                        .padding(.top, 9)
+                }
+                .obReveal(active: isActive)
+
+                VStack(spacing: 14) {
+                    OBPermissionCard(icon: "mic.fill", title: "Microphone",
+                                     desc: "So Unpaged can hear you when you use voice features.",
+                                     granted: micGranted, onAllow: allowMicrophone)
+                        .obReveal(active: isActive, delay: 0.08)
+                    OBPermissionCard(icon: "waveform", title: "Speech Recognition",
+                                     desc: "Turns what you say into text — recognized on device.",
+                                     granted: speechGranted, onAllow: allowSpeech)
+                        .obReveal(active: isActive, delay: 0.16)
+                }
+                .padding(.top, 24)
+
+                VStack(spacing: 6) {
+                    Text(bothGranted ? "All set — moving on…"
+                                     : "You can skip this and change it later in Settings.")
+                        .font(.system(size: 12.5, weight: .medium))
+                        .foregroundStyle(OB.tertiary)
+                        .multilineTextAlignment(.center)
+                    OBBounceChevron(reduceMotion: reduceMotion)
+                }
+                .frame(maxWidth: .infinity)
+                .opacity(bothGranted ? 1 : 0.55)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: bothGranted)
+                .padding(.top, 26)
+            }
+        }
+        .onAppear(perform: seedFromSystemStatus)
+        // Catch grants made in the Settings app (the denied/restricted path sends users there).
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { seedFromSystemStatus() }
+        }
+    }
+
+    // MARK: Authorization
+
+    private func seedFromSystemStatus() {
+        setGranted(mic: AVAudioApplication.shared.recordPermission == .granted,
+                   speech: SFSpeechRecognizer.authorizationStatus() == .authorized)
+    }
+
+    private func allowMicrophone() {
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            setGranted(mic: true, speech: speechGranted)
+        case .undetermined:
+            Task { @MainActor in
+                let granted = await AVAudioApplication.requestRecordPermission()
+                if granted {
+                    setGranted(mic: true, speech: speechGranted)
+                    scheduleAdvanceIfComplete()
+                }
+                // Denied: the button simply stays "Allow" — no extra error UI.
+            }
+        default:
+            // .denied — the system prompt can't be shown again; route to Settings.
+            openAppSettings()
+        }
+    }
+
+    private func allowSpeech() {
+        switch SFSpeechRecognizer.authorizationStatus() {
+        case .authorized:
+            setGranted(mic: micGranted, speech: true)
+        case .notDetermined:
+            SFSpeechRecognizer.requestAuthorization { status in
+                Task { @MainActor in
+                    if status == .authorized {
+                        setGranted(mic: micGranted, speech: true)
+                        scheduleAdvanceIfComplete()
+                    }
+                }
+            }
+        default:
+            // .denied / .restricted — the system prompt can't be shown again; route to Settings.
+            openAppSettings()
+        }
+    }
+
+    private func setGranted(mic: Bool, speech: Bool) {
+        guard mic != micGranted || speech != speechGranted else { return }
+        if reduceMotion {
+            micGranted = mic
+            speechGranted = speech
+        } else {
+            withAnimation(.easeInOut(duration: 0.4)) {
+                micGranted = mic
+                speechGranted = speech
+            }
+        }
+    }
+
+    /// Auto-advance only when the second grant comes from this scene's own buttons.
+    private func scheduleAdvanceIfComplete() {
+        guard bothGranted else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.82) { onAllGranted() }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+}
+
+/// Icon tile + title + description with a full-width Allow button. Granted: tile fills accent,
+/// button flips to accent-soft "Allowed" with a leading check, card gains an accent ring + glow.
+private struct OBPermissionCard: View {
+    let icon: String
+    let title: String
+    let desc: String
+    let granted: Bool
+    let onAllow: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 15) {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .fill(granted ? OB.accent : OB.accentSoft)
+                    .frame(width: 52, height: 52)
+                    .overlay(
+                        Image(systemName: icon)
+                            .font(.system(size: 24))
+                            .foregroundStyle(granted ? Color.white : OB.accent)
+                    )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 17.5, weight: .semibold))
+                        .tracking(-0.35)
+                        .foregroundStyle(OB.label)
+                    Text(desc)
+                        .font(.system(size: 13))
+                        .foregroundStyle(OB.secondary)
+                        .lineSpacing(2.5)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            Button(action: onAllow) {
+                HStack(spacing: 7) {
+                    if granted {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 19, height: 19)
+                            .background(Circle().fill(OB.accent))
+                    }
+                    Text(granted ? "Allowed" : "Allow")
+                        .font(.system(size: 15, weight: .bold))
+                        .tracking(-0.15)
+                }
+                .foregroundStyle(granted ? OB.accent : Color.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 13)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(granted ? OB.accentSoft : OB.accent)
+                )
+                .shadow(color: granted ? .clear : OB.accent.opacity(0.3), radius: 10, y: 8)
+            }
+            .buttonStyle(OBPressButtonStyle())
+            .disabled(granted)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(Color.cardWhite))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(OB.accent, lineWidth: granted ? 1.5 : 0)
+        )
+        .shadow(color: granted ? OB.accent.opacity(0.16) : .black.opacity(0.07),
+                radius: granted ? 13 : 7, y: granted ? 5 : 4)
+    }
+}
+
+// MARK: - Scene 3 · Playback
 
 struct OBPlaybackScene: View {
     let isActive: Bool
@@ -516,7 +720,7 @@ private struct OBStepper: View {
     }
 }
 
-// MARK: - Scene 3 · Stats
+// MARK: - Scene 4 · Stats
 
 struct OBStatsScene: View {
     let isActive: Bool
@@ -659,7 +863,7 @@ private struct OBHeatmap: View {
     }
 }
 
-// MARK: - Scene 4 · Apple Intelligence
+// MARK: - Scene 5 · Apple Intelligence
 
 struct OBIntelligenceScene: View {
     let isActive: Bool
@@ -786,7 +990,7 @@ private struct OBMomentNameCard: View {
     }
 }
 
-// MARK: - Scene 5 · iCloud sync
+// MARK: - Scene 6 · iCloud sync
 
 struct OBCloudScene: View {
     let isActive: Bool
@@ -933,12 +1137,14 @@ private struct OBSyncGraphic: View {
     }
 }
 
-// MARK: - Scene 6 · Done
+// MARK: - Scene 7 · Done
 
 struct OBDoneScene: View {
     let isActive: Bool
     let reduceMotion: Bool
     let choice: OnboardingChoice?
+    let micGranted: Bool
+    let speechGranted: Bool
     let resume: Double
     let skipBack: Double
     let skipForward: Double
@@ -1004,9 +1210,19 @@ struct OBDoneScene: View {
         }
     }
 
+    private var voiceAccess: String {
+        switch (micGranted, speechGranted) {
+        case (true, true):   "Allowed"
+        case (true, false):  "Mic only"
+        case (false, true):  "Speech only"
+        case (false, false): "Skipped"
+        }
+    }
+
     private var summaryCard: some View {
         let rows: [(String, String)] = [
             ("Home tab", choice == .own ? "My books" : "Free books"),
+            ("Voice access", voiceAccess),
             ("On resume", resumeShort(ResumeBacktrackOption(rawValue: resume) ?? .oneMinute)),
             ("Skip", "\(skipShort(skipBack)) / \(skipShort(skipForward))"),
             ("Moment offset", momentStepperLabel(MomentBacktrackOption(rawValue: moment) ?? .exact).lowercased())

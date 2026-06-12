@@ -116,7 +116,7 @@ Try closing and reopening the app. If the issue persists, delete and re-import t
 
 ### CarPlay voice search isn't working
 
-Voice search needs Microphone and Speech Recognition permissions. These are requested on the iPhone the first time you launch the app — if you declined, go to **Settings → Unpaged** and enable them. The CarPlay screen itself cannot show permission prompts, which is why we ask on the iPhone first.
+Voice search needs Microphone and Speech Recognition permissions. Unpaged asks for both during the welcome flow on your iPhone — if you skipped that step or declined, go to **Settings → Unpaged** and enable them. The CarPlay screen itself cannot show permission prompts, which is why we ask on the iPhone first.
 
 ### Apple Intelligence isn't generating bookmark names
 

@@ -2,9 +2,9 @@
 //  OnboardingFlowView.swift
 //  Pageless
 //
-//  Root of the welcome flow: a paged vertical scroll of six full-screen scenes with a floating
+//  Root of the welcome flow: a paged vertical scroll of seven full-screen scenes with a floating
 //  progress-dot rail. Preference controls bind directly to the app's existing @AppStorage keys, so
-//  every choice persists immediately and the scene-6 summary stays in sync. "Open Library" marks
+//  every choice persists immediately and the final summary stays in sync. "Open Library" marks
 //  onboarding complete and routes into the chosen home tab.
 //
 //  Requirement A — identical on every device/iOS version: a fixed 402pt content column (centered on
@@ -12,6 +12,8 @@
 //  text sizing never reflows layout, and the app's own light/dark theme via `preferredColorScheme`.
 //
 
+import AVFoundation
+import Speech
 import SwiftUI
 
 struct OnboardingFlowView: View {
@@ -33,7 +35,13 @@ struct OnboardingFlowView: View {
     @State private var choice: OnboardingChoice?
     @State private var activeID: Int? = 0
 
-    private let sceneCount = 6
+    // Voice permission state for the Permissions scene + final summary. Seeded from the live
+    // authorization status so re-runs (Settings → Reset Onboarding) start with the truth.
+    @State private var micGranted = AVAudioApplication.shared.recordPermission == .granted
+    @State private var speechGranted = SFSpeechRecognizer.authorizationStatus() == .authorized
+
+    private static let sceneLabels = ["Start", "Permissions", "Playback", "Your year", "Smart", "iCloud", "Done"]
+    private var sceneCount: Int { Self.sceneLabels.count }
 
     /// A scene is "active" when it's the centered page. `scrollPosition(id:)` can report `nil` before
     /// the first settle, so treat `nil` as scene 0 — otherwise the opening scene's reveal never fires.
@@ -49,24 +57,32 @@ struct OnboardingFlowView: View {
                                   choice: $choice, onPicked: { jump(to: 1) })
                 }
                 scene(1) {
-                    OBPlaybackScene(isActive: isActive(1), reduceMotion: reduceMotion,
+                    OBPermissionsScene(isActive: isActive(1), reduceMotion: reduceMotion,
+                                       micGranted: $micGranted,
+                                       speechGranted: $speechGranted,
+                                       onAllGranted: advancePastPermissions)
+                }
+                scene(2) {
+                    OBPlaybackScene(isActive: isActive(2), reduceMotion: reduceMotion,
                                     resume: $resumeBacktrackSeconds,
                                     skipBack: $skipBackSeconds,
                                     skipForward: $skipForwardSeconds,
                                     moment: $momentBacktrackSeconds)
                 }
-                scene(2) {
-                    OBStatsScene(isActive: isActive(2), reduceMotion: reduceMotion)
-                }
                 scene(3) {
-                    OBIntelligenceScene(isActive: isActive(3), reduceMotion: reduceMotion)
+                    OBStatsScene(isActive: isActive(3), reduceMotion: reduceMotion)
                 }
                 scene(4) {
-                    OBCloudScene(isActive: isActive(4), reduceMotion: reduceMotion)
+                    OBIntelligenceScene(isActive: isActive(4), reduceMotion: reduceMotion)
                 }
                 scene(5) {
-                    OBDoneScene(isActive: isActive(5), reduceMotion: reduceMotion,
+                    OBCloudScene(isActive: isActive(5), reduceMotion: reduceMotion)
+                }
+                scene(6) {
+                    OBDoneScene(isActive: isActive(6), reduceMotion: reduceMotion,
                                 choice: choice,
+                                micGranted: micGranted,
+                                speechGranted: speechGranted,
                                 resume: resumeBacktrackSeconds,
                                 skipBack: skipBackSeconds,
                                 skipForward: skipForwardSeconds,
@@ -111,6 +127,7 @@ struct OnboardingFlowView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(Self.sceneLabels[i])
                 .animation(OBMotion.settle, value: on)
             }
         }
@@ -123,6 +140,12 @@ struct OnboardingFlowView: View {
         withAnimation(.easeInOut(duration: 0.45)) {
             activeID = index
         }
+    }
+
+    /// Auto-advance after both permissions land — but only if the user is still on the scene.
+    private func advancePastPermissions() {
+        guard (activeID ?? 0) == 1 else { return }
+        jump(to: 2)
     }
 
     private func finish() {
