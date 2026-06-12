@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: May 28, 2026_
+_Last updated: June 12, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data about you, and the app has no backend server of its own.** The only data that leaves your device goes to Apple (for in-app purchases) and to LibriVox/Internet Archive (when you browse or download free books) — never your name, email, or payment details. Details below.
 
@@ -22,9 +22,9 @@ This data is stored in the app's private container on your iPhone. Unpaged does 
 | Permission | Why | What happens to the audio/data |
 | ---------- | --- | ------------------------------ |
 | **Microphone** | Hands-free voice search in CarPlay so you can ask for a book by name while driving. | Audio is streamed only to Apple's on-device Speech recognizer for transcription. Unpaged does not save, upload, or share the recording. |
-| **Speech Recognition** | Transcribing audiobook moments, generating AI moment names, and converting CarPlay voice queries into text. | Speech recognition uses Apple's on-device model. No transcripts are sent to Unpaged servers (there are none). |
+| **Speech Recognition** | Converting CarPlay voice queries into text, and as a fallback for transcribing audiobook moments. | Speech recognition uses Apple's on-device model. No transcripts are sent to Unpaged servers (there are none). |
 
-If you decline these permissions, the relevant features (CarPlay voice search, AI moment naming) are disabled. The rest of the app continues to work.
+On iOS 26 and later, the AI features (moment naming and recaps) transcribe audiobook segments with Apple's newer on-device speech engine, which does not require the Speech Recognition permission at all — the permission is only requested if the app has to fall back to the older transcription path. If you decline these permissions, CarPlay voice search is disabled (and on older transcription paths, AI moment naming too). The rest of the app continues to work.
 
 ## iCloud Sync (optional, paid)
 
@@ -45,7 +45,9 @@ Apple's [iCloud privacy](https://www.apple.com/legal/privacy/data/en/icloud/) co
 
 ## Apple Intelligence features
 
-Unpaged uses Apple's on-device foundation model (Apple Intelligence) to generate moment names and progress recaps. This processing happens **entirely on your device**. Your audiobook content and transcripts are not sent to Apple, OpenAI, Anthropic, or anyone else.
+Unpaged uses Apple's on-device foundation model (Apple Intelligence) to generate moment names and progress recaps. Both the transcription of the audio segment and the AI generation happen **entirely on your device**. Your audiobook content and transcripts are not sent to Apple, OpenAI, Anthropic, or anyone else.
+
+The first time transcription runs, iOS may download Apple's on-device speech-recognition model for your language (a one-time download managed by the operating system, from Apple's servers). No audio or audiobook content is sent during this download — it only fetches the model. After that, transcription and AI generation work fully offline.
 
 ## In-app purchases
 
@@ -67,6 +69,7 @@ Network requests are made only:
 - To LibriVox/Internet Archive when you browse, sample, or download a free book
 - To stream a streaming-only audiobook you've added to your library
 - To Apple (App Store / StoreKit) for in-app purchase and restore
+- To Apple, once per language, when iOS downloads its on-device speech-recognition model the first time AI transcription runs (no audio or content is sent)
 
 All requests use HTTPS. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the app.
 

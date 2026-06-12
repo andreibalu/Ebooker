@@ -1,6 +1,6 @@
 # Unpaged — Support
 
-_Last updated: May 21, 2026_
+_Last updated: June 12, 2026_
 
 Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
@@ -35,7 +35,7 @@ Apple Intelligence (on-device only) powers two features:
 - **AI Bookmarks** — when you save a moment, the app transcribes the audio around it and generates a name, a key quote, characters mentioned, and a mood tag.
 - **AI Recap** — when you return to a book after a break, the app writes a short two-line recap of where you left off.
 
-Both features run entirely on your iPhone. Nothing is uploaded.
+Both features run entirely on your iPhone — the transcription and the AI generation. Nothing is uploaded. The very first time you use them, iOS may download Apple's on-device speech model for your language (a one-time download); after that they work fully offline.
 
 ### Do AI features require a paid unlock?
 
@@ -120,7 +120,7 @@ Voice search needs Microphone and Speech Recognition permissions. These are requ
 
 ### Apple Intelligence isn't generating bookmark names
 
-Confirm your iPhone supports Apple Intelligence (iPhone 15 Pro/Pro Max or any iPhone 16+) and that it's turned on in **Settings → Apple Intelligence & Siri**. The feature also requires the on-device model to be fully downloaded — this can take time after a fresh iOS install or update.
+Confirm your iPhone supports Apple Intelligence (iPhone 15 Pro/Pro Max or any iPhone 16+) and that it's turned on in **Settings → Apple Intelligence & Siri**. The feature also requires the on-device model to be fully downloaded — this can take time after a fresh iOS install or update. The first AI bookmark or recap can also be slower than usual while iOS downloads its on-device speech model for your language; this happens once, and everything works offline afterwards.
 
 ### My free trial counter feels wrong
 
