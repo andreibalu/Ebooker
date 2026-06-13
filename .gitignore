@@ -1,6 +1,7 @@
 # Claude Code skill infra — local only, never commit
 .claude/
 .agents/
+.codex/
 skills-lock.json
 CLAUDE.original.md
 
