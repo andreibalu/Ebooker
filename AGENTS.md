@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-Guidance for Claude Code (claude.ai/code) working in this repo.
+Guidance for Codex (Codex.ai/code) working in this repo.
 
 ## App Identity
 
