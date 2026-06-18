@@ -22,6 +22,10 @@ Three names = intentional historical layers — no "fix". New user-facing copy s
 
 After editing, remind the user to push the new content to the public Gist(s).
 
+## App Store Connect Analytics
+
+Use [@app-store-connect-analytics](plugin://app-store-connect-analytics@personal) when pulling Unpaged App Store Connect data for marketing, ASO, launch analysis, sales/download summaries, purchases, subscriptions, or other App Store performance questions. Bundle id / SKU: `andreibaludev.Pageless`. Do not substitute RevenueCat for App Store Connect data unless explicitly requested.
+
 ## Build & Run
 
 XcodeBuildMCP for all build/run. Only device tools enabled in this MCP profile — no `*_sim` variants. Call `mcp__XcodeBuildMCP__session_show_defaults` first to verify project/scheme/device.
