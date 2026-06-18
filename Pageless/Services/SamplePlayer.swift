@@ -37,21 +37,27 @@ final class SamplePlayer {
         avPlayer.volume = 1.0
         self.player = avPlayer
 
-        // Observe when the item is ready to play
+        // Observe when the item is ready to play.
         statusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 switch item.status {
                 case .readyToPlay:
-                    // Only start the auto-stop countdown once the sample is
-                    // actually playing, so loading time isn't counted.
                     guard case .loading(let id) = self.state, id == bookId else { return }
-                    self.state = .playing(bookId: bookId)
-                    self.stopTask?.cancel()
-                    self.stopTask = Task { [weak self] in
-                        try? await Task.sleep(for: .seconds(Self.sampleDurationSeconds))
-                        guard !Task.isCancelled else { return }
-                        self?.stop()
+                    let sampleStart = CMTime(seconds: Double(Self.sampleStartOffsetSeconds), preferredTimescale: 600)
+                    avPlayer.seek(to: sampleStart, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+                        Task { @MainActor [weak self] in
+                            guard let self else { return }
+                            guard case .loading(let id) = self.state, id == bookId else { return }
+                            self.state = .playing(bookId: bookId)
+                            avPlayer.play()
+                            self.stopTask?.cancel()
+                            self.stopTask = Task { [weak self] in
+                                try? await Task.sleep(for: .seconds(Self.sampleDurationSeconds))
+                                guard !Task.isCancelled else { return }
+                                self?.stop()
+                            }
+                        }
                     }
                 case .failed:
                     self.stop()
@@ -65,8 +71,10 @@ final class SamplePlayer {
         try? AVAudioSession.sharedInstance().setCategory(.playback, options: .duckOthers)
         try? AVAudioSession.sharedInstance().setActive(true)
 
-        avPlayer.play()
     }
+
+    /// Offset from the beginning of the first track before sample playback starts.
+    static let sampleStartOffsetSeconds: Int = 30
 
     /// Duration of the sample playback countdown, in seconds. Starts once the
     /// audio is actually ready to play (not while still loading).

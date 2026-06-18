@@ -5,7 +5,7 @@
 
 import SwiftUI
 
-/// Inline 20s sample play/stop toggle shared by the browse chart rows and the
+/// Inline sample play/stop toggle shared by the browse chart rows and the
 /// collection list rows. A standalone button so it never triggers row navigation.
 struct LibriVoxSampleButton: View {
     let book: LibriVoxBook
