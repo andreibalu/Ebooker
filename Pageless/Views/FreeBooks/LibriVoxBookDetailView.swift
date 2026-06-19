@@ -124,10 +124,14 @@ struct LibriVoxBookDetailView: View {
             if SamplePlayer.shared.isActive(for: book.id) {
                 SamplePlayer.shared.stop()
             } else {
+                SamplePlayer.shared.beginLoading(bookId: book.id)
                 Task {
-                    if let url = await fetchSampleURL() {
-                        SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
+                    guard let url = await fetchSampleURL() else {
+                        SamplePlayer.shared.stop()
+                        return
                     }
+                    guard SamplePlayer.shared.isActive(for: book.id) else { return }
+                    SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
                 }
             }
         } label: {

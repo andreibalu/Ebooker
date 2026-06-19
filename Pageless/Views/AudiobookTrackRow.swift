@@ -14,9 +14,14 @@ struct AudiobookTrackRow: View {
 
     var body: some View {
         Button {
+            if audiobook.isStreamingOnly {
+                openPlayer()
+            }
             Task {
                 await player.playTrack(at: track.orderIndex, in: audiobook)
-                openPlayer()
+                if !audiobook.isStreamingOnly {
+                    openPlayer()
+                }
             }
         } label: {
             HStack(alignment: .center, spacing: 14) {

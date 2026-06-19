@@ -21,12 +21,14 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     @Published private(set) var duration: Double = 1
     @Published private(set) var isPlaying = false
     @Published private(set) var playbackRate: Double = 1
+    @Published private(set) var loadingPlaybackBookID: UUID?
     @Published var sleepTimerEndsAt: Date?
     @Published var playerErrorMessage: String?
 
     private let player = AVPlayer()
     private var timeObserverToken: Any?
     private var playbackEndedObserver: NSObjectProtocol?
+    private var currentItemStatusObservation: NSKeyValueObservation?
     private var modelContext: ModelContext?
     private var resumeBacktrackSeconds: Double = ResumeBacktrackOption.oneMinute.rawValue
     private var skipBackSeconds: Double = SkipIntervalOption.thirty.rawValue
@@ -35,6 +37,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var resumeBacktrackAvailableThisLaunch = true
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
+    private var timeControlStatusObservation: NSKeyValueObservation?
     private var backgroundObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
 
@@ -49,6 +52,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         player.automaticallyWaitsToMinimizeStalling = true
         addPeriodicTimeObserver()
         observeTrackEnd()
+        observeTimeControlStatus()
         configureRemoteCommands()
 
         backgroundObserver = NotificationCenter.default.addObserver(
@@ -108,6 +112,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         self.duration = duration
     }
 
+    func seedUnitTestLoadingPlayback(bookID: UUID?) {
+        loadingPlaybackBookID = bookID
+    }
+
     func applyPlaybackDefaults(resumeBacktrack: Double, skipBack: Double, skipForward: Double) {
         resumeBacktrackSeconds = resumeBacktrack
         skipBackSeconds = skipBack
@@ -117,6 +125,14 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     var bookProgress: Double {
         currentAudiobook?.progress ?? 0
+    }
+
+    var isPreparingPlayback: Bool {
+        loadingPlaybackBookID != nil
+    }
+
+    func isLoadingPlayback(for audiobook: Audiobook) -> Bool {
+        loadingPlaybackBookID == audiobook.id
     }
 
     func startPlayback(for audiobook: Audiobook, autoplay: Bool = true) async {
@@ -180,6 +196,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func pause() {
         player.pause()
+        loadingPlaybackBookID = nil
         isPlaying = false
         updateProgressMarkerIfNeeded()
         persistPlayback(force: true)
@@ -303,6 +320,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
 
         persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
+        let showsStreamLoading = !audiobook.isDownloaded && autoplay
+        if showsStreamLoading {
+            loadingPlaybackBookID = audiobook.id
+        }
         isLoadingItem = true
         activateAudioSession()
 
@@ -313,36 +334,52 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             } else if let remoteURL = track.remoteURL {
                 guard NetworkMonitor.shared.isConnected else {
                     isLoadingItem = false
+                    clearLoadingPlayback(for: audiobook.id)
                     playerErrorMessage = "You're offline. Download this book to listen without internet."
                     return
                 }
                 assetURL = remoteURL
             } else {
                 isLoadingItem = false
+                clearLoadingPlayback(for: audiobook.id)
                 playerErrorMessage = "No audio source available for this track."
                 return
             }
             let asset = AVURLAsset(url: assetURL)
             let item = AVPlayerItem(asset: asset)
+            let loadingBookID = audiobook.id
+            currentItemStatusObservation?.invalidate()
+            currentItemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                let failed = item.status == .failed
+                Task { @MainActor [weak self] in
+                    guard let self, failed else { return }
+                    self.isLoadingItem = false
+                    self.clearLoadingPlayback(for: loadingBookID)
+                    self.playerErrorMessage = "Unpaged could not open this audio stream."
+                }
+            }
 
             if currentAudiobook !== audiobook {
                 equalizer.bind(to: audiobook)
             }
-            if let mix = await equalizer.makeAudioMix(for: asset) {
-                item.audioMix = mix
-            }
 
+            let initialDuration = track.duration > 0 ? track.duration : 1
+            let initialTime = max(0, min(time, initialDuration))
             currentAudiobook = audiobook
             currentTrack = track
             currentTrackIndex = trackIndex
-            currentTime = 0
+            currentTime = initialTime
             playbackRate = audiobook.playbackRate
-            duration = track.duration > 0 ? track.duration : 1
+            duration = initialDuration
             audiobook.currentTrackIndex = trackIndex
-            audiobook.currentTime = time
+            audiobook.currentTime = initialTime
             audiobook.lastPlayedAt = .now
             audiobook.isFinished = false
-            persistence.lastPersistedTime = time
+            persistence.lastPersistedTime = initialTime
+
+            if let mix = await equalizer.makeAudioMix(for: asset) {
+                item.audioMix = mix
+            }
 
             player.replaceCurrentItem(with: item)
 
@@ -363,12 +400,20 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 play()
             } else {
                 pause()
+                clearLoadingPlayback(for: audiobook.id)
             }
 
             updateNowPlayingInfo()
         } catch {
             isLoadingItem = false
+            clearLoadingPlayback(for: audiobook.id)
             playerErrorMessage = "Unpaged could not open this audio file."
+        }
+    }
+
+    private func clearLoadingPlayback(for bookID: UUID) {
+        if loadingPlaybackBookID == bookID {
+            loadingPlaybackBookID = nil
         }
     }
 
@@ -384,6 +429,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 }
 
                 self.isPlaying = self.player.timeControlStatus == .playing
+                if self.isPlaying, let bookID = self.currentAudiobook?.id {
+                    self.clearLoadingPlayback(for: bookID)
+                }
                 if self.isPlaying, self.persistence.seekPenaltyRemaining > 0 {
                     self.persistence.seekPenaltyRemaining = max(0, self.persistence.seekPenaltyRemaining - 1)
                 }
@@ -411,6 +459,19 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 } else {
                     self.markCurrentBookFinished()
                 }
+            }
+        }
+    }
+
+    private func observeTimeControlStatus() {
+        timeControlStatusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isPlaying = player.timeControlStatus == .playing
+                if player.timeControlStatus == .playing, let bookID = self.currentAudiobook?.id {
+                    self.clearLoadingPlayback(for: bookID)
+                }
+                self.updateNowPlayingInfo()
             }
         }
     }

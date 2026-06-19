@@ -25,6 +25,11 @@ final class SamplePlayer {
 
     private init() {}
 
+    func beginLoading(bookId: String) {
+        stop()
+        state = .loading(bookId: bookId)
+    }
+
     func playSample(bookId: String, trackURL: URL) {
         stop()
 

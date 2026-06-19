@@ -181,9 +181,20 @@ struct PlayerView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
-            Text("File \(player.currentTrackIndex + 1)")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            if player.isPreparingPlayback {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color.amber)
+                    Text("Connecting to stream…")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.amber)
+            } else {
+                Text("File \(player.currentTrackIndex + 1)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 
@@ -235,16 +246,25 @@ struct PlayerView: View {
             }
 
             Button {
-                player.togglePlayback()
+                if player.isPreparingPlayback {
+                    player.pause()
+                } else {
+                    player.togglePlayback()
+                }
             } label: {
                 ZStack {
                     Circle()
                         .fill(Color.primary)
                         .frame(width: 72, height: 72)
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(Color.cream)
-                        .offset(x: player.isPlaying ? 0 : 2)
+                    if player.isPreparingPlayback {
+                        ProgressView()
+                            .tint(Color.cream)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(Color.cream)
+                            .offset(x: player.isPlaying ? 0 : 2)
+                    }
                 }
             }
             .buttonStyle(.plain)

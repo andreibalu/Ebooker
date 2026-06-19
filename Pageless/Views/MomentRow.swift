@@ -176,9 +176,14 @@ struct MomentRow: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                if audiobook.isStreamingOnly {
+                    openPlayer()
+                }
                 Task {
                     await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
-                    openPlayer()
+                    if !audiobook.isStreamingOnly {
+                        openPlayer()
+                    }
                 }
             } label: {
                 Image(systemName: "play.circle")

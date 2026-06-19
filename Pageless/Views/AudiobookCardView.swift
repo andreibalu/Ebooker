@@ -8,6 +8,7 @@ import SwiftUI
 struct AudiobookCardView: View {
     let audiobook: Audiobook
     let isCurrentlyPlaying: Bool
+    let isLoadingPlayback: Bool
 
     @State private var folderSizeMB: Int?
 
@@ -17,7 +18,19 @@ struct AudiobookCardView: View {
                 cover
 
                 // Status badge (top trailing of cover)
-                if isCurrentlyPlaying {
+                if isLoadingPlayback {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(.primary)
+                        Text("Connecting")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(10)
+                } else if isCurrentlyPlaying {
                     Label("Playing", systemImage: "waveform")
                         .font(.caption.weight(.semibold))
                         .padding(.horizontal, 10)

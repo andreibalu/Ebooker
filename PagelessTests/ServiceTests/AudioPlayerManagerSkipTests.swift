@@ -25,6 +25,27 @@ struct AudioPlayerManagerSkipTests {
         return Audiobook(title: "Test", folderName: "test", totalDuration: 600 * Double(trackCount), tracks: tracks)
     }
 
+    @Test func loadingPlaybackHelperMatchesOnlyTheLoadingBook() {
+        let player = AudioPlayerManager()
+        let loadingBook = makeBook(trackCount: 1)
+        let otherBook = makeBook(trackCount: 1)
+
+        player.seedUnitTestLoadingPlayback(bookID: loadingBook.id)
+
+        #expect(player.isLoadingPlayback(for: loadingBook))
+        #expect(player.isLoadingPlayback(for: otherBook) == false)
+    }
+
+    @Test func loadingPlaybackHelperClearsWhenLoadingIDIsNil() {
+        let player = AudioPlayerManager()
+        let book = makeBook(trackCount: 1)
+
+        player.seedUnitTestLoadingPlayback(bookID: book.id)
+        player.seedUnitTestLoadingPlayback(bookID: nil)
+
+        #expect(player.isLoadingPlayback(for: book) == false)
+    }
+
     // MARK: - Single-track navigation
 
     @Test func canGoToNextTrackIsFalseForSingleTrackBook() {
