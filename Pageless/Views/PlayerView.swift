@@ -326,43 +326,42 @@ struct PlayerView: View {
 
     private var segmentedQuickActionsRow: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 0) {
-                Menu {
-                    ForEach(supportedRates, id: \.self) { rate in
-                        Button {
-                            player.setPlaybackRate(rate)
-                        } label: {
-                            if rate == player.playbackRate {
-                                Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
-                            } else {
-                                Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
-                            }
+            Menu {
+                ForEach(supportedRates, id: \.self) { rate in
+                    Button {
+                        player.setPlaybackRate(rate)
+                    } label: {
+                        if rate == player.playbackRate {
+                            Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
+                        } else {
+                            Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
                         }
                     }
-                } label: {
-                    compactQuickActionSegment(
-                        icon: "speedometer",
-                        text: "\(playbackRateLabel)",
-                        filled: false,
-                        expands: true
-                    )
                 }
-
-                segmentDivider
-
-                Button {
-                    showEqualizer = true
-                } label: {
-                    compactQuickActionSegment(
-                        icon: "slider.horizontal.3",
-                        text: "EQ",
-                        filled: equalizer.isEnabled,
-                        expands: true
-                    )
-                }
-                .disabled(player.currentAudiobook == nil)
+            } label: {
+                compactQuickActionSegment(
+                    icon: "speedometer",
+                    text: playbackRateLabel,
+                    filled: false,
+                    expands: true
+                )
             }
             .frame(maxWidth: .infinity)
+
+            segmentDivider
+
+            Button {
+                showEqualizer = true
+            } label: {
+                compactQuickActionSegment(
+                    icon: "slider.horizontal.3",
+                    text: "EQ",
+                    filled: equalizer.isEnabled,
+                    expands: true
+                )
+            }
+            .disabled(player.currentAudiobook == nil)
+            .frame(width: 74)
 
             segmentDivider
 
@@ -376,12 +375,18 @@ struct PlayerView: View {
                     }
                 }
             } label: {
-                compactQuickActionSegment(
-                    icon: "moon.zzz.fill",
-                    text: "Sleep Timer",
-                    filled: player.sleepTimerEndsAt != nil,
-                    expands: true
-                )
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    compactQuickActionSegment(
+                        icon: "moon.zzz.fill",
+                        text: PlayerQuickActionDisplay.sleepTimerTitle(
+                            endsAt: player.sleepTimerEndsAt,
+                            now: timeline.date
+                        ),
+                        filled: player.sleepTimerEndsAt != nil,
+                        expands: true,
+                        accented: player.sleepTimerEndsAt != nil
+                    )
+                }
             }
             .frame(maxWidth: .infinity)
         }
@@ -417,24 +422,41 @@ struct PlayerView: View {
         .shadow(color: .black.opacity(0.04), radius: 4, y: 2)
     }
 
-    private func compactQuickActionSegment(icon: String, text: String, filled: Bool, expands: Bool) -> some View {
+    private func compactQuickActionSegment(
+        icon: String,
+        text: String,
+        filled: Bool,
+        expands: Bool,
+        accented: Bool = false
+    ) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(accented ? Color.amber : Color.primary)
             Text(text)
                 .font(.subheadline.weight(.medium))
                 .lineLimit(1)
-                .minimumScaleFactor(0.92)
+                .minimumScaleFactor(0.72)
+                .allowsTightening(true)
+                .monospacedDigit()
+                .contentTransition(.numericText())
         }
-        .foregroundStyle(.primary)
-        .padding(.horizontal, 14)
+        .foregroundStyle(accented ? Color.amber : Color.primary)
+        .padding(.horizontal, 10)
         .padding(.vertical, 12)
         .background(
-            filled ? Color.primary.opacity(0.08) : Color.clear,
+            filled
+                ? (accented ? Color.amber.opacity(0.14) : Color.primary.opacity(0.08))
+                : Color.clear,
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(accented ? Color.amber.opacity(0.22) : Color.clear, lineWidth: 1)
         )
         .frame(maxWidth: expands ? .infinity : nil)
         .fixedSize(horizontal: !expands, vertical: false)
+        .animation(.snappy(duration: 0.2), value: text)
     }
 
     private var segmentDivider: some View {
@@ -486,7 +508,7 @@ struct PlayerView: View {
     }
 
     private var playbackRateLabel: String {
-        "\(player.playbackRate.formatted(.number.precision(.fractionLength(0...2))))x"
+        PlayerQuickActionDisplay.playbackRateTitle(for: player.playbackRate)
     }
 
     private var windowSafeAreaInsets: UIEdgeInsets {
