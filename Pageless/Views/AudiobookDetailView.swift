@@ -196,53 +196,83 @@ struct AudiobookDetailView: View {
 
     @ViewBuilder
     private var streamingDownloadSection: some View {
-        switch streamDownloadVM.state {
-        case .idle:
-            Button {
-                streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
-            } label: {
-                Label("Download for Offline", systemImage: "arrow.down.circle")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.amber)
+                    .frame(width: 28, height: 28)
 
-        case .downloading(let completed, let total):
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Downloading…")
-                        .font(.subheadline.weight(.medium))
-                    Spacer()
-                    Text("\(completed) / \(total) tracks")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Download for Offline")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Save this LibriVox book to listen without internet.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                ProgressView(value: Double(completed), total: Double(max(total, 1)))
-                    .tint(.primary)
-                Button("Cancel") {
-                    streamDownloadVM.cancel()
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+
+                Spacer(minLength: 0)
             }
 
-        case .complete:
-            Label("Downloaded", systemImage: "checkmark.circle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.green)
-
-        case .failed(let message):
-            VStack(alignment: .leading, spacing: 8) {
-                Label(message, systemImage: "exclamationmark.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
-                Button("Try Again") {
+            switch streamDownloadVM.state {
+            case .idle:
+                Button {
                     streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
+                } label: {
+                    Label("Download for Offline", systemImage: "arrow.down")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(.plain)
+                .padding(.vertical, 11)
+                .background(Color.primary, in: Capsule())
+                .foregroundStyle(Color.cream)
+
+            case .downloading(let completed, let total):
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Downloading…")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("\(completed) / \(total) tracks")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: Double(completed), total: Double(max(total, 1)))
+                        .tint(Color.amber)
+                    Button("Cancel") {
+                        streamDownloadVM.cancel()
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+            case .complete:
+                Label("Downloaded", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+
+            case .failed(let message):
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(message, systemImage: "exclamationmark.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(.red)
+                    Button("Try Again") {
+                        streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
+        .padding(16)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, y: 3)
     }
 
     // MARK: - Header
@@ -279,9 +309,14 @@ struct AudiobookDetailView: View {
                     ICloudBackupBadge(style: .inlineLabel)
 
                     Button {
+                        if audiobook.isStreamingOnly {
+                            openPlayer()
+                        }
                         Task {
                             await player.startPlayback(for: audiobook)
-                            openPlayer()
+                            if !audiobook.isStreamingOnly {
+                                openPlayer()
+                            }
                         }
                     } label: {
                         Label(
@@ -483,9 +518,14 @@ struct AudiobookDetailView: View {
                     }
 
                     Button {
+                        if audiobook.isStreamingOnly {
+                            openPlayer()
+                        }
                         Task {
                             await player.playProgressBookmark(at: progressTrackIndex, in: audiobook, time: progressTime)
-                            openPlayer()
+                            if !audiobook.isStreamingOnly {
+                                openPlayer()
+                            }
                         }
                     } label: {
                         Image(systemName: "play.circle.fill")

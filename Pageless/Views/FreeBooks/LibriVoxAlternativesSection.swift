@@ -97,10 +97,14 @@ struct LibriVoxAlternativesSection: View {
             if SamplePlayer.shared.isActive(for: alternative.id) {
                 SamplePlayer.shared.stop()
             } else {
+                SamplePlayer.shared.beginLoading(bookId: alternative.id)
                 Task {
-                    if let url = await fetchFirstTrackURL(for: alternative) {
-                        SamplePlayer.shared.playSample(bookId: alternative.id, trackURL: url)
+                    guard let url = await fetchFirstTrackURL(for: alternative) else {
+                        SamplePlayer.shared.stop()
+                        return
                     }
+                    guard SamplePlayer.shared.isActive(for: alternative.id) else { return }
+                    SamplePlayer.shared.playSample(bookId: alternative.id, trackURL: url)
                 }
             }
         } label: {

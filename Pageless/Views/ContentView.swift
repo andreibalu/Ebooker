@@ -500,16 +500,22 @@ struct ContentView: View {
         } label: {
             AudiobookCardView(
                 audiobook: audiobook,
-                isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id
+                isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id,
+                isLoadingPlayback: player.isLoadingPlayback(for: audiobook)
             )
         }
         .buttonStyle(.plain)
         .contextMenu {
             Button("Resume", systemImage: "play.fill") {
+                if audiobook.isStreamingOnly {
+                    openPlayer()
+                }
                 Task {
                     await player.startPlayback(for: audiobook)
-                    try? await Task.sleep(for: .milliseconds(600))
-                    openPlayer()
+                    if !audiobook.isStreamingOnly {
+                        try? await Task.sleep(for: .milliseconds(600))
+                        openPlayer()
+                    }
                 }
             }
 

@@ -17,10 +17,14 @@ struct LibriVoxSampleButton: View {
             if SamplePlayer.shared.isActive(for: book.id) {
                 SamplePlayer.shared.stop()
             } else {
+                SamplePlayer.shared.beginLoading(bookId: book.id)
                 Task {
-                    if let url = await browseViewModel.fetchFirstTrackURL(for: book) {
-                        SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
+                    guard let url = await browseViewModel.fetchFirstTrackURL(for: book) else {
+                        SamplePlayer.shared.stop()
+                        return
                     }
+                    guard SamplePlayer.shared.isActive(for: book.id) else { return }
+                    SamplePlayer.shared.playSample(bookId: book.id, trackURL: url)
                 }
             }
         } label: {
@@ -37,6 +41,7 @@ struct LibriVoxSampleButton: View {
             .frame(width: size + 8, height: size + 8)
         }
         .buttonStyle(.plain)
+        .disabled(!NetworkMonitor.shared.isConnected && !SamplePlayer.shared.isActive(for: book.id))
     }
 }
 

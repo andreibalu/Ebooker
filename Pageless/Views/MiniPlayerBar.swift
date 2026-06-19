@@ -52,6 +52,11 @@ struct MiniPlayerBar: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                    } else if player.isPreparingPlayback {
+                        Text("Connecting to stream…")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.amber)
+                            .lineLimit(1)
                     }
                 }
 
@@ -62,13 +67,26 @@ struct MiniPlayerBar: View {
                     .padding(.trailing, 2)
 
                 Button {
-                    player.togglePlayback()
+                    if player.isPreparingPlayback {
+                        player.pause()
+                    } else {
+                        player.togglePlayback()
+                    }
                 } label: {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .frame(width: 42, height: 42)
-                        .background(Color.primary, in: Circle())
-                        .foregroundStyle(Color.cardWhite)
+                    ZStack {
+                        Circle()
+                            .fill(Color.primary)
+                            .frame(width: 42, height: 42)
+                        if player.isPreparingPlayback {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(Color.cardWhite)
+                        } else {
+                            Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(Color.cardWhite)
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, 2)
