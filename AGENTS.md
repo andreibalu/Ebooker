@@ -6,7 +6,7 @@ Guidance for Codex (Codex.ai/code) working in this repo.
 
 - **Marketing name (App Store / home screen)**: Unpaged
 - **Xcode scheme**: `Pageless` · **source folder**: `Pageless/` · **bundle id prefix**: `andreibaludev.Pageless`
-- **Marketing version**: see `VERSION` (currently 1.3.2)
+- **Marketing version**: see `VERSION` (currently 1.3.3)
 
 Three names = intentional historical layers — no "fix". New user-facing copy says "Unpaged".
 
@@ -22,6 +22,8 @@ Three names = intentional historical layers — no "fix". New user-facing copy s
 
 After editing, remind the user to push the new content to the public Gist(s).
 
+`docs/superpowers/plans/` and `docs/superpowers/specs/` are temporary implementation artifacts. Keep only active work there; delete a plan and its design spec once implementation is complete.
+
 ## App Store Connect Analytics
 
 Use [@app-store-connect-analytics](plugin://app-store-connect-analytics@personal) when pulling Unpaged App Store Connect data for marketing, ASO, launch analysis, sales/download summaries, purchases, subscriptions, or other App Store performance questions. Bundle id / SKU: `andreibaludev.Pageless`. Do not substitute RevenueCat for App Store Connect data unless explicitly requested.
@@ -36,6 +38,8 @@ XcodeBuildMCP for all build/run. Only device tools enabled in this MCP profile �
 - **Clean**: `mcp__XcodeBuildMCP__clean`
 
 **Device target**: always Andrei's iPhone 15 Pro — identifier `00008130-000471A80C81001C` (UDID `BAE98D59-834B-5B20-8E9A-8943DCE6F7FD`). Apple Intelligence (`FoundationModels`) only runs on 15 Pro / 16+ hardware, so the simulator can't exercise AI surfaces. `xcode-device-build` skill helps with device setup.
+
+If the phone is unavailable and the user explicitly authorizes a simulator, use a known cached simulator with native `xcodebuild` and keep `-parallel-testing-enabled NO`. Treat that as non-AI regression coverage only.
 
 **External packages: none.** Native Apple frameworks only (AVFoundation, MediaToolbox, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI, StoreKit, Intents, CarPlay, Network). RevenueCat was removed — see "In-App Purchases".
 
@@ -63,8 +67,9 @@ Pageless/
 │                    detail / settings / cloud / moment views; subfolders FreeBooks/,
 │                    ReadingStats/, Onboarding/
 ├── Services/        playback, import/AI, stats, EQ, LibriVox, CarPlay, IAP, iCloud sync
-│   └── Protocols/   TranscriptionProviding, MomentAnalyzing, AudioExtracting, RecapProviding,
-│                    FreeBookDownloading (iOS<26 `Unavailable…` fallbacks live here too)
+│   └── Protocols/   TranscriptionProviding, SegmentTranscribing, MomentAnalyzing,
+│                    AudioExtracting, RecapProviding, FreeBookDownloading
+│                    (iOS<26 `Unavailable…` fallbacks live here too)
 └── Utilities/       TimeFormatter, BookDescriptionFormatting, Color+Theme (`amber` accent)
 ```
 
@@ -99,6 +104,7 @@ All `@MainActor @Observable`; views create them with `@State`. Initializer injec
 | `LibraryViewModel` | `pendingImport`, `urlsHoldingSecurityAccess`, delete/rename candidates | `FreeBookDownloading` (legacy seed catalog) |
 | `BrowseLibriVoxViewModel` | search, `syncState`, `featuredBooks`, language/genre/duration filters | `LibriVoxAPIClient`, `LibriVoxCatalogSync` (via SwiftData) |
 | `LibriVoxBookDetailViewModel` | persisted identity, `addToLibraryState`, shared-manager request routing | `FreeBookIdentityService`, `StreamingLibraryService` |
+| `LibriVoxCollectionViewModel` | collection `state`, locally ordered `books` | `LibriVoxAPIClient`, `LibriVoxCatalogSync` (via SwiftData) |
 
 ## Services
 
@@ -227,6 +233,6 @@ Library metadata, progress, moments, EQ config, reading sessions sync via CloudK
 
 Swift Testing (`import Testing`). Run via `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
 
-- Mocks in `PagelessTests/Mocks/`: `MockTranscriptionService`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService` — one per protocol service. LibriVox-path code is tested integration-style against in-memory SwiftData containers; if you add a protocol there, add a matching mock.
+- Mocks in `PagelessTests/Mocks/`: `MockTranscriptionService`, `MockSegmentTranscriber`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService` — one per protocol service. LibriVox-path code is tested integration-style against in-memory SwiftData containers; if you add a protocol there, add a matching mock.
 - **In-memory test containers: always pass `cloudKitDatabase: .none`** to `ModelConfiguration`. The default `.automatic` picks up the host app's CloudKit entitlement on device and fails CloudKit-shape validation. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one intentional `.private(...)` validation, via a file-backed temp store.
 - **Hold the container in a local**: `let container = try makeContainer(); let context = container.mainContext` — never `try makeContainer().mainContext` (container deallocates; first fetch crashes the host app).

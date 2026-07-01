@@ -39,7 +39,7 @@ Apple Intelligence (on-device only) powers two features:
 - **AI Bookmarks** — when you save a moment, the app transcribes the audio around it and generates a name, a key quote, characters mentioned, and a mood tag.
 - **AI Recap** — when you return to a book after a break, the app writes a short two-line recap of where you left off.
 
-Both features run entirely on your iPhone — the transcription and the AI generation. Nothing is uploaded. The very first time you use them, iOS may download Apple's on-device speech model for your language (a one-time download); after that they work fully offline.
+AI generation and primary transcription run entirely on your iPhone. If primary transcription fails, Unpaged can use Apple's older Speech fallback; Apple may process audio and transcripts when on-device recognition is unavailable. Nothing is sent to Unpaged or any developer-operated server. The first use may download Apple's on-device speech model for your language; once installed, the primary path works offline.
 
 ### Do AI features require a paid unlock?
 
@@ -81,7 +81,7 @@ Long-press the book cover in your library and choose **Delete**.
 **Free books work the same way.** With iCloud Sync on, removing a free (LibriVox) book from your library keeps its progress and bookmarks in your **iCloud Library**. There are two ways to pick up where you left off:
 
 - **Re-add it from the Free Books tab.** Because every free book carries its LibriVox ID, Unpaged recognises and reuses its iCloud record automatically, restoring progress, bookmarks, favorites, and equalizer settings whether you stream it or download it. It never creates a second copy of the same LibriVox recording.
-- **From iCloud Library.** Open **Settings → iCloud Library**, find it under **Free books**, and tap **Stream**.
+- **From iCloud Library.** Open **Settings → iCloud Library**, find it under **Removed free books**, and tap **Stream**.
 
 With sync off, removing a free book simply takes it out of your library; you can always add it again from the **Free Books** tab.
 
@@ -123,15 +123,15 @@ Voice search needs Microphone and Speech Recognition permissions. Unpaged asks f
 
 ### Apple Intelligence isn't generating bookmark names
 
-Confirm your iPhone supports Apple Intelligence (iPhone 15 Pro/Pro Max or any iPhone 16+) and that it's turned on in **Settings → Apple Intelligence & Siri**. The feature also requires the on-device model to be fully downloaded — this can take time after a fresh iOS install or update. The first AI bookmark or recap can also be slower than usual while iOS downloads its on-device speech model for your language; this happens once, and everything works offline afterwards.
+Confirm your iPhone supports Apple Intelligence (iPhone 15 Pro/Pro Max or any iPhone 16+) and that it's turned on in **Settings → Apple Intelligence & Siri**. The feature also requires the on-device model to be fully downloaded — this can take time after a fresh iOS install or update. The first AI bookmark or recap can be slower while iOS downloads its on-device speech model for your language; once installed, the primary AI path works offline.
 
 ### My free trial counter feels wrong
 
-The AI trial tracks a fixed number of uses, not days. Restoring purchases or reinstalling does not reset the counter. If you believe the count is incorrect, email me.
+The AI trial tracks five successful AI uses, not days. Restoring purchases does not change the counter. If you believe the count is incorrect, email me.
 
 ## Privacy
 
-Unpaged does not collect, transmit, sell, or share any personal data. Full details are in the [Privacy Policy](https://github.com/andreibalu).
+Unpaged does not collect, sell, or share your personal data with the developer. Optional features communicate directly with Apple, LibriVox, and Internet Archive as described in the [Privacy Policy](https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262).
 
 ## Reporting a bug or requesting a feature
 

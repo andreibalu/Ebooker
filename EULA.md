@@ -3,7 +3,7 @@
 **App:** Unpaged
 **Developer:** Andrei Baluta
 **Contact:** andrei.baluta@yahoo.com
-**Last updated:** May 30, 2026
+**Last updated:** July 1, 2026
 
 This End User License Agreement ("Agreement") is a legal agreement between you
 ("you") and Andrei Baluta ("Developer," "we," "us") for the use of the Unpaged
@@ -117,11 +117,13 @@ availability, or fitness for any purpose.
 
 ## 10. Privacy and Data
 
-The Application does not collect, transmit, sell, or share your personal data with
-the Developer. AI features run entirely on-device using Apple Intelligence; no
-listening content is uploaded. Network requests are limited to fetching free books
-from LibriVox/Internet Archive, streaming audiobooks you add, and processing
-purchases through Apple. Optional iCloud Sync uses your private iCloud account.
+The Application does not collect, sell, or share your personal data with the
+Developer. AI generation runs on-device using Apple Intelligence. Primary AI
+transcription also runs on-device; Apple's Speech service may process audio when
+the legacy fallback is used and on-device recognition is unavailable. Network
+requests support free-book browsing, streaming, and downloads through
+LibriVox/Internet Archive, purchases through Apple, and optional iCloud Sync in
+your private iCloud account. The Developer operates no backend server.
 Full details are in the Privacy Policy:
 <https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262>
 
