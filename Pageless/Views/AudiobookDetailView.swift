@@ -14,6 +14,7 @@ struct AudiobookDetailView: View {
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
     @Environment(\.modelContext) private var modelContext
+    @Environment(LibriVoxDownloadManager.self) private var downloadManager
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
@@ -28,7 +29,6 @@ struct AudiobookDetailView: View {
     @State private var tracksExpanded = false
     @State private var momentsExpanded = false
     @State private var folderSizeMB: Int?
-    @State private var streamDownloadVM = StreamedBookDownloadViewModel()
     @State private var showMatchSheet = false
     @State private var hasCloudCandidates = false
     @State private var freeBackup: Audiobook?
@@ -98,7 +98,7 @@ struct AudiobookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                if audiobook.isStreamingOnly {
+                if audiobook.isStreamingOnly || downloadEntry != nil {
                     streamingDownloadSection
                 }
                 resumeAnchorRow
@@ -194,6 +194,20 @@ struct AudiobookDetailView: View {
 
     // MARK: - Streaming Download
 
+    private var downloadEntry: LibriVoxDownloadManager.Entry? {
+        guard let catalogId = audiobook.catalogId else { return nil }
+        return downloadManager.entry(for: catalogId)
+    }
+
+    private func startOfflineDownload() {
+        guard let catalogId = audiobook.catalogId else { return }
+        downloadManager.start(request: .init(
+            catalogID: catalogId,
+            metadata: .init(title: audiobook.title),
+            target: .existing(audiobookID: audiobook.id)
+        ))
+    }
+
     @ViewBuilder
     private var streamingDownloadSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -215,10 +229,11 @@ struct AudiobookDetailView: View {
                 Spacer(minLength: 0)
             }
 
-            switch streamDownloadVM.state {
-            case .idle:
+            if let entry = downloadEntry {
+                LibriVoxDetailDownloadStatus(entry: entry)
+            } else {
                 Button {
-                    streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
+                    startOfflineDownload()
                 } label: {
                     Label("Download for Offline", systemImage: "arrow.down")
                         .font(.subheadline.weight(.semibold))
@@ -228,42 +243,6 @@ struct AudiobookDetailView: View {
                 .padding(.vertical, 11)
                 .background(Color.primary, in: Capsule())
                 .foregroundStyle(Color.cream)
-
-            case .downloading(let completed, let total):
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Downloading…")
-                            .font(.subheadline.weight(.medium))
-                        Spacer()
-                        Text("\(completed) / \(total) tracks")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    ProgressView(value: Double(completed), total: Double(max(total, 1)))
-                        .tint(Color.amber)
-                    Button("Cancel") {
-                        streamDownloadVM.cancel()
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-            case .complete:
-                Label("Downloaded", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.green)
-
-            case .failed(let message):
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(message, systemImage: "exclamationmark.circle")
-                        .font(.subheadline)
-                        .foregroundStyle(.red)
-                    Button("Try Again") {
-                        streamDownloadVM.startDownload(audiobook: audiobook, modelContext: modelContext)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
             }
         }
         .padding(16)

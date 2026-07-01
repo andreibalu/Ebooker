@@ -14,6 +14,18 @@ enum StreamingLibraryService {
         tracks: [CachedLibriVoxTrack],
         modelContext: ModelContext
     ) async throws -> Audiobook {
+        if let match = try FreeBookIdentityService.match(
+            catalogId: book.id,
+            modelContext: modelContext
+        ) {
+            if match.classification == .archived {
+                match.audiobook.isArchived = false
+                match.audiobook.isDownloaded = false
+                try modelContext.save()
+            }
+            return match.audiobook
+        }
+
         // LibriVox cover URLs are unreliable — skip the fetch and let the
         // generated letter template render in every cover surface instead.
         let folderName = UUID().uuidString

@@ -18,7 +18,7 @@ struct PagelessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            PagelessRootView(modelContainer: appDelegate.modelContainer)
                 .environmentObject(appDelegate.audioPlayer)
                 .environmentObject(appDelegate.audioPlayer.equalizer)
                 .environmentObject(aiEntitlementStore)
@@ -57,5 +57,21 @@ struct PagelessApp: App {
         Task { @MainActor in
             await player.startPlaybackFromSavedProgress(for: latest)
         }
+    }
+}
+
+/// Constructs process-lifetime download state only after the app's ModelContainer exists.
+private struct PagelessRootView: View {
+    @State private var downloadManager: LibriVoxDownloadManager
+
+    init(modelContainer: ModelContainer) {
+        _downloadManager = State(initialValue: LibriVoxDownloadManager(
+            executor: .live(modelContext: modelContainer.mainContext)
+        ))
+    }
+
+    var body: some View {
+        ContentView()
+            .environment(downloadManager)
     }
 }

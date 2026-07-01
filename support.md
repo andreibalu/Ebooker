@@ -1,6 +1,6 @@
 # Unpaged — Support
 
-_Last updated: June 12, 2026_
+_Last updated: July 1, 2026_
 
 Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
@@ -14,9 +14,13 @@ I read every message. Please include your iOS version and iPhone model so I can 
 
 Open Unpaged, tap **+**, and pick MP3, M4B, or AAC files from Files, iCloud Drive, or any provider connected to the Files app. Multi-file books import as a single audiobook with tracks ordered by filename.
 
+If the selected files exactly match an audiobook already active in your library, Unpaged shows **Already in Library** instead of creating a duplicate. Renaming or moving the same files does not create another copy.
+
 ### Where do the free books come from?
 
 The **Free Books** tab streams or downloads public-domain audiobooks from [LibriVox](https://librivox.org). Over 20,000 titles are cached locally for fast browsing. You can stream a book without downloading it, or download for offline listening.
+
+Download progress stays visible in both **Free Books** and **Library** while Unpaged remains open, even if you navigate away from the book. You can cancel an active download or retry/dismiss a failed one from either tab.
 
 At the top of the tab, **Collections** are hand-picked shelves of classics grouped by theme — for example Gothic & Horror, Detective & Mystery, or Short Listens you can finish in an afternoon. Every collection book streams, downloads, and samples exactly like the rest of the free catalog.
 
@@ -74,11 +78,10 @@ Long-press the book cover in your library and choose **Delete**.
 - **With iCloud Sync on**, this removes the audio from *this iPhone* but keeps the book in your **iCloud Library** — your progress, bookmarks, recaps, and equalizer settings stay safely backed up, and you can restore the book anytime (see "How do I restore my library" below). A book is only ever permanently erased from iCloud when you swipe to delete it inside **Settings → iCloud Library**.
 - **With iCloud Sync off**, you choose whether to remove the book from Unpaged only, or also delete its imported audio files from local storage. Nothing is backed up.
 
-**Free books work the same way.** With iCloud Sync on, removing a free (LibriVox) book from your library keeps its progress and bookmarks in your **iCloud Library**. There are three ways to pick up where you left off:
+**Free books work the same way.** With iCloud Sync on, removing a free (LibriVox) book from your library keeps its progress and bookmarks in your **iCloud Library**. There are two ways to pick up where you left off:
 
-- **Re-add it from the Free Books tab.** Because every free book carries its LibriVox ID, Unpaged recognises the book automatically and asks whether to **Import from iCloud** (restoring your progress and bookmarks) or **Add as New** — whether you stream it or download it.
+- **Re-add it from the Free Books tab.** Because every free book carries its LibriVox ID, Unpaged recognises and reuses its iCloud record automatically, restoring progress, bookmarks, favorites, and equalizer settings whether you stream it or download it. It never creates a second copy of the same LibriVox recording.
 - **From iCloud Library.** Open **Settings → iCloud Library**, find it under **Free books**, and tap **Stream**.
-- **If you chose "Add as New"** and later change your mind, open the book and tap the **iCloud** button in the top-right corner to import your backup.
 
 With sync off, removing a free book simply takes it out of your library; you can always add it again from the **Free Books** tab.
 

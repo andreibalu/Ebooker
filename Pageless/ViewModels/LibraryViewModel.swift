@@ -33,6 +33,7 @@ final class LibraryViewModel {
 
     // MARK: - Alert state
 
+    var alertTitle = "Something Went Wrong"
     var alertMessage = ""
     var isShowingAlert = false
 
@@ -53,11 +54,7 @@ final class LibraryViewModel {
             Task {
                 do {
                     let pending = try await LibraryImportService.prepareImport(from: audioURLs)
-                    if let orphan = OrphanRestoreService.findMatch(for: pending, modelContext: modelContext) {
-                        restoreMatch = RestoreMatchCandidate(pending: pending, orphan: orphan)
-                    } else {
-                        pendingImport = pending
-                    }
+                    routePreparedImport(pending, modelContext: modelContext)
                 } catch {
                     releaseSecurityScopedAccess()
                     presentAlert(message: error.localizedDescription)
@@ -68,15 +65,38 @@ final class LibraryViewModel {
         }
     }
 
+    /// Routes a prepared own-book import through active duplicate detection before the specialized
+    /// cloud-orphan restore flow.
+    func routePreparedImport(_ pending: PendingImportSelection, modelContext: ModelContext) {
+        do {
+            if try LibraryImportService.findActiveDuplicate(for: pending, modelContext: modelContext) != nil {
+                handleAlreadyInLibrary()
+            } else if let orphan = OrphanRestoreService.findMatch(for: pending, modelContext: modelContext) {
+                restoreMatch = RestoreMatchCandidate(pending: pending, orphan: orphan)
+            } else {
+                pendingImport = pending
+            }
+        } catch {
+            releaseSecurityScopedAccess()
+            presentAlert(message: error.localizedDescription)
+        }
+    }
+
     func importAudiobook(_ pending: PendingImportSelection, title: String, author: String, modelContext: ModelContext) throws {
-        _ = try LibraryImportService.importAudiobook(
-            from: pending,
-            title: title,
-            author: author,
-            modelContext: modelContext
-        )
-        pendingImport = nil
-        releaseSecurityScopedAccess()
+        do {
+            _ = try LibraryImportService.importAudiobook(
+                from: pending,
+                title: title,
+                author: author,
+                modelContext: modelContext
+            )
+            pendingImport = nil
+            releaseSecurityScopedAccess()
+        } catch LibraryImportError.alreadyInLibrary {
+            handleAlreadyInLibrary()
+        } catch {
+            throw error
+        }
     }
 
     /// User accepted the auto-match: write files into the orphan's folder and adopt its metadata.
@@ -207,8 +227,19 @@ final class LibraryViewModel {
 
     // MARK: - Helpers
 
-    func presentAlert(message: String) {
+    func presentAlert(title: String = "Something Went Wrong", message: String) {
+        alertTitle = title
         alertMessage = message
         isShowingAlert = true
+    }
+
+    private func handleAlreadyInLibrary() {
+        pendingImport = nil
+        restoreMatch = nil
+        releaseSecurityScopedAccess()
+        presentAlert(
+            title: "Already in Library",
+            message: LibraryImportError.alreadyInLibrary.localizedDescription
+        )
     }
 }

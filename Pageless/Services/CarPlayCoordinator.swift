@@ -10,9 +10,20 @@ import UIKit
 
 private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "CarPlay")
 
-/// CarPlay UI: library tabs (Favorites / All Books / Free Books), playback via `CPNowPlayingTemplate`, non-AI moments named "CarPlay N".
+/// CarPlay UI: library tabs (Favorites / Library / Free Books), playback via `CPNowPlayingTemplate`, non-AI moments named "CarPlay N".
 @MainActor
 final class CarPlayCoordinator: NSObject {
+    enum LegacyCatalogAction: Equatable {
+        case playDownloaded
+        case playStreaming
+        case restoreArchivedStreaming
+        case insertStreaming
+
+        var requiresNetwork: Bool {
+            self != .playDownloaded
+        }
+    }
+
     private weak var interfaceController: CPInterfaceController?
     private let modelContainer: ModelContainer
     private let audioPlayer: AudioPlayerManager
@@ -74,7 +85,7 @@ final class CarPlayCoordinator: NSObject {
         favorites.tabImage = UIImage(systemName: "heart.fill")
 
         let allBooks = CPListTemplate(
-            title: "All Books",
+            title: LibraryTab.allBooks.title,
             sections: [CPListSection(items: [], header: nil, sectionIndexTitle: nil)]
         )
         allBooks.tabImage = UIImage(systemName: "books.vertical.fill")
@@ -342,31 +353,96 @@ final class CarPlayCoordinator: NSObject {
 
     private func handleCatalogTap(entryId: String) {
         guard let entry = freeBookCatalog.first(where: { $0.id == entryId }) else { return }
-        if let existing = fetchAudiobook(catalogId: entryId) {
-            Task { @MainActor in
-                await audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
-                presentNowPlayingIfNeeded()
-            }
+        let match: FreeBookIdentityService.Match?
+        do {
+            match = try fetchAudiobookMatch(catalogId: entryId)
+        } catch {
+            carPlayLog.error("catalog identity lookup failed: \(String(describing: error), privacy: .public)")
+            presentInfoAlert(title: "Couldn't open book", message: error.localizedDescription)
             return
         }
-        guard NetworkMonitor.shared.isConnected else {
+
+        let action = Self.legacyCatalogAction(for: match)
+        if action.requiresNetwork && !NetworkMonitor.shared.isConnected {
             presentInfoAlert(
                 title: "You're offline",
                 message: "Free books stream over the internet. Connect and try again."
             )
             return
         }
-        Task { @MainActor in
-            let audiobook = addCatalogEntryAsStreamingAudiobook(entry)
-            await audioPlayer.startPlayback(for: audiobook, autoplay: true)
-            presentNowPlayingIfNeeded()
+
+        switch action {
+        case .playDownloaded, .playStreaming:
+            guard let audiobook = match?.audiobook else { return }
+            Task { @MainActor in
+                await audioPlayer.startPlaybackFromSavedProgress(for: audiobook, autoplay: true)
+                presentNowPlayingIfNeeded()
+            }
+        case .restoreArchivedStreaming:
+            do {
+                guard let match else { return }
+                let audiobook = try Self.activateArchivedLegacyCatalogMatch(
+                    match,
+                    modelContext: modelContainer.mainContext
+                )
+                Task { @MainActor in
+                    await audioPlayer.startPlaybackFromSavedProgress(for: audiobook, autoplay: true)
+                    presentNowPlayingIfNeeded()
+                }
+            } catch {
+                carPlayLog.error("catalog restore failed: \(String(describing: error), privacy: .public)")
+                presentInfoAlert(title: "Couldn't open book", message: error.localizedDescription)
+            }
+        case .insertStreaming:
+            Task { @MainActor in
+                do {
+                    let audiobook = try addCatalogEntryAsStreamingAudiobook(entry)
+                    await audioPlayer.startPlayback(for: audiobook, autoplay: true)
+                    presentNowPlayingIfNeeded()
+                } catch {
+                    carPlayLog.error("catalog insertion failed: \(String(describing: error), privacy: .public)")
+                    presentInfoAlert(title: "Couldn't open book", message: error.localizedDescription)
+                }
+            }
         }
+    }
+
+    static func legacyCatalogAction(for match: FreeBookIdentityService.Match?) -> LegacyCatalogAction {
+        guard let match else { return .insertStreaming }
+        switch match.classification {
+        case .downloadedActive: return .playDownloaded
+        case .streamingActive: return .playStreaming
+        case .archived: return .restoreArchivedStreaming
+        }
+    }
+
+    static func activateArchivedLegacyCatalogMatch(
+        _ match: FreeBookIdentityService.Match,
+        modelContext: ModelContext
+    ) throws -> Audiobook {
+        guard match.classification == .archived else { return match.audiobook }
+        match.audiobook.isArchived = false
+        match.audiobook.isDownloaded = false
+        try modelContext.save()
+        return match.audiobook
     }
 
     /// Inserts an Audiobook with `isDownloaded == false` whose tracks point at the
     /// catalog entry's remote URLs, so playback streams instead of waiting on a download.
-    private func addCatalogEntryAsStreamingAudiobook(_ entry: FreeBookCatalogEntry) -> Audiobook {
+    private func addCatalogEntryAsStreamingAudiobook(_ entry: FreeBookCatalogEntry) throws -> Audiobook {
         let context = modelContainer.mainContext
+        if let match = try FreeBookIdentityService.match(
+            catalogId: entry.id,
+            modelContext: context
+        ) {
+            if match.classification == .archived {
+                match.audiobook.isArchived = false
+                match.audiobook.isDownloaded = false
+                try context.save()
+            }
+            return match.audiobook
+        }
+
         let audiobook = Audiobook(
             title: entry.title,
             author: entry.author,
@@ -394,7 +470,7 @@ final class CarPlayCoordinator: NSObject {
             audiobook.tracks.append(audioTrack)
         }
 
-        try? context.save()
+        try context.save()
         return audiobook
     }
 
@@ -594,18 +670,20 @@ final class CarPlayCoordinator: NSObject {
 
             // Reuse existing library entry if we already added this book.
             // `catalogId` is computed (wraps `_catalogId`), so #Predicate can't use it.
-            if let existing = self.fetchAudiobook(catalogId: book.id) {
-                // If it was removed (archived) but kept in iCloud, bring it back to the library.
-                if existing.isArchived {
-                    existing.isArchived = false
-                    try? context.save()
-                }
-                await self.audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
-                self.presentNowPlayingIfNeeded()
-                return
-            }
-
             do {
+                if let match = try self.fetchAudiobookMatch(catalogId: book.id) {
+                    let existing = match.audiobook
+                    // If it was removed (archived) but kept in iCloud, bring it back to the library.
+                    if existing.isArchived {
+                        existing.isArchived = false
+                        existing.isDownloaded = false
+                        try context.save()
+                    }
+                    await self.audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)
+                    self.presentNowPlayingIfNeeded()
+                    return
+                }
+
                 let cached: [CachedLibriVoxTrack]
                 if let existing = book.cachedTracks {
                     cached = existing
@@ -638,14 +716,11 @@ final class CarPlayCoordinator: NSObject {
         }
     }
 
-    private func fetchAudiobook(catalogId: String) -> Audiobook? {
-        // `Audiobook.catalogId` is a computed property over the private stored
-        // `_catalogId`, so SwiftData's #Predicate keypath cache asserts on it.
-        // Filter in memory instead — the library is small and fully fits.
-        let context = ModelContext(modelContainer)
-        let descriptor = FetchDescriptor<Audiobook>()
-        guard let books = try? context.fetch(descriptor) else { return nil }
-        return books.first(where: { $0.catalogId == catalogId })
+    private func fetchAudiobookMatch(catalogId: String) throws -> FreeBookIdentityService.Match? {
+        return try FreeBookIdentityService.match(
+            catalogId: catalogId,
+            modelContext: modelContainer.mainContext
+        )
     }
 
     // MARK: - Alerts

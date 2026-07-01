@@ -11,11 +11,44 @@ enum LibraryTab {
     case favorites
     case allBooks
     case freeBooks
+
+    var title: String {
+        switch self {
+        case .favorites: "Favorites"
+        case .allBooks: "Library"
+        case .freeBooks: "Free Books"
+        }
+    }
+}
+
+@MainActor
+enum LibraryBookVisibility {
+    static func includes(
+        bookID: UUID,
+        isDownloaded: Bool,
+        isFreeBook: Bool,
+        isArchived: Bool,
+        isFavorite: Bool,
+        tab: LibraryTab,
+        downloadEntry: LibriVoxDownloadManager.Entry?
+    ) -> Bool {
+        let normallyVisible = (isDownloaded || isFreeBook) && !isArchived
+        if tab == .favorites {
+            return normallyVisible && isFavorite
+        }
+        guard tab == .allBooks else { return false }
+        if normallyVisible { return true }
+        guard isFreeBook, isArchived, let downloadEntry,
+              case .existing(let targetID) = downloadEntry.target
+        else { return false }
+        return targetID == bookID
+    }
 }
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
+    @Environment(LibriVoxDownloadManager.self) private var downloadManager
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
     @Query private var audiobooks: [Audiobook]
@@ -23,12 +56,12 @@ struct ContentView: View {
     @Namespace private var readingStatsNamespace
     private let readingStatsMorphID = "reading-activity-heatmap"
 
-    // Each library tab keeps its own sort preference. "librarySortOption" is retained as the All Books
+    // Each library tab keeps its own sort preference. "librarySortOption" remains the Library
     // key so existing users keep their saved choice; Favorites gets its own independent key.
     @AppStorage("librarySortOption") private var allBooksSortRaw = LibrarySortOption.recent.rawValue
     @AppStorage("favoritesSortOption") private var favoritesSortRaw = LibrarySortOption.recent.rawValue
     // When the user chose "Free books" in onboarding, the app always opens on Free Books and the
-    // tabs reorder to Favorites / Free Books / All Books. Default false = unchanged behavior.
+    // tabs reorder to Favorites / Free Books / Library. Default false = unchanged behavior.
     @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
@@ -218,7 +251,7 @@ struct ContentView: View {
                 viewModel.renameCandidate = nil
             }
         }
-        .alert("Something Went Wrong", isPresented: $viewModel.isShowingAlert) {
+        .alert(viewModel.alertTitle, isPresented: $viewModel.isShowingAlert) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(viewModel.alertMessage)
@@ -324,8 +357,8 @@ struct ContentView: View {
 
     // MARK: - Tab Picker
 
-    /// Tab order is fixed for own-book users (Favorites / All Books / Free Books). Users who chose
-    /// "Free books" in onboarding get Free Books promoted to the center (Favorites / Free Books / All Books).
+    /// Tab order is fixed for own-book users (Favorites / Library / Free Books). Users who chose
+    /// "Free books" in onboarding get Free Books promoted to the center (Favorites / Free Books / Library).
     private var tabOrder: [LibraryTab] {
         startOnFreeBooks ? [.favorites, .freeBooks, .allBooks] : [.favorites, .allBooks, .freeBooks]
     }
@@ -345,7 +378,7 @@ struct ContentView: View {
         case .favorites:
             sortableTabButton(title: "Favorites", tab: .favorites, sortRaw: $favoritesSortRaw)
         case .allBooks:
-            sortableTabButton(title: "All Books", tab: .allBooks, sortRaw: $allBooksSortRaw)
+            sortableTabButton(title: tab.title, tab: .allBooks, sortRaw: $allBooksSortRaw)
         case .freeBooks:
             tabButton(title: "Free Books", tab: .freeBooks)
         }
@@ -447,26 +480,27 @@ struct ContentView: View {
     @ViewBuilder
     private func booksGrid(for tab: LibraryTab) -> some View {
         let books = displayedBooks(for: tab)
-        if books.isEmpty {
-            ScrollView {
+        ScrollView {
+            LazyVStack(spacing: 16) {
+                if tab == .allBooks {
+                    LibriVoxDownloadSection()
+                }
                 if tab == .favorites { readingActivityHeader }
-                emptyState(for: tab)
-                    .padding(.top, 24)
-            }
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 16) {
-                    if tab == .favorites { readingActivityHeader }
+
+                if books.isEmpty {
+                    emptyState(for: tab)
+                        .padding(.top, 24)
+                } else {
                     LazyVGrid(columns: gridColumns, spacing: 16) {
                         ForEach(books) { audiobook in
                             audiobookGridItem(audiobook)
                         }
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 20)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+            .padding(.bottom, 20)
         }
     }
 
@@ -501,7 +535,8 @@ struct ContentView: View {
             AudiobookCardView(
                 audiobook: audiobook,
                 isCurrentlyPlaying: player.currentAudiobook?.id == audiobook.id,
-                isLoadingPlayback: player.isLoadingPlayback(for: audiobook)
+                isLoadingPlayback: player.isLoadingPlayback(for: audiobook),
+                downloadEntry: audiobook.catalogId.flatMap(downloadManager.entry(for:))
             )
         }
         .buttonStyle(.plain)
@@ -615,16 +650,23 @@ struct ContentView: View {
         // Owned books synced from iCloud may exist without their audio on this device.
         // Hide those from the main grid — they only surface in Cloud Library for manual restore.
         // Free books stay visible: they keep remote URLs after sync and remain streamable.
-        // Archived free books (removed by the user but kept in iCloud) are hidden here too; they
-        // surface only in the iCloud Library, where "Stream" un-archives them.
-        let playable = audiobooks.filter { ($0.isDownloaded || $0.isFreeBook) && !$0.isArchived }
-        let base: [Audiobook]
+        // Archived free books stay hidden unless this Library page is actively restoring that
+        // exact row; Cloud Library remains their normal home.
+        let base = audiobooks.filter { audiobook in
+            LibraryBookVisibility.includes(
+                bookID: audiobook.id,
+                isDownloaded: audiobook.isDownloaded,
+                isFreeBook: audiobook.isFreeBook,
+                isArchived: audiobook.isArchived,
+                isFavorite: audiobook.isFavorite,
+                tab: tab,
+                downloadEntry: audiobook.catalogId.flatMap(downloadManager.entry(for:))
+            )
+        }
         let sortRaw: String
         if tab == .favorites {
-            base = playable.filter { $0.isFavorite }
             sortRaw = favoritesSortRaw
         } else {
-            base = playable
             sortRaw = allBooksSortRaw
         }
         return viewModel.sorted(base, by: sortRaw)

@@ -24,6 +24,7 @@ final class FreeBookDownloadService: FreeBookDownloading {
     private var bookDownloadState: [String: BookDownloadState] = [:]
     private var pendingQueue: [FreeBookCatalogEntry] = []
     private var modelContext: ModelContext?
+    private var queueHandoffRetryTask: Task<Void, Never>?
 
     struct DownloadTaskContext {
         let catalogId: String
@@ -36,6 +37,15 @@ final class FreeBookDownloadService: FreeBookDownloading {
         let folderName: String
         var completedTracks: Int
         var totalTracks: Int
+    }
+
+    struct QueueIdentityLookupError: LocalizedError {
+        let catalogId: String
+        let underlyingError: Error
+
+        var errorDescription: String? {
+            underlyingError.localizedDescription
+        }
     }
 
     // MARK: - Configure
@@ -54,7 +64,18 @@ final class FreeBookDownloadService: FreeBookDownloading {
     // MARK: - Public API
 
     func startDownload(entry: FreeBookCatalogEntry) {
-        guard !activeDownloads.contains(entry.id) else { return }
+        let queuedCatalogIds = Set(pendingQueue.map(\.id))
+        do {
+            guard try Self.shouldAcceptDownload(
+                catalogId: entry.id,
+                activeCatalogIds: activeDownloads,
+                queuedCatalogIds: queuedCatalogIds,
+                modelContext: modelContext
+            ) else { return }
+        } catch {
+            downloadErrors[entry.id] = "Could not check the library: \(error.localizedDescription)"
+            return
+        }
 
         guard checkDiskSpace(requiredMB: entry.downloadSizeMB) else {
             downloadErrors[entry.id] = "Not enough storage space. This book requires \(Int(entry.downloadSizeMB)) MB."
@@ -91,12 +112,57 @@ final class FreeBookDownloadService: FreeBookDownloading {
 
     // MARK: - Finalization
 
+    @discardableResult
     func finalizeDownload(
         catalogEntry: FreeBookCatalogEntry,
         folderName: String,
         coverData: Data?,
-        modelContext: ModelContext
-    ) throws {
+        modelContext: ModelContext,
+        saveModelContext: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> Audiobook {
+        if let match = try FreeBookIdentityService.match(
+            catalogId: catalogEntry.id,
+            modelContext: modelContext
+        ) {
+            switch match.classification {
+            case .downloadedActive:
+                let freshFolderURL = try Self.storageFolderURL(for: folderName)
+                if FileManager.default.fileExists(atPath: freshFolderURL.path(percentEncoded: false)) {
+                    try FileManager.default.removeItem(at: freshFolderURL)
+                }
+                return match.audiobook
+            case .streamingActive, .archived:
+                let tracks = catalogEntry.tracks.map { track in
+                    let storedFileName = String(format: "%03d", track.orderIndex + 1) + "-" + track.fileName
+                    let savedTrack = AudioTrack(
+                        title: track.title,
+                        originalFileName: track.fileName,
+                        storedFileName: storedFileName,
+                        orderIndex: track.orderIndex,
+                        duration: track.durationSeconds
+                    )
+                    savedTrack.remoteURLString = track.downloadURL
+                    return savedTrack
+                }
+                do {
+                    return try FreeBookIdentityService.promoteToDownloaded(
+                        match.audiobook,
+                        folderName: folderName,
+                        title: catalogEntry.title,
+                        author: catalogEntry.author,
+                        coverArtData: coverData,
+                        tracks: tracks,
+                        modelContext: modelContext,
+                        saveModelContext: saveModelContext
+                    )
+                } catch {
+                    let freshFolderURL = try Self.storageFolderURL(for: folderName)
+                    try? FileManager.default.removeItem(at: freshFolderURL)
+                    throw error
+                }
+            }
+        }
+
         let audiobook = Audiobook(
             title: catalogEntry.title,
             author: catalogEntry.author,
@@ -123,7 +189,74 @@ final class FreeBookDownloadService: FreeBookDownloading {
         }
 
         audiobook.totalDuration = audiobook.sortedTracks.reduce(0) { $0 + $1.duration }
-        try modelContext.save()
+        do {
+            try saveModelContext(modelContext)
+            return audiobook
+        } catch {
+            let insertedTracks = audiobook.tracks
+            audiobook.tracks.removeAll()
+            for track in insertedTracks {
+                track.audiobook = nil
+                modelContext.delete(track)
+            }
+            modelContext.delete(audiobook)
+            let freshFolderURL = try Self.storageFolderURL(for: folderName)
+            try? FileManager.default.removeItem(at: freshFolderURL)
+            throw error
+        }
+    }
+
+    /// Shared admission rule for direct starts and queueing. Downloaded identities block another
+    /// download; streaming and archived identities remain eligible for in-place promotion.
+    static func shouldAcceptDownload(
+        catalogId: String,
+        activeCatalogIds: Set<String>,
+        queuedCatalogIds: Set<String>,
+        modelContext: ModelContext?
+    ) throws -> Bool {
+        guard !activeCatalogIds.contains(catalogId), !queuedCatalogIds.contains(catalogId) else {
+            return false
+        }
+        guard let modelContext else { return true }
+        guard let match = try FreeBookIdentityService.match(
+            catalogId: catalogId,
+            modelContext: modelContext
+        ) else {
+            return true
+        }
+        return match.classification != .downloadedActive
+    }
+
+    /// Pops stale queue entries until one still has no active or persisted identity.
+    static func dequeueNextEligibleDownload(
+        from queue: inout [FreeBookCatalogEntry],
+        activeCatalogIds: Set<String>,
+        modelContext: ModelContext?,
+        admissionCheck: ((FreeBookCatalogEntry) throws -> Bool)? = nil
+    ) throws -> FreeBookCatalogEntry? {
+        while let candidate = queue.first {
+            let isEligible: Bool
+            do {
+                if let admissionCheck {
+                    isEligible = try admissionCheck(candidate)
+                } else {
+                    isEligible = try shouldAcceptDownload(
+                        catalogId: candidate.id,
+                        activeCatalogIds: activeCatalogIds,
+                        queuedCatalogIds: [],
+                        modelContext: modelContext
+                    )
+                }
+            } catch {
+                throw QueueIdentityLookupError(catalogId: candidate.id, underlyingError: error)
+            }
+
+            queue.removeFirst()
+            if isEligible {
+                return candidate
+            }
+        }
+        return nil
     }
 
     // MARK: - Delegate Callbacks
@@ -132,7 +265,7 @@ final class FreeBookDownloadService: FreeBookDownloading {
         guard let context = taskContexts[taskId] else { return }
 
         do {
-            let folderURL = try storageFolderURL(for: context.folderName)
+            let folderURL = try Self.storageFolderURL(for: context.folderName)
             let storedFileName = String(format: "%03d", context.trackEntry.orderIndex + 1) + "-" + context.trackEntry.fileName
             let destinationURL = folderURL.appendingPathComponent(storedFileName)
 
@@ -235,9 +368,36 @@ final class FreeBookDownloadService: FreeBookDownloading {
         downloadProgress.removeValue(forKey: catalogId)
         bookDownloadState.removeValue(forKey: catalogId)
 
-        if let next = pendingQueue.first {
-            pendingQueue.removeFirst()
-            beginDownload(entry: next)
+        beginNextQueuedDownload()
+    }
+
+    private func beginNextQueuedDownload() {
+        queueHandoffRetryTask?.cancel()
+        queueHandoffRetryTask = nil
+
+        do {
+            if let next = try Self.dequeueNextEligibleDownload(
+                from: &pendingQueue,
+                activeCatalogIds: activeDownloads,
+                modelContext: modelContext
+            ) {
+                beginDownload(entry: next)
+            }
+        } catch {
+            guard let candidate = pendingQueue.first else { return }
+            let lookupError = error as? QueueIdentityLookupError
+            let catalogId = lookupError?.catalogId ?? candidate.id
+            downloadErrors[catalogId] = "Could not check the library: \(error.localizedDescription)"
+            queueHandoffRetryTask = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+                guard let self else { return }
+                self.queueHandoffRetryTask = nil
+                self.beginNextQueuedDownload()
+            }
         }
     }
 
@@ -252,7 +412,7 @@ final class FreeBookDownloadService: FreeBookDownloading {
         return freeSpace > Int64(Double(requiredBytes) * 1.1)
     }
 
-    private func storageFolderURL(for folderName: String) throws -> URL {
+    static func storageFolderURL(for folderName: String) throws -> URL {
         let applicationSupport = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,

@@ -59,18 +59,11 @@ struct AudioSessionInterruptionTests {
 
     // MARK: - .ended
 
-    @Test func interruptionEndedResumesWhenShouldResumeSet() async throws {
-        let player = AudioPlayerManager()
-        player.play()
+    @Test func interruptionEndedResumesWhenShouldResumeSet() {
+        var controller = AudioSessionInterruptionController()
 
-        postInterruption(type: .began)
-        try await settle()
-        #expect(player.isPlaying == false) // sanity: paused by .began
-
-        postInterruption(type: .ended, options: .shouldResume)
-        try await settle()
-
-        #expect(player.isPlaying == true)
+        #expect(controller.action(for: .began, options: [], isPlaying: true) == .pause)
+        #expect(controller.action(for: .ended, options: .shouldResume, isPlaying: false) == .resume)
     }
 
     @Test func interruptionEndedDoesNotResumeWithoutShouldResume() async throws {
@@ -86,17 +79,9 @@ struct AudioSessionInterruptionTests {
         #expect(player.isPlaying == false)
     }
 
-    @Test func interruptionEndedWithoutPriorBeganDoesNotStartPlayback() async throws {
-        let player = AudioPlayerManager()
-        // Never called play() — .ended + shouldResume should still start playback
-        // because the handler calls play() unconditionally when shouldResume is set.
-        // This mirrors real device behaviour where AVFoundation tracks the prior state.
-        postInterruption(type: .ended, options: .shouldResume)
-        try await settle()
+    @Test func interruptionEndedWithoutPriorBeganDoesNotStartPlayback() {
+        var controller = AudioSessionInterruptionController()
 
-        // isPlaying will be true because play() sets it regardless of prior state.
-        // This is consistent with how the system works: if shouldResume is set,
-        // the app should resume.
-        #expect(player.isPlaying == true)
+        #expect(controller.action(for: .ended, options: .shouldResume, isPlaying: false) == .none)
     }
 }

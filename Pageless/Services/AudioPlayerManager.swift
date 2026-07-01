@@ -10,6 +10,45 @@ import SwiftData
 import SwiftUI
 import UIKit
 
+struct AudioSessionInterruptionController {
+    enum Action: Equatable {
+        case none
+        case pause
+        case resume
+    }
+
+    private var isInterruptionActive = false
+    private var wasPlayingBeforeInterruption = false
+
+    mutating func action(
+        for type: AVAudioSession.InterruptionType,
+        options: AVAudioSession.InterruptionOptions,
+        isPlaying: Bool
+    ) -> Action {
+        switch type {
+        case .began:
+            if !isInterruptionActive {
+                wasPlayingBeforeInterruption = isPlaying
+            }
+            isInterruptionActive = true
+            return isPlaying ? .pause : .none
+
+        case .ended:
+            guard isInterruptionActive else { return .none }
+            defer {
+                isInterruptionActive = false
+                wasPlayingBeforeInterruption = false
+            }
+            return wasPlayingBeforeInterruption && options.contains(.shouldResume)
+                ? .resume
+                : .none
+
+        @unknown default:
+            return .none
+        }
+    }
+}
+
 @MainActor
 final class AudioPlayerManager: NSObject, ObservableObject {
     /// Shared with `PlayerView` and CarPlay playback-rate controls.
@@ -40,6 +79,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var timeControlStatusObservation: NSKeyValueObservation?
     private var backgroundObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
+    private var interruptionController = AudioSessionInterruptionController()
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
@@ -76,16 +116,19 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             guard let self,
                   let typeValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
                   let type = AVAudioSession.InterruptionType(rawValue: typeValue) else { return }
+            let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
             Task { @MainActor in
-                switch type {
-                case .began:
-                    if self.isPlaying { self.pause() }
-                case .ended:
-                    if let optionsValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt,
-                       AVAudioSession.InterruptionOptions(rawValue: optionsValue).contains(.shouldResume) {
-                        self.play()
-                    }
-                default:
+                switch self.interruptionController.action(
+                    for: type,
+                    options: options,
+                    isPlaying: self.isPlaying
+                ) {
+                case .pause:
+                    self.pause()
+                case .resume:
+                    self.play()
+                case .none:
                     break
                 }
             }

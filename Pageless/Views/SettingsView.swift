@@ -691,7 +691,7 @@ private struct HomeTabRow: View {
                 segment(title: "Free Books", icon: "books.vertical.fill", isOn: startOnFreeBooks) {
                     startOnFreeBooks = true
                 }
-                segment(title: "All Books", icon: "square.stack.fill", isOn: !startOnFreeBooks) {
+                segment(title: LibraryTab.allBooks.title, icon: "square.stack.fill", isOn: !startOnFreeBooks) {
                     startOnFreeBooks = false
                 }
             }
@@ -703,7 +703,7 @@ private struct HomeTabRow: View {
                 Capsule()
                     .fill(Color.amber)
                     .matchedGeometryEffect(
-                        id: startOnFreeBooks ? "Free Books" : "All Books",
+                        id: startOnFreeBooks ? LibraryTab.freeBooks.title : LibraryTab.allBooks.title,
                         in: pill,
                         isSource: false
                     )

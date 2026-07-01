@@ -37,6 +37,7 @@ enum LibraryImportError: LocalizedError {
     case couldNotReadFile(URL)
     case couldNotCreateStorage
     case invalidTitle
+    case alreadyInLibrary
 
     var errorDescription: String? {
         switch self {
@@ -48,6 +49,8 @@ enum LibraryImportError: LocalizedError {
             "The app could not create local storage for this audiobook."
         case .invalidTitle:
             "Give the audiobook a title before importing it."
+        case .alreadyInLibrary:
+            "This audiobook is already in your library."
         }
     }
 }
@@ -139,6 +142,10 @@ enum LibraryImportService {
             throw LibraryImportError.invalidTitle
         }
 
+        if try findActiveDuplicate(for: pending, modelContext: modelContext) != nil {
+            throw LibraryImportError.alreadyInLibrary
+        }
+
         let folderName = UUID().uuidString
         let folderURL = try storageFolderURL(for: folderName)
 
@@ -176,6 +183,44 @@ enum LibraryImportService {
         try modelContext.save()
 
         return audiobook
+    }
+
+    /// Exact, order-independent track identity for imported own books. Fingerprint counts are
+    /// preserved so repeated chapters cannot collapse into a set match.
+    static func hasExactFingerprintMultiset(
+        _ pending: PendingImportSelection,
+        matching audiobook: Audiobook
+    ) -> Bool {
+        guard pending.tracks.count == audiobook.tracks.count else { return false }
+
+        let pendingFingerprints = pending.tracks.compactMap(\.contentFingerprint)
+        let existingFingerprints = audiobook.tracks.compactMap(\.contentFingerprint)
+        guard pendingFingerprints.count == pending.tracks.count,
+              existingFingerprints.count == audiobook.tracks.count else {
+            return false
+        }
+
+        func counts(_ fingerprints: [String]) -> [String: Int] {
+            fingerprints.reduce(into: [:]) { result, fingerprint in
+                result[fingerprint, default: 0] += 1
+            }
+        }
+
+        return counts(pendingFingerprints) == counts(existingFingerprints)
+    }
+
+    /// Finds a currently usable own-book row with the same imported audio identity. Free books use
+    /// catalog IDs, while cloud-only own-book orphans keep their specialized restoration flow.
+    static func findActiveDuplicate(
+        for pending: PendingImportSelection,
+        modelContext: ModelContext
+    ) throws -> Audiobook? {
+        let books = try modelContext.fetch(FetchDescriptor<Audiobook>())
+        return books.first { audiobook in
+            audiobook.isDownloaded
+                && !audiobook.isFreeBook
+                && hasExactFingerprintMultiset(pending, matching: audiobook)
+        }
     }
 
     static func deleteAudiobook(

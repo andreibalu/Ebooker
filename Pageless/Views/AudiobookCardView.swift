@@ -9,6 +9,7 @@ struct AudiobookCardView: View {
     let audiobook: Audiobook
     let isCurrentlyPlaying: Bool
     let isLoadingPlayback: Bool
+    let downloadEntry: LibriVoxDownloadManager.Entry?
 
     @State private var folderSizeMB: Int?
 
@@ -97,16 +98,21 @@ struct AudiobookCardView: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
 
-                    if audiobook.isStreamingOnly {
+                    if let status = LibriVoxDownloadPresentation.cardStatus(
+                        entry: downloadEntry,
+                        isStreamingOnly: audiobook.isStreamingOnly
+                    ) {
                         Text("·")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         HStack(spacing: 2) {
-                            Image(systemName: "antenna.radiowaves.left.and.right")
+                            Image(systemName: downloadEntry == nil
+                                  ? "antenna.radiowaves.left.and.right"
+                                  : "arrow.down.circle")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                                 .accessibilityHidden(true)
-                            Text("Stream")
+                            Text(status)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }

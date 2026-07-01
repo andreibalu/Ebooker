@@ -7,17 +7,6 @@ import Foundation
 import Observation
 import SwiftData
 
-struct ActiveLibriVoxDownload: Identifiable {
-    let id: String // book.id
-    let book: LibriVoxBook
-    var completed: Int
-    var total: Int
-
-    var progress: Double {
-        total > 0 ? Double(completed) / Double(total) : 0
-    }
-}
-
 enum DurationFilter: String, CaseIterable, Identifiable {
     case short     = "< 1 hr"
     case medium    = "1–3 hrs"
@@ -48,7 +37,6 @@ final class BrowseLibriVoxViewModel {
     var searchQuery: String = ""
     var searchResults: [LibriVoxBook] = []
     var syncState: SyncState = .idle
-    var activeDownloads: [String: ActiveLibriVoxDownload] = [:]
     var featuredBooks: [LibriVoxBook] = []
     var todaysPick: LibriVoxBook? = nil
 
@@ -100,10 +88,6 @@ final class BrowseLibriVoxViewModel {
         availableLanguages.isEmpty ? Self.fallbackLanguages : availableLanguages
     }
 
-    var sortedActiveDownloads: [ActiveLibriVoxDownload] {
-        activeDownloads.values.sorted { $0.book.title < $1.book.title }
-    }
-
     // MARK: - Sample playback URL cache
 
     var cachedFirstTrackURLs: [String: URL] = [:]
@@ -125,35 +109,6 @@ final class BrowseLibriVoxViewModel {
 
     private var searchTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
-    private var cancelHandlers: [String: () -> Void] = [:]
-
-    // MARK: - Download tracking
-
-    func registerDownload(book: LibriVoxBook, total: Int, cancelHandler: @escaping () -> Void = {}) {
-        activeDownloads[book.id] = ActiveLibriVoxDownload(id: book.id, book: book, completed: 0, total: total)
-        cancelHandlers[book.id] = cancelHandler
-    }
-
-    func updateDownloadProgress(bookId: String, completed: Int, total: Int) {
-        activeDownloads[bookId]?.completed = completed
-        activeDownloads[bookId]?.total = total
-    }
-
-    func completeDownload(bookId: String) {
-        activeDownloads.removeValue(forKey: bookId)
-        cancelHandlers.removeValue(forKey: bookId)
-    }
-
-    func cancelOrFailDownload(bookId: String) {
-        activeDownloads.removeValue(forKey: bookId)
-        cancelHandlers.removeValue(forKey: bookId)
-    }
-
-    func cancelDownload(bookId: String) {
-        cancelHandlers[bookId]?()
-        cancelHandlers.removeValue(forKey: bookId)
-    }
-
     var lastSyncDescription: String {
         guard let date = LibriVoxCatalogSync.lastSyncDate else { return "Never synced" }
         return "Updated \(TimeFormatter.relativeDateString(for: date)) · Books provided by Librivox"

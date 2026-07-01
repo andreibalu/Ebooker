@@ -42,6 +42,37 @@ enum LibriVoxDownloadService {
         modelContext: ModelContext,
         onProgress: @escaping ProgressHandler
     ) async throws -> Audiobook {
+        try await downloadAndImport(
+            book: book,
+            tracks: tracks,
+            modelContext: modelContext,
+            onProgress: onProgress,
+            downloadToTemporaryFile: { remoteURL in
+                let (temporaryURL, _) = try await URLSession.shared.download(from: remoteURL)
+                return temporaryURL
+            },
+            beforeCommit: {},
+            saveModelContext: { try $0.save() }
+        )
+    }
+
+    /// Injectable boundaries make the final-file / pre-commit cancellation window deterministic.
+    static func downloadAndImport(
+        book: LibriVoxBook,
+        tracks: [LibriVoxAPITrack],
+        modelContext: ModelContext,
+        onProgress: @escaping ProgressHandler,
+        downloadToTemporaryFile: @escaping (URL) async throws -> URL,
+        beforeCommit: @escaping () -> Void,
+        saveModelContext: @escaping (ModelContext) throws -> Void = { try $0.save() }
+    ) async throws -> Audiobook {
+        if let match = try FreeBookIdentityService.match(
+            catalogId: book.id,
+            modelContext: modelContext
+        ), match.classification == .downloadedActive {
+            return match.audiobook
+        }
+
         let folderName = UUID().uuidString
         let folderURL = try makeStorageFolder(named: folderName)
 
@@ -61,7 +92,7 @@ enum LibriVoxDownloadService {
                 let storedFileName = "\(String(format: "%03d", index + 1))-\(sanitized(safeTitle)).\(ext)"
                 let destURL = folderURL.appendingPathComponent(storedFileName)
 
-                let (tempURL, _) = try await URLSession.shared.download(from: remoteURL)
+                let tempURL = try await downloadToTemporaryFile(remoteURL)
                 // Move from temp location (URLSession cleans up temp automatically on move)
                 if FileManager.default.fileExists(atPath: destURL.path(percentEncoded: false)) {
                     try FileManager.default.removeItem(at: destURL)
@@ -84,29 +115,16 @@ enum LibriVoxDownloadService {
                 onProgress(index + 1, tracks.count)
             }
 
-            // Build Audiobook
-            let totalDuration = audioTracks.reduce(0) { $0 + $1.duration }
-            // A downloaded LibriVox book is still a free book — stamp its catalog id so it keeps the
-            // same iCloud identity as a streaming entry and can be matched/restored by id later.
-            let audiobook = Audiobook(
-                title: book.title,
-                author: book.authorDisplay,
+            beforeCommit()
+            try Task.checkCancellation()
+            return try finalizeDownloadedBook(
+                book: book,
                 folderName: folderName,
-                coverArtData: nil,
-                totalDuration: totalDuration,
-                isFreeBook: true,
-                catalogId: book.id
+                folderURL: folderURL,
+                audioTracks: audioTracks,
+                modelContext: modelContext,
+                saveModelContext: saveModelContext
             )
-
-            modelContext.insert(audiobook)
-            for track in audioTracks {
-                track.audiobook = audiobook
-                modelContext.insert(track)
-                audiobook.tracks.append(track)
-            }
-            try modelContext.save()
-
-            return audiobook
 
         } catch {
             // Clean up partial download folder on failure
@@ -122,10 +140,53 @@ enum LibriVoxDownloadService {
         modelContext: ModelContext,
         onProgress: @escaping ProgressHandler
     ) async throws {
+        try await downloadStreamedBook(
+            audiobook: audiobook,
+            modelContext: modelContext,
+            onProgress: onProgress,
+            downloadToTemporaryFile: { remoteURL in
+                let (temporaryURL, _) = try await URLSession.shared.download(from: remoteURL)
+                return temporaryURL
+            }
+        )
+    }
+
+    /// Injectable transport seam keeps cancellation/failure rollback deterministic in tests.
+    static func downloadStreamedBook(
+        audiobook: Audiobook,
+        modelContext: ModelContext,
+        onProgress: @escaping ProgressHandler,
+        downloadToTemporaryFile: @escaping (URL) async throws -> URL
+    ) async throws {
+        try await downloadStreamedBook(
+            audiobook: audiobook,
+            modelContext: modelContext,
+            onProgress: onProgress,
+            downloadToTemporaryFile: downloadToTemporaryFile,
+            beforeCommit: {},
+            saveModelContext: { try $0.save() }
+        )
+    }
+
+    static func downloadStreamedBook(
+        audiobook: Audiobook,
+        modelContext: ModelContext,
+        onProgress: @escaping ProgressHandler,
+        downloadToTemporaryFile: @escaping (URL) async throws -> URL,
+        beforeCommit: @escaping () -> Void,
+        saveModelContext: @escaping (ModelContext) throws -> Void = { try $0.save() }
+    ) async throws {
         let folderURL = try makeStorageFolder(named: audiobook.folderName)
         let sortedTracks = audiobook.sortedTracks
+        let trackSnapshots = sortedTracks.map {
+            ($0, $0.originalFileName, $0.storedFileName, $0.duration)
+        }
+        let wasDownloaded = audiobook.isDownloaded
+        let wasArchived = audiobook.isArchived
+        let originalTotalDuration = audiobook.totalDuration
 
         do {
+            var stagedMetadata: [(AudioTrack, String, String, TimeInterval)] = []
             for (index, track) in sortedTracks.enumerated() {
                 guard let remoteURL = track.remoteURL else {
                     throw LibriVoxDownloadError.invalidTrackURL(track.title)
@@ -136,27 +197,42 @@ enum LibriVoxDownloadService {
                 let storedFileName = "\(String(format: "%03d", index + 1))-\(sanitized(safeTitle)).\(ext)"
                 let destURL = folderURL.appendingPathComponent(storedFileName)
 
-                let (tempURL, _) = try await URLSession.shared.download(from: remoteURL)
+                let tempURL = try await downloadToTemporaryFile(remoteURL)
                 if FileManager.default.fileExists(atPath: destURL.path(percentEncoded: false)) {
                     try FileManager.default.removeItem(at: destURL)
                 }
                 try FileManager.default.moveItem(at: tempURL, to: destURL)
 
-                track.storedFileName = storedFileName
-                track.originalFileName = remoteURL.lastPathComponent
-
+                var duration = track.duration
                 let asset = AVURLAsset(url: destURL)
                 if let dur = try? await asset.load(.duration), dur.seconds.isFinite, dur.seconds > 0 {
-                    track.duration = dur.seconds
+                    duration = dur.seconds
                 }
+                stagedMetadata.append((track, remoteURL.lastPathComponent, storedFileName, duration))
 
                 onProgress(index + 1, sortedTracks.count)
             }
 
+            beforeCommit()
+            try Task.checkCancellation()
+            for (track, originalFileName, storedFileName, duration) in stagedMetadata {
+                track.originalFileName = originalFileName
+                track.storedFileName = storedFileName
+                track.duration = duration
+            }
             audiobook.isDownloaded = true
+            audiobook.isArchived = false
             audiobook.totalDuration = sortedTracks.reduce(0) { $0 + $1.duration }
-            try modelContext.save()
+            try saveModelContext(modelContext)
         } catch {
+            for (track, originalFileName, storedFileName, duration) in trackSnapshots {
+                track.originalFileName = originalFileName
+                track.storedFileName = storedFileName
+                track.duration = duration
+            }
+            audiobook.isDownloaded = wasDownloaded
+            audiobook.isArchived = wasArchived
+            audiobook.totalDuration = originalTotalDuration
             // Clean up partial downloads on failure
             try? FileManager.default.removeItem(at: folderURL)
             throw error
@@ -164,6 +240,66 @@ enum LibriVoxDownloadService {
     }
 
     // MARK: - Private helpers
+
+    /// Resolves the identity race after files exist. Downloaded rows win and discard the fresh
+    /// folder; streaming/archived rows absorb the files while preserving their book identity.
+    static func finalizeDownloadedBook(
+        book: LibriVoxBook,
+        folderName: String,
+        folderURL: URL,
+        audioTracks: [AudioTrack],
+        modelContext: ModelContext,
+        saveModelContext: (ModelContext) throws -> Void = { try $0.save() }
+    ) throws -> Audiobook {
+        if let match = try FreeBookIdentityService.match(catalogId: book.id, modelContext: modelContext) {
+            switch match.classification {
+            case .downloadedActive:
+                if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
+                    try FileManager.default.removeItem(at: folderURL)
+                }
+                return match.audiobook
+            case .streamingActive, .archived:
+                return try FreeBookIdentityService.promoteToDownloaded(
+                    match.audiobook,
+                    folderName: folderName,
+                    title: book.title,
+                    author: book.authorDisplay,
+                    coverArtData: nil,
+                    tracks: audioTracks,
+                    modelContext: modelContext,
+                    saveModelContext: saveModelContext
+                )
+            }
+        }
+
+        let audiobook = Audiobook(
+            title: book.title,
+            author: book.authorDisplay,
+            folderName: folderName,
+            coverArtData: nil,
+            totalDuration: audioTracks.reduce(0) { $0 + $1.duration },
+            isFreeBook: true,
+            catalogId: book.id
+        )
+        modelContext.insert(audiobook)
+        for track in audioTracks {
+            track.audiobook = audiobook
+            modelContext.insert(track)
+            audiobook.tracks.append(track)
+        }
+        do {
+            try saveModelContext(modelContext)
+            return audiobook
+        } catch {
+            audiobook.tracks.removeAll()
+            for track in audioTracks {
+                track.audiobook = nil
+                modelContext.delete(track)
+            }
+            modelContext.delete(audiobook)
+            throw error
+        }
+    }
 
     private static func makeStorageFolder(named folderName: String) throws -> URL {
         let appSupport = try FileManager.default.url(

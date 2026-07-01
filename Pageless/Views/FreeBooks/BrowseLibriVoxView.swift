@@ -62,6 +62,7 @@ struct BrowseLibriVoxView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(LibriVoxDownloadManager.self) private var downloadManager
 
     @AppStorage("freeBooksCollectionsHidden") private var collectionsHiddenStored = false
     /// Mirrors `collectionsHiddenStored` — @AppStorage writes don't participate in
@@ -88,6 +89,15 @@ struct BrowseLibriVoxView: View {
                     .padding(.top, 4)
 
                 statusLine
+
+                if !downloadManager.entries.isEmpty {
+                    ScrollView(.vertical) {
+                        LibriVoxDownloadSection()
+                            .padding(.horizontal, 20)
+                    }
+                    .frame(maxHeight: 220)
+                    .padding(.top, 12)
+                }
 
                 contentArea
             }
@@ -408,10 +418,6 @@ struct BrowseLibriVoxView: View {
     private var browseContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if !viewModel.activeDownloads.isEmpty {
-                    downloadsSection
-                }
-
                 if let pick = viewModel.todaysPick {
                     heroCard(pick)
                         .padding(.horizontal, 20)
@@ -604,76 +610,6 @@ struct BrowseLibriVoxView: View {
     private func chartMeta(_ book: LibriVoxBook) -> String {
         guard book.totalTimeSecs > 0 else { return "Unknown length" }
         return "\(book.formattedDuration) · \(book.estimatedDownloadSizeMB) MB"
-    }
-
-    // MARK: - Active downloads (pinned above the hero)
-
-    private var downloadsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            sectionHeader("Downloading · \(viewModel.activeDownloads.count)")
-
-            VStack(spacing: 0) {
-                let downloads = viewModel.sortedActiveDownloads
-                ForEach(downloads) { download in
-                    downloadRow(download, isLast: download.id == downloads.last?.id)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 4)
-        }
-        .padding(.top, 14)
-    }
-
-    private func downloadRow(_ download: ActiveLibriVoxDownload, isLast: Bool) -> some View {
-        NavigationLink {
-            LibriVoxBookDetailView(book: download.book, onOpenPlayer: onOpenPlayer, browseViewModel: viewModel)
-        } label: {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Text(download.book.title)
-                        .font(.system(size: FBType.title, weight: .medium, design: .serif))
-                        .lineLimit(1)
-                        .foregroundStyle(.primary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    FBEyebrow(text: remainingSizeLabel(for: download))
-
-                    Button {
-                        viewModel.cancelDownload(bookId: download.id)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.primary.opacity(0.08))
-                        Capsule()
-                            .fill(Color.amber)
-                            .frame(width: geo.size.width * download.progress)
-                    }
-                }
-                .frame(height: 2)
-                .animation(.linear(duration: 0.2), value: download.progress)
-            }
-            .padding(.top, 10)
-            .padding(.bottom, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .overlay(alignment: .bottom) {
-            if !isLast { hairline }
-        }
-    }
-
-    private func remainingSizeLabel(for download: ActiveLibriVoxDownload) -> String {
-        let totalMB = download.book.estimatedDownloadSizeMB
-        guard totalMB > 0 else { return "" }
-        let remaining = max(0, Int((Double(totalMB) * (1.0 - download.progress)).rounded()))
-        return "\(remaining) MB left"
     }
 
     // MARK: - Search & filter results

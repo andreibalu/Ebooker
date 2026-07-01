@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 
 struct LibriVoxBookDetailView: View {
@@ -11,6 +12,7 @@ struct LibriVoxBookDetailView: View {
     let browseViewModel: BrowseLibriVoxViewModel?
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(LibriVoxDownloadManager.self) private var downloadManager
     @State private var viewModel = LibriVoxBookDetailViewModel()
     @State private var descriptionExpanded = false
     @State private var sampleTrackURL: URL?
@@ -36,25 +38,11 @@ struct LibriVoxBookDetailView: View {
         .background(Color.cream.ignoresSafeArea())
         .navigationTitle(book.title)
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog(
-            "Import your saved progress?",
-            isPresented: Binding(
-                get: { viewModel.pendingRestore != nil },
-                set: { if !$0 { viewModel.pendingRestore = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Import from iCloud") {
-                viewModel.confirmRestore(modelContext: modelContext)
-            }
-            Button("Add as New") {
-                viewModel.declineRestoreAddAsNew(modelContext: modelContext)
-            }
-            Button("Cancel", role: .cancel) {
-                viewModel.pendingRestore = nil
-            }
-        } message: {
-            Text("You have a backup of this book in your iCloud Library with your progress and bookmarks. Import it, or add a fresh copy?")
+        .onAppear {
+            viewModel.refreshIdentity(book: book, modelContext: modelContext)
+        }
+        .onChange(of: downloadManager.entry(for: book.id)?.phase) { _, _ in
+            viewModel.refreshIdentity(book: book, modelContext: modelContext)
         }
     }
 
@@ -183,96 +171,42 @@ struct LibriVoxBookDetailView: View {
 
     @ViewBuilder
     private var actionSection: some View {
-        if viewModel.isAlreadyInLibrary {
+        if let entry = downloadManager.entry(for: book.id) {
+            downloadStatus(entry)
+        } else if viewModel.isDownloaded {
             EmptyView()
-        } else if let trackerDownload = browseViewModel?.activeDownloads[book.id], !viewModel.downloadState.isActive {
-            // Another session is already downloading this book
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Downloading…")
-                        .font(.subheadline.weight(.medium))
-                    Spacer()
-                    Text("\(trackerDownload.completed) / \(trackerDownload.total)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                ProgressView(value: trackerDownload.progress)
-                    .tint(.primary)
-                Button("Cancel Download") {
-                    browseViewModel?.cancelDownload(bookId: book.id)
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            }
         } else {
-            switch viewModel.downloadState {
-            case .idle:
-                VStack(spacing: 10) {
-                    Button {
-                        viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
-                    } label: {
-                        Label("Download Free Book", systemImage: "arrow.down.circle.fill")
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.black)
-                    .controlSize(.large)
-
-                    addToLibraryButton
-                }
-
-            case .fetchingTracks:
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        Text("Fetching track list…")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    Button("Cancel") {
-                        viewModel.cancelDownload()
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-            case .downloading(let completed, let total):
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Downloading…")
-                            .font(.subheadline.weight(.medium))
-                        Spacer()
-                        Text("\(completed) / \(total)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    ProgressView(value: Double(completed), total: Double(max(total, 1)))
-                        .tint(.primary)
-                    Button("Cancel") {
-                        viewModel.cancelDownload()
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-
-            case .complete:
-                EmptyView()
-
-            case .failed(let message):
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) {
+                if let message = viewModel.requestErrorMessage {
                     Label(message, systemImage: "exclamationmark.circle")
                         .font(.subheadline)
                         .foregroundStyle(.red)
-                    Button("Try Again") {
-                        viewModel.startDownload(book: book, modelContext: modelContext, tracker: browseViewModel)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                }
+                Button {
+                    viewModel.startDownload(
+                        book: book,
+                        modelContext: modelContext,
+                        manager: downloadManager
+                    )
+                } label: {
+                    Label("Download Free Book", systemImage: "arrow.down.circle.fill")
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.black)
+                .controlSize(.large)
+
+                if !viewModel.isActiveInLibrary {
+                    addToLibraryButton
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func downloadStatus(_ entry: LibriVoxDownloadManager.Entry) -> some View {
+        LibriVoxDetailDownloadStatus(entry: entry, progressTint: .primary)
     }
 
     // MARK: - Add to Library
@@ -282,7 +216,9 @@ struct LibriVoxBookDetailView: View {
         switch viewModel.addToLibraryState {
         case .idle:
             Button {
-                viewModel.addToLibrary(book: book, modelContext: modelContext)
+                Task {
+                    await viewModel.addToLibrary(book: book, modelContext: modelContext)
+                }
             } label: {
                 Label("Add to Library", systemImage: "plus.circle")
                     .frame(maxWidth: .infinity)
@@ -309,7 +245,9 @@ struct LibriVoxBookDetailView: View {
                     .font(.subheadline)
                     .foregroundStyle(.red)
                 Button("Try Again") {
-                    viewModel.addToLibrary(book: book, modelContext: modelContext)
+                    Task {
+                        await viewModel.addToLibrary(book: book, modelContext: modelContext)
+                    }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -322,8 +260,8 @@ struct LibriVoxBookDetailView: View {
     @ViewBuilder
     private var completionSection: some View {
         let completedAudiobook: Audiobook? = {
-            if case .complete(let ab) = viewModel.downloadState { return ab }
             if case .complete(let ab) = viewModel.addToLibraryState { return ab }
+            if viewModel.isActiveInLibrary { return viewModel.libraryAudiobook }
             return nil
         }()
 
