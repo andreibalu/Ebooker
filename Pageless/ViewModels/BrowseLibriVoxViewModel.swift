@@ -178,6 +178,14 @@ final class BrowseLibriVoxViewModel {
 
     // MARK: - Search
 
+    func catalogBook(id: String, modelContext: ModelContext) -> LibriVoxBook? {
+        var descriptor = FetchDescriptor<LibriVoxBook>(
+            predicate: #Predicate { $0.id == id }
+        )
+        descriptor.fetchLimit = 1
+        return try? modelContext.fetch(descriptor).first
+    }
+
     func onQueryChanged(_ query: String, modelContext: ModelContext) {
         searchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)

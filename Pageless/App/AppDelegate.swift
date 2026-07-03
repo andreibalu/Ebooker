@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     let audioPlayer: AudioPlayerManager
     let freeBookDownloader: FreeBookDownloadService
     let libriVoxDownloadCoordinator: LibriVoxBackgroundDownloadCoordinator
+    let libriVoxDownloadRuntime: LibriVoxDownloadRuntime
     private let backgroundSessionCompletionRegistry = BackgroundSessionCompletionRegistry()
     private var cloudKitImportObserver: NSObjectProtocol?
 
@@ -90,6 +91,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         self.freeBookDownloader = FreeBookDownloadService()
         self.libriVoxDownloadCoordinator = LibriVoxBackgroundDownloadCoordinator(
             modelContext: modelContainer.mainContext
+        )
+        self.libriVoxDownloadRuntime = LibriVoxDownloadRuntime(
+            coordinator: libriVoxDownloadCoordinator,
+            activityController: DownloadLiveActivityController(),
+            isAppActive: { UIApplication.shared.applicationState == .active }
         )
         super.init()
         AppDelegate.shared = self

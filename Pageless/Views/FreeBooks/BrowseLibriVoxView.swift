@@ -8,6 +8,7 @@
 //  inset lists. Serif (New York) for titles/headlines, serif italic for authors
 //  and status copy, small-caps eyebrows for section labels and metadata.
 
+import SwiftData
 import SwiftUI
 
 /// The page's entire type scale — four text sizes, nothing else. Every label on
@@ -68,6 +69,7 @@ struct BrowseLibriVoxView: View {
     /// Mirrors `collectionsHiddenStored` — @AppStorage writes don't participate in
     /// animation transactions, so the view animates this local state and persists separately.
     @State private var collectionsHidden = false
+    @State private var selectedDownloadBook: LibriVoxBook?
 
     private var isSearching: Bool {
         !viewModel.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -90,15 +92,6 @@ struct BrowseLibriVoxView: View {
 
                 statusLine
 
-                if !downloadManager.entries.isEmpty {
-                    ScrollView(.vertical) {
-                        LibriVoxDownloadSection()
-                            .padding(.horizontal, 20)
-                    }
-                    .frame(maxHeight: 220)
-                    .padding(.top, 12)
-                }
-
                 contentArea
             }
             .background(Color.cream.ignoresSafeArea())
@@ -110,6 +103,13 @@ struct BrowseLibriVoxView: View {
         }
         .animation(.easeInOut(duration: 0.35), value: viewModel.isInitialLoading)
         .animation(.easeInOut(duration: 0.3), value: viewModel.featuredBooks.count)
+        .navigationDestination(item: $selectedDownloadBook) { book in
+            LibriVoxBookDetailView(
+                book: book,
+                onOpenPlayer: onOpenPlayer,
+                browseViewModel: viewModel
+            )
+        }
         .onAppear {
             collectionsHidden = collectionsHiddenStored
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
@@ -410,6 +410,20 @@ struct BrowseLibriVoxView: View {
         }
     }
 
+    @ViewBuilder
+    private var downloadRows: some View {
+        if !downloadManager.entries.isEmpty {
+            LibriVoxDownloadSection { catalogID in
+                selectedDownloadBook = viewModel.catalogBook(
+                    id: catalogID,
+                    modelContext: modelContext
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 16)
+        }
+    }
+
     // MARK: - Browse content (hero, collections, chart)
 
     /// Plain ScrollView rather than List: List can't animate row-height changes (the
@@ -418,10 +432,12 @@ struct BrowseLibriVoxView: View {
     private var browseContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                downloadRows
+
                 if let pick = viewModel.todaysPick {
                     heroCard(pick)
                         .padding(.horizontal, 20)
-                        .padding(.top, 16)
+                        .padding(.top, downloadManager.entries.isEmpty ? 16 : 12)
                 }
 
                 collectionsHeaderButton
@@ -617,8 +633,10 @@ struct BrowseLibriVoxView: View {
     private var resultsList: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                downloadRows
+
                 sectionHeader(foundLabel)
-                    .padding(.top, 16)
+                    .padding(.top, downloadManager.entries.isEmpty ? 16 : 12)
 
                 LazyVStack(spacing: 0) {
                     ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.id) { index, book in

@@ -47,6 +47,7 @@ struct LibriVoxDownloadPresentation {
 /// Shared, compact download surface used by Free Books and the Library tab.
 struct LibriVoxDownloadSection: View {
     @Environment(LibriVoxDownloadManager.self) private var manager
+    var onSelect: ((String) -> Void)? = nil
 
     private var entries: [LibriVoxDownloadManager.Entry] {
         manager.entries.values.sorted { $0.metadata.title < $1.metadata.title }
@@ -81,15 +82,20 @@ struct LibriVoxDownloadSection: View {
         let presentation = LibriVoxDownloadPresentation(entry: entry)
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.metadata.title)
-                        .font(.subheadline.weight(.medium))
-                        .lineLimit(1)
-                    Text(presentation.statusText)
-                        .font(.caption)
-                        .foregroundStyle(entry.phase == .failed ? Color.red : Color.secondary)
-                        .lineLimit(1)
+                Group {
+                    if let onSelect {
+                        Button {
+                            onSelect(entry.catalogID)
+                        } label: {
+                            rowSummary(entry, presentation: presentation)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens book details")
+                    } else {
+                        rowSummary(entry, presentation: presentation)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
                 if presentation.showsSpinner {
                     ProgressView().controlSize(.small)
@@ -103,6 +109,23 @@ struct LibriVoxDownloadSection: View {
             }
         }
         .padding(.vertical, 10)
+    }
+
+    private func rowSummary(
+        _ entry: LibriVoxDownloadManager.Entry,
+        presentation: LibriVoxDownloadPresentation
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(entry.metadata.title)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+            Text(presentation.statusText)
+                .font(.caption)
+                .foregroundStyle(entry.phase == .failed ? Color.red : Color.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder

@@ -9,6 +9,28 @@ import Testing
 
 @MainActor
 struct LibriVoxDownloadManagerTests {
+    @Test func runtimeKeepsOneManagerAndRoutesCoordinatorEventsToIt() {
+        let job = restoredJob()
+        let coordinator = MockLibriVoxDownloadCoordinator(restoredJobs: [job])
+        let runtime = LibriVoxDownloadRuntime(
+            coordinator: coordinator,
+            activityController: NoopDownloadActivityController()
+        )
+        let visibleManager = runtime.manager
+
+        coordinator.emit(.progress(
+            catalogID: job.catalogID,
+            attemptID: job.attemptID,
+            completed: 0,
+            total: 2,
+            currentTrackFraction: 0.75
+        ))
+
+        #expect(runtime.manager === visibleManager)
+        #expect(visibleManager.entry(for: job.catalogID)?.phase == .downloading)
+        #expect(visibleManager.entry(for: job.catalogID)?.progress == 0.375)
+    }
+
     @Test func restoredCoordinatorJobAppearsImmediately() {
         var job = restoredJob()
         job.completedIndexes = [0]
