@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* PagelessDownloadActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* PagelessDownloadActivity.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		A10000000000000000000002 /* DownloadActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* DownloadActivityAttributes.swift */; };
+		A10000000000000000000002 /* Pageless/Downloads/DownloadActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* Pageless/Downloads/DownloadActivityAttributes.swift */; };
 		BC744B342F83D03C0007E60E /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC744B332F83D03C0007E60E /* StoreKit.framework */; };
 /* End PBXBuildFile section */
 
@@ -36,9 +36,23 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000008 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000001 /* PagelessDownloadActivity.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		A10000000000000000000004 /* PagelessDownloadActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PagelessDownloadActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		A10000000000000000000005 /* DownloadActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pageless/Downloads/DownloadActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
+		A10000000000000000000005 /* Pageless/Downloads/DownloadActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pageless/Downloads/DownloadActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
 		BC744B332F83D03C0007E60E /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		BC74D7E62F6986AC0070910C /* Pageless.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pageless.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC74D7F52F6986AD0070910C /* PagelessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PagelessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -127,7 +141,7 @@
 			children = (
 				BC74D7E82F6986AC0070910C /* Pageless */,
 				A10000000000000000000006 /* PagelessDownloadActivity */,
-				A10000000000000000000005 /* DownloadActivityAttributes.swift */,
+				A10000000000000000000005 /* Pageless/Downloads/DownloadActivityAttributes.swift */,
 				BC74D7F82F6986AD0070910C /* PagelessTests */,
 				BC74D8022F6986AD0070910C /* PagelessUITests */,
 				BC744B322F83D03C0007E60E /* Frameworks */,
@@ -148,21 +162,29 @@
 		};
 /* End PBXGroup section */
 
-/* Begin PBXCopyFilesBuildPhase section */
-		A10000000000000000000008 /* Embed App Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
-			files = (
-				A10000000000000000000001 /* PagelessDownloadActivity.appex in Embed App Extensions */,
-			);
-			name = "Embed App Extensions";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
-
 /* Begin PBXNativeTarget section */
+		A10000000000000000000009 /* PagelessDownloadActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000015 /* Build configuration list for PBXNativeTarget "PagelessDownloadActivity" */;
+			buildPhases = (
+				A10000000000000000000011 /* Sources */,
+				A10000000000000000000007 /* Frameworks */,
+				A10000000000000000000010 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000006 /* PagelessDownloadActivity */,
+			);
+			name = PagelessDownloadActivity;
+			packageProductDependencies = (
+			);
+			productName = PagelessDownloadActivity;
+			productReference = A10000000000000000000004 /* PagelessDownloadActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		BC74D7E52F6986AC0070910C /* Pageless */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = BC74D8092F6986AD0070910C /* Build configuration list for PBXNativeTarget "Pageless" */;
@@ -186,28 +208,6 @@
 			productName = Pageless;
 			productReference = BC74D7E62F6986AC0070910C /* Pageless.app */;
 			productType = "com.apple.product-type.application";
-		};
-		A10000000000000000000009 /* PagelessDownloadActivity */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = A10000000000000000000015 /* Build configuration list for PBXNativeTarget "PagelessDownloadActivity" */;
-			buildPhases = (
-				A10000000000000000000011 /* Sources */,
-				A10000000000000000000007 /* Frameworks */,
-				A10000000000000000000010 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				A10000000000000000000006 /* PagelessDownloadActivity */,
-			);
-			name = PagelessDownloadActivity;
-			packageProductDependencies = (
-			);
-			productName = PagelessDownloadActivity;
-			productReference = A10000000000000000000004 /* PagelessDownloadActivity.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 		BC74D7F42F6986AD0070910C /* PagelessTests */ = {
 			isa = PBXNativeTarget;
@@ -341,7 +341,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000002 /* DownloadActivityAttributes.swift in Sources */,
+				A10000000000000000000002 /* Pageless/Downloads/DownloadActivityAttributes.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
