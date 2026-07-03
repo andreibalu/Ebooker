@@ -21,10 +21,10 @@ This data is stored in the app's private container on your iPhone. Unpaged does 
 
 | Permission | Why | What happens to the audio/data |
 | ---------- | --- | ------------------------------ |
-| **Microphone** | Hands-free voice search in CarPlay so you can ask for a book by name while driving. | Audio is passed to Apple's Speech framework for transcription. Processing is on-device when supported; otherwise Apple may process it on its servers. Unpaged does not save the recording or send it to any developer-operated server. |
-| **Speech Recognition** | Converting CarPlay voice queries into text, and as a fallback for transcribing audiobook moments. | Apple's Speech framework performs the recognition. Processing is on-device when supported; otherwise audio and transcripts may be sent to Apple under Apple's privacy terms. Unpaged has no server that receives them. |
+| **Microphone** | Hands-free voice search in CarPlay so you can ask for a book by name while driving. | Audio is passed to Apple's Speech framework for on-device transcription. If on-device recognition is unavailable for the selected language, recognition stops instead of sending audio to Apple's speech servers. Unpaged does not save the recording or send it to any developer-operated server. |
+| **Speech Recognition** | Converting CarPlay voice queries into text, and as a fallback for transcribing audiobook moments. | Apple's Speech framework performs recognition on-device. Unpaged requires on-device support and does not permit server-based Speech recognition. |
 
-On iOS 26 and later, the AI features (moment naming and recaps) first use Apple's newer on-device speech engine, which does not require the Speech Recognition permission. Permission is requested only if the app falls back to the older Speech path. If you decline these permissions, CarPlay voice search is disabled and fallback AI transcription cannot run. The rest of the app continues to work. Apple's [Siri, Dictation & Privacy](https://www.apple.com/legal/privacy/data/en/ask-siri-dictation/) notice explains when speech processing may occur on Apple's servers.
+On iOS 26 and later, the AI features (moment naming and recaps) first use Apple's newer on-device speech engine, which does not require the Speech Recognition permission. Permission is requested only if the app falls back to the older Speech path. That fallback also requires on-device recognition support. If you decline these permissions, CarPlay voice search is disabled and fallback AI transcription cannot run. The rest of the app continues to work.
 
 ## iCloud Sync (optional, paid)
 
@@ -45,9 +45,9 @@ Apple's [iCloud privacy](https://www.apple.com/legal/privacy/data/en/icloud/) co
 
 ## Apple Intelligence features
 
-Unpaged uses Apple's on-device foundation model (Apple Intelligence) to generate moment names and progress recaps. AI generation happens **entirely on your device**. Primary transcription also runs on-device. If primary transcription fails and Unpaged uses Apple's older Speech fallback, Apple may process audio and transcripts on its servers when on-device recognition is unavailable. Nothing is sent to OpenAI, Anthropic, or any developer-operated server.
+Unpaged uses Apple's on-device foundation model (Apple Intelligence) to generate moment names and progress recaps. AI generation happens **entirely on your device**. Primary transcription also runs on-device. If primary transcription fails, Unpaged's older Speech fallback runs only when on-device recognition is supported. Nothing is sent to Apple speech servers, OpenAI, Anthropic, or any developer-operated server.
 
-The first time transcription runs, iOS may download Apple's on-device speech-recognition model for your language (a one-time download managed by the operating system, from Apple's servers). No audio or audiobook content is sent during this download — it only fetches the model. Once installed, primary transcription and AI generation work offline; the legacy Speech fallback may still use Apple's servers when on-device recognition is unavailable.
+The first time transcription runs, iOS may download Apple's on-device speech-recognition model for your language (a one-time download managed by the operating system, from Apple's servers). No audio or audiobook content is sent during this download — it only fetches the model. Once installed, primary transcription and AI generation work offline; the legacy Speech fallback also requires on-device support.
 
 ## In-app purchases
 
@@ -70,7 +70,7 @@ Network requests are made only:
 - To stream a streaming-only audiobook you've added to your library
 - To Apple iCloud when you enable iCloud Sync
 - To Apple (App Store / StoreKit) for in-app purchase and restore
-- To Apple's Speech service when CarPlay voice search runs or AI transcription uses the legacy fallback; processing stays on-device when supported
+- Through Apple's Speech framework when CarPlay voice search runs or AI transcription uses the legacy fallback; Unpaged requires processing to stay on-device
 - To Apple, once per language, when iOS downloads its on-device speech-recognition model the first time AI transcription runs (no audio or content is sent)
 
 All requests use HTTPS. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the app.

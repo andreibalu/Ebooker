@@ -10,6 +10,8 @@ import UIKit
 @MainActor
 @Observable
 final class FreeBookDownloadService: FreeBookDownloading {
+    static let backgroundSessionIdentifier = "com.ebooker.freeBookDownloads"
+
     // MARK: - Published State
 
     var downloadProgress: [String: Double] = [:]
@@ -55,7 +57,7 @@ final class FreeBookDownloadService: FreeBookDownloading {
         guard backgroundSession == nil else { return }
         let delegate = SessionDelegate(service: self)
         self.sessionDelegate = delegate
-        let config = URLSessionConfiguration.background(withIdentifier: "com.ebooker.freeBookDownloads")
+        let config = URLSessionConfiguration.background(withIdentifier: Self.backgroundSessionIdentifier)
         config.isDiscretionary = false
         config.sessionSendsLaunchEvents = true
         self.backgroundSession = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
@@ -479,8 +481,9 @@ private final class SessionDelegate: NSObject, URLSessionDownloadDelegate {
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
         Task { @MainActor in
             if let appDelegate = await UIApplication.shared.delegate as? AppDelegate {
-                appDelegate.backgroundSessionCompletionHandler?()
-                appDelegate.backgroundSessionCompletionHandler = nil
+                appDelegate.takeBackgroundSessionCompletionHandler(
+                    for: session.configuration.identifier ?? FreeBookDownloadService.backgroundSessionIdentifier
+                )?()
             }
         }
     }

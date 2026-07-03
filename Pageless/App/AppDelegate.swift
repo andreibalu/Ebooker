@@ -13,6 +13,19 @@ import UIKit
 
 private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "CarPlay")
 
+@MainActor
+final class BackgroundSessionCompletionRegistry {
+    private var handlers: [String: () -> Void] = [:]
+
+    func store(_ handler: @escaping () -> Void, for identifier: String) {
+        handlers[identifier] = handler
+    }
+
+    func take(for identifier: String) -> (() -> Void)? {
+        handlers.removeValue(forKey: identifier)
+    }
+}
+
 /// Supplies the CarPlay scene configuration alongside SwiftUI `WindowGroup`.
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
@@ -21,7 +34,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     let modelContainer: ModelContainer
     let audioPlayer: AudioPlayerManager
     let freeBookDownloader: FreeBookDownloadService
-    var backgroundSessionCompletionHandler: (() -> Void)?
+    let libriVoxDownloadCoordinator: LibriVoxBackgroundDownloadCoordinator
+    private let backgroundSessionCompletionRegistry = BackgroundSessionCompletionRegistry()
     private var cloudKitImportObserver: NSObjectProtocol?
 
     override init() {
@@ -74,6 +88,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         self.audioPlayer = AudioPlayerManager()
         self.freeBookDownloader = FreeBookDownloadService()
+        self.libriVoxDownloadCoordinator = LibriVoxBackgroundDownloadCoordinator(
+            modelContext: modelContainer.mainContext
+        )
         super.init()
         AppDelegate.shared = self
 
@@ -116,8 +133,17 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         completionHandler: @escaping () -> Void
     ) {
         Task { @MainActor in
-            backgroundSessionCompletionHandler = completionHandler
+            backgroundSessionCompletionRegistry.store(completionHandler, for: identifier)
+            if identifier == FreeBookDownloadService.backgroundSessionIdentifier {
+                freeBookDownloader.configure(modelContext: modelContainer.mainContext)
+            } else if identifier == LibriVoxBackgroundDownloadCoordinator.sessionIdentifier {
+                libriVoxDownloadCoordinator.ensureSession()
+            }
         }
+    }
+
+    func takeBackgroundSessionCompletionHandler(for identifier: String) -> (() -> Void)? {
+        backgroundSessionCompletionRegistry.take(for: identifier)
     }
 
     nonisolated func application(

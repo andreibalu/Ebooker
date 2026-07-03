@@ -34,6 +34,103 @@ enum LibriVoxDownloadService {
         return tracks
     }
 
+    static func storedFileName(title: String, remoteURL: URL, index: Int) -> String {
+        let safeTitle = title.isEmpty ? "Track \(index + 1)" : title
+        let ext = remoteURL.pathExtension.isEmpty ? "mp3" : remoteURL.pathExtension
+        return "\(String(format: "%03d", index + 1))-\(sanitized(safeTitle)).\(ext)"
+    }
+
+    static func finalizeStagedFreshDownload(
+        book: LibriVoxBook,
+        job: LibriVoxDownloadJob,
+        stagingFolderURL: URL,
+        modelContext: ModelContext,
+        beforeCommit: () throws -> Void
+    ) throws -> Audiobook {
+        let folderName = UUID().uuidString
+        let folderURL = try makeStorageFolder(named: folderName)
+        do {
+            let tracks = try job.tracks.enumerated().map { index, track in
+                let source = stagingFolderURL.appendingPathComponent(track.storedFileName)
+                let destination = folderURL.appendingPathComponent(track.storedFileName)
+                try FileManager.default.moveItem(at: source, to: destination)
+                let saved = AudioTrack(
+                    title: track.title,
+                    originalFileName: track.remoteURL.lastPathComponent,
+                    storedFileName: track.storedFileName,
+                    orderIndex: index,
+                    duration: track.durationSeconds
+                )
+                saved.remoteURLString = track.remoteURL.absoluteString
+                return saved
+            }
+            try beforeCommit()
+            return try finalizeDownloadedBook(
+                book: book,
+                folderName: folderName,
+                folderURL: folderURL,
+                audioTracks: tracks,
+                modelContext: modelContext
+            )
+        } catch {
+            try? FileManager.default.removeItem(at: folderURL)
+            throw error
+        }
+    }
+
+    static func finalizeStagedExistingDownload(
+        audiobook: Audiobook,
+        job: LibriVoxDownloadJob,
+        stagingFolderURL: URL,
+        modelContext: ModelContext,
+        beforeCommit: () throws -> Void
+    ) throws {
+        let folderURL = try makeStorageFolder(named: audiobook.folderName)
+        let tracks = audiobook.sortedTracks
+        guard tracks.count == job.tracks.count else { throw LibriVoxDownloadError.noTracks }
+        let trackSnapshots = tracks.map {
+            ($0, $0.title, $0.originalFileName, $0.storedFileName, $0.duration, $0.remoteURLString)
+        }
+        let wasDownloaded = audiobook.isDownloaded
+        let wasArchived = audiobook.isArchived
+        let originalTotalDuration = audiobook.totalDuration
+        var movedURLs: [URL] = []
+        do {
+            for (track, staged) in zip(tracks, job.tracks) {
+                let source = stagingFolderURL.appendingPathComponent(staged.storedFileName)
+                let destination = folderURL.appendingPathComponent(staged.storedFileName)
+                if FileManager.default.fileExists(atPath: destination.path) {
+                    try FileManager.default.removeItem(at: destination)
+                }
+                try FileManager.default.moveItem(at: source, to: destination)
+                movedURLs.append(destination)
+                track.title = staged.title
+                track.originalFileName = staged.remoteURL.lastPathComponent
+                track.storedFileName = staged.storedFileName
+                track.duration = staged.durationSeconds
+                track.remoteURLString = staged.remoteURL.absoluteString
+            }
+            try beforeCommit()
+            audiobook.isDownloaded = true
+            audiobook.isArchived = false
+            audiobook.totalDuration = tracks.reduce(0) { $0 + $1.duration }
+            try modelContext.save()
+        } catch {
+            for (track, title, originalFileName, storedFileName, duration, remoteURLString) in trackSnapshots {
+                track.title = title
+                track.originalFileName = originalFileName
+                track.storedFileName = storedFileName
+                track.duration = duration
+                track.remoteURLString = remoteURLString
+            }
+            audiobook.isDownloaded = wasDownloaded
+            audiobook.isArchived = wasArchived
+            audiobook.totalDuration = originalTotalDuration
+            for url in movedURLs { try? FileManager.default.removeItem(at: url) }
+            throw error
+        }
+    }
+
     /// Downloads all tracks, fetches cover art, and imports the book into the SwiftData library.
     /// Returns the newly created Audiobook so the caller can navigate to it.
     static func downloadAndImport(

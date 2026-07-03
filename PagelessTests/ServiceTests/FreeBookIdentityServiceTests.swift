@@ -349,6 +349,72 @@ struct FreeBookIdentityServiceTests {
         #expect(!FileManager.default.fileExists(atPath: folder.path(percentEncoded: false)))
     }
 
+    @Test func stagedPromotionLateCancellationRestoresMetadataAndRemovesMovedFiles() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let audiobook = makeAudiobook(downloaded: false, archived: true, createdAt: .now)
+        audiobook.folderName = UUID().uuidString
+        audiobook.totalDuration = 10
+        let track = AudioTrack(
+            title: "Old Track",
+            originalFileName: "old.mp3",
+            storedFileName: "old-local.mp3",
+            orderIndex: 0,
+            duration: 10
+        )
+        track.remoteURLString = "https://example.com/new.mp3"
+        track.audiobook = audiobook
+        audiobook.tracks = [track]
+        context.insert(audiobook)
+        context.insert(track)
+        try context.save()
+
+        let staging = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StagedPromotion-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data([1, 2, 3]).write(to: staging.appendingPathComponent("001-new.mp3"))
+        defer { try? FileManager.default.removeItem(at: staging) }
+        let job = LibriVoxDownloadJob(
+            catalogID: "catalog-1",
+            attemptID: UUID(),
+            title: "Book",
+            target: .existing(audiobookID: audiobook.id),
+            stagingFolderName: staging.lastPathComponent,
+            tracks: [
+                .init(
+                    title: "New Track",
+                    remoteURL: URL(string: "https://example.com/new.mp3")!,
+                    durationSeconds: 20,
+                    storedFileName: "001-new.mp3"
+                )
+            ],
+            completedIndexes: [0],
+            phase: .downloading,
+            lastError: nil
+        )
+
+        #expect(throws: CancellationError.self) {
+            try LibriVoxDownloadService.finalizeStagedExistingDownload(
+                audiobook: audiobook,
+                job: job,
+                stagingFolderURL: staging,
+                modelContext: context,
+                beforeCommit: { throw CancellationError() }
+            )
+        }
+
+        #expect(track.title == "Old Track")
+        #expect(track.originalFileName == "old.mp3")
+        #expect(track.storedFileName == "old-local.mp3")
+        #expect(track.duration == 10)
+        #expect(!audiobook.isDownloaded)
+        #expect(audiobook.isArchived)
+        #expect(audiobook.totalDuration == 10)
+        let destination = try audiobookFolderURL(named: audiobook.folderName)
+            .appendingPathComponent("001-new.mp3")
+        #expect(!FileManager.default.fileExists(atPath: destination.path))
+    }
+
     @Test func freshSaveFailureRemovesInsertedIdentityAndFolderSoRetryStartsFresh() async throws {
         let container = try makeContainer()
         let context = container.mainContext

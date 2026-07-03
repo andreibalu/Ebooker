@@ -31,10 +31,10 @@ struct TranscriptionService: TranscriptionProviding {
         request.shouldReportPartialResults = false
         // Punctuated output keeps sentence-based post-processing working.
         request.addsPunctuation = true
-        // Server-based recognition caps audio at ~1 minute; our segments are longer.
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        // Server-based recognition caps audio at ~1 minute and can send speech
+        // data off-device. Legacy transcription therefore requires local support.
+        try OnDeviceSpeechPolicy.requireSupport(recognizer.supportsOnDeviceRecognition)
+        request.requiresOnDeviceRecognition = true
 
         return try await withCheckedThrowingContinuation { continuation in
             var hasResumed = false
@@ -57,6 +57,22 @@ struct TranscriptionService: TranscriptionProviding {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 continuation.resume(returning: text)
             }
+        }
+    }
+}
+
+enum OnDeviceSpeechPolicy {
+    enum PolicyError: LocalizedError {
+        case unsupported
+
+        var errorDescription: String? {
+            "On-device speech recognition is not supported for this language."
+        }
+    }
+
+    static func requireSupport(_ supportsOnDeviceRecognition: Bool) throws {
+        guard supportsOnDeviceRecognition else {
+            throw PolicyError.unsupported
         }
     }
 }

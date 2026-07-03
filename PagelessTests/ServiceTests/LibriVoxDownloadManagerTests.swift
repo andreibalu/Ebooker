@@ -9,6 +9,47 @@ import Testing
 
 @MainActor
 struct LibriVoxDownloadManagerTests {
+    @Test func restoredCoordinatorJobAppearsImmediately() {
+        var job = restoredJob()
+        job.completedIndexes = [0]
+        let coordinator = MockLibriVoxDownloadCoordinator(restoredJobs: [job])
+        let manager = LibriVoxDownloadManager(
+            coordinator: coordinator,
+            activityController: NoopDownloadActivityController()
+        )
+
+        #expect(manager.entry(for: "restored")?.completedTracks == 1)
+        #expect(manager.entry(for: "restored")?.totalTracks == 2)
+        #expect(manager.entry(for: "restored")?.phase == .downloading)
+    }
+
+    @Test func coordinatorProgressUpdatesFractionAndRejectsStaleAttempt() async {
+        let job = restoredJob()
+        let coordinator = MockLibriVoxDownloadCoordinator(restoredJobs: [job])
+        let manager = LibriVoxDownloadManager(
+            coordinator: coordinator,
+            activityController: NoopDownloadActivityController()
+        )
+
+        coordinator.emit(.progress(
+            catalogID: "restored",
+            attemptID: job.attemptID,
+            completed: 0,
+            total: 2,
+            currentTrackFraction: 0.5
+        ))
+        coordinator.emit(.progress(
+            catalogID: "restored",
+            attemptID: UUID(),
+            completed: 99,
+            total: 99,
+            currentTrackFraction: 1
+        ))
+
+        #expect(manager.entry(for: "restored")?.currentTrackFraction == 0.5)
+        #expect(manager.entry(for: "restored")?.totalTracks == 2)
+    }
+
     @Test func registersPreparingEntryBeforeExecutorStarts() async {
         let probe = RegistrationProbe()
         let executor = LibriVoxDownloadManager.Executor { request, _ in
@@ -65,6 +106,25 @@ struct LibriVoxDownloadManagerTests {
         #expect(entry?.phase == .downloading)
         #expect(entry?.completedTracks == 2)
         #expect(entry?.totalTracks == 5)
+
+        gate.open()
+        await manager.waitForAllWork()
+    }
+
+    @Test func reportsFractionalProgressForCurrentTrack() async {
+        let gate = AsyncGate()
+        let progressReported = AsyncEvent()
+        let manager = LibriVoxDownloadManager(executor: .init { _, progress in
+            progress(.init(completed: 1, total: 4, currentTrackFraction: 0.5))
+            progressReported.signal()
+            await gate.wait()
+        })
+
+        manager.start(request: request())
+        await progressReported.wait()
+
+        #expect(manager.entry(for: "catalog-1")?.currentTrackFraction == 0.5)
+        #expect(manager.entry(for: "catalog-1")?.progress == 0.375)
 
         gate.open()
         await manager.waitForAllWork()
@@ -267,6 +327,51 @@ struct LibriVoxDownloadManagerTests {
             target: target
         )
     }
+
+    private func restoredJob() -> LibriVoxDownloadJob {
+        .init(
+            catalogID: "restored",
+            attemptID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
+            title: "Restored Book",
+            target: .fresh,
+            stagingFolderName: "stage",
+            tracks: [
+                .init(title: "One", remoteURL: URL(string: "https://example.com/1")!, durationSeconds: 1, storedFileName: "1.mp3"),
+                .init(title: "Two", remoteURL: URL(string: "https://example.com/2")!, durationSeconds: 1, storedFileName: "2.mp3")
+            ],
+            completedIndexes: [],
+            phase: .downloading,
+            lastError: nil
+        )
+    }
+}
+
+@MainActor
+private final class MockLibriVoxDownloadCoordinator: LibriVoxDownloadCoordinating {
+    let restoredJobs: [LibriVoxDownloadJob]
+    private var sink: (@MainActor (LibriVoxDownloadCoordinatorEvent) -> Void)?
+
+    init(restoredJobs: [LibriVoxDownloadJob]) {
+        self.restoredJobs = restoredJobs
+    }
+
+    func setEventSink(_ sink: @escaping @MainActor (LibriVoxDownloadCoordinatorEvent) -> Void) {
+        self.sink = sink
+    }
+
+    func start(_ request: LibriVoxDownloadManager.Request, attemptID: UUID) async throws {}
+    func cancel(catalogID: String, attemptID: UUID) async {}
+    func retry(_ request: LibriVoxDownloadManager.Request, attemptID: UUID) async throws {}
+    func reconcile() async {}
+
+    func emit(_ event: LibriVoxDownloadCoordinatorEvent) {
+        sink?(event)
+    }
+}
+
+@MainActor
+private final class NoopDownloadActivityController: DownloadLiveActivityControlling {
+    func synchronize(snapshot: DownloadActivitySnapshot?, appIsActive: Bool) async {}
 }
 
 @MainActor

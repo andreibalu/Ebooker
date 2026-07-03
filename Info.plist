@@ -20,6 +20,17 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>andreibaludev.Pageless.downloads</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>unpaged</string>
+			</array>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
@@ -28,6 +39,8 @@
 	<string>Unpaged uses the microphone for hands-free voice search of free books while you drive.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Unpaged uses speech recognition to transcribe audio, suggest names for your saved moments, and search free books by voice in CarPlay.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>

@@ -18,7 +18,10 @@ struct PagelessApp: App {
 
     var body: some Scene {
         WindowGroup {
-            PagelessRootView(modelContainer: appDelegate.modelContainer)
+            PagelessRootView(
+                modelContainer: appDelegate.modelContainer,
+                downloadCoordinator: appDelegate.libriVoxDownloadCoordinator
+            )
                 .environmentObject(appDelegate.audioPlayer)
                 .environmentObject(appDelegate.audioPlayer.equalizer)
                 .environmentObject(aiEntitlementStore)
@@ -63,15 +66,27 @@ struct PagelessApp: App {
 /// Constructs process-lifetime download state only after the app's ModelContainer exists.
 private struct PagelessRootView: View {
     @State private var downloadManager: LibriVoxDownloadManager
+    @State private var router = UnpagedRouter()
+    @Environment(\.scenePhase) private var scenePhase
 
-    init(modelContainer: ModelContainer) {
+    init(
+        modelContainer: ModelContainer,
+        downloadCoordinator: LibriVoxDownloadCoordinating
+    ) {
         _downloadManager = State(initialValue: LibriVoxDownloadManager(
-            executor: .live(modelContext: modelContainer.mainContext)
+            coordinator: downloadCoordinator,
+            activityController: DownloadLiveActivityController(),
+            isAppActive: { UIApplication.shared.applicationState == .active }
         ))
     }
 
     var body: some View {
         ContentView()
             .environment(downloadManager)
+            .environment(router)
+            .onOpenURL { router.open($0) }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { downloadManager.applicationDidBecomeActive() }
+            }
     }
 }

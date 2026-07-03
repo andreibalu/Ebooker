@@ -49,6 +49,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
     @Environment(LibriVoxDownloadManager.self) private var downloadManager
+    @Environment(UnpagedRouter.self) private var router
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
     @Query private var audiobooks: [Audiobook]
@@ -77,6 +78,7 @@ struct ContentView: View {
     @State private var playerYOffset: CGFloat = UIScreen.main.bounds.height
     @State private var isSettingsPresented = false
     @State private var isCloudLibraryPresented = false
+    @State private var downloadScrollRequest = 0
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
     private let screenHeight = UIScreen.main.bounds.height
 
@@ -298,6 +300,15 @@ struct ContentView: View {
             viewModel.presentAlert(message: newValue)
             player.playerErrorMessage = nil
         }
+        .onChange(of: router.pendingRoute) { _, route in
+            guard route == .downloads else { return }
+            isPlayerVisible = false
+            isSettingsPresented = false
+            isCloudLibraryPresented = false
+            selectedTab = .allBooks
+            downloadScrollRequest &+= 1
+            router.consume(.downloads)
+        }
     }
 
     // MARK: - Header
@@ -480,27 +491,36 @@ struct ContentView: View {
     @ViewBuilder
     private func booksGrid(for tab: LibraryTab) -> some View {
         let books = displayedBooks(for: tab)
-        ScrollView {
-            LazyVStack(spacing: 16) {
-                if tab == .allBooks {
-                    LibriVoxDownloadSection()
-                }
-                if tab == .favorites { readingActivityHeader }
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    if tab == .allBooks {
+                        LibriVoxDownloadSection()
+                    }
+                    if tab == .favorites { readingActivityHeader }
 
-                if books.isEmpty {
-                    emptyState(for: tab)
-                        .padding(.top, 24)
-                } else {
-                    LazyVGrid(columns: gridColumns, spacing: 16) {
-                        ForEach(books) { audiobook in
-                            audiobookGridItem(audiobook)
+                    if books.isEmpty {
+                        emptyState(for: tab)
+                            .padding(.top, 24)
+                    } else {
+                        LazyVGrid(columns: gridColumns, spacing: 16) {
+                            ForEach(books) { audiobook in
+                                audiobookGridItem(audiobook)
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 20)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 20)
+            .onChange(of: downloadScrollRequest) { _, _ in
+                guard tab == .allBooks else { return }
+                Task { @MainActor in
+                    await Task.yield()
+                    proxy.scrollTo("library-downloads", anchor: .top)
+                }
+            }
         }
     }
 

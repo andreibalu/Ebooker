@@ -7,10 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A10000000000000000000001 /* PagelessDownloadActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* PagelessDownloadActivity.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000000000000000000002 /* DownloadActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* DownloadActivityAttributes.swift */; };
 		BC744B342F83D03C0007E60E /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC744B332F83D03C0007E60E /* StoreKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		A10000000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BC74D7DE2F6986AC0070910C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000009;
+			remoteInfo = PagelessDownloadActivity;
+		};
 		BC74D7F62F6986AD0070910C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BC74D7DE2F6986AC0070910C /* Project object */;
@@ -28,13 +37,33 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A10000000000000000000004 /* PagelessDownloadActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PagelessDownloadActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000005 /* DownloadActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pageless/Downloads/DownloadActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
 		BC744B332F83D03C0007E60E /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		BC74D7E62F6986AC0070910C /* Pageless.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pageless.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC74D7F52F6986AD0070910C /* PagelessTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PagelessTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BC74D7FF2F6986AD0070910C /* PagelessUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PagelessUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A10000000000000000000016 /* Exceptions for "PagelessDownloadActivity" folder in "PagelessDownloadActivity" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A10000000000000000000009 /* PagelessDownloadActivity */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		A10000000000000000000006 /* PagelessDownloadActivity */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A10000000000000000000016 /* Exceptions for "PagelessDownloadActivity" folder in "PagelessDownloadActivity" target */,
+			);
+			path = PagelessDownloadActivity;
+			sourceTree = "<group>";
+		};
 		BC74D7E82F6986AC0070910C /* Pageless */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Pageless;
@@ -53,6 +82,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000007 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC74D7E32F6986AC0070910C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -90,6 +126,8 @@
 			isa = PBXGroup;
 			children = (
 				BC74D7E82F6986AC0070910C /* Pageless */,
+				A10000000000000000000006 /* PagelessDownloadActivity */,
+				A10000000000000000000005 /* DownloadActivityAttributes.swift */,
 				BC74D7F82F6986AD0070910C /* PagelessTests */,
 				BC74D8022F6986AD0070910C /* PagelessUITests */,
 				BC744B322F83D03C0007E60E /* Frameworks */,
@@ -101,6 +139,7 @@
 			isa = PBXGroup;
 			children = (
 				BC74D7E62F6986AC0070910C /* Pageless.app */,
+				A10000000000000000000004 /* PagelessDownloadActivity.appex */,
 				BC74D7F52F6986AD0070910C /* PagelessTests.xctest */,
 				BC74D7FF2F6986AD0070910C /* PagelessUITests.xctest */,
 			);
@@ -108,6 +147,20 @@
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000008 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000000000000000000001 /* PagelessDownloadActivity.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXNativeTarget section */
 		BC74D7E52F6986AC0070910C /* Pageless */ = {
@@ -117,10 +170,12 @@
 				BC74D7E22F6986AC0070910C /* Sources */,
 				BC74D7E32F6986AC0070910C /* Frameworks */,
 				BC74D7E42F6986AC0070910C /* Resources */,
+				A10000000000000000000008 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A10000000000000000000012 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				BC74D7E82F6986AC0070910C /* Pageless */,
@@ -131,6 +186,28 @@
 			productName = Pageless;
 			productReference = BC74D7E62F6986AC0070910C /* Pageless.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A10000000000000000000009 /* PagelessDownloadActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000015 /* Build configuration list for PBXNativeTarget "PagelessDownloadActivity" */;
+			buildPhases = (
+				A10000000000000000000011 /* Sources */,
+				A10000000000000000000007 /* Frameworks */,
+				A10000000000000000000010 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000000000000000000006 /* PagelessDownloadActivity */,
+			);
+			name = PagelessDownloadActivity;
+			packageProductDependencies = (
+			);
+			productName = PagelessDownloadActivity;
+			productReference = A10000000000000000000004 /* PagelessDownloadActivity.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		BC74D7F42F6986AD0070910C /* PagelessTests */ = {
 			isa = PBXNativeTarget;
@@ -188,6 +265,9 @@
 				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					A10000000000000000000009 = {
+						CreatedOnToolsVersion = 26.3;
+					};
 					BC74D7E52F6986AC0070910C = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -218,6 +298,7 @@
 			projectRoot = "";
 			targets = (
 				BC74D7E52F6986AC0070910C /* Pageless */,
+				A10000000000000000000009 /* PagelessDownloadActivity */,
 				BC74D7F42F6986AD0070910C /* PagelessTests */,
 				BC74D7FE2F6986AD0070910C /* PagelessUITests */,
 			);
@@ -225,6 +306,13 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000010 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC74D7E42F6986AC0070910C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -249,6 +337,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000011 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000002 /* DownloadActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BC74D7E22F6986AC0070910C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -273,6 +369,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		A10000000000000000000012 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000009 /* PagelessDownloadActivity */;
+			targetProxy = A10000000000000000000003 /* PBXContainerItemProxy */;
+		};
 		BC74D7F72F6986AD0070910C /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = BC74D7E52F6986AC0070910C /* Pageless */;
@@ -286,6 +387,64 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		A10000000000000000000013 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WR23UX8DY4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PagelessDownloadActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.3;
+				PRODUCT_BUNDLE_IDENTIFIER = andreibaludev.Pageless.DownloadActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A10000000000000000000014 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WR23UX8DY4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PagelessDownloadActivity/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.3;
+				PRODUCT_BUNDLE_IDENTIFIER = andreibaludev.Pageless.DownloadActivity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		BC74D8072F6986AD0070910C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -576,6 +735,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		A10000000000000000000015 /* Build configuration list for PBXNativeTarget "PagelessDownloadActivity" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000013 /* Debug */,
+				A10000000000000000000014 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BC74D7E12F6986AC0070910C /* Build configuration list for PBXProject "Pageless" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

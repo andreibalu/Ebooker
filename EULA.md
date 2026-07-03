@@ -119,8 +119,8 @@ availability, or fitness for any purpose.
 
 The Application does not collect, sell, or share your personal data with the
 Developer. AI generation runs on-device using Apple Intelligence. Primary AI
-transcription also runs on-device; Apple's Speech service may process audio when
-the legacy fallback is used and on-device recognition is unavailable. Network
+  transcription also runs on-device; the legacy Speech fallback requires
+  on-device recognition support and does not permit server processing. Network
 requests support free-book browsing, streaming, and downloads through
 LibriVox/Internet Archive, purchases through Apple, and optional iCloud Sync in
 your private iCloud account. The Developer operates no backend server.

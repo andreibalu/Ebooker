@@ -31,9 +31,11 @@ struct LibriVoxDownloadPresentationTests {
 
     @Test("Downloading maps track progress to a bounded fraction")
     func mapsProgress() {
-        let presentation = LibriVoxDownloadPresentation(entry: entry(phase: .downloading))
+        let presentation = LibriVoxDownloadPresentation(
+            entry: entry(phase: .downloading, currentTrackFraction: 0.5)
+        )
 
-        #expect(presentation.progress == 0.4)
+        #expect(presentation.progress == 0.5)
     }
 
     @Test("Manager status takes precedence over Stream on a library card")
@@ -97,7 +99,8 @@ struct LibriVoxDownloadPresentationTests {
 
     private func entry(
         phase: LibriVoxDownloadManager.Phase,
-        target: LibriVoxDownloadManager.Target = .fresh
+        target: LibriVoxDownloadManager.Target = .fresh,
+        currentTrackFraction: Double = 0
     ) -> LibriVoxDownloadManager.Entry {
         .init(
             request: .init(
@@ -108,6 +111,7 @@ struct LibriVoxDownloadPresentationTests {
             phase: phase,
             completedTracks: 2,
             totalTracks: 5,
+            currentTrackFraction: currentTrackFraction,
             errorMessage: phase == .failed ? "Connection lost" : nil
         )
     }

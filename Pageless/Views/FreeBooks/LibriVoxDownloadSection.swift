@@ -21,7 +21,7 @@ struct LibriVoxDownloadPresentation {
 
     var progress: Double? {
         guard entry.phase == .downloading, entry.totalTracks > 0 else { return nil }
-        return min(1, max(0, Double(entry.completedTracks) / Double(entry.totalTracks)))
+        return entry.progress
     }
 
     var showsSpinner: Bool { entry.phase == .preparing || entry.phase == .cancelling }
@@ -53,8 +53,12 @@ struct LibriVoxDownloadSection: View {
     }
 
     var body: some View {
-        if !entries.isEmpty {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            Color.clear
+                .frame(height: 0)
+                .id("library-downloads")
+
+            if !entries.isEmpty {
                 HStack(spacing: 10) {
                     Text("Downloads · \(entries.count)")
                         .font(.subheadline.weight(.semibold))
@@ -147,8 +151,7 @@ struct LibriVoxDetailDownloadStatus: View {
                         .foregroundStyle(.secondary)
                 }
                 ProgressView(
-                    value: Double(entry.completedTracks),
-                    total: Double(max(entry.totalTracks, 1))
+                    value: entry.progress
                 )
                 .tint(progressTint)
             case .cancelling:

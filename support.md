@@ -1,6 +1,6 @@
 # Unpaged — Support
 
-_Last updated: July 1, 2026_
+_Last updated: July 2, 2026_
 
 Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
@@ -20,7 +20,9 @@ If the selected files exactly match an audiobook already active in your library,
 
 The **Free Books** tab streams or downloads public-domain audiobooks from [LibriVox](https://librivox.org). Over 20,000 titles are cached locally for fast browsing. You can stream a book without downloading it, or download for offline listening.
 
-Download progress stays visible in both **Free Books** and **Library** while Unpaged remains open, even if you navigate away from the book. You can cancel an active download or retry/dismiss a failed one from either tab.
+Download progress stays visible in both **Free Books** and **Library**, even if you navigate away from the book. Downloads continue while Unpaged is suspended in the background and reconnect to their saved progress if iOS relaunches the app. You can cancel an active download or retry/dismiss a failed one from either tab.
+
+On supported iOS versions, Unpaged also shows one download Live Activity on the Lock Screen. Compatible iPhones show the same progress in the Dynamic Island. Multiple book downloads are combined into one activity; tap it to open **Library → Downloads**. You can disable Live Activities in **Settings → Unpaged → Live Activities** without disabling background downloads.
 
 At the top of the tab, **Collections** are hand-picked shelves of classics grouped by theme — for example Gothic & Horror, Detective & Mystery, or Short Listens you can finish in an afternoon. Every collection book streams, downloads, and samples exactly like the rest of the free catalog.
 
@@ -39,7 +41,7 @@ Apple Intelligence (on-device only) powers two features:
 - **AI Bookmarks** — when you save a moment, the app transcribes the audio around it and generates a name, a key quote, characters mentioned, and a mood tag.
 - **AI Recap** — when you return to a book after a break, the app writes a short two-line recap of where you left off.
 
-AI generation and primary transcription run entirely on your iPhone. If primary transcription fails, Unpaged can use Apple's older Speech fallback; Apple may process audio and transcripts when on-device recognition is unavailable. Nothing is sent to Unpaged or any developer-operated server. The first use may download Apple's on-device speech model for your language; once installed, the primary path works offline.
+AI generation and transcription run entirely on your iPhone. If primary transcription fails, Unpaged can use Apple's older Speech fallback only when on-device recognition is supported. Audio and transcripts are not sent to speech servers, Unpaged, or any developer-operated server. First use may download Apple's on-device speech model for your language; once installed, the primary path works offline.
 
 ### Do AI features require a paid unlock?
 
