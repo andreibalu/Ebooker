@@ -79,6 +79,7 @@ struct ContentView: View {
     @State private var isSettingsPresented = false
     @State private var isCloudLibraryPresented = false
     @State private var downloadScrollRequest = 0
+    @State private var selectedLibraryDownloadBook: LibriVoxBook?
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
     private let screenHeight = UIScreen.main.bounds.height
 
@@ -102,6 +103,13 @@ struct ContentView: View {
                     }
                     .background(Color.cream.ignoresSafeArea())
                     .navigationBarHidden(true)
+                    .navigationDestination(item: $selectedLibraryDownloadBook) { book in
+                        LibriVoxBookDetailView(
+                            book: book,
+                            onOpenPlayer: openPlayer,
+                            browseViewModel: browseViewModel
+                        )
+                    }
                 }
 
                 if player.currentAudiobook != nil {
@@ -495,7 +503,12 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     if tab == .allBooks {
-                        LibriVoxDownloadSection()
+                        LibriVoxDownloadSection { catalogID in
+                            selectedLibraryDownloadBook = browseViewModel.catalogBook(
+                                id: catalogID,
+                                modelContext: modelContext
+                            )
+                        }
                     }
                     if tab == .favorites { readingActivityHeader }
 
