@@ -46,6 +46,7 @@ enum LibraryBookVisibility {
 }
 
 struct ContentView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
     @Environment(LibriVoxDownloadManager.self) private var downloadManager
@@ -76,6 +77,9 @@ struct ContentView: View {
     @State private var isPlayerVisible = false
     @State private var isClosingPlayer = false
     @State private var playerYOffset: CGFloat = UIScreen.main.bounds.height
+    @State private var playerOpacity: Double = 0
+    @State private var playerTeardownTask: Task<Void, Never>?
+    @State private var playerDismissGeneration: UInt = 0
     @State private var isSettingsPresented = false
     @State private var isCloudLibraryPresented = false
     @State private var downloadScrollRequest = 0
@@ -129,7 +133,8 @@ struct ContentView: View {
                 )
                     .environmentObject(player)
                     .environmentObject(aiEntitlementStore)
-                    .offset(y: playerYOffset)
+                    .offset(y: reduceMotion ? 0 : playerYOffset)
+                    .opacity(playerOpacity)
                     .ignoresSafeArea()
             }
         }
@@ -282,6 +287,11 @@ struct ContentView: View {
                 skipForward: skipForwardSeconds
             )
         }
+        .onDisappear {
+            playerTeardownTask?.cancel()
+            playerTeardownTask = nil
+            playerDismissGeneration &+= 1
+        }
         .onChange(of: resumeBacktrackSeconds) { _, newValue in
             player.applyPlaybackDefaults(
                 resumeBacktrack: newValue,
@@ -310,6 +320,9 @@ struct ContentView: View {
         }
         .onChange(of: router.pendingRoute) { _, route in
             guard route == .downloads else { return }
+            playerTeardownTask?.cancel()
+            playerTeardownTask = nil
+            playerDismissGeneration &+= 1
             isPlayerVisible = false
             isSettingsPresented = false
             isCloudLibraryPresented = false
@@ -581,7 +594,6 @@ struct ContentView: View {
                 Task {
                     await player.startPlayback(for: audiobook)
                     if !audiobook.isStreamingOnly {
-                        try? await Task.sleep(for: .milliseconds(600))
                         openPlayer()
                     }
                 }
@@ -608,34 +620,71 @@ struct ContentView: View {
     // MARK: - Player Presentation
 
     private func openPlayer() {
+        playerTeardownTask?.cancel()
+        playerTeardownTask = nil
+        playerDismissGeneration &+= 1
         isClosingPlayer = false
-        if !isPlayerVisible {
-            playerYOffset = screenHeight
-            isPlayerVisible = true
-        }
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+
+        if reduceMotion {
             playerYOffset = 0
+            if !isPlayerVisible {
+                playerOpacity = 0
+                isPlayerVisible = true
+            }
+            withAnimation(.easeOut(duration: 0.2)) {
+                playerOpacity = 1
+            }
+        } else {
+            playerOpacity = 1
+            if !isPlayerVisible {
+                playerYOffset = screenHeight
+                isPlayerVisible = true
+            }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                playerYOffset = 0
+            }
         }
     }
 
     private func closePlayer() {
         guard !isClosingPlayer else { return }
+        beginPlayerDismiss(response: 0.4, delay: .milliseconds(450))
+    }
+
+    private func beginPlayerDismiss(response: Double, delay: Duration) {
+        playerTeardownTask?.cancel()
+        playerTeardownTask = nil
+        playerDismissGeneration &+= 1
+        let generation = playerDismissGeneration
         isClosingPlayer = true
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            playerYOffset = screenHeight
+
+        if reduceMotion {
+            playerYOffset = 0
+            withAnimation(.easeOut(duration: 0.2)) {
+                playerOpacity = 0
+            }
+        } else {
+            withAnimation(.spring(response: response, dampingFraction: 0.85)) {
+                playerYOffset = screenHeight
+            }
         }
-        Task {
-            try? await Task.sleep(for: .milliseconds(450))
+
+        playerTeardownTask = Task { @MainActor in
+            try? await Task.sleep(for: reduceMotion ? .milliseconds(200) : delay)
+            guard !Task.isCancelled, generation == playerDismissGeneration else { return }
             isPlayerVisible = false
             isClosingPlayer = false
+            playerTeardownTask = nil
         }
     }
 
     private func handlePlayerDragChanged(_ dragUp: CGFloat) {
         guard !isClosingPlayer else { return }
+        guard !reduceMotion else { return }
         if !isPlayerVisible && dragUp > 0 {
             playerYOffset = screenHeight
             isPlayerVisible = true
+            playerOpacity = 1
         }
         if isPlayerVisible {
             playerYOffset = max(0, screenHeight - dragUp)
@@ -645,22 +694,25 @@ struct ContentView: View {
     private func handlePlayerDragEnded(_ dragUp: CGFloat, velocity: CGFloat) {
         guard !isClosingPlayer else { return }
         if dragUp > screenHeight * 0.3 || velocity > 600 {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                playerYOffset = 0
+            if reduceMotion {
+                openPlayer()
+            } else {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    playerYOffset = 0
+                }
+            }
+        } else if reduceMotion {
+            if isPlayerVisible {
+                beginPlayerDismiss(response: 0.35, delay: .milliseconds(400))
             }
         } else {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                playerYOffset = screenHeight
-            }
-            Task {
-                try? await Task.sleep(for: .milliseconds(400))
-                isPlayerVisible = false
-            }
+            beginPlayerDismiss(response: 0.35, delay: .milliseconds(400))
         }
     }
 
     private func handlePlayerDismissDragChanged(_ dragDown: CGFloat) {
         guard isPlayerVisible, !isClosingPlayer else { return }
+        guard !reduceMotion else { return }
         playerYOffset = max(0, dragDown)
     }
 
@@ -670,6 +722,8 @@ struct ContentView: View {
 
         if shouldDismiss {
             closePlayer()
+        } else if reduceMotion {
+            openPlayer()
         } else {
             withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
                 playerYOffset = 0
