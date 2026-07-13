@@ -10,3 +10,15 @@ next-env.d.ts
 
 # Browser exports are release outputs, not source inputs.
 /exports
+
+# Existing local-only or unreviewed inputs. Preserve locally; never version.
+/AGENTS.md
+/CLAUDE.md
+/src/app/favicon.ico
+/public/file.svg
+/public/globe.svg
+/public/next.svg
+/public/vercel.svg
+/public/window.svg
+/public/screenshots/en/library.png
+/public/screenshots/en/icloud-library.png
