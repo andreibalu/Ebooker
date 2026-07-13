@@ -9,6 +9,12 @@ import Foundation
 // import RevenueCat
 import StoreKit
 
+struct LaunchEntitlementCache: Codable, Equatable {
+    let isEntitled: Bool
+    let verifiedAt: Date
+    let validUntil: Date?
+}
+
 /// StoreKit 2 state for the auto-renewable iCloud Sync subscription.
 ///
 /// A singleton (`shared`) is required because `AppDelegate.init` reads subscription state
@@ -75,17 +81,28 @@ final class ICloudSubscriptionStore: ObservableObject {
     }
 
     func refreshEntitlements() async {
+        let now = Date()
         var found = false
         var renewal: Date?
+        var missingExpiration = false
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }
             guard transaction.productID == ICloudSyncProductID.monthly else { continue }
-            if transaction.revocationDate == nil,
-               transaction.expirationDate.map({ $0 > Date() }) ?? true {
-                found = true
-                renewal = transaction.expirationDate
+            guard transaction.revocationDate == nil else { continue }
+            guard let expirationDate = transaction.expirationDate else {
+                missingExpiration = true
                 break
             }
+            if expirationDate > now {
+                found = true
+                renewal = expirationDate
+                break
+            }
+        }
+        if missingExpiration {
+            assertionFailure("iCloud Sync entitlement has no expiration date")
+            found = false
+            renewal = nil
         }
         if isSubscribed != found {
             isSubscribed = found
@@ -93,7 +110,10 @@ final class ICloudSubscriptionStore: ObservableObject {
         if renewsOn != renewal {
             renewsOn = renewal
         }
-        UserDefaults.standard.set(found, forKey: Self.subscribedCacheKey)
+        Self.writeLaunchEntitlementCache(
+            LaunchEntitlementCache(isEntitled: found, verifiedAt: now, validUntil: renewal),
+            defaults: .standard
+        )
     }
 
     func purchase() async {
@@ -146,15 +166,49 @@ final class ICloudSubscriptionStore: ObservableObject {
         }
     }
 
-    /// Synchronous snapshot used by `IcloudSyncGate.isEnabled()` at app launch
-    /// (before any async refresh has run). Reads the UserDefaults cache written by
-    /// the most recent `refreshEntitlements()` — the user keeps sync access across
-    /// the brief window between launch and the first async refresh.
-    nonisolated static func isSubscribedAtLaunch() -> Bool {
-        UserDefaults.standard.bool(forKey: subscribedCacheKey)
+    /// Synchronous launch hint used before StoreKit's async entitlement APIs are available.
+    /// Encoded entitlements require a future expiration. Legacy Boolean-only installs receive
+    /// a bounded migration window so they do not retain indefinite access.
+    nonisolated static func isSubscribedAtLaunch(
+        now: Date = .now,
+        defaults: UserDefaults = .standard
+    ) -> Bool {
+        if let data = defaults.data(forKey: launchEntitlementCacheKey),
+           let cache = try? JSONDecoder().decode(LaunchEntitlementCache.self, from: data) {
+            guard cache.isEntitled else { return false }
+            guard let validUntil = cache.validUntil, validUntil > now else { return false }
+            return true
+        }
+
+        guard defaults.bool(forKey: subscribedCacheKey) else { return false }
+        let firstSeenAt: Date
+        if let stored = defaults.object(forKey: legacyCacheFirstSeenAtKey) as? Date {
+            firstSeenAt = stored
+        } else {
+            firstSeenAt = now
+            defaults.set(firstSeenAt, forKey: legacyCacheFirstSeenAtKey)
+        }
+        return now < firstSeenAt.addingTimeInterval(legacyMigrationWindow)
     }
 
+    nonisolated static func writeLaunchEntitlementCache(
+        _ cache: LaunchEntitlementCache,
+        defaults: UserDefaults = .standard
+    ) {
+        do {
+            let data = try JSONEncoder().encode(cache)
+            defaults.set(data, forKey: launchEntitlementCacheKey)
+            defaults.removeObject(forKey: subscribedCacheKey)
+            defaults.removeObject(forKey: legacyCacheFirstSeenAtKey)
+        } catch {
+            assertionFailure("Could not encode iCloud Sync launch entitlement cache")
+        }
+    }
+
+    private static let launchEntitlementCacheKey = "iCloudSyncLaunchEntitlement"
     fileprivate static let subscribedCacheKey = "iCloudSyncSubscribed"
+    private static let legacyCacheFirstSeenAtKey = "iCloudSyncLegacyCacheFirstSeenAt"
+    private static let legacyMigrationWindow: TimeInterval = 86_400
 
     private func listenForTransactions() async {
         for await verification in Transaction.updates {
@@ -173,4 +227,3 @@ final class ICloudSubscriptionStore: ObservableObject {
         }
     }
 }
-
