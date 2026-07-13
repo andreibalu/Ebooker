@@ -1,0 +1,12 @@
+# Generated and local-only artifacts
+/node_modules
+/.next
+/out
+/build
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+.env*
+
+# Browser exports are release outputs, not source inputs.
+/exports

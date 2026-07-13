@@ -12,5 +12,10 @@ xcuserdata/
 DerivedData/
 build/
 
-# App Store screenshot generator (Next.js project — not part of the iOS app)
-screenshots/
+# App Store screenshot generator caches and local-only inputs
+screenshots/node_modules/
+screenshots/.next/
+screenshots/out/
+screenshots/build/
+screenshots/.env*
+screenshots/*.tsbuildinfo
