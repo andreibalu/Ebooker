@@ -9,7 +9,7 @@ import Foundation
 // import RevenueCat
 import StoreKit
 
-struct LaunchEntitlementCache: Codable, Equatable {
+nonisolated struct LaunchEntitlementCache: Codable, Equatable {
     let isEntitled: Bool
     let verifiedAt: Date
     let validUntil: Date?
@@ -205,10 +205,10 @@ final class ICloudSubscriptionStore: ObservableObject {
         }
     }
 
-    private static let launchEntitlementCacheKey = "iCloudSyncLaunchEntitlement"
-    fileprivate static let subscribedCacheKey = "iCloudSyncSubscribed"
-    private static let legacyCacheFirstSeenAtKey = "iCloudSyncLegacyCacheFirstSeenAt"
-    private static let legacyMigrationWindow: TimeInterval = 86_400
+    nonisolated private static let launchEntitlementCacheKey = "iCloudSyncLaunchEntitlement"
+    nonisolated fileprivate static let subscribedCacheKey = "iCloudSyncSubscribed"
+    nonisolated private static let legacyCacheFirstSeenAtKey = "iCloudSyncLegacyCacheFirstSeenAt"
+    nonisolated private static let legacyMigrationWindow: TimeInterval = 86_400
 
     private func listenForTransactions() async {
         for await verification in Transaction.updates {
