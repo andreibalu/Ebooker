@@ -45,7 +45,7 @@ enum OrphanDetectionService {
                 : []
             let hasFiles = !contents.isEmpty
 
-            log.info("Inspect '\(book.title, privacy: .public)' folder=\(folderURL.path(), privacy: .public) exists=\(exists, privacy: .public) hasFiles=\(hasFiles, privacy: .public) fileCount=\(contents.count, privacy: .public) trackCount=\(book.tracks.count, privacy: .public)")
+            log.info("Inspect local audiobook storage exists=\(exists, privacy: .public) hasFiles=\(hasFiles, privacy: .public) fileCount=\(contents.count, privacy: .public) trackCount=\(book.tracks.count, privacy: .public)")
 
             if !hasFiles {
                 book.isDownloaded = false

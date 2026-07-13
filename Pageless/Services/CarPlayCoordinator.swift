@@ -710,7 +710,7 @@ final class CarPlayCoordinator: NSObject {
                 await self.audioPlayer.startPlayback(for: audiobook, autoplay: true)
                 self.presentNowPlayingIfNeeded()
             } catch {
-                carPlayLog.error("librivox stream failed: \(String(describing: error), privacy: .public)")
+                carPlayLog.error("librivox stream failed")
                 self.presentInfoAlert(title: "Couldn't open book", message: error.localizedDescription)
             }
         }

@@ -6,8 +6,6 @@
 import CarPlay
 import CoreData
 import OSLog
-// RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable purchase analytics.
-// import RevenueCat
 import SwiftData
 import UIKit
 
@@ -123,14 +121,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             }
         }
 
-        // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
-        // #if !DEBUG
-        // Purchases.configure(
-        //     with: Configuration.Builder(withAPIKey: "appl_fLJZEZIjoyasIHSFeJyYlqHmfzx")
-        //         .with(purchasesAreCompletedBy: .myApp, storeKitVersion: .storeKit2)
-        //         .build()
-        // )
-        // #endif
     }
 
     nonisolated func application(

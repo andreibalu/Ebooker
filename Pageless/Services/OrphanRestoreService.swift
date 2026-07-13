@@ -173,7 +173,7 @@ enum OrphanRestoreService {
         backup.isArchived = false
         backup.isDownloaded = false
         try LibraryImportService.deleteAudiobook(current, deleteFiles: current.isDownloaded, modelContext: modelContext)
-        log.info("Restored free backup '\(backup.title, privacy: .public)' (catalogId match), discarded duplicate '\(current.title, privacy: .public)'")
+        log.info("Restored free backup by catalogId match and discarded duplicate")
     }
 
     // MARK: - Private helpers

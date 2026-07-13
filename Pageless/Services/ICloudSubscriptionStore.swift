@@ -5,8 +5,6 @@
 
 import Combine
 import Foundation
-// RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable purchase analytics.
-// import RevenueCat
 import StoreKit
 
 nonisolated struct LaunchEntitlementCache: Codable, Equatable {
@@ -126,10 +124,6 @@ final class ICloudSubscriptionStore: ObservableObject {
         defer { isPurchasing = false }
         do {
             let result = try await product.purchase()
-            // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
-            // if Purchases.isConfigured {
-            //     _ = try? await Purchases.shared.recordPurchase(result)
-            // }
             switch result {
             case .success(let verification):
                 switch verification {
@@ -156,10 +150,6 @@ final class ICloudSubscriptionStore: ObservableObject {
         restoreError = nil
         do {
             try await AppStore.sync()
-            // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
-            // if Purchases.isConfigured {
-            //     _ = try? await Purchases.shared.syncPurchases()
-            // }
             await refreshEntitlements()
         } catch {
             restoreError = error.localizedDescription
@@ -216,10 +206,6 @@ final class ICloudSubscriptionStore: ObservableObject {
             case .verified(let transaction):
                 guard transaction.productID == ICloudSyncProductID.monthly else { continue }
                 await transaction.finish()
-                // RevenueCat disabled — reverted to StoreKit-only. Uncomment to re-enable observer-mode analytics.
-                // if Purchases.isConfigured {
-                //     _ = try? await Purchases.shared.syncPurchases()
-                // }
                 await refreshEntitlements()
             case .unverified:
                 break
