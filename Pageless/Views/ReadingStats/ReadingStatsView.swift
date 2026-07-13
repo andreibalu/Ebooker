@@ -19,6 +19,7 @@ struct ReadingStatsView: View {
     var palette: HeatmapPalette = .amber
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var scrollOffset: CGFloat = 0
 
     var body: some View {
@@ -103,8 +104,13 @@ struct ReadingStatsView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.primary)
                 .opacity(navBarProgress > 0.5 ? 1 : 0)
-                .offset(y: navBarProgress > 0.5 ? 0 : 6)
-                .animation(.easeOut(duration: 0.25), value: navBarProgress > 0.5)
+                .offset(y: reduceMotion ? 0 : (navBarProgress > 0.5 ? 0 : 6))
+                .animation(
+                    reduceMotion
+                        ? .easeOut(duration: 0.2)
+                        : .easeOut(duration: 0.25),
+                    value: navBarProgress > 0.5
+                )
         }
         .frame(height: 44)
         .overlay(alignment: .bottom) {

@@ -41,15 +41,20 @@ struct RevealOnAppear: ViewModifier {
     var delay: Double = 0
     var yOffset: CGFloat = 28
     @State private var visible = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
         content
             .opacity(visible ? 1 : 0)
-            .scaleEffect(visible ? 1 : 0.985)
-            .offset(y: visible ? 0 : yOffset)
+            .scaleEffect(reduceMotion ? 1 : (visible ? 1 : 0.985))
+            .offset(y: reduceMotion ? 0 : (visible ? 0 : yOffset))
             .onAppear {
                 guard !visible else { return }
-                withAnimation(.easeOut(duration: 0.9).delay(delay)) {
+                withAnimation(
+                    reduceMotion
+                        ? .easeOut(duration: 0.2)
+                        : .easeOut(duration: 0.9).delay(delay)
+                ) {
                     visible = true
                 }
             }
@@ -76,17 +81,23 @@ struct CountUpText<Content: View>: View {
     enum Ease { case easeOutCubic, easeOutQuart, easeOutQuint }
 
     @State private var startDate: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    @ViewBuilder
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0/60.0, paused: !trigger || isDone)) { ctx in
-            let raw = max(0, ctx.date.timeIntervalSince(startDate ?? ctx.date))
-            let t = min(1, raw / duration)
-            let eased = applyEase(t)
-            content(target * eased)
-        }
-        .onAppear { if trigger, startDate == nil { startDate = .now } }
-        .onChange(of: trigger) { _, newValue in
-            if newValue, startDate == nil { startDate = .now }
+        if reduceMotion {
+            content(target)
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0/60.0, paused: !trigger || isDone)) { ctx in
+                let raw = max(0, ctx.date.timeIntervalSince(startDate ?? ctx.date))
+                let t = min(1, raw / duration)
+                let eased = applyEase(t)
+                content(target * eased)
+            }
+            .onAppear { if trigger, startDate == nil { startDate = .now } }
+            .onChange(of: trigger) { _, newValue in
+                if newValue, startDate == nil { startDate = .now }
+            }
         }
     }
 
@@ -112,6 +123,7 @@ struct StatsHeroSection: View {
     let scrollOffset: CGFloat
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var scale: HeatmapScale { .pick(daysSinceFirst: stats.daysTracked) }
 
@@ -170,10 +182,10 @@ struct StatsHeroSection: View {
         Double(max(0, min(1, scrollOffset / 320)))
     }
     private var heroOpacity: Double {
-        1 - pow(parallaxProgress, 1.2)
+        reduceMotion ? 1 : 1 - pow(parallaxProgress, 1.2)
     }
     private var heroTranslateY: CGFloat {
-        -CGFloat(parallaxProgress) * 40
+        reduceMotion ? 0 : -CGFloat(parallaxProgress) * 40
     }
 
     var body: some View {
@@ -228,6 +240,7 @@ struct StatsHeroSection: View {
 struct TotalTimeSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     private var avgPerDay: Int {
@@ -268,7 +281,7 @@ struct TotalTimeSection: View {
         .padding(.top, 60)
         .padding(.bottom, 40)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
     }
 }
@@ -279,6 +292,7 @@ struct BestDaySection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     var body: some View {
@@ -347,7 +361,7 @@ struct BestDaySection: View {
         .padding(.top, 40)
         .padding(.bottom, 30)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
     }
 
@@ -396,6 +410,7 @@ struct BestTimeSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     private var period: String {
@@ -435,7 +450,7 @@ struct BestTimeSection: View {
         .padding(.top, 40)
         .padding(.bottom, 30)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
     }
 
@@ -484,7 +499,7 @@ struct BestTimeSection: View {
                 Spoke(
                     angleRadians: angle.radians,
                     r0: r0,
-                    length: visible ? CGFloat(max(2, len)) : 0
+                    length: reduceMotion ? CGFloat(max(2, len)) : (visible ? CGFloat(max(2, len)) : 0)
                 )
                 .stroke(
                     isBest ? palette.accent : (colorScheme == .dark ? Color.white.opacity(0.45) : Color.black.opacity(0.45)),
@@ -492,8 +507,10 @@ struct BestTimeSection: View {
                 )
                 .opacity(isBest ? 1 : 0.55)
                 .animation(
-                    .interpolatingSpring(stiffness: 80, damping: 14)
-                        .delay(Double(pos) * 0.028),
+                    reduceMotion
+                        ? nil
+                        : .interpolatingSpring(stiffness: 80, damping: 14)
+                            .delay(Double(pos) * 0.028),
                     value: visible
                 )
             }
@@ -540,6 +557,7 @@ struct Spoke: Shape {
 struct LongestBookSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     var body: some View {
@@ -558,10 +576,15 @@ struct LongestBookSection: View {
                 GeneratedCoverView(title: stats.longestBookTitle ?? "")
                     .frame(width: 160, height: 160)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .rotationEffect(.degrees(visible ? -2 : -8))
-                    .scaleEffect(visible ? 1 : 0.85)
-                    .shadow(color: .black.opacity(visible ? 0.25 : 0.15), radius: visible ? 30 : 8, x: 0, y: visible ? 18 : 4)
-                    .animation(.easeOut(duration: 1.4), value: visible)
+                    .rotationEffect(.degrees(reduceMotion ? -2 : (visible ? -2 : -8)))
+                    .scaleEffect(reduceMotion ? 1 : (visible ? 1 : 0.85))
+                    .shadow(
+                        color: .black.opacity(reduceMotion || visible ? 0.25 : 0.15),
+                        radius: reduceMotion || visible ? 30 : 8,
+                        x: 0,
+                        y: reduceMotion || visible ? 18 : 4
+                    )
+                    .animation(reduceMotion ? nil : .easeOut(duration: 1.4), value: visible)
 
                 VStack(spacing: 4) {
                     SerifDisplay(text: stats.longestBookTitle ?? "", size: 26)
@@ -591,7 +614,7 @@ struct LongestBookSection: View {
         .padding(.top, 40)
         .padding(.bottom, 30)
         .onAppear {
-            withAnimation(.easeOut(duration: 1.0)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 1.0)) { visible = true }
         }
     }
 }
@@ -602,6 +625,7 @@ struct StreakSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     private var ribbon: [(active: Bool, minutes: Int)] {
@@ -665,9 +689,11 @@ struct StreakSection: View {
                                 )
                                 .frame(width: barWidth, height: 22)
                                 .opacity(visible ? 1 : 0)
-                                .offset(y: visible ? 0 : 10)
+                                .offset(y: reduceMotion ? 0 : (visible ? 0 : 10))
                                 .animation(
-                                    .easeOut(duration: 0.6).delay(Double(i) * 0.018),
+                                    reduceMotion
+                                        ? .easeOut(duration: 0.2)
+                                        : .easeOut(duration: 0.6).delay(Double(i) * 0.018),
                                     value: visible
                                 )
                         }
@@ -685,7 +711,7 @@ struct StreakSection: View {
         .padding(.top, 40)
         .padding(.bottom, 30)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
     }
 }
@@ -695,6 +721,7 @@ struct StreakSection: View {
 struct MetricsTrioSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     private var lastName: String {
@@ -745,7 +772,7 @@ struct MetricsTrioSection: View {
         .padding(.top, 40)
         .padding(.bottom, 30)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
     }
 
@@ -778,8 +805,13 @@ struct MetricsTrioSection: View {
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 3)
         .opacity(visible ? 1 : 0)
-        .offset(y: visible ? 0 : 20)
-        .animation(.easeOut(duration: 0.9).delay(delay), value: visible)
+        .offset(y: reduceMotion ? 0 : (visible ? 0 : 20))
+        .animation(
+            reduceMotion
+                ? .easeOut(duration: 0.2)
+                : .easeOut(duration: 0.9).delay(delay),
+            value: visible
+        )
     }
 }
 
@@ -789,6 +821,7 @@ struct FreeBooksSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
     private var pctTarget: Double { stats.freePct * 100 }
@@ -821,7 +854,7 @@ struct FreeBooksSection: View {
         .padding(.top, 40)
         .padding(.bottom, 30)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.9)) { visible = true }
+            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
     }
 
@@ -834,10 +867,10 @@ struct FreeBooksSection: View {
                     lineWidth: stroke
                 )
             Circle()
-                .trim(from: 0, to: visible ? CGFloat(stats.freePct) : 0)
+                .trim(from: 0, to: reduceMotion ? CGFloat(stats.freePct) : (visible ? CGFloat(stats.freePct) : 0))
                 .stroke(palette.accent, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(.easeOut(duration: 1.5), value: visible)
+                .animation(reduceMotion ? nil : .easeOut(duration: 1.5), value: visible)
 
             CountUpText(target: pctTarget, duration: 1.4, trigger: visible) { value in
                 Text("\(Int(value.rounded()))%")
