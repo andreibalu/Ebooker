@@ -354,9 +354,9 @@ struct ContentView: View {
             Spacer()
 
             HStack(spacing: 6) {
-                // iCloud Library — only for active subscribers, who are the only users with books
-                // backed up to iCloud to browse. Opens the full backed-up library.
-                if ICloudSubscriptionStore.isSubscribedAtLaunch() {
+                // iCloud Library — only for users whose sync store is active this launch.
+                // Opens the full backed-up library.
+                if IcloudSyncGate.isEnabled() {
                     Button {
                         isCloudLibraryPresented = true
                     } label: {

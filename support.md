@@ -89,7 +89,7 @@ With sync off, removing a free book simply takes it out of your library; you can
 
 ### Will my bookmarks and progress sync to other devices?
 
-Yes — opt-in iCloud sync is available as an auto-renewing subscription (US$0.99/month, billed through your Apple ID; prices vary by region). Open **Settings** inside Unpaged, tap the **iCloud Sync** card, and subscribe, then turn on **Sync library with iCloud**. The first time you toggle it on you'll be asked to quit and reopen the app so the new iCloud-backed store takes effect. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ. Cancel anytime in your Apple ID subscription settings; access continues through the end of the billing period. Everything else in Unpaged stays free.
+Yes — opt-in iCloud sync is available as an auto-renewing subscription (US$0.99/month, billed through your Apple ID; prices vary by region). Open **Settings** inside Unpaged, tap the **iCloud Sync** card, and subscribe, then turn on **Sync library with iCloud**. The toggle controls the next launch: after either turning sync on or turning it off, quit and reopen Unpaged so its iCloud-backed store can be selected. Until relaunch, this launch keeps its existing sync state and its backup/delete behavior stays unchanged. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ. Cancel anytime in your Apple ID subscription settings; access continues through the end of the billing period. Everything else in Unpaged stays free.
 
 ### How do I know a book is backed up to iCloud?
 
@@ -98,7 +98,7 @@ When iCloud Sync is on, every book shows a small **iCloud checkmark** — on its
 ### How do I restore my library on a new iPhone (or after reinstalling)?
 
 1. Sign in to the same iCloud account on the new device and install Unpaged.
-2. Open **Settings → Sync library with iCloud** and turn it on. Within a minute or two your library titles and metadata will appear.
+2. Open **Settings → Sync library with iCloud**, turn it on, then quit and reopen Unpaged. Within a minute or two your library titles and metadata will appear.
 3. Open **Settings → iCloud Library** to see **every book you've ever added** — nothing is hidden. Books are grouped so you can tell at a glance what's backed up and what's on this device:
    - **On this iPhone** — books whose audio is downloaded here (your own imports and downloaded free books). These show a checkmark; they're safe in iCloud and ready to play offline.
    - **Streaming** — free books you're keeping as streaming entries. No download, but fully backed up.

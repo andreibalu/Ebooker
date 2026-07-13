@@ -20,8 +20,6 @@ struct CloudLibraryView: View {
     @Environment(\.dismiss) private var dismiss
     @Query private var allBooks: [Audiobook]
 
-    @AppStorage(IcloudSyncGate.preferenceKey) private var iCloudSyncEnabled = false
-
     @State private var pickingForBook: Audiobook?
     @State private var fileImporterPresented = false
     @State private var alertMessage: String?
@@ -58,7 +56,7 @@ struct CloudLibraryView: View {
 
     var body: some View {
         List {
-            if !iCloudSyncEnabled {
+            if !IcloudSyncGate.isEnabled() {
                 Section {
                     Text("Turn on iCloud sync in Settings to back up your library and see it across devices.")
                         .font(.callout)
@@ -109,7 +107,7 @@ struct CloudLibraryView: View {
                 }
             }
 
-            if onThisPhone.isEmpty && streamingFree.isEmpty && ownOrphans.isEmpty && archivedFree.isEmpty && iCloudSyncEnabled {
+            if onThisPhone.isEmpty && streamingFree.isEmpty && ownOrphans.isEmpty && archivedFree.isEmpty && IcloudSyncGate.isEnabled() {
                 Section {
                     Text("Your iCloud Library is empty. Books you import will be backed up here automatically.")
                         .font(.callout)

@@ -67,7 +67,7 @@ struct ICloudSettingsView: View {
         .alert("Relaunch Required", isPresented: $showRelaunchAlert) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text("Quit and reopen Unpaged to finish turning on iCloud sync. Your library will appear shortly after.")
+            Text(relaunchMessage)
         }
         .alert(
             "Purchase",
@@ -210,10 +210,11 @@ struct ICloudSettingsView: View {
         SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
             VStack(alignment: .leading, spacing: 0) {
                 Toggle(isOn: Binding(
-                    get: { iCloudSyncEnabled && hasUbiquityIdentity },
+                    get: { iCloudSyncEnabled },
                     set: { newValue in
+                        guard newValue != iCloudSyncEnabled else { return }
                         iCloudSyncEnabled = newValue
-                        if newValue {
+                        if newValue != IcloudSyncGate.isEnabled() {
                             showRelaunchAlert = true
                         }
                     }
@@ -272,9 +273,23 @@ struct ICloudSettingsView: View {
         if !hasUbiquityIdentity {
             return "Sign in to iCloud in System Settings to enable sync."
         }
+        let activeThisLaunch = IcloudSyncGate.isEnabled()
+        if iCloudSyncEnabled && !activeThisLaunch {
+            return "Will turn on after relaunch"
+        }
+        if !iCloudSyncEnabled && activeThisLaunch {
+            return "Will turn off after relaunch"
+        }
         return iCloudSyncEnabled
             ? "On \u{2014} your library syncs across devices"
             : "Off \u{2014} library stays on this device"
+    }
+
+    private var relaunchMessage: String {
+        if iCloudSyncEnabled {
+            return "Quit and reopen Unpaged to finish turning on iCloud sync. Your library will appear shortly after."
+        }
+        return "Quit and reopen Unpaged to finish turning off iCloud sync. This launch keeps using its current iCloud state."
     }
 }
 
