@@ -135,7 +135,8 @@ enum LibraryImportService {
         from pending: PendingImportSelection,
         title: String,
         author: String,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        mutationEnvironment: LibraryMutationEnvironment = .live()
     ) throws -> Audiobook {
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else {
@@ -146,43 +147,62 @@ enum LibraryImportService {
             throw LibraryImportError.alreadyInLibrary
         }
 
-        let folderName = UUID().uuidString
-        let folderURL = try storageFolderURL(for: folderName)
+        let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
+        do {
+            let storedFileNames = pending.tracks.enumerated().map { index, track in
+                "\(String(format: "%03d", index + 1))-\(sanitizedFileName(from: track.originalFileName))"
+            }
+            for (track, storedFileName) in zip(pending.tracks, storedFileNames) {
+                _ = try transaction.stageCopy(from: track.sourceURL, named: storedFileName)
+            }
 
-        let audiobook = Audiobook(
-            title: trimmedTitle,
-            author: author.trimmingCharacters(in: .whitespacesAndNewlines),
-            folderName: folderName,
-            coverArtData: pending.coverArtData,
-            totalDuration: pending.totalDuration
-        )
-
-        modelContext.insert(audiobook)
-
-        for (index, track) in pending.tracks.enumerated() {
-            let storedFileName = "\(String(format: "%03d", index + 1))-\(sanitizedFileName(from: track.originalFileName))"
-            let destinationURL = folderURL.appendingPathComponent(storedFileName, conformingTo: .audio)
-
-            try copyFile(from: track.sourceURL, to: destinationURL)
-
-            let savedTrack = AudioTrack(
-                title: track.title,
-                originalFileName: track.originalFileName,
-                storedFileName: storedFileName,
-                orderIndex: index,
-                duration: track.duration,
-                audiobook: audiobook
+            let folderName = UUID().uuidString
+            let folderURL = try LibraryMutationTransaction.folderURL(
+                for: folderName,
+                rootURL: transaction.rootURL
             )
-            savedTrack.contentFingerprint = track.contentFingerprint
+            let audiobook = Audiobook(
+                title: trimmedTitle,
+                author: author.trimmingCharacters(in: .whitespacesAndNewlines),
+                folderName: folderName,
+                coverArtData: pending.coverArtData,
+                totalDuration: pending.totalDuration
+            )
 
-            audiobook.tracks.append(savedTrack)
-            modelContext.insert(savedTrack)
+            modelContext.insert(audiobook)
+            for (index, track) in pending.tracks.enumerated() {
+                let savedTrack = AudioTrack(
+                    title: track.title,
+                    originalFileName: track.originalFileName,
+                    storedFileName: storedFileNames[index],
+                    orderIndex: index,
+                    duration: track.duration,
+                    audiobook: audiobook
+                )
+                savedTrack.contentFingerprint = track.contentFingerprint
+                audiobook.tracks.append(savedTrack)
+                modelContext.insert(savedTrack)
+            }
+
+            audiobook.totalDuration = audiobook.sortedTracks.reduce(0) { $0 + $1.duration }
+            try transaction.promoteStaging(to: folderURL)
+            try mutationEnvironment.save(modelContext)
+            do {
+                try transaction.commit()
+            } catch {
+                throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
+            }
+            return audiobook
+        } catch {
+            if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
+                throw error
+            }
+            try LibraryMutationTransaction.rollbackAndRethrow(
+                error,
+                modelContext: modelContext,
+                transaction: transaction
+            )
         }
-
-        audiobook.totalDuration = audiobook.sortedTracks.reduce(0) { $0 + $1.duration }
-        try modelContext.save()
-
-        return audiobook
     }
 
     /// Exact, order-independent track identity for imported own books. Fingerprint counts are
@@ -226,30 +246,71 @@ enum LibraryImportService {
     static func deleteAudiobook(
         _ audiobook: Audiobook,
         deleteFiles: Bool,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        mutationEnvironment: LibraryMutationEnvironment = .live()
     ) throws {
-        if deleteFiles {
-            let folderURL = try storageFolderURL(for: audiobook.folderName)
-            if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
-                try FileManager.default.removeItem(at: folderURL)
+        let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
+        do {
+            if deleteFiles {
+                let folderURL = try LibraryMutationTransaction.folderURL(
+                    for: audiobook.folderName,
+                    rootURL: transaction.rootURL
+                )
+                try transaction.backupExistingFolder(at: folderURL)
             }
-        }
 
-        modelContext.delete(audiobook)
-        try modelContext.save()
+            modelContext.delete(audiobook)
+            try mutationEnvironment.save(modelContext)
+            do {
+                try transaction.commit()
+            } catch {
+                throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
+            }
+        } catch {
+            if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
+                throw error
+            }
+            try LibraryMutationTransaction.rollbackAndRethrow(
+                error,
+                modelContext: modelContext,
+                transaction: transaction
+            )
+        }
     }
 
     /// Removes the on-disk audio for this device but PRESERVES the synced record (tracks, moments,
     /// progress, recap, EQ) so the book remains in the iCloud Library as a restorable backup.
     /// The book becomes a cloud-only orphan (`isDownloaded = false`); its tracks keep their
     /// `contentFingerprint` so a later re-import can auto-match and restore it.
-    static func softDeleteAudiobook(_ audiobook: Audiobook, modelContext: ModelContext) throws {
-        let folderURL = try storageFolderURL(for: audiobook.folderName)
-        if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
-            try FileManager.default.removeItem(at: folderURL)
+    static func softDeleteAudiobook(
+        _ audiobook: Audiobook,
+        modelContext: ModelContext,
+        mutationEnvironment: LibraryMutationEnvironment = .live()
+    ) throws {
+        let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
+        do {
+            let folderURL = try LibraryMutationTransaction.folderURL(
+                for: audiobook.folderName,
+                rootURL: transaction.rootURL
+            )
+            try transaction.backupExistingFolder(at: folderURL)
+            audiobook.isDownloaded = false
+            try mutationEnvironment.save(modelContext)
+            do {
+                try transaction.commit()
+            } catch {
+                throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
+            }
+        } catch {
+            if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
+                throw error
+            }
+            try LibraryMutationTransaction.rollbackAndRethrow(
+                error,
+                modelContext: modelContext,
+                transaction: transaction
+            )
         }
-        audiobook.isDownloaded = false
-        try modelContext.save()
     }
 
     /// Soft-removes a FREE book from this device's library while preserving the synced record
@@ -258,18 +319,46 @@ enum LibraryImportService {
     /// the main grid but can be re-streamed from the iCloud Library. The free-book analogue of
     /// `softDeleteAudiobook`: free `!isDownloaded` alone is ambiguous (active streaming vs removed),
     /// so the archive flag is what distinguishes a removed book from one the user is still streaming.
-    static func archiveFreeBook(_ audiobook: Audiobook, modelContext: ModelContext) throws {
-        let folderURL = try storageFolderURL(for: audiobook.folderName)
-        if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
-            try FileManager.default.removeItem(at: folderURL)
+    static func archiveFreeBook(
+        _ audiobook: Audiobook,
+        modelContext: ModelContext,
+        mutationEnvironment: LibraryMutationEnvironment = .live()
+    ) throws {
+        let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
+        do {
+            let folderURL = try LibraryMutationTransaction.folderURL(
+                for: audiobook.folderName,
+                rootURL: transaction.rootURL
+            )
+            try transaction.backupExistingFolder(at: folderURL)
+            audiobook.isDownloaded = false
+            audiobook.isArchived = true
+            try mutationEnvironment.save(modelContext)
+            do {
+                try transaction.commit()
+            } catch {
+                throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
+            }
+        } catch {
+            if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
+                throw error
+            }
+            try LibraryMutationTransaction.rollbackAndRethrow(
+                error,
+                modelContext: modelContext,
+                transaction: transaction
+            )
         }
-        audiobook.isDownloaded = false
-        audiobook.isArchived = true
-        try modelContext.save()
     }
 
     static func fileURL(for track: AudioTrack, in audiobook: Audiobook) throws -> URL {
-        try storageFolderURL(for: audiobook.folderName).appendingPathComponent(track.storedFileName)
+        let root = LibraryMutationTransaction.defaultAudiobooksRoot()
+        let folder = try LibraryMutationTransaction.folderURL(for: audiobook.folderName, rootURL: root)
+        return try LibraryMutationTransaction.fileURL(
+            for: track.storedFileName,
+            in: folder,
+            rootURL: root
+        )
     }
 
     /// Returns the total on-disk size of an audiobook's storage folder in megabytes, or nil if unavailable.
@@ -424,16 +513,6 @@ enum LibraryImportService {
         guard let value = try? await item.load(.stringValue) else { return nil }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func copyFile(from sourceURL: URL, to destinationURL: URL) throws {
-        try withSecurityScopedAccess(to: sourceURL) {
-            if FileManager.default.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
-                try FileManager.default.removeItem(at: destinationURL)
-            }
-
-            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-        }
     }
 
     private static func storageFolderURL(for folderName: String) throws -> URL {

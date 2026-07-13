@@ -49,30 +49,165 @@ enum OrphanRestoreService {
     static func adopt(
         orphan: Audiobook,
         pending: PendingImportSelection,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        mutationEnvironment: LibraryMutationEnvironment = .live()
     ) throws -> Audiobook {
-        let folderURL = try storageFolderURL(for: orphan.folderName)
-        // Clear out anything stale that happens to be in the folder before copying.
-        let existing = (try? FileManager.default.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? []
-        for file in existing {
-            try? FileManager.default.removeItem(at: file)
+        let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
+        do {
+            let prepared = try prepareAdoption(
+                orphan: orphan,
+                pending: pending,
+                modelContext: modelContext,
+                transaction: transaction
+            )
+            try mutationEnvironment.save(modelContext)
+            do {
+                try transaction.commit()
+            } catch {
+                throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
+            }
+            let firstExists = !prepared.firstStored.isEmpty && FileManager.default.fileExists(
+                atPath: prepared.folderURL.appendingPathComponent(prepared.firstStored).path(percentEncoded: false)
+            )
+            log.info("Adopted orphan tracks=\(prepared.trackCount) firstFileExists=\(firstExists) isDownloaded=\(orphan.isDownloaded)")
+            return orphan
+        } catch {
+            if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
+                throw error
+            }
+            try LibraryMutationTransaction.rollbackAndRethrow(
+                error,
+                modelContext: modelContext,
+                transaction: transaction
+            )
+        }
+    }
+
+    /// Merges a downloaded local book INTO a cloud-only entry (cloud-wins). Copies the local audio
+    /// files into the cloud entry's folder and rewrites its track pointers (via `adopt`), then deletes
+    /// the now-redundant local record. The SURVIVING record is `cloudEntry`, so its synced progress,
+    /// moments, recap, and EQ are what the user keeps; the local book's divergent state is discarded.
+    @discardableResult
+    static func merge(
+        localBook: Audiobook,
+        into cloudEntry: Audiobook,
+        modelContext: ModelContext,
+        mutationEnvironment: LibraryMutationEnvironment = .live()
+    ) throws -> Audiobook {
+        // Build a pending import that points at the local book's on-disk files.
+        let previews: [TrackImportPreview] = try localBook.sortedTracks.map { track in
+            let url = try LibraryImportService.fileURL(for: track, in: localBook)
+            return TrackImportPreview(
+                sourceURL: url,
+                title: track.title,
+                originalFileName: track.originalFileName,
+                duration: track.duration,
+                contentFingerprint: track.contentFingerprint
+            )
+        }
+        let pending = PendingImportSelection(
+            sourceURLs: previews.map(\.sourceURL),
+            suggestedTitle: localBook.title,
+            suggestedAuthor: localBook.author,
+            coverArtData: localBook.coverArtData,
+            tracks: previews
+        )
+
+        let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
+        do {
+            let prepared = try prepareAdoption(
+                orphan: cloudEntry,
+                pending: pending,
+                modelContext: modelContext,
+                transaction: transaction
+            )
+            let localFolder = try LibraryMutationTransaction.folderURL(
+                for: localBook.folderName,
+                rootURL: transaction.rootURL
+            )
+            if localFolder != prepared.folderURL {
+                try transaction.backupExistingFolder(at: localFolder)
+            }
+            modelContext.delete(localBook)
+            try mutationEnvironment.save(modelContext)
+            do {
+                try transaction.commit()
+            } catch {
+                throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
+            }
+
+            log.info("Merged local book into cloud entry")
+            return cloudEntry
+        } catch {
+            if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
+                throw error
+            }
+            try LibraryMutationTransaction.rollbackAndRethrow(
+                error,
+                modelContext: modelContext,
+                transaction: transaction
+            )
+        }
+    }
+
+    // MARK: - Free-book matching (by catalog id)
+
+    /// Finds an archived free-book backup that matches a LibriVox catalog id — i.e. a free book the
+    /// user removed from this device but kept in their iCloud Library. Used to auto-match on re-add
+    /// and behind the manual "Match with iCloud backup" button. `catalogId` is computed over a private
+    /// backing field, so it can't be expressed in a `#Predicate`; we filter in memory.
+    static func fetchFreeBackup(catalogId: String, modelContext: ModelContext) -> Audiobook? {
+        guard !catalogId.isEmpty else { return nil }
+        guard let all = try? modelContext.fetch(FetchDescriptor<Audiobook>()) else { return nil }
+        return all.first { $0.isFreeBook && $0.isArchived && $0.catalogId == catalogId }
+    }
+
+    /// Free-book analogue of `merge` (cloud-wins) with no files to copy: discards the just-added
+    /// duplicate and brings the archived iCloud backup back into the library as a streaming entry,
+    /// preserving its synced progress, moments, recap, and EQ. The surviving record is `backup`.
+    static func restoreFreeBackup(
+        replacing current: Audiobook,
+        with backup: Audiobook,
+        modelContext: ModelContext
+    ) throws {
+        backup.isArchived = false
+        backup.isDownloaded = false
+        try LibraryImportService.deleteAudiobook(current, deleteFiles: current.isDownloaded, modelContext: modelContext)
+        log.info("Restored free backup '\(backup.title, privacy: .public)' (catalogId match), discarded duplicate '\(current.title, privacy: .public)'")
+    }
+
+    // MARK: - Private helpers
+
+    private static func prepareAdoption(
+        orphan: Audiobook,
+        pending: PendingImportSelection,
+        modelContext: ModelContext,
+        transaction: LibraryMutationTransaction
+    ) throws -> (folderURL: URL, trackCount: Int, firstStored: String) {
+        let existingTracks = orphan.sortedTracks
+        let storedFileNames = pending.tracks.enumerated().map { index, preview in
+            "\(String(format: "%03d", index + 1))-\(sanitizedFileName(preview.originalFileName))"
+        }
+        for (preview, storedFileName) in zip(pending.tracks, storedFileNames) {
+            _ = try transaction.stageCopy(from: preview.sourceURL, named: storedFileName)
         }
 
-        // Match each pending track to an existing AudioTrack by fingerprint first, then by index.
-        let existingTracks = orphan.sortedTracks
+        let folderURL = try LibraryMutationTransaction.folderURL(
+            for: orphan.folderName,
+            rootURL: transaction.rootURL
+        )
+        try transaction.backupExistingFolder(at: folderURL)
+        try transaction.promoteStaging(to: folderURL)
+
         var consumedTrackIds = Set<UUID>()
         var rewrittenTracks: [AudioTrack] = []
-
         for (index, preview) in pending.tracks.enumerated() {
-            let storedFileName = "\(String(format: "%03d", index + 1))-\(sanitizedFileName(preview.originalFileName))"
-            let destinationURL = folderURL.appendingPathComponent(storedFileName, conformingTo: .audio)
-
-            try copyFile(from: preview.sourceURL, to: destinationURL)
-
-            // Prefer fingerprint match against an existing track; otherwise fall back to positional.
+            let storedFileName = storedFileNames[index]
             let matchedExisting: AudioTrack? = {
                 if let fp = preview.contentFingerprint {
-                    if let exact = existingTracks.first(where: { $0.contentFingerprint == fp && !consumedTrackIds.contains($0.id) }) {
+                    if let exact = existingTracks.first(where: {
+                        $0.contentFingerprint == fp && !consumedTrackIds.contains($0.id)
+                    }) {
                         return exact
                     }
                 }
@@ -106,109 +241,24 @@ enum OrphanRestoreService {
             }
         }
 
-        // Any leftover existing tracks (orphan had more chapters than the user re-imported) — drop them.
         for track in existingTracks where !consumedTrackIds.contains(track.id) {
-            if let idx = orphan.tracks.firstIndex(where: { $0.id == track.id }) {
-                orphan.tracks.remove(at: idx)
+            if let index = orphan.tracks.firstIndex(where: { $0.id == track.id }) {
+                orphan.tracks.remove(at: index)
             }
             modelContext.delete(track)
         }
 
         orphan.totalDuration = orphan.sortedTracks.reduce(0) { $0 + $1.duration }
         orphan.isDownloaded = true
-
-        // Adopt the cover from the import if the orphan doesn't already have one synced.
         if orphan.coverArtData == nil, let cover = pending.coverArtData {
             orphan.coverArtData = cover
         }
 
-        try modelContext.save()
-        let firstStored = rewrittenTracks.first?.storedFileName ?? ""
-        let firstExists = !firstStored.isEmpty && FileManager.default.fileExists(
-            atPath: folderURL.appendingPathComponent(firstStored).path(percentEncoded: false)
+        return (
+            folderURL: folderURL,
+            trackCount: rewrittenTracks.count,
+            firstStored: rewrittenTracks.first?.storedFileName ?? ""
         )
-        log.info("Adopted orphan '\(orphan.title, privacy: .public)' folder=\(folderURL.path(), privacy: .public) tracks=\(rewrittenTracks.count, privacy: .public) firstFileExists=\(firstExists, privacy: .public) isDownloaded=\(orphan.isDownloaded, privacy: .public)")
-        return orphan
-    }
-
-    /// Merges a downloaded local book INTO a cloud-only entry (cloud-wins). Copies the local audio
-    /// files into the cloud entry's folder and rewrites its track pointers (via `adopt`), then deletes
-    /// the now-redundant local record. The SURVIVING record is `cloudEntry`, so its synced progress,
-    /// moments, recap, and EQ are what the user keeps; the local book's divergent state is discarded.
-    @discardableResult
-    static func merge(
-        localBook: Audiobook,
-        into cloudEntry: Audiobook,
-        modelContext: ModelContext
-    ) throws -> Audiobook {
-        // Build a pending import that points at the local book's on-disk files.
-        let previews: [TrackImportPreview] = try localBook.sortedTracks.map { track in
-            let url = try LibraryImportService.fileURL(for: track, in: localBook)
-            return TrackImportPreview(
-                sourceURL: url,
-                title: track.title,
-                originalFileName: track.originalFileName,
-                duration: track.duration,
-                contentFingerprint: track.contentFingerprint
-            )
-        }
-        let pending = PendingImportSelection(
-            sourceURLs: previews.map(\.sourceURL),
-            suggestedTitle: localBook.title,
-            suggestedAuthor: localBook.author,
-            coverArtData: localBook.coverArtData,
-            tracks: previews
-        )
-
-        _ = try adopt(orphan: cloudEntry, pending: pending, modelContext: modelContext)
-
-        // Remove the duplicate local record and its (now-copied) files.
-        try LibraryImportService.deleteAudiobook(localBook, deleteFiles: true, modelContext: modelContext)
-
-        log.info("Merged local '\(localBook.title, privacy: .public)' into cloud entry '\(cloudEntry.title, privacy: .public)'")
-        return cloudEntry
-    }
-
-    // MARK: - Free-book matching (by catalog id)
-
-    /// Finds an archived free-book backup that matches a LibriVox catalog id — i.e. a free book the
-    /// user removed from this device but kept in their iCloud Library. Used to auto-match on re-add
-    /// and behind the manual "Match with iCloud backup" button. `catalogId` is computed over a private
-    /// backing field, so it can't be expressed in a `#Predicate`; we filter in memory.
-    static func fetchFreeBackup(catalogId: String, modelContext: ModelContext) -> Audiobook? {
-        guard !catalogId.isEmpty else { return nil }
-        guard let all = try? modelContext.fetch(FetchDescriptor<Audiobook>()) else { return nil }
-        return all.first { $0.isFreeBook && $0.isArchived && $0.catalogId == catalogId }
-    }
-
-    /// Free-book analogue of `merge` (cloud-wins) with no files to copy: discards the just-added
-    /// duplicate and brings the archived iCloud backup back into the library as a streaming entry,
-    /// preserving its synced progress, moments, recap, and EQ. The surviving record is `backup`.
-    static func restoreFreeBackup(
-        replacing current: Audiobook,
-        with backup: Audiobook,
-        modelContext: ModelContext
-    ) throws {
-        backup.isArchived = false
-        backup.isDownloaded = false
-        try LibraryImportService.deleteAudiobook(current, deleteFiles: current.isDownloaded, modelContext: modelContext)
-        log.info("Restored free backup '\(backup.title, privacy: .public)' (catalogId match), discarded duplicate '\(current.title, privacy: .public)'")
-    }
-
-    // MARK: - Private helpers (duplicated minimally from LibraryImportService to avoid widening its API)
-
-    private static func storageFolderURL(for folderName: String) throws -> URL {
-        let applicationSupport = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
-        )
-        let libraryURL = applicationSupport.appendingPathComponent("Audiobooks", isDirectory: true)
-        try FileManager.default.createDirectory(at: libraryURL, withIntermediateDirectories: true)
-        let folder = libraryURL.appendingPathComponent(folderName, isDirectory: true)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return folder
     }
 
     private static func sanitizedFileName(_ name: String) -> String {
@@ -220,13 +270,4 @@ enum OrphanRestoreService {
         return sanitized.isEmpty ? UUID().uuidString : sanitized
     }
 
-    private static func copyFile(from sourceURL: URL, to destinationURL: URL) throws {
-        let accessed = sourceURL.startAccessingSecurityScopedResource()
-        defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
-
-        if FileManager.default.fileExists(atPath: destinationURL.path(percentEncoded: false)) {
-            try FileManager.default.removeItem(at: destinationURL)
-        }
-        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-    }
 }

@@ -100,7 +100,7 @@ struct OrphanRestoreServiceTests {
     }
 
     @Test func mergeMovesLocalFilesIntoCloudEntryAndDeletesLocalRecord() throws {
-        let context = try makeInMemoryContext()
+        let (container, context) = try makeInMemoryContainerAndContext()
 
         // Cloud-only entry the user wants to keep (its moments/progress win).
         let cloudFolder = "cloud-\(UUID().uuidString)"
@@ -134,9 +134,24 @@ struct OrphanRestoreServiceTests {
         try Data(repeating: 0xAB, count: 1024).write(to: localStorage.appendingPathComponent("001-ch01.m4a"))
 
         let localID = localBook.id
-        let survivor = try OrphanRestoreService.merge(localBook: localBook, into: cloudEntry, modelContext: context)
+        var saveCalls = 0
+        let environment = LibraryMutationEnvironment(
+            rootURL: LibraryMutationTransaction.defaultAudiobooksRoot(),
+            save: { context in
+                saveCalls += 1
+                if saveCalls == 2 { throw MergeMutationTestError.save }
+                try context.save()
+            }
+        )
+        let survivor = try OrphanRestoreService.merge(
+            localBook: localBook,
+            into: cloudEntry,
+            modelContext: context,
+            mutationEnvironment: environment
+        )
 
         #expect(survivor === cloudEntry)
+        #expect(saveCalls == 1)
         #expect(cloudEntry.isDownloaded == true)
         #expect(cloudEntry.progressTime == 99.0)
         #expect(cloudEntry.moments.first?.label == "Cloud moment")
@@ -149,9 +164,70 @@ struct OrphanRestoreServiceTests {
         // The duplicate local record is gone.
         let remaining = try context.fetch(FetchDescriptor<Audiobook>())
         #expect(!remaining.contains { $0.id == localID })
+        let refetched = ModelContext(container)
+        let persisted = try refetched.fetch(FetchDescriptor<Audiobook>())
+        #expect(persisted.contains { $0.id == cloudEntry.id && $0.isDownloaded })
+        #expect(!persisted.contains { $0.id == localID })
 
         try? FileManager.default.removeItem(at: cloudStorage)
         try? FileManager.default.removeItem(at: localStorage)
+    }
+
+    @Test func mergeSaveFailureRestoresBothRecordsAndBothFoldersInFreshContext() throws {
+        let (container, context) = try makeInMemoryContainerAndContext()
+        let cloudFolder = "merge-cloud-failure-\(UUID().uuidString)"
+        let cloudEntry = makeOrphan(in: context, title: "Cloud Backup", folderName: cloudFolder, fingerprints: ["fp-1"])
+
+        let localFolder = "merge-local-failure-\(UUID().uuidString)"
+        let localBook = Audiobook(title: "Local Copy", folderName: localFolder, isDownloaded: true)
+        context.insert(localBook)
+        let localTrack = AudioTrack(
+            title: "Chapter 1",
+            originalFileName: "ch01.m4a",
+            storedFileName: "001-ch01.m4a",
+            orderIndex: 0,
+            duration: 60,
+            audiobook: localBook
+        )
+        localTrack.contentFingerprint = "fp-1"
+        localBook.tracks.append(localTrack)
+        context.insert(localTrack)
+        try context.save()
+
+        let localStorage = try storageFolder(for: localFolder)
+        try FileManager.default.createDirectory(at: localStorage, withIntermediateDirectories: true)
+        try Data("local-audio".utf8).write(to: localStorage.appendingPathComponent("001-ch01.m4a"))
+        let cloudStorage = try storageFolder(for: cloudFolder)
+        let cloudID = cloudEntry.id
+        let localID = localBook.id
+        let root = LibraryMutationTransaction.defaultAudiobooksRoot()
+        let environment = LibraryMutationEnvironment(rootURL: root, save: { _ in
+            throw MergeMutationTestError.save
+        })
+
+        do {
+            _ = try OrphanRestoreService.merge(
+                localBook: localBook,
+                into: cloudEntry,
+                modelContext: context,
+                mutationEnvironment: environment
+            )
+            Issue.record("Expected merge save failure")
+        } catch MergeMutationTestError.save {
+            // Expected.
+        }
+
+        let refetched = ModelContext(container)
+        let books = try refetched.fetch(FetchDescriptor<Audiobook>())
+        let restoredCloud = books.first { $0.id == cloudID }
+        let restoredLocal = books.first { $0.id == localID }
+        #expect(restoredCloud?.isDownloaded == false)
+        #expect(restoredLocal?.isDownloaded == true)
+        #expect(FileManager.default.fileExists(atPath: localStorage.appendingPathComponent("001-ch01.m4a").path(percentEncoded: false)))
+        #expect(!FileManager.default.fileExists(atPath: cloudStorage.path(percentEncoded: false)))
+
+        try? FileManager.default.removeItem(at: localStorage)
+        try? FileManager.default.removeItem(at: cloudStorage)
     }
 
     @Test func softDeleteRemovesFilesButPreservesRecord() throws {
@@ -195,11 +271,19 @@ struct OrphanRestoreServiceTests {
 
     // MARK: - Helpers
 
+    private enum MergeMutationTestError: Error {
+        case save
+    }
+
     private func makeInMemoryContext() throws -> ModelContext {
+        try makeInMemoryContainerAndContext().1
+    }
+
+    private func makeInMemoryContainerAndContext() throws -> (ModelContainer, ModelContext) {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self, ReadingSession.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
         let container = try ModelContainer(for: schema, configurations: [config])
-        return ModelContext(container)
+        return (container, ModelContext(container))
     }
 
     private func makeOrphan(
