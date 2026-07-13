@@ -24,6 +24,7 @@ struct MomentRow: View {
     @State private var isDraggingSwipe = false
     @State private var swipeBaseOffset: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
+    @State private var isCommittingDelete = false
 
     /// Width of the exposed delete action (Mail-style).
     private let revealWidth: CGFloat = 82
@@ -50,6 +51,7 @@ struct MomentRow: View {
                 .offset(x: dragOffset)
                 .gesture(swipeGesture)
                 .onTapGesture {
+                    guard !isCommittingDelete else { return }
                     if isRevealed {
                         withAnimation(springClose) {
                             dragOffset = 0
@@ -116,7 +118,8 @@ struct MomentRow: View {
 
     private var deleteActionBackground: some View {
         Button {
-            commitDeleteAnimated()
+            guard !isCommittingDelete else { return }
+            animateOutAndDelete(haptic: .medium)
         } label: {
             Text("Delete")
                 .font(.subheadline.weight(.semibold))
@@ -207,13 +210,17 @@ struct MomentRow: View {
         }
     }
 
-    private func commitDeleteAnimated() {
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        let w = effectiveWidth
-        withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
-            dragOffset = -w - 24
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
+    private func animateOutAndDelete(haptic: UIImpactFeedbackGenerator.FeedbackStyle) {
+        guard !isCommittingDelete else { return }
+        isCommittingDelete = true
+        UIImpactFeedbackGenerator(style: haptic).impactOccurred()
+        let width = effectiveWidth
+        withAnimation(
+            .spring(response: 0.34, dampingFraction: 0.9),
+            completionCriteria: .removed
+        ) {
+            dragOffset = -width - 24
+        } completion: {
             onDelete()
         }
     }
@@ -221,6 +228,7 @@ struct MomentRow: View {
     private var swipeGesture: some Gesture {
         DragGesture(minimumDistance: 16, coordinateSpace: .local)
             .onChanged { value in
+                guard !isCommittingDelete else { return }
                 let dx = value.translation.width
                 let dy = value.translation.height
 
@@ -238,6 +246,7 @@ struct MomentRow: View {
                 dragOffset = min(0, max(next, minX))
             }
             .onEnded { value in
+                guard !isCommittingDelete else { return }
                 isDraggingSwipe = false
                 let w = effectiveWidth
                 let current = swipeBaseOffset + value.translation.width
@@ -250,13 +259,7 @@ struct MomentRow: View {
                     || (current <= -w * 0.58 && predicted <= -w * 0.9)
 
                 if shouldFullDelete {
-                    UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-                    withAnimation(.spring(response: 0.34, dampingFraction: 0.9)) {
-                        dragOffset = -w - 24
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.24) {
-                        onDelete()
-                    }
+                    animateOutAndDelete(haptic: .rigid)
                     return
                 }
 
