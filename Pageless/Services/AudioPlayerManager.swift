@@ -49,6 +49,31 @@ struct AudioSessionInterruptionController {
     }
 }
 
+struct PlaybackLoadGeneration {
+    private(set) var current: UInt64 = 0
+
+    mutating func begin() -> UInt64 {
+        current &+= 1
+        return current
+    }
+
+    mutating func invalidate() {
+        current &+= 1
+    }
+
+    func isCurrent(_ token: UInt64) -> Bool {
+        token == current
+    }
+}
+
+struct AudioPlayerLoadPreparation {
+    let isNetworkAvailable: @MainActor () -> Bool
+    let makeAudioMix: @MainActor (AVAsset) async -> AVAudioMix?
+    let loadDuration: @MainActor (AVAsset) async throws -> CMTime
+    /// Preparation-only hook. Must not seek the shared AVPlayer.
+    let prepareSeek: @MainActor (AVAsset, CMTime) async -> Bool
+}
+
 @MainActor
 final class AudioPlayerManager: NSObject, ObservableObject {
     /// Shared with `PlayerView` and CarPlay playback-rate controls.
@@ -76,19 +101,45 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var resumeBacktrackAvailableThisLaunch = true
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
+    private var loadGeneration = PlaybackLoadGeneration()
+    private var seekGeneration: UInt64 = 0
     private var timeControlStatusObservation: NSKeyValueObservation?
     private var backgroundObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
     private var interruptionController = AudioSessionInterruptionController()
+    private var loadPreparation: AudioPlayerLoadPreparation
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
     private let sessionRecorder = ReadingSessionRecorder()
     let equalizer: AudioEqualizerService
 
-    override init() {
+    override convenience init() {
+        self.init(loadPreparation: nil)
+    }
+
+    init(loadPreparation: AudioPlayerLoadPreparation?) {
         self.equalizer = AudioEqualizerService()
+        self.loadPreparation = loadPreparation ?? AudioPlayerLoadPreparation(
+            isNetworkAvailable: { false },
+            makeAudioMix: { _ in nil },
+            loadDuration: { _ in .zero },
+            prepareSeek: { _, _ in false }
+        )
         super.init()
+        if loadPreparation == nil {
+            self.loadPreparation = AudioPlayerLoadPreparation(
+                isNetworkAvailable: { NetworkMonitor.shared.isConnected },
+                makeAudioMix: { [weak self] asset in
+                    guard let self else { return nil }
+                    return await self.equalizer.makeAudioMix(for: asset)
+                },
+                loadDuration: { asset in
+                    try await asset.load(.duration)
+                },
+                prepareSeek: { _, _ in true }
+            )
+        }
         player.automaticallyWaitsToMinimizeStalling = true
         addPeriodicTimeObserver()
         observeTrackEnd()
@@ -238,6 +289,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func pause() {
+        invalidateCurrentLoad()
+        pauseCurrentItemWithoutInvalidatingLoad()
+    }
+
+    private func pauseCurrentItemWithoutInvalidatingLoad() {
         player.pause()
         loadingPlaybackBookID = nil
         isPlaying = false
@@ -253,9 +309,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
         let boundedTime = max(0, min(seconds, duration))
         let target = CMTime(seconds: boundedTime, preferredTimescale: 600)
+        seekGeneration &+= 1
+        let seekToken = seekGeneration
+        let loadToken = loadGeneration.current
         player.seek(to: target) { [weak self] finished in
             guard let self, finished else { return }
             Task { @MainActor in
+                guard self.isCurrentLoad(loadToken), self.seekGeneration == seekToken else { return }
                 self.currentTime = boundedTime
                 self.persistPlayback(force: true)
                 self.updateNowPlayingInfo()
@@ -362,11 +422,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard audiobook.sortedTracks.indices.contains(trackIndex) else { return }
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
 
+        let loadToken = beginLoad()
         persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
         let showsStreamLoading = !audiobook.isDownloaded && autoplay
-        if showsStreamLoading {
-            loadingPlaybackBookID = audiobook.id
-        }
+        loadingPlaybackBookID = showsStreamLoading ? audiobook.id : nil
         isLoadingItem = true
         activateAudioSession()
 
@@ -375,83 +434,135 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             if audiobook.isDownloaded {
                 assetURL = try LibraryImportService.fileURL(for: track, in: audiobook)
             } else if let remoteURL = track.remoteURL {
-                guard NetworkMonitor.shared.isConnected else {
-                    isLoadingItem = false
-                    clearLoadingPlayback(for: audiobook.id)
-                    playerErrorMessage = "You're offline. Download this book to listen without internet."
+                guard loadPreparation.isNetworkAvailable() else {
+                    failCurrentLoad(
+                        "You're offline. Download this book to listen without internet.",
+                        loadToken: loadToken
+                    )
                     return
                 }
                 assetURL = remoteURL
             } else {
-                isLoadingItem = false
-                clearLoadingPlayback(for: audiobook.id)
-                playerErrorMessage = "No audio source available for this track."
+                failCurrentLoad("No audio source available for this track.", loadToken: loadToken)
                 return
             }
             let asset = AVURLAsset(url: assetURL)
             let item = AVPlayerItem(asset: asset)
-            let loadingBookID = audiobook.id
-            currentItemStatusObservation?.invalidate()
-            currentItemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
-                let failed = item.status == .failed
-                Task { @MainActor [weak self] in
-                    guard let self, failed else { return }
-                    self.isLoadingItem = false
-                    self.clearLoadingPlayback(for: loadingBookID)
-                    self.playerErrorMessage = "Unpaged could not open this audio stream."
-                }
+            let initialDuration = track.duration > 0 ? track.duration : 1
+
+            if let mix = await loadPreparation.makeAudioMix(asset) {
+                guard isCurrentLoad(loadToken) else { return }
+                item.audioMix = mix
             }
 
+            let loadedDuration = try? await loadPreparation.loadDuration(asset)
+            guard isCurrentLoad(loadToken) else { return }
+            let committedDuration: Double
+            if let loadedDuration, loadedDuration.seconds.isFinite, loadedDuration.seconds > 0 {
+                committedDuration = loadedDuration.seconds
+            } else {
+                committedDuration = initialDuration
+            }
+            let startTime = max(0, min(time, committedDuration))
+            let target = CMTime(seconds: startTime, preferredTimescale: 600)
+            let shouldSeek = await loadPreparation.prepareSeek(asset, target)
+            guard isCurrentLoad(loadToken) else { return }
+
+            // Commit only after every suspending preparation step succeeds. Until this point,
+            // current model state and shared AVPlayer remain owned by prior request.
+            player.cancelPendingSeeks()
+            player.pause()
+            isPlaying = false
+            player.replaceCurrentItem(with: item)
             if currentAudiobook !== audiobook {
                 equalizer.bind(to: audiobook)
             }
 
-            let initialDuration = track.duration > 0 ? track.duration : 1
-            let initialTime = max(0, min(time, initialDuration))
             currentAudiobook = audiobook
             currentTrack = track
             currentTrackIndex = trackIndex
-            currentTime = initialTime
+            currentTime = startTime
             playbackRate = audiobook.playbackRate
-            duration = initialDuration
+            duration = committedDuration
             audiobook.currentTrackIndex = trackIndex
-            audiobook.currentTime = initialTime
+            audiobook.currentTime = startTime
             audiobook.lastPlayedAt = .now
             audiobook.isFinished = false
-            persistence.lastPersistedTime = initialTime
-
-            if let mix = await equalizer.makeAudioMix(for: asset) {
-                item.audioMix = mix
-            }
-
-            player.replaceCurrentItem(with: item)
-
-            if let loadedDuration = try? await asset.load(.duration), loadedDuration.seconds.isFinite, loadedDuration.seconds > 0 {
-                duration = loadedDuration.seconds
+            if let loadedDuration, loadedDuration.seconds.isFinite, loadedDuration.seconds > 0 {
                 track.duration = loadedDuration.seconds
             }
-
-            let startTime = max(0, min(time, duration))
-            let target = CMTime(seconds: startTime, preferredTimescale: 600)
-            await player.seek(to: target)
-            currentTime = startTime
             persistence.lastPersistedTime = startTime
+
+            currentItemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                let failed = item.status == .failed
+                Task { @MainActor [weak self] in
+                    guard let self, failed, self.isCurrentLoad(loadToken) else { return }
+                    self.isLoadingItem = false
+                    self.clearLoadingPlayback(for: audiobook.id)
+                    self.playerErrorMessage = "Unpaged could not open this audio stream."
+                }
+            }
+
+            seekGeneration &+= 1
+            let committedSeekToken = seekGeneration
+            if shouldSeek {
+                player.seek(to: target) { [weak self] finished in
+                    guard let self, finished else { return }
+                    Task { @MainActor in
+                        guard self.isCurrentLoad(loadToken), self.seekGeneration == committedSeekToken else { return }
+                        self.currentTime = startTime
+                        self.persistPlayback(force: true)
+                        self.updateNowPlayingInfo()
+                    }
+                }
+            }
+
             isLoadingItem = false
             persistPlayback(force: true)
 
             if autoplay {
                 play()
             } else {
-                pause()
+                pauseCurrentItemWithoutInvalidatingLoad()
                 clearLoadingPlayback(for: audiobook.id)
             }
 
             updateNowPlayingInfo()
         } catch {
+            guard isCurrentLoad(loadToken) else { return }
             isLoadingItem = false
             clearLoadingPlayback(for: audiobook.id)
             playerErrorMessage = "Unpaged could not open this audio file."
         }
+    }
+
+    private func beginLoad() -> UInt64 {
+        seekGeneration &+= 1
+        player.cancelPendingSeeks()
+        currentItemStatusObservation?.invalidate()
+        currentItemStatusObservation = nil
+        return loadGeneration.begin()
+    }
+
+    private func invalidateCurrentLoad() {
+        loadGeneration.invalidate()
+        seekGeneration &+= 1
+        player.cancelPendingSeeks()
+        currentItemStatusObservation?.invalidate()
+        currentItemStatusObservation = nil
+        isLoadingItem = false
+        loadingPlaybackBookID = nil
+    }
+
+    private func isCurrentLoad(_ token: UInt64) -> Bool {
+        loadGeneration.isCurrent(token)
+    }
+
+    private func failCurrentLoad(_ message: String, loadToken: UInt64) {
+        guard isCurrentLoad(loadToken) else { return }
+        isLoadingItem = false
+        loadingPlaybackBookID = nil
+        playerErrorMessage = message
     }
 
     private func clearLoadingPlayback(for bookID: UUID) {
