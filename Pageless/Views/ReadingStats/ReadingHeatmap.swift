@@ -282,6 +282,7 @@ struct ReadingHeatmapView: View {
     var emphasizeKey: String? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var didAppear = false
 
     var body: some View {
@@ -296,7 +297,8 @@ struct ReadingHeatmapView: View {
             }
         }
         .onAppear {
-            // Trigger the stagger animation once layout is done.
+            // Keep final state latched even if Reduce Motion changes while this view survives.
+            // The reduced-motion branch below disables per-cell animation scheduling.
             if stagger { didAppear = true }
         }
     }
@@ -418,7 +420,7 @@ struct ReadingHeatmapView: View {
             return Double(col + row) * (perCell / 1000.0)
         }()
 
-        let visible = !stagger || didAppear
+        let visible = reduceMotion || !stagger || didAppear
 
         RoundedRectangle(cornerRadius: radius, style: .continuous)
             .fill(fill)
@@ -441,7 +443,7 @@ struct ReadingHeatmapView: View {
             .opacity(visible ? 1 : 0)
             .scaleEffect(visible ? 1 : 0.6)
             .animation(
-                stagger
+                stagger && !reduceMotion
                     ? .easeOut(duration: 0.48).delay(staggerDelay)
                     : nil,
                 value: didAppear

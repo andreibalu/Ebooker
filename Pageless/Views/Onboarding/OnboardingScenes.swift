@@ -95,15 +95,26 @@ struct OBChoiceScene: View {
     let reduceMotion: Bool
     @Binding var choice: OnboardingChoice?
     let onPicked: () -> Void
+    @State private var advanceTask: Task<Void, Never>?
 
     private func pick(_ value: OnboardingChoice) {
+        advanceTask?.cancel()
+        advanceTask = nil
+
         if choice == value {
             // Re-tapping the selected card clears it (Requirement B: reversible).
-            withAnimation(OBMotion.settle) { choice = nil }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection) { choice = nil }
         } else {
-            withAnimation(OBMotion.settle) { choice = value }
-            // Advance to the playback scene after the selection animation settles.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.62) { onPicked() }
+            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection) { choice = value }
+            scheduleAdvance(for: value)
+        }
+    }
+
+    private func scheduleAdvance(for value: OnboardingChoice) {
+        advanceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(620))
+            guard !Task.isCancelled, isActive, choice == value else { return }
+            onPicked()
         }
     }
 
@@ -152,6 +163,16 @@ struct OBChoiceScene: View {
                 .padding(.top, 26)
             }
             .obReveal(active: isActive)
+        }
+        .onChange(of: isActive) { _, active in
+            if !active {
+                advanceTask?.cancel()
+                advanceTask = nil
+            }
+        }
+        .onDisappear {
+            advanceTask?.cancel()
+            advanceTask = nil
         }
     }
 
@@ -215,11 +236,13 @@ struct OBChoiceScene: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(OB.accent, lineWidth: selected ? 2 : 0)
+                    .strokeBorder(OB.accent, lineWidth: reduceMotion ? 2 : (selected ? 2 : 0))
+                    .opacity(reduceMotion ? (selected ? 1 : 0) : 1)
             )
             .shadow(color: selected ? OB.accent.opacity(0.22) : .black.opacity(0.07),
-                    radius: selected ? 17 : 7, y: selected ? 14 : 4)
-            .scaleEffect(selected ? 1.025 : 1)
+                    radius: reduceMotion ? 7 : (selected ? 17 : 7),
+                    y: reduceMotion ? 4 : (selected ? 14 : 4))
+            .scaleEffect(reduceMotion ? 1 : (selected ? 1.025 : 1))
         }
         .buttonStyle(.plain)
     }
@@ -292,7 +315,7 @@ struct OBPermissionsScene: View {
                 }
                 .frame(maxWidth: .infinity)
                 .opacity(bothGranted ? 1 : 0.55)
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.4), value: bothGranted)
+                .animation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection, value: bothGranted)
                 .padding(.top, 26)
             }
         }
@@ -351,10 +374,12 @@ struct OBPermissionsScene: View {
     private func setGranted(mic: Bool, speech: Bool) {
         guard mic != micGranted || speech != speechGranted else { return }
         if reduceMotion {
-            micGranted = mic
-            speechGranted = speech
+            withAnimation(.easeOut(duration: 0.2)) {
+                micGranted = mic
+                speechGranted = speech
+            }
         } else {
-            withAnimation(.easeInOut(duration: 0.4)) {
+            withAnimation(OBMotion.selection) {
                 micGranted = mic
                 speechGranted = speech
             }
@@ -475,15 +500,15 @@ struct OBPlaybackScene: View {
                               caption: "How far the back and forward buttons jump.",
                               delay: 0.16) {
                         VStack(spacing: 10) {
-                            OBChipRow(value: $skipBack, leadingSymbol: "gobackward.30")
-                            OBChipRow(value: $skipForward, leadingSymbol: "goforward.30")
+                            OBChipRow(value: $skipBack, leadingSymbol: "gobackward.30", reduceMotion: reduceMotion)
+                            OBChipRow(value: $skipForward, leadingSymbol: "goforward.30", reduceMotion: reduceMotion)
                         }
                     }
 
                     prefBlock(icon: "bookmark.fill", title: "Save moment offset",
                               caption: "Where a saved moment lands relative to now.",
                               delay: 0.24) {
-                        OBStepper(value: $moment)
+                        OBStepper(value: $moment, reduceMotion: reduceMotion)
                     }
                 }
                 .padding(.top, 22)
@@ -645,6 +670,7 @@ private struct OBResumeSlider: View {
 private struct OBChipRow: View {
     @Binding var value: Double
     let leadingSymbol: String
+    let reduceMotion: Bool
     private let options = SkipIntervalOption.allCases
 
     var body: some View {
@@ -656,7 +682,9 @@ private struct OBChipRow: View {
             ForEach(options) { option in
                 let on = option.rawValue == value
                 Button {
-                    withAnimation(OBMotion.settle) { value = option.rawValue }
+                    withAnimation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection) {
+                        value = option.rawValue
+                    }
                 } label: {
                     Text(skipShort(option.rawValue))
                         .font(.system(size: 14.5, weight: .semibold))
@@ -669,7 +697,7 @@ private struct OBChipRow: View {
                                 .fill(on ? OB.accent : OB.fill(0.06))
                         )
                         .shadow(color: on ? OB.accent.opacity(0.28) : .clear, radius: 8, y: 6)
-                        .offset(y: on ? -1 : 0)
+                        .offset(y: reduceMotion ? 0 : (on ? -1 : 0))
                 }
                 .buttonStyle(.plain)
             }
@@ -680,6 +708,7 @@ private struct OBChipRow: View {
 /// − / value / + stepper across the moment-offset options.
 private struct OBStepper: View {
     @Binding var value: Double
+    let reduceMotion: Bool
     private let options = MomentBacktrackOption.allCases
 
     private var index: Int { options.firstIndex(where: { $0.rawValue == value }) ?? 0 }
@@ -704,7 +733,11 @@ private struct OBStepper: View {
 
     private func set(_ newIndex: Int) {
         let clamped = max(0, min(options.count - 1, newIndex))
-        withAnimation(OBMotion.settle) { value = options[clamped].rawValue }
+        if reduceMotion {
+            value = options[clamped].rawValue
+        } else {
+            withAnimation(OBMotion.selection) { value = options[clamped].rawValue }
+        }
     }
 
     private func stepButton(_ symbol: String, disabled: Bool, action: @escaping () -> Void) -> some View {
@@ -1248,9 +1281,12 @@ struct OBDoneScene: View {
 }
 
 private struct OBPressButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(OBMotion.settle, value: configuration.isPressed)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1))
+            .opacity(reduceMotion && configuration.isPressed ? 0.82 : 1)
+            .animation(OBMotion.press, value: configuration.isPressed)
     }
 }

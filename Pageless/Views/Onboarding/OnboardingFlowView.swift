@@ -118,17 +118,19 @@ struct OnboardingFlowView: View {
                 } label: {
                     Circle()
                         .fill(on ? OB.accent : OB.fill(0.25))
-                        .frame(width: on ? 8 : 6, height: on ? 8 : 6)
+                        .frame(width: reduceMotion ? 8 : (on ? 8 : 6),
+                               height: reduceMotion ? 8 : (on ? 8 : 6))
                         .overlay(
                             Circle()
-                                .stroke(OB.accentSoft, lineWidth: on ? 4 : 0)
+                                .stroke(OB.accentSoft, lineWidth: 4)
+                                .opacity(on ? 1 : 0)
                         )
                         .frame(width: 14, height: 14)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Self.sceneLabels[i])
-                .animation(OBMotion.settle, value: on)
+                .animation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection, value: on)
             }
         }
         .padding(.trailing, 9)
@@ -137,7 +139,11 @@ struct OnboardingFlowView: View {
     // MARK: - Navigation
 
     private func jump(to index: Int) {
-        withAnimation(.easeInOut(duration: 0.45)) {
+        guard !reduceMotion else {
+            activeID = index
+            return
+        }
+        withAnimation(Animation.timingCurve(0.77, 0, 0.175, 1, duration: 0.45)) {
             activeID = index
         }
     }
