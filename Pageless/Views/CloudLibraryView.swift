@@ -6,6 +6,69 @@
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
+import Observation
+
+enum CloudLibraryRestoreDecision: Equatable {
+    case adopt
+    case confirmMismatch
+}
+
+struct CloudLibraryRestoreRequest: Identifiable {
+    let id = UUID()
+    let book: Audiobook
+    let pending: PendingImportSelection
+}
+
+@MainActor
+@Observable
+final class CloudLibraryRestoreFlow {
+    private(set) var pending: CloudLibraryRestoreRequest?
+    private var heldSecurityScopedURLs: [URL] = []
+
+    @discardableResult
+    func route(
+        pending: PendingImportSelection,
+        for book: Audiobook,
+        accessedURLs: [URL],
+        adopt: (Audiobook, PendingImportSelection) throws -> Void,
+        release: (URL) -> Void
+    ) throws -> CloudLibraryRestoreDecision {
+        let decision = CloudLibraryView.restoreDecision(pending: pending, for: book)
+        switch decision {
+        case .adopt:
+            defer { accessedURLs.forEach(release) }
+            try adopt(book, pending)
+        case .confirmMismatch:
+            self.pending = CloudLibraryRestoreRequest(book: book, pending: pending)
+            heldSecurityScopedURLs = accessedURLs
+        }
+        return decision
+    }
+
+    func confirm(
+        adopt: (Audiobook, PendingImportSelection) throws -> Void,
+        release: (URL) -> Void
+    ) throws {
+        guard let request = pending else { return }
+        try adopt(request.book, request.pending)
+        pending = nil
+        releaseHeldSecurityScopedAccess(release: release)
+    }
+
+    func cancel(release: (URL) -> Void) {
+        pending = nil
+        releaseHeldSecurityScopedAccess(release: release)
+    }
+
+    func releaseOnDismiss(release: (URL) -> Void) {
+        cancel(release: release)
+    }
+
+    private func releaseHeldSecurityScopedAccess(release: (URL) -> Void) {
+        heldSecurityScopedURLs.forEach(release)
+        heldSecurityScopedURLs = []
+    }
+}
 
 /// The user-facing iCloud Library: every book the user has ever added lives here permanently —
 /// shown whether or not its audio is present on this device — so the user can always confirm their
@@ -26,6 +89,16 @@ struct CloudLibraryView: View {
     @State private var streamRestoreInFlight: Set<UUID> = []
     @State private var navigateToBook: Audiobook?
     @State private var deleteCandidate: Audiobook?
+    @State private var restoreFlow = CloudLibraryRestoreFlow()
+
+    static func restoreDecision(
+        pending: PendingImportSelection,
+        for book: Audiobook
+    ) -> CloudLibraryRestoreDecision {
+        LibraryImportService.hasExactFingerprintMultiset(pending, matching: book)
+            ? .adopt
+            : .confirmMismatch
+    }
 
     private func byRecency(_ books: [Audiobook]) -> [Audiobook] {
         books.sorted { ($0.lastPlayedAt ?? $0.createdAt) > ($1.lastPlayedAt ?? $1.createdAt) }
@@ -129,6 +202,23 @@ struct CloudLibraryView: View {
             handleFileSelection(result)
         }
         .confirmationDialog(
+            "These files do not match the iCloud copy",
+            isPresented: Binding(
+                get: { restoreFlow.pending != nil },
+                set: { if !$0 { cancelMismatchedRestore() } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Adopt These Files", role: .destructive) {
+                confirmMismatchedRestore()
+            }
+            Button("Choose Different Files", role: .cancel) {
+                cancelMismatchedRestore()
+            }
+        } message: {
+            Text("The selected files do not have the same tracks as ‘\(restoreFlow.pending?.book.title ?? "this book")’. Adopting them replaces its audio while keeping its iCloud progress and moments.")
+        }
+        .confirmationDialog(
             "Remove from iCloud?",
             isPresented: Binding(
                 get: { deleteCandidate != nil },
@@ -150,6 +240,9 @@ struct CloudLibraryView: View {
             Button("OK", role: .cancel) { alertMessage = nil }
         } message: {
             Text(alertMessage ?? "")
+        }
+        .onDisappear {
+            restoreFlow.releaseOnDismiss(release: stopSecurityScopedAccess)
         }
     }
 
@@ -315,26 +408,61 @@ struct CloudLibraryView: View {
             guard !audioURLs.isEmpty else { return }
             let accessed = audioURLs.filter { $0.startAccessingSecurityScopedResource() }
             Task {
-                defer { accessed.forEach { $0.stopAccessingSecurityScopedResource() } }
+                var callerOwnsAccess = true
                 do {
                     let pending = try await LibraryImportService.prepareImport(from: audioURLs)
-                    let pendingFingerprints = Set(pending.tracks.compactMap { $0.contentFingerprint })
-                    let orphanFingerprints = Set(book.tracks.compactMap { $0.contentFingerprint })
-                    let matched = !pendingFingerprints.isEmpty && !pendingFingerprints.isDisjoint(with: orphanFingerprints)
-                    if !matched {
-                        alertMessage = "These files don't match the iCloud copy of ‘\(book.title)’. Tap again to adopt anyway, or pick a different file."
-                        // Best-effort: still adopt — the user explicitly chose this row, the
-                        // mismatch warning above is informational and gates a second tap visually.
+                    callerOwnsAccess = false
+                    let decision = try restoreFlow.route(
+                        pending: pending,
+                        for: book,
+                        accessedURLs: accessed,
+                        adopt: adoptRestore,
+                        release: stopSecurityScopedAccess
+                    )
+                    switch decision {
+                    case .confirmMismatch:
+                        pickingForBook = nil
+                        return
+                    case .adopt:
+                        pickingForBook = nil
+                        navigateToBook = book
                     }
-                    _ = try OrphanRestoreService.adopt(orphan: book, pending: pending, modelContext: modelContext)
-                    pickingForBook = nil
-                    navigateToBook = book
                 } catch {
+                    if callerOwnsAccess {
+                        accessed.forEach(stopSecurityScopedAccess)
+                    }
                     alertMessage = error.localizedDescription
                 }
             }
         case .failure(let error):
             alertMessage = error.localizedDescription
         }
+    }
+
+    private func confirmMismatchedRestore() {
+        guard let book = restoreFlow.pending?.book else { return }
+        do {
+            try restoreFlow.confirm(
+                adopt: adoptRestore,
+                release: stopSecurityScopedAccess
+            )
+            navigateToBook = book
+        } catch {
+            // Keep request and security-scoped access alive so the user can retry or choose
+            // different files after a recoverable adoption failure.
+            alertMessage = error.localizedDescription
+        }
+    }
+
+    private func cancelMismatchedRestore() {
+        restoreFlow.cancel(release: stopSecurityScopedAccess)
+    }
+
+    private func adoptRestore(_ book: Audiobook, _ pending: PendingImportSelection) throws {
+        _ = try OrphanRestoreService.adopt(orphan: book, pending: pending, modelContext: modelContext)
+    }
+
+    private func stopSecurityScopedAccess(_ url: URL) {
+        url.stopAccessingSecurityScopedResource()
     }
 }
