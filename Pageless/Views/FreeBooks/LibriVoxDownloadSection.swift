@@ -44,6 +44,22 @@ struct LibriVoxDownloadPresentation {
     }
 }
 
+@MainActor
+struct LibriVoxDownloadAnimationKey: Equatable {
+    struct Item: Equatable {
+        let catalogID: String
+        let phase: LibriVoxDownloadManager.Phase
+    }
+
+    let items: [Item]
+
+    init(entries: [LibriVoxDownloadManager.Entry]) {
+        items = entries.map {
+            Item(catalogID: $0.catalogID, phase: $0.phase)
+        }
+    }
+}
+
 /// Shared, compact download surface used by Free Books and the Library tab.
 struct LibriVoxDownloadSection: View {
     @Environment(LibriVoxDownloadManager.self) private var manager

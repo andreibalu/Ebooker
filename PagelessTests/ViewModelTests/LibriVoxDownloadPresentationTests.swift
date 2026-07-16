@@ -97,6 +97,30 @@ struct LibriVoxDownloadPresentationTests {
         ))
     }
 
+    @Test("Download animation key ignores progress but tracks phase and membership")
+    func animationKeyScopesChanges() {
+        let initial = entry(phase: .downloading, currentTrackFraction: 0.1)
+        var progressOnly = initial
+        progressOnly.completedTracks = 4
+        progressOnly.currentTrackFraction = 0.9
+
+        #expect(
+            LibriVoxDownloadAnimationKey(entries: [initial])
+                == LibriVoxDownloadAnimationKey(entries: [progressOnly])
+        )
+
+        var completed = progressOnly
+        completed.phase = .complete
+        #expect(
+            LibriVoxDownloadAnimationKey(entries: [initial])
+                != LibriVoxDownloadAnimationKey(entries: [completed])
+        )
+        #expect(
+            LibriVoxDownloadAnimationKey(entries: [initial])
+                != LibriVoxDownloadAnimationKey(entries: [])
+        )
+    }
+
     private func entry(
         phase: LibriVoxDownloadManager.Phase,
         target: LibriVoxDownloadManager.Target = .fresh,
