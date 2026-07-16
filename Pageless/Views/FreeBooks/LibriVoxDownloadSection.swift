@@ -62,11 +62,24 @@ struct LibriVoxDownloadAnimationKey: Equatable {
 
 /// Shared, compact download surface used by Free Books and the Library tab.
 struct LibriVoxDownloadSection: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(LibriVoxDownloadManager.self) private var manager
     var onSelect: ((String) -> Void)? = nil
 
     private var entries: [LibriVoxDownloadManager.Entry] {
         manager.entries.values.sorted { $0.metadata.title < $1.metadata.title }
+    }
+
+    private var animationKey: LibriVoxDownloadAnimationKey {
+        LibriVoxDownloadAnimationKey(entries: entries)
+    }
+
+    private var stateAnimation: Animation {
+        AppMotion.stateChangeAnimation(reduceMotion: reduceMotion)
+    }
+
+    private var stateTransition: AnyTransition {
+        AppMotion.stateTransition(reduceMotion: reduceMotion)
     }
 
     var body: some View {
@@ -83,15 +96,20 @@ struct LibriVoxDownloadSection: View {
                         .fill(Color.primary.opacity(0.18))
                         .frame(height: 0.5)
                 }
+                .transition(.opacity)
 
                 ForEach(entries, id: \.catalogID) { entry in
-                    row(entry)
-                    if entry.catalogID != entries.last?.catalogID {
-                        Divider()
+                    VStack(spacing: 0) {
+                        row(entry)
+                        if entry.catalogID != entries.last?.catalogID {
+                            Divider()
+                        }
                     }
+                    .transition(stateTransition)
                 }
             }
         }
+        .animation(stateAnimation, value: animationKey)
     }
 
     private func row(_ entry: LibriVoxDownloadManager.Entry) -> some View {
@@ -114,7 +132,9 @@ struct LibriVoxDownloadSection: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer()
                 if presentation.showsSpinner {
-                    ProgressView().controlSize(.small)
+                    ProgressView()
+                        .controlSize(.small)
+                        .transition(stateTransition)
                 }
                 actions(for: entry, presentation: presentation)
             }
@@ -122,6 +142,7 @@ struct LibriVoxDownloadSection: View {
             if let progress = presentation.progress {
                 ProgressView(value: progress)
                     .tint(.amber)
+                    .transition(stateTransition)
             }
         }
         .padding(.vertical, 10)
@@ -139,6 +160,7 @@ struct LibriVoxDownloadSection: View {
                 .font(.caption)
                 .foregroundStyle(entry.phase == .failed ? Color.red : Color.secondary)
                 .lineLimit(1)
+                .contentTransition(.opacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
@@ -149,69 +171,83 @@ struct LibriVoxDownloadSection: View {
         for entry: LibriVoxDownloadManager.Entry,
         presentation: LibriVoxDownloadPresentation
     ) -> some View {
-        if presentation.canCancel {
-            Button {
-                Task { await manager.cancel(catalogID: entry.catalogID) }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
+        Group {
+            if presentation.canCancel {
+                Button {
+                    Task { await manager.cancel(catalogID: entry.catalogID) }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Cancel download")
+            } else if presentation.canRetry || presentation.canDismiss {
+                HStack(spacing: 10) {
+                    Button("Retry") { manager.retry(catalogID: entry.catalogID) }
+                    Button("Dismiss") { manager.dismiss(catalogID: entry.catalogID) }
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Cancel download")
-        } else if presentation.canRetry || presentation.canDismiss {
-            HStack(spacing: 10) {
-                Button("Retry") { manager.retry(catalogID: entry.catalogID) }
-                Button("Dismiss") { manager.dismiss(catalogID: entry.catalogID) }
-            }
-            .font(.caption.weight(.semibold))
-            .buttonStyle(.plain)
         }
+        .transition(stateTransition)
     }
 }
 
 /// Shared five-phase status/actions used by both LibriVox detail routes.
 struct LibriVoxDetailDownloadStatus: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(LibriVoxDownloadManager.self) private var manager
     let entry: LibriVoxDownloadManager.Entry
     var progressTint: Color = .amber
 
+    private var stateAnimation: Animation {
+        AppMotion.stateChangeAnimation(reduceMotion: reduceMotion)
+    }
+
+    private var stateTransition: AnyTransition {
+        AppMotion.stateTransition(reduceMotion: reduceMotion)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            switch entry.phase {
-            case .preparing:
-                Label("Preparing download…", systemImage: "arrow.down.circle")
-                    .foregroundStyle(.secondary)
-            case .downloading:
-                HStack {
-                    Text("Downloading…").fontWeight(.medium)
-                    Spacer()
-                    Text("\(entry.completedTracks) / \(entry.totalTracks) tracks")
-                        .font(.caption)
+            Group {
+                switch entry.phase {
+                case .preparing:
+                    Label("Preparing download…", systemImage: "arrow.down.circle")
                         .foregroundStyle(.secondary)
+                case .downloading:
+                    HStack {
+                        Text("Downloading…").fontWeight(.medium)
+                        Spacer()
+                        Text("\(entry.completedTracks) / \(entry.totalTracks) tracks")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: entry.progress)
+                        .tint(progressTint)
+                case .cancelling:
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Cancelling…").foregroundStyle(.secondary)
+                    }
+                case .failed:
+                    Label(entry.errorMessage ?? "The download failed.", systemImage: "exclamationmark.circle")
+                        .foregroundStyle(.red)
+                    HStack {
+                        Button("Try Again") { manager.retry(catalogID: entry.catalogID) }
+                        Button("Dismiss") { manager.dismiss(catalogID: entry.catalogID) }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                case .complete:
+                    Label("Downloaded", systemImage: "checkmark.circle.fill")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.green)
                 }
-                ProgressView(
-                    value: entry.progress
-                )
-                .tint(progressTint)
-            case .cancelling:
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Cancelling…").foregroundStyle(.secondary)
-                }
-            case .failed:
-                Label(entry.errorMessage ?? "The download failed.", systemImage: "exclamationmark.circle")
-                    .foregroundStyle(.red)
-                HStack {
-                    Button("Try Again") { manager.retry(catalogID: entry.catalogID) }
-                    Button("Dismiss") { manager.dismiss(catalogID: entry.catalogID) }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            case .complete:
-                Label("Downloaded", systemImage: "checkmark.circle.fill")
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.green)
             }
+            .id(entry.phase)
+            .transition(stateTransition)
 
             if entry.phase == .preparing || entry.phase == .downloading {
                 Button("Cancel") {
@@ -219,8 +255,10 @@ struct LibriVoxDetailDownloadStatus: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .transition(.opacity)
             }
         }
         .font(.subheadline)
+        .animation(stateAnimation, value: entry.phase)
     }
 }
