@@ -49,7 +49,7 @@ struct LibriVoxDownloadManifestStoreTests {
         #expect(LibriVoxDownloadTaskIdentity(description: "|\(attemptID)|1") == nil)
     }
 
-    @Test func corruptManifestIsQuarantinedWithoutHidingValidJobs() throws {
+    @Test func corruptManifestIsQuarantinedWhileValidManifestContinuesLoading() throws {
         let harness = try StoreHarness()
         defer { harness.remove() }
         let job = makeJob()
@@ -59,6 +59,73 @@ struct LibriVoxDownloadManifestStoreTests {
         #expect(try harness.store.loadAll() == [job])
         #expect(try harness.store.quarantinedFiles().count == 1)
         #expect(try harness.store.manifestFiles().count == 1)
+    }
+
+    @Test func invalidPathManifestIsQuarantined() throws {
+        let harness = try StoreHarness()
+        defer { harness.remove() }
+        let job = makeJob(stagingFolderName: "../escape")
+        try FileManager.default.createDirectory(
+            at: harness.store.manifestsURL,
+            withIntermediateDirectories: true
+        )
+        try JSONEncoder().encode(job).write(
+            to: harness.store.manifestsURL.appendingPathComponent("invalid.json")
+        )
+
+        #expect(try harness.store.loadAll().isEmpty)
+        #expect(try harness.store.quarantinedFiles().count == 1)
+    }
+
+    @Test func invalidURLDurationAndTrackOrderAreQuarantined() throws {
+        let harness = try StoreHarness()
+        defer { harness.remove() }
+        var job = makeJob()
+        job.tracks = [
+            job.tracks[0],
+            .init(
+                title: "Chapter 2",
+                remoteURL: URL(string: "file:///tmp/2.mp3")!,
+                durationSeconds: 0,
+                storedFileName: "0002.mp3",
+                orderIndex: 2
+            )
+        ]
+        try FileManager.default.createDirectory(
+            at: harness.store.manifestsURL,
+            withIntermediateDirectories: true
+        )
+        try JSONEncoder().encode(job).write(
+            to: harness.store.manifestsURL.appendingPathComponent("\(job.attemptID.uuidString).json")
+        )
+
+        #expect(try harness.store.loadAll().isEmpty)
+        #expect(try harness.store.quarantinedFiles().count == 1)
+    }
+
+    @Test func oldManifestMissingOrderIndexesMigratesByTrackPosition() throws {
+        let harness = try StoreHarness()
+        defer { harness.remove() }
+        let job = makeJob()
+        let encoded = try JSONEncoder().encode(job)
+        var object = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var tracks = try #require(object["tracks"] as? [[String: Any]])
+        tracks = tracks.map { track in
+            var migrated = track
+            migrated.removeValue(forKey: "orderIndex")
+            return migrated
+        }
+        object["tracks"] = tracks
+        let oldData = try JSONSerialization.data(withJSONObject: object)
+        try FileManager.default.createDirectory(
+            at: harness.store.manifestsURL,
+            withIntermediateDirectories: true
+        )
+        try oldData.write(
+            to: harness.store.manifestsURL.appendingPathComponent("\(job.attemptID.uuidString).json")
+        )
+
+        #expect(try harness.store.loadAll() == [job])
     }
 
     @Test func deleteRemovesOnlyMatchingAttempt() throws {
@@ -76,7 +143,8 @@ struct LibriVoxDownloadManifestStoreTests {
 
     private func makeJob(
         catalogID: String = "book",
-        completed: Set<Int> = []
+        completed: Set<Int> = [],
+        stagingFolderName: String = "stage"
     ) -> LibriVoxDownloadJob {
         .init(
             catalogID: catalogID,
@@ -87,19 +155,21 @@ struct LibriVoxDownloadManifestStoreTests {
                     : "66666666-7777-8888-9999-AAAAAAAAAAAA")!,
             title: "Jane Eyre",
             target: .fresh,
-            stagingFolderName: "stage",
+            stagingFolderName: stagingFolderName,
             tracks: [
                 .init(
                     title: "Chapter 1",
                     remoteURL: URL(string: "https://example.com/1.mp3")!,
                     durationSeconds: 60,
-                    storedFileName: "0001.mp3"
+                    storedFileName: "0001.mp3",
+                    orderIndex: 0
                 ),
                 .init(
                     title: "Chapter 2",
                     remoteURL: URL(string: "https://example.com/2.mp3")!,
                     durationSeconds: 75,
-                    storedFileName: "0002.mp3"
+                    storedFileName: "0002.mp3",
+                    orderIndex: 1
                 )
             ],
             completedIndexes: completed,

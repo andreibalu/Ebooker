@@ -374,6 +374,9 @@ struct FreeBookIdentityServiceTests {
         try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
         try Data([1, 2, 3]).write(to: staging.appendingPathComponent("001-new.mp3"))
         defer { try? FileManager.default.removeItem(at: staging) }
+        let backup = FileManager.default.temporaryDirectory
+            .appendingPathComponent("promotion-backup-(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: backup) }
         let job = LibriVoxDownloadJob(
             catalogID: "catalog-1",
             attemptID: UUID(),
@@ -385,12 +388,16 @@ struct FreeBookIdentityServiceTests {
                     title: "New Track",
                     remoteURL: URL(string: "https://example.com/new.mp3")!,
                     durationSeconds: 20,
-                    storedFileName: "001-new.mp3"
+                    storedFileName: "001-new.mp3",
+                    orderIndex: 0
                 )
             ],
             completedIndexes: [0],
             phase: .downloading,
-            lastError: nil
+            lastError: nil,
+            fileMetadata: [0: try LibriVoxDownloadService.fileMetadata(
+                at: staging.appendingPathComponent("001-new.mp3")
+            )]
         )
 
         #expect(throws: CancellationError.self) {
@@ -398,6 +405,7 @@ struct FreeBookIdentityServiceTests {
                 audiobook: audiobook,
                 job: job,
                 stagingFolderURL: staging,
+                backupFolderURL: backup,
                 modelContext: context,
                 beforeCommit: { throw CancellationError() }
             )

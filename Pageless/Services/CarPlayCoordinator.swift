@@ -57,7 +57,13 @@ final class CarPlayCoordinator: NSObject {
         carPlayLog.info("coordinator connect")
         self.interfaceController = interfaceController
         audioPlayer.configure(modelContext: modelContainer.mainContext)
-        freeBookDownloader.configure(modelContext: modelContainer.mainContext)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = await self.freeBookDownloader.restoreBackgroundSession(
+                modelContext: self.modelContainer.mainContext
+            )
+            self.refreshLibraryTemplates()
+        }
         applyPlaybackDefaultsFromStorage()
         let root = makeRootTemplate()
         interfaceController.setRootTemplate(root, animated: true) { [weak self] success, error in

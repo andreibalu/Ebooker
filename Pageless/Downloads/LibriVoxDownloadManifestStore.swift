@@ -5,6 +5,23 @@
 
 import Foundation
 
+enum LibriVoxDownloadManifestStoreError: LocalizedError {
+    case corrupted(URL, Error)
+    case unreadable(URL, Error)
+    case invalidJob(URL, String)
+
+    var errorDescription: String? {
+        switch self {
+        case .corrupted(let url, let error):
+            "Corrupt LibriVox download manifest \(url.lastPathComponent): \(error.localizedDescription)"
+        case .unreadable(let url, let error):
+            "Unreadable LibriVox download manifest \(url.lastPathComponent): \(error.localizedDescription)"
+        case .invalidJob(let url, let reason):
+            "Invalid LibriVox download manifest \(url.lastPathComponent): \(reason)"
+        }
+    }
+}
+
 final class LibriVoxDownloadManifestStore: @unchecked Sendable {
     let rootURL: URL
     let manifestsURL: URL
@@ -31,13 +48,22 @@ final class LibriVoxDownloadManifestStore: @unchecked Sendable {
         try prepareDirectories()
         var jobs: [LibriVoxDownloadJob] = []
         for fileURL in try manifestFiles() {
+            let data: Data
             do {
-                jobs.append(try decoder.decode(
-                    LibriVoxDownloadJob.self,
-                    from: Data(contentsOf: fileURL)
-                ))
+                data = try Data(contentsOf: fileURL)
             } catch {
-                try quarantine(fileURL)
+                throw LibriVoxDownloadManifestStoreError.unreadable(fileURL, error)
+            }
+            do {
+                let job = try decoder.decode(LibriVoxDownloadJob.self, from: data)
+                try validate(job, fileURL: fileURL)
+                jobs.append(job)
+            } catch {
+                do {
+                    try quarantine(fileURL)
+                } catch {
+                    throw LibriVoxDownloadManifestStoreError.unreadable(fileURL, error)
+                }
             }
         }
         return jobs.sorted {
@@ -49,6 +75,7 @@ final class LibriVoxDownloadManifestStore: @unchecked Sendable {
     }
 
     func save(_ job: LibriVoxDownloadJob) throws {
+        try validate(job, fileURL: manifestURL(for: job.attemptID))
         try prepareDirectories()
         let destinationURL = manifestURL(for: job.attemptID)
         let temporaryURL = manifestsURL.appendingPathComponent(
@@ -101,6 +128,71 @@ final class LibriVoxDownloadManifestStore: @unchecked Sendable {
     private func prepareDirectories() throws {
         try fileManager.createDirectory(at: manifestsURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: corruptURL, withIntermediateDirectories: true)
+    }
+
+    private func validate(_ job: LibriVoxDownloadJob, fileURL: URL) throws {
+        guard !job.catalogID.isEmpty else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "empty catalog ID")
+        }
+        guard fileURL.deletingPathExtension().lastPathComponent == job.attemptID.uuidString else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "manifest attempt identity mismatch")
+        }
+        guard isContainedPathComponent(job.stagingFolderName, under: rootURL) else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "unsafe staging folder")
+        }
+        if let destinationFolderName = job.destinationFolderName,
+           !isContainedPathComponent(destinationFolderName, under: rootURL) {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "unsafe destination folder")
+        }
+        if let backupFolderName = job.backupFolderName,
+           !isContainedPathComponent(backupFolderName, under: rootURL) {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "unsafe backup folder")
+        }
+        guard !job.tracks.isEmpty else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "empty track list")
+        }
+        guard job.tracks.enumerated().allSatisfy({ index, track in
+            track.orderIndex == index
+                && ["http", "https"].contains(track.remoteURL.scheme?.lowercased())
+                && !(track.remoteURL.host?.isEmpty ?? true)
+                && track.durationSeconds.isFinite
+                && track.durationSeconds > 0
+        }) else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(
+                fileURL,
+                "invalid track URL, duration, or contiguous order"
+            )
+        }
+        let names = job.tracks.map(\.storedFileName)
+        guard Set(names).count == job.tracks.count,
+              job.tracks.allSatisfy({ isContainedPathComponent($0.storedFileName, under: rootURL) })
+        else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "duplicate or invalid track shape")
+        }
+        guard job.completedIndexes.allSatisfy({ $0 >= 0 && $0 < job.tracks.count }) else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "completed track index out of bounds")
+        }
+        guard job.fileMetadata.keys.allSatisfy({ job.completedIndexes.contains($0) }),
+              job.fileMetadata.values.allSatisfy({ $0.byteCount > 0 && $0.sha256.count == 64 })
+        else {
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "invalid staged file metadata")
+        }
+        if job.phase == .finalizing {
+            guard Set(job.fileMetadata.keys) == Set(job.tracks.indices) else {
+                throw LibriVoxDownloadManifestStoreError.invalidJob(
+                    fileURL,
+                    "finalizing manifest missing staged file metadata"
+                )
+            }
+        }
+    }
+
+    private func isContainedPathComponent(_ value: String, under _: URL) -> Bool {
+        !value.isEmpty
+            && value != "."
+            && value != ".."
+            && !value.contains("/")
+            && !value.contains("\\")
     }
 
     private func quarantine(_ fileURL: URL) throws {

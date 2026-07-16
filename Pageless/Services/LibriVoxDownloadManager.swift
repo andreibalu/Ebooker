@@ -175,6 +175,7 @@ final class LibriVoxDownloadManager {
     private let isAppActive: @MainActor () -> Bool
     private let completionRemoval: CompletionRemoval
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var preparationTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var attempts: [String: UInt64] = [:]
     @ObservationIgnored private var coordinatorAttempts: [String: UUID] = [:]
 
@@ -259,9 +260,14 @@ final class LibriVoxDownloadManager {
             let attemptID = UUID()
             coordinatorAttempts[request.catalogID] = attemptID
             synchronizeActivity()
-            Task { [weak self] in
+            let task = Task { [weak self] in
                 do {
                     try await coordinator.start(request, attemptID: attemptID)
+                } catch is CancellationError {
+                    self?.finishCoordinatorCancellation(
+                        for: request.catalogID,
+                        attemptID: attemptID
+                    )
                 } catch {
                     self?.finishCoordinatorFailure(
                         error,
@@ -269,7 +275,12 @@ final class LibriVoxDownloadManager {
                         attemptID: attemptID
                     )
                 }
+                self?.finishCoordinatorPreparation(
+                    for: request.catalogID,
+                    attemptID: attemptID
+                )
             }
+            preparationTasks[request.catalogID] = task
             return true
         }
 
@@ -292,7 +303,14 @@ final class LibriVoxDownloadManager {
             entry.currentTrackFraction = 0
             entries[catalogID] = entry
             synchronizeActivity()
+            preparationTasks[catalogID]?.cancel()
             await coordinator.cancel(catalogID: catalogID, attemptID: attemptID)
+            await preparationTasks[catalogID]?.value
+            guard coordinatorAttempts[catalogID] == attemptID else { return true }
+            preparationTasks[catalogID] = nil
+            coordinatorAttempts[catalogID] = nil
+            entries[catalogID] = nil
+            synchronizeActivity()
             return true
         }
 
@@ -316,7 +334,8 @@ final class LibriVoxDownloadManager {
     func retry(catalogID: String) -> Bool {
         guard var entry = entries[catalogID],
               entry.phase == .failed,
-              tasks[catalogID] == nil
+              tasks[catalogID] == nil,
+              preparationTasks[catalogID] == nil
         else { return false }
 
         entry.phase = .preparing
@@ -330,13 +349,23 @@ final class LibriVoxDownloadManager {
             let attemptID = UUID()
             coordinatorAttempts[catalogID] = attemptID
             synchronizeActivity()
-            Task { [weak self] in
+            let task = Task { [weak self] in
                 do {
                     try await coordinator.retry(entry.request, attemptID: attemptID)
+                } catch is CancellationError {
+                    self?.finishCoordinatorCancellation(
+                        for: catalogID,
+                        attemptID: attemptID
+                    )
                 } catch {
                     self?.finishCoordinatorFailure(error, for: catalogID, attemptID: attemptID)
                 }
+                self?.finishCoordinatorPreparation(
+                    for: catalogID,
+                    attemptID: attemptID
+                )
             }
+            preparationTasks[catalogID] = task
             return true
         }
 
@@ -364,6 +393,10 @@ final class LibriVoxDownloadManager {
     func waitForAllWork() async {
         let currentTasks = Array(tasks.values)
         for task in currentTasks {
+            await task.value
+        }
+        let currentPreparationTasks = Array(preparationTasks.values)
+        for task in currentPreparationTasks {
             await task.value
         }
     }
@@ -459,7 +492,8 @@ final class LibriVoxDownloadManager {
 
         case let .failed(catalogID, attemptID, message):
             guard coordinatorAttempts[catalogID] == attemptID,
-                  var entry = entries[catalogID]
+                  var entry = entries[catalogID],
+                  entry.phase != .cancelling
             else { return }
             entry.phase = .failed
             entry.currentTrackFraction = 0
@@ -491,6 +525,21 @@ final class LibriVoxDownloadManager {
             attemptID: attemptID,
             message: error.localizedDescription
         ))
+    }
+
+    private func finishCoordinatorCancellation(for catalogID: String, attemptID: UUID) {
+        guard coordinatorAttempts[catalogID] == attemptID,
+              entries[catalogID]?.phase == .cancelling
+        else { return }
+        entries[catalogID] = nil
+        coordinatorAttempts[catalogID] = nil
+        preparationTasks[catalogID] = nil
+        synchronizeActivity()
+    }
+
+    private func finishCoordinatorPreparation(for catalogID: String, attemptID: UUID) {
+        guard coordinatorAttempts[catalogID] == attemptID else { return }
+        preparationTasks[catalogID] = nil
     }
 
     private func finishCoordinatorSuccess(for catalogID: String, attemptID: UUID) async {

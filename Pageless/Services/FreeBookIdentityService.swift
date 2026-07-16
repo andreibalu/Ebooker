@@ -49,6 +49,35 @@ enum FreeBookIdentityService {
             .first
     }
 
+    static func hasCommittedAudioFiles(
+        _ audiobook: Audiobook,
+        expectedStoredFileNames: Set<String>? = nil,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard audiobook.isDownloaded,
+              !audiobook.folderName.isEmpty,
+              !audiobook.tracks.isEmpty
+        else { return false }
+        if let expectedStoredFileNames,
+           Set(audiobook.tracks.map(\.storedFileName)) != expectedStoredFileNames {
+            return false
+        }
+        guard let applicationSupport = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else { return false }
+        let folder = applicationSupport
+            .appendingPathComponent("Audiobooks", isDirectory: true)
+            .appendingPathComponent(audiobook.folderName, isDirectory: true)
+        return audiobook.tracks.allSatisfy { track in
+            let fileURL = folder.appendingPathComponent(track.storedFileName)
+            guard fileManager.fileExists(atPath: fileURL.path(percentEncoded: false)),
+                  let values = try? fileURL.resourceValues(forKeys: [.fileSizeKey])
+            else { return false }
+            return (values.fileSize ?? 0) > 0
+        }
+    }
+
     /// Reuses a persisted free-book row while replacing only its local-file representation.
     /// Book-level identity, progress, moments, favorites, and equalizer state remain untouched.
     static func promoteToDownloaded(

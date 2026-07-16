@@ -13,14 +13,72 @@ private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "
 
 @MainActor
 final class BackgroundSessionCompletionRegistry {
-    private var handlers: [String: () -> Void] = [:]
+    private var handlers: [String: [() -> Void]] = [:]
+    private var pendingReleases: Set<String> = []
+    private var restorationReady: Set<String> = []
+    private var consumed: Set<String> = []
+    private var activeCycles: Set<String> = []
 
-    func store(_ handler: @escaping () -> Void, for identifier: String) {
-        handlers[identifier] = handler
+    func beginCycle(for identifier: String) {
+        guard !activeCycles.contains(identifier) else { return }
+        activeCycles.insert(identifier)
+        restorationReady.remove(identifier)
+        consumed.remove(identifier)
+    }
+
+    private func consumeHandlers(for identifier: String) -> (() -> Void)? {
+        guard let handlers = handlers.removeValue(forKey: identifier), !handlers.isEmpty else {
+            return nil
+        }
+        consumed.insert(identifier)
+        activeCycles.remove(identifier)
+        return {
+            handlers.forEach { $0() }
+        }
+    }
+
+    @discardableResult
+    func store(_ handler: @escaping () -> Void, for identifier: String) -> (() -> Void)? {
+        guard !consumed.contains(identifier) else { return nil }
+        handlers[identifier, default: []].append(handler)
+        if pendingReleases.contains(identifier), restorationReady.contains(identifier) {
+            pendingReleases.remove(identifier)
+            return consumeHandlers(for: identifier)
+        }
+        return nil
     }
 
     func take(for identifier: String) -> (() -> Void)? {
-        handlers.removeValue(forKey: identifier)
+        consumeHandlers(for: identifier)
+    }
+
+    func requestCompletion(for identifier: String) -> (() -> Void)? {
+        guard !consumed.contains(identifier) else { return nil }
+        if !handlers[identifier, default: []].isEmpty {
+            guard restorationReady.contains(identifier) else {
+                pendingReleases.insert(identifier)
+                return nil
+            }
+            pendingReleases.remove(identifier)
+            return consumeHandlers(for: identifier)
+        }
+        pendingReleases.insert(identifier)
+        return nil
+    }
+
+    @discardableResult
+    func markRestorationReady(for identifier: String) -> (() -> Void)? {
+        restorationReady.insert(identifier)
+        guard pendingReleases.remove(identifier) != nil else { return nil }
+        return consumeHandlers(for: identifier)
+    }
+
+    @discardableResult
+    func markRestorationFailed(for identifier: String) -> (() -> Void)? {
+        // Durable fail-closed outcome. Preserve release handshake.
+        restorationReady.insert(identifier)
+        guard pendingReleases.remove(identifier) != nil else { return nil }
+        return consumeHandlers(for: identifier)
     }
 }
 
@@ -129,17 +187,41 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         completionHandler: @escaping () -> Void
     ) {
         Task { @MainActor in
-            backgroundSessionCompletionRegistry.store(completionHandler, for: identifier)
+            backgroundSessionCompletionRegistry.beginCycle(for: identifier)
+            let handlerReadyBeforeConfiguration = backgroundSessionCompletionRegistry.store(
+                completionHandler,
+                for: identifier
+            )
+            var restorationSucceeded = true
             if identifier == FreeBookDownloadService.backgroundSessionIdentifier {
-                freeBookDownloader.configure(modelContext: modelContainer.mainContext)
+                restorationSucceeded = await freeBookDownloader.restoreBackgroundSession(
+                    modelContext: modelContainer.mainContext
+                )
             } else if identifier == LibriVoxBackgroundDownloadCoordinator.sessionIdentifier {
-                libriVoxDownloadCoordinator.ensureSession()
+                restorationSucceeded = await libriVoxDownloadCoordinator.restoreBackgroundSession()
+            }
+            if restorationSucceeded {
+                UserDefaults.standard.removeObject(
+                    forKey: "BackgroundSessionRecoveryError.\(identifier)"
+                )
+                (handlerReadyBeforeConfiguration
+                    ?? backgroundSessionCompletionRegistry.markRestorationReady(for: identifier))?()
+            } else {
+                UserDefaults.standard.set(
+                    "Background restoration halted; retry required.",
+                    forKey: "BackgroundSessionRecoveryError.\(identifier)"
+                )
+                backgroundSessionCompletionRegistry.markRestorationFailed(for: identifier)?()
             }
         }
     }
 
     func takeBackgroundSessionCompletionHandler(for identifier: String) -> (() -> Void)? {
         backgroundSessionCompletionRegistry.take(for: identifier)
+    }
+
+    func requestBackgroundSessionCompletionHandler(for identifier: String) -> (() -> Void)? {
+        backgroundSessionCompletionRegistry.requestCompletion(for: identifier)
     }
 
     nonisolated func application(

@@ -205,13 +205,13 @@ struct AudioPlayerManagerLoadTests {
         await waitUntilStarted(slowSeek)
 
         let currentLoad = Task { @MainActor in
-            await player.playTrack(at: 0, in: b, time: 77)
+            await player.playTrack(at: 0, in: b, time: 57)
         }
         await currentLoad.value
         slowSeek.release()
         await staleLoad.value
 
-        assertCurrentPlayback(player, book: b, time: 77)
+        assertCurrentPlayback(player, book: b, time: 57)
     }
 
     private func preparation(

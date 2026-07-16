@@ -392,7 +392,7 @@ struct LibraryImportMutationTests {
         do {
             _ = try LibraryImportService.fileURL(for: track, in: book)
             Issue.record("Expected persisted folder traversal rejection")
-        } catch LibraryMutationError.pathOutsideAudiobooks {
+        } catch LibraryMutationError.invalidFolderName {
             // Expected.
         }
     }

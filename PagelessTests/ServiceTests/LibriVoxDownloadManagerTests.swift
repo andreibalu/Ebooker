@@ -339,6 +339,67 @@ struct LibriVoxDownloadManagerTests {
         #expect(manager.entry(for: "catalog-1") == nil)
     }
 
+    @Test func cancellationDuringCoordinatorPreparationDoesNotLeaveWorkRegistered() async {
+        let coordinator = SuspendedCoordinator()
+        let manager = LibriVoxDownloadManager(
+            coordinator: coordinator,
+            activityController: NoopDownloadActivityController()
+        )
+
+        #expect(manager.start(request: request()))
+        await coordinator.startEntered.wait()
+
+        let cancellation = Task { await manager.cancel(catalogID: "catalog-1") }
+        await coordinator.cancelCalled.wait()
+        #expect(manager.entry(for: "catalog-1")?.phase == .cancelling)
+
+        coordinator.releasePreparation()
+        #expect(await cancellation.value)
+        #expect(manager.entry(for: "catalog-1") == nil)
+        #expect(!coordinator.didRegisterJob)
+        coordinator.emit(.progress(
+            catalogID: "catalog-1",
+            attemptID: coordinator.firstAttemptID,
+            completed: 99,
+            total: 99,
+            currentTrackFraction: 1
+        ))
+        coordinator.emit(.failed(
+            catalogID: "catalog-1",
+            attemptID: coordinator.firstAttemptID,
+            message: "late"
+        ))
+        #expect(manager.entry(for: "catalog-1") == nil)
+    }
+
+    @Test func cancellationDuringCoordinatorRetryCannotReviveFailedAttempt() async {
+        let coordinator = SuspendedCoordinator()
+        let manager = LibriVoxDownloadManager(
+            coordinator: coordinator,
+            activityController: NoopDownloadActivityController()
+        )
+
+        #expect(manager.start(request: request()))
+        await coordinator.startEntered.wait()
+        coordinator.releasePreparation()
+        await coordinator.startFinished.wait()
+        coordinator.emit(.failed(
+            catalogID: "catalog-1",
+            attemptID: coordinator.firstAttemptID,
+            message: "failed"
+        ))
+        #expect(manager.entry(for: "catalog-1")?.phase == .failed)
+
+        #expect(manager.retry(catalogID: "catalog-1"))
+        await coordinator.retryEntered.wait()
+        let cancellation = Task { await manager.cancel(catalogID: "catalog-1") }
+        await coordinator.cancelCalled.wait()
+        coordinator.releasePreparation()
+
+        #expect(await cancellation.value)
+        #expect(manager.entry(for: "catalog-1") == nil)
+    }
+
     private func request(
         catalogID: String = "catalog-1",
         target: LibriVoxDownloadManager.Target = .fresh
@@ -358,8 +419,8 @@ struct LibriVoxDownloadManagerTests {
             target: .fresh,
             stagingFolderName: "stage",
             tracks: [
-                .init(title: "One", remoteURL: URL(string: "https://example.com/1")!, durationSeconds: 1, storedFileName: "1.mp3"),
-                .init(title: "Two", remoteURL: URL(string: "https://example.com/2")!, durationSeconds: 1, storedFileName: "2.mp3")
+                .init(title: "One", remoteURL: URL(string: "https://example.com/1")!, durationSeconds: 1, storedFileName: "1.mp3", orderIndex: 0),
+                .init(title: "Two", remoteURL: URL(string: "https://example.com/2")!, durationSeconds: 1, storedFileName: "2.mp3", orderIndex: 1)
             ],
             completedIndexes: [],
             phase: .downloading,
@@ -388,6 +449,53 @@ private final class MockLibriVoxDownloadCoordinator: LibriVoxDownloadCoordinatin
 
     func emit(_ event: LibriVoxDownloadCoordinatorEvent) {
         sink?(event)
+    }
+}
+
+@MainActor
+private final class SuspendedCoordinator: LibriVoxDownloadCoordinating {
+    let restoredJobs: [LibriVoxDownloadJob] = []
+    let startEntered = AsyncEvent()
+    let startFinished = AsyncEvent()
+    let retryEntered = AsyncEvent()
+    let cancelCalled = AsyncEvent()
+    private let preparationGate = AsyncGate()
+    private var sink: (@MainActor (LibriVoxDownloadCoordinatorEvent) -> Void)?
+    private(set) var didRegisterJob = false
+    private(set) var firstAttemptID = UUID()
+
+    func setEventSink(_ sink: @escaping @MainActor (LibriVoxDownloadCoordinatorEvent) -> Void) {
+        self.sink = sink
+    }
+
+    func start(_ request: LibriVoxDownloadManager.Request, attemptID: UUID) async throws {
+        firstAttemptID = attemptID
+        startEntered.signal()
+        await preparationGate.wait()
+        try Task.checkCancellation()
+        didRegisterJob = true
+        startFinished.signal()
+    }
+
+    func cancel(catalogID: String, attemptID: UUID) async {
+        cancelCalled.signal()
+    }
+
+    func retry(_ request: LibriVoxDownloadManager.Request, attemptID: UUID) async throws {
+        retryEntered.signal()
+        await preparationGate.wait()
+        try Task.checkCancellation()
+        didRegisterJob = true
+    }
+
+    func reconcile() async {}
+
+    func emit(_ event: LibriVoxDownloadCoordinatorEvent) {
+        sink?(event)
+    }
+
+    func releasePreparation() {
+        preparationGate.open()
     }
 }
 

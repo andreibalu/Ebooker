@@ -28,10 +28,10 @@ struct PagelessApp: App {
                 .environment(onboardingManager)
                 .environment(appDelegate.freeBookDownloader)
                 .preferredColorScheme(forceDarkMode ? .dark : nil)
-                .onAppear {
-                    appDelegate.freeBookDownloader.configure(modelContext: appDelegate.modelContainer.mainContext)
-                }
                 .task {
+                    _ = await appDelegate.freeBookDownloader.restoreBackgroundSession(
+                        modelContext: appDelegate.modelContainer.mainContext
+                    )
                     await UnpagedAppShortcuts.updateAppShortcutParameters()
                 }
         }

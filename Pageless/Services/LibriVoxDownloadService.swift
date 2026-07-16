@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import CryptoKit
 import Foundation
 import SwiftData
 
@@ -11,6 +12,7 @@ enum LibriVoxDownloadError: LocalizedError {
     case noTracks
     case invalidTrackURL(String)
     case couldNotCreateStorage
+    case missingStagedFile(String)
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +22,8 @@ enum LibriVoxDownloadError: LocalizedError {
             "Could not resolve a download URL for \"\(title)\"."
         case .couldNotCreateStorage:
             "The app could not create local storage for this audiobook."
+        case .missingStagedFile(let fileName):
+            "A staged download file is missing: \(fileName)."
         }
     }
 }
@@ -40,20 +44,74 @@ enum LibriVoxDownloadService {
         return "\(String(format: "%03d", index + 1))-\(sanitized(safeTitle)).\(ext)"
     }
 
+    static func fileMetadata(at url: URL) throws -> LibriVoxDownloadFileMetadata {
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        var hasher = SHA256()
+        var byteCount: Int64 = 0
+        let chunkSize = 1024 * 1024
+        while true {
+            let chunk = try file.read(upToCount: chunkSize) ?? Data()
+            guard !chunk.isEmpty else { break }
+            hasher.update(data: chunk)
+            byteCount += Int64(chunk.count)
+        }
+        return .init(
+            byteCount: byteCount,
+            sha256: hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        )
+    }
+
+    static func fileMatchesMetadata(
+        at url: URL,
+        expected: LibriVoxDownloadFileMetadata,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard fileManager.fileExists(atPath: url.path(percentEncoded: false)),
+              let actual = try? fileMetadata(at: url)
+        else { return false }
+        return actual == expected
+    }
+
     static func finalizeStagedFreshDownload(
         book: LibriVoxBook,
         job: LibriVoxDownloadJob,
         stagingFolderURL: URL,
+        destinationFolderName: String? = nil,
         modelContext: ModelContext,
         beforeCommit: () throws -> Void
     ) throws -> Audiobook {
-        let folderName = UUID().uuidString
+        let folderName = destinationFolderName ?? UUID().uuidString
+        let folderURLWithoutCreate = try storageFolderURL(named: folderName)
+        let folderExistedBeforeFinalization = FileManager.default.fileExists(
+            atPath: folderURLWithoutCreate.path(percentEncoded: false)
+        )
         let folderURL = try makeStorageFolder(named: folderName)
         do {
             let tracks = try job.tracks.enumerated().map { index, track in
                 let source = stagingFolderURL.appendingPathComponent(track.storedFileName)
                 let destination = folderURL.appendingPathComponent(track.storedFileName)
-                try FileManager.default.moveItem(at: source, to: destination)
+                if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+                    let destinationIsValid = job.fileMetadata[index].map {
+                        fileMatchesMetadata(at: destination, expected: $0)
+                    } ?? false
+                    if !destinationIsValid {
+                        if FileManager.default.fileExists(atPath: source.path(percentEncoded: false)) {
+                            try FileManager.default.removeItem(at: destination)
+                            try FileManager.default.moveItem(at: source, to: destination)
+                        } else {
+                            throw LibriVoxDownloadError.missingStagedFile(track.storedFileName)
+                        }
+                    }
+                } else if FileManager.default.fileExists(atPath: source.path(percentEncoded: false)) {
+                    try FileManager.default.moveItem(at: source, to: destination)
+                } else {
+                    throw LibriVoxDownloadError.missingStagedFile(track.storedFileName)
+                }
+                guard let expected = job.fileMetadata[index],
+                      fileMatchesMetadata(at: destination, expected: expected) else {
+                    throw LibriVoxDownloadError.missingStagedFile(track.storedFileName)
+                }
                 let saved = AudioTrack(
                     title: track.title,
                     originalFileName: track.remoteURL.lastPathComponent,
@@ -73,7 +131,9 @@ enum LibriVoxDownloadService {
                 modelContext: modelContext
             )
         } catch {
-            try? FileManager.default.removeItem(at: folderURL)
+            if !folderExistedBeforeFinalization {
+                try? FileManager.default.removeItem(at: folderURL)
+            }
             throw error
         }
     }
@@ -82,10 +142,15 @@ enum LibriVoxDownloadService {
         audiobook: Audiobook,
         job: LibriVoxDownloadJob,
         stagingFolderURL: URL,
+        backupFolderURL: URL,
         modelContext: ModelContext,
         beforeCommit: () throws -> Void
     ) throws {
-        let folderURL = try makeStorageFolder(named: audiobook.folderName)
+        let folderURL = try storageFolderURL(named: audiobook.folderName)
+        let folderExistedBeforeFinalization = FileManager.default.fileExists(
+            atPath: folderURL.path(percentEncoded: false)
+        )
+        try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
         let tracks = audiobook.sortedTracks
         guard tracks.count == job.tracks.count else { throw LibriVoxDownloadError.noTracks }
         let trackSnapshots = tracks.map {
@@ -94,16 +159,54 @@ enum LibriVoxDownloadService {
         let wasDownloaded = audiobook.isDownloaded
         let wasArchived = audiobook.isArchived
         let originalTotalDuration = audiobook.totalDuration
-        var movedURLs: [URL] = []
+        var createdURLs: [URL] = []
+        try FileManager.default.createDirectory(at: backupFolderURL, withIntermediateDirectories: true)
+        var backups: [(original: URL, backup: URL)] = []
         do {
-            for (track, staged) in zip(tracks, job.tracks) {
+            for (index, pair) in zip(tracks, job.tracks).enumerated() {
+                let (track, staged) = pair
                 let source = stagingFolderURL.appendingPathComponent(staged.storedFileName)
                 let destination = folderURL.appendingPathComponent(staged.storedFileName)
-                if FileManager.default.fileExists(atPath: destination.path) {
-                    try FileManager.default.removeItem(at: destination)
+                let sourceExists = FileManager.default.fileExists(atPath: source.path(percentEncoded: false))
+                let destinationExists = FileManager.default.fileExists(atPath: destination.path(percentEncoded: false))
+                guard let expected = job.fileMetadata[index] else {
+                    throw LibriVoxDownloadError.missingStagedFile(staged.storedFileName)
                 }
-                try FileManager.default.moveItem(at: source, to: destination)
-                movedURLs.append(destination)
+                guard sourceExists || destinationExists else {
+                    throw LibriVoxDownloadError.missingStagedFile(staged.storedFileName)
+                }
+                if sourceExists {
+                    if destinationExists {
+                        if fileMatchesMetadata(at: destination, expected: expected) {
+                            try FileManager.default.removeItem(at: source)
+                        } else {
+                            let backup = backupFolderURL.appendingPathComponent(staged.storedFileName)
+                            if !FileManager.default.fileExists(atPath: backup.path(percentEncoded: false)) {
+                                try FileManager.default.copyItem(at: destination, to: backup)
+                            }
+                            backups.append((destination, backup))
+                            try FileManager.default.removeItem(at: destination)
+                            try FileManager.default.moveItem(at: source, to: destination)
+                            createdURLs.append(destination)
+                        }
+                    } else {
+                        try FileManager.default.moveItem(at: source, to: destination)
+                        createdURLs.append(destination)
+                    }
+                } else {
+                    if !fileMatchesMetadata(at: destination, expected: expected) {
+                        let backup = backupFolderURL.appendingPathComponent(staged.storedFileName)
+                        if FileManager.default.fileExists(atPath: backup.path(percentEncoded: false)) {
+                            if FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+                                try FileManager.default.removeItem(at: destination)
+                            }
+                            try FileManager.default.moveItem(at: backup, to: destination)
+                        }
+                    }
+                    guard fileMatchesMetadata(at: destination, expected: expected) else {
+                        throw LibriVoxDownloadError.missingStagedFile(staged.storedFileName)
+                    }
+                }
                 track.title = staged.title
                 track.originalFileName = staged.remoteURL.lastPathComponent
                 track.storedFileName = staged.storedFileName
@@ -126,7 +229,15 @@ enum LibriVoxDownloadService {
             audiobook.isDownloaded = wasDownloaded
             audiobook.isArchived = wasArchived
             audiobook.totalDuration = originalTotalDuration
-            for url in movedURLs { try? FileManager.default.removeItem(at: url) }
+            for url in createdURLs { try? FileManager.default.removeItem(at: url) }
+            for backup in backups {
+                try? FileManager.default.removeItem(at: backup.original)
+                try? FileManager.default.moveItem(at: backup.backup, to: backup.original)
+            }
+            try? FileManager.default.removeItem(at: backupFolderURL)
+            if !folderExistedBeforeFinalization {
+                try? FileManager.default.removeItem(at: folderURL)
+            }
             throw error
         }
     }
@@ -351,10 +462,28 @@ enum LibriVoxDownloadService {
         if let match = try FreeBookIdentityService.match(catalogId: book.id, modelContext: modelContext) {
             switch match.classification {
             case .downloadedActive:
-                if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
-                    try FileManager.default.removeItem(at: folderURL)
+                if FreeBookIdentityService.hasCommittedAudioFiles(match.audiobook) {
+                    if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
+                        try FileManager.default.removeItem(at: folderURL)
+                    }
+                    return match.audiobook
                 }
-                return match.audiobook
+                if match.audiobook.tracks.isEmpty {
+                    if FileManager.default.fileExists(atPath: folderURL.path(percentEncoded: false)) {
+                        try FileManager.default.removeItem(at: folderURL)
+                    }
+                    return match.audiobook
+                }
+                return try FreeBookIdentityService.promoteToDownloaded(
+                    match.audiobook,
+                    folderName: folderName,
+                    title: book.title,
+                    author: book.authorDisplay,
+                    coverArtData: nil,
+                    tracks: audioTracks,
+                    modelContext: modelContext,
+                    saveModelContext: saveModelContext
+                )
             case .streamingActive, .archived:
                 return try FreeBookIdentityService.promoteToDownloaded(
                     match.audiobook,
@@ -399,6 +528,16 @@ enum LibriVoxDownloadService {
     }
 
     private static func makeStorageFolder(named folderName: String) throws -> URL {
+        let dest = try storageFolderURL(named: folderName)
+        do {
+            try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        } catch {
+            throw LibriVoxDownloadError.couldNotCreateStorage
+        }
+        return dest
+    }
+
+    static func storageFolderURL(named folderName: String) throws -> URL {
         let appSupport = try FileManager.default.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
@@ -407,11 +546,6 @@ enum LibriVoxDownloadService {
         )
         let booksDir = appSupport.appendingPathComponent("Audiobooks", isDirectory: true)
         let dest = booksDir.appendingPathComponent(folderName, isDirectory: true)
-        do {
-            try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-        } catch {
-            throw LibriVoxDownloadError.couldNotCreateStorage
-        }
         return dest
     }
 

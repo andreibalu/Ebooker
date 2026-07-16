@@ -470,7 +470,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
             // Commit only after every suspending preparation step succeeds. Until this point,
             // current model state and shared AVPlayer remain owned by prior request.
-            player.cancelPendingSeeks()
+            player.currentItem?.cancelPendingSeeks()
             player.pause()
             isPlaying = false
             player.replaceCurrentItem(with: item)
@@ -493,12 +493,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             }
             persistence.lastPersistedTime = startTime
 
+            let audiobookID = audiobook.id
             currentItemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
                 let failed = item.status == .failed
                 Task { @MainActor [weak self] in
                     guard let self, failed, self.isCurrentLoad(loadToken) else { return }
                     self.isLoadingItem = false
-                    self.clearLoadingPlayback(for: audiobook.id)
+                    self.clearLoadingPlayback(for: audiobookID)
                     self.playerErrorMessage = "Unpaged could not open this audio stream."
                 }
             }
@@ -538,7 +539,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func beginLoad() -> UInt64 {
         seekGeneration &+= 1
-        player.cancelPendingSeeks()
+        player.currentItem?.cancelPendingSeeks()
         currentItemStatusObservation?.invalidate()
         currentItemStatusObservation = nil
         return loadGeneration.begin()
@@ -547,7 +548,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private func invalidateCurrentLoad() {
         loadGeneration.invalidate()
         seekGeneration &+= 1
-        player.cancelPendingSeeks()
+        player.currentItem?.cancelPendingSeeks()
         currentItemStatusObservation?.invalidate()
         currentItemStatusObservation = nil
         isLoadingItem = false

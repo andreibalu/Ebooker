@@ -259,8 +259,10 @@ enum LibraryImportService {
                 try transaction.backupExistingFolder(at: folderURL)
             }
 
-            modelContext.delete(audiobook)
-            try mutationEnvironment.save(modelContext)
+            try modelContext.transaction {
+                modelContext.delete(audiobook)
+                try mutationEnvironment.save(modelContext)
+            }
             do {
                 try transaction.commit()
             } catch {
@@ -270,11 +272,16 @@ enum LibraryImportService {
             if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error {
                 throw error
             }
-            try LibraryMutationTransaction.rollbackAndRethrow(
-                error,
-                modelContext: modelContext,
-                transaction: transaction
-            )
+            let operationError = error
+            do {
+                try transaction.rollback()
+            } catch {
+                throw LibraryMutationError.rollbackFailed(
+                    operationError: operationError,
+                    rollbackError: error
+                )
+            }
+            throw operationError
         }
     }
 
