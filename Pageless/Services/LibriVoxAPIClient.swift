@@ -11,6 +11,11 @@ struct LibriVoxAPIGenre: Decodable {
     let id: String
     let name: String
 
+    init(id: String, name: String) {
+        self.id = id
+        self.name = name
+    }
+
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = (try? c.decode(Int.self, forKey: .id)).map(String.init)
@@ -96,6 +101,32 @@ struct LibriVoxAPIBook: Decodable {
         (genres ?? []).map(\.name).filter { !$0.isEmpty }
     }
 
+    init(
+        id: String,
+        title: String,
+        description: String,
+        totalTimeSecs: Int,
+        authors: [LibriVoxAPIAuthor]?,
+        language: String,
+        urlLibrivox: String?,
+        urlIarchive: String?,
+        urlRss: String?,
+        coverartThumbnail: String?,
+        genres: [LibriVoxAPIGenre]?
+    ) {
+        self.id = id
+        self.title = title
+        self.description = description
+        self.totalTimeSecs = totalTimeSecs
+        self.authors = authors
+        self.language = language
+        self.urlLibrivox = urlLibrivox
+        self.urlIarchive = urlIarchive
+        self.urlRss = urlRss
+        self.coverartThumbnail = coverartThumbnail
+        self.genres = genres
+    }
+
     init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // id arrives as Int in the API but we store it as String
@@ -120,6 +151,11 @@ struct LibriVoxAPIBook: Decodable {
 struct LibriVoxAPIAuthor: Decodable {
     let firstName: String?
     let lastName: String?
+
+    init(firstName: String?, lastName: String?) {
+        self.firstName = firstName
+        self.lastName = lastName
+    }
 
     enum CodingKeys: String, CodingKey {
         case firstName = "first_name"
@@ -209,7 +245,7 @@ enum LibriVoxAPIClient {
         return try await fetchBooks(queryItems: items)
     }
 
-    /// Fetches all books updated since the given timestamp, paginating until exhausted.
+    /// Fetches books newly cataloged since the timestamp, paginating until exhausted.
     static func fetchCatalogSince(timestamp: Date) async throws -> [LibriVoxAPIBook] {
         let unix = Int(timestamp.timeIntervalSince1970)
         var allBooks: [LibriVoxAPIBook] = []
@@ -229,6 +265,41 @@ enum LibriVoxAPIClient {
             offset += page.count
         }
         return allBooks
+    }
+
+    /// Searches LibriVox's feed by title and author concurrently. The feed exposes
+    /// those as separate parameters, so results are merged locally and deduplicated.
+    static func searchBooks(query: String, limit: Int = 50) async throws -> [LibriVoxAPIBook] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        async let titleMatches = fetchSearchResults(parameter: "title", query: trimmed, limit: limit)
+        async let authorMatches = fetchSearchResults(parameter: "author", query: trimmed, limit: limit)
+        return rankAndMergeSearchResults(
+            titleMatches: try await titleMatches,
+            authorMatches: try await authorMatches,
+            query: trimmed
+        )
+    }
+
+    static func rankAndMergeSearchResults(
+        titleMatches: [LibriVoxAPIBook],
+        authorMatches: [LibriVoxAPIBook],
+        query: String
+    ) -> [LibriVoxAPIBook] {
+        let byID = Dictionary(
+            (titleMatches + authorMatches).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let needle = query.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        return byID.values.sorted { lhs, rhs in
+            let lhsScore = remoteSearchRank(lhs, query: needle)
+            let rhsScore = remoteSearchRank(rhs, query: needle)
+            if lhsScore != rhsScore { return lhsScore < rhsScore }
+            let titleOrder = lhs.title.localizedStandardCompare(rhs.title)
+            if titleOrder != .orderedSame { return titleOrder == .orderedAscending }
+            return lhs.id.localizedStandardCompare(rhs.id) == .orderedAscending
+        }
     }
 
     /// Fetches catalog metadata for a specific set of LibriVox project IDs.
@@ -252,13 +323,37 @@ enum LibriVoxAPIClient {
     }
 
     /// Fetches catalog metadata for a single LibriVox project ID.
-    private static func fetchBook(id: String) async throws -> LibriVoxAPIBook? {
+    static func fetchBook(id: String) async throws -> LibriVoxAPIBook? {
         var items: [URLQueryItem] = [
             URLQueryItem(name: "format", value: "json"),
             URLQueryItem(name: "id", value: id),
         ]
         items.append(contentsOf: catalogFields)
         return try await fetchBooks(queryItems: items).first
+    }
+
+    private static func fetchSearchResults(
+        parameter: String,
+        query: String,
+        limit: Int
+    ) async throws -> [LibriVoxAPIBook] {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: parameter, value: query),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "0"),
+        ]
+        items.append(contentsOf: catalogFields)
+        return try await fetchBooks(queryItems: items)
+    }
+
+    private static func remoteSearchRank(_ book: LibriVoxAPIBook, query: String) -> Int {
+        let title = book.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        let author = book.authorDisplay.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        if title.hasPrefix(query) { return 0 }
+        if title.contains(query) { return 1 }
+        if author.contains(query) { return 2 }
+        return 3
     }
 
     /// Fetches all tracks for a LibriVox project ID.
@@ -314,5 +409,21 @@ enum LibriVoxAPIClient {
             return []
         }
         throw LibriVoxAPIError.unreadableResponse
+    }
+}
+
+@MainActor
+protocol LibriVoxRemoteSearching {
+    func search(query: String) async throws -> [LibriVoxAPIBook]
+    func fetchBook(id: String) async throws -> LibriVoxAPIBook?
+}
+
+struct LiveLibriVoxRemoteSearch: LibriVoxRemoteSearching {
+    func search(query: String) async throws -> [LibriVoxAPIBook] {
+        try await LibriVoxAPIClient.searchBooks(query: query)
+    }
+
+    func fetchBook(id: String) async throws -> LibriVoxAPIBook? {
+        try await LibriVoxAPIClient.fetchBook(id: id)
     }
 }

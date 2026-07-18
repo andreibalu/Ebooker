@@ -7,9 +7,6 @@ import SwiftData
 import SwiftUI
 
 struct SettingsView: View {
-    var onRefreshCatalog: (() -> Void)? = nil
-    var onResetCatalog: (() -> Void)? = nil
-
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
@@ -20,7 +17,6 @@ struct SettingsView: View {
     @State private var navigationPath: [SettingsDestination] = []
     @State private var selectedDetent: PresentationDetent = .medium
     @State private var showResetConfirmation = false
-    @State private var showCatalogResetConfirmation = false
     @State private var expandedPicker: PlaybackPicker?
 
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
@@ -65,7 +61,6 @@ struct SettingsView: View {
                     unlockSection
                     playbackSection
                     appSection
-                    librarySection
                     aboutSection
                     #if DEBUG
                     developerSection
@@ -299,51 +294,6 @@ struct SettingsView: View {
     private func togglePicker(_ picker: PlaybackPicker) {
         withAnimation(.snappy(duration: 0.34, extraBounce: 0.04)) {
             expandedPicker = (expandedPicker == picker) ? nil : picker
-        }
-    }
-
-    // MARK: - Library section
-
-    private var librarySection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            SettingsSectionHeader(eyebrow: "Library", title: "Your collection.")
-
-            SettingsCard {
-                VStack(spacing: 0) {
-                    actionRow(
-                        title: "Refresh Catalog",
-                        caption: "Pull the latest books from librivox.org",
-                        actionLabel: "Refresh"
-                    ) {
-                        onRefreshCatalog?()
-                        dismiss()
-                    }
-
-                    SettingsHairline()
-
-                    actionRow(
-                        title: "Reset Catalog",
-                        caption: "Erase the cached catalog and download it again",
-                        actionLabel: "Reset"
-                    ) {
-                        showCatalogResetConfirmation = true
-                    }
-                    .confirmationDialog(
-                        "Reset Free Books Catalog?",
-                        isPresented: $showCatalogResetConfirmation
-                    ) {
-                        Button("Reset & Re-download", role: .destructive) {
-                            onResetCatalog?()
-                            dismiss()
-                        }
-                        Button("Cancel", role: .cancel) {}
-                    } message: {
-                        Text("The cached LibriVox catalog will be erased and downloaded fresh. Your library and downloaded books are not affected.")
-                    }
-
-                    SettingsCardFooter(text: "Free books courtesy of LibriVox \u{2014} public-domain audio recorded by volunteers.")
-                }
-            }
         }
     }
 

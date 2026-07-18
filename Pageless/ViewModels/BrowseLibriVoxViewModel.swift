@@ -25,8 +25,15 @@ enum DurationFilter: String, CaseIterable, Identifiable {
     }
 }
 
+@MainActor
 @Observable
 final class BrowseLibriVoxViewModel {
+    enum SearchSource: Equatable {
+        case librivox
+        case local
+        case savedFallback
+    }
+
     enum SyncState {
         case idle
         case syncing(fetched: Int)
@@ -36,9 +43,27 @@ final class BrowseLibriVoxViewModel {
 
     var searchQuery: String = ""
     var searchResults: [LibriVoxBook] = []
+    var searchSource: SearchSource? = nil
+    var isSearchingLibriVox = false
+    var searchFailureMessage: String? = nil
     var syncState: SyncState = .idle
+    var backgroundUpdateMessage: String? = nil
     var featuredBooks: [LibriVoxBook] = []
     var todaysPick: LibriVoxBook? = nil
+
+    private let remoteSearch: any LibriVoxRemoteSearching
+    private let isLocalSearchReadyProvider: () -> Bool
+
+    init(
+        remoteSearch: (any LibriVoxRemoteSearching)? = nil,
+        isLocalSearchReady: (() -> Bool)? = nil
+    ) {
+        self.remoteSearch = remoteSearch ?? LiveLibriVoxRemoteSearch()
+        self.isLocalSearchReadyProvider = isLocalSearchReady ?? { LibriVoxCatalogSync.isLocalSearchReady }
+    }
+
+    var isLocalSearchReady: Bool { isLocalSearchReadyProvider() }
+    var filtersAvailable: Bool { isLocalSearchReady }
 
     /// The featured chart with today's pick removed so the hero and the numbered
     /// list never show the same book twice.
@@ -109,29 +134,9 @@ final class BrowseLibriVoxViewModel {
 
     private var searchTask: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
-    var lastSyncDescription: String {
-        guard let date = LibriVoxCatalogSync.lastSyncDate else { return "Never synced" }
-        return "Updated \(TimeFormatter.relativeDateString(for: date)) · Books provided by Librivox"
-    }
-
-    var catalogCount: Int { LibriVoxCatalogSync.syncedBookCount }
-
-    /// Blocking overlay: there is nothing on screen yet (no classics, no search results, not
-    /// offline) and we are actively loading. As soon as the curated classics arrive this turns
-    /// false and the full catalog continues loading behind a non-blocking inline banner.
-    var isInitialLoading: Bool {
-        guard featuredBooks.isEmpty,
-              searchResults.isEmpty,
-              searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !isOfflineWithNoData else { return false }
-        if isPreloadingFeatured { return true }
-        if case .syncing = syncState { return LibriVoxCatalogSync.syncedBookCount == 0 }
-        return false
-    }
-
-    /// Non-blocking: the full catalog is streaming in while classics (or cached data) are visible.
+    private var statusTask: Task<Void, Never>?
+    /// Non-blocking background preparation/update indicator.
     var isLoadingFullCatalog: Bool {
-        guard !isInitialLoading else { return false }
         if case .syncing = syncState { return true }
         return false
     }
@@ -191,12 +196,15 @@ final class BrowseLibriVoxViewModel {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || hasActiveFilters else {
             searchResults = []
+            searchSource = nil
+            searchFailureMessage = nil
+            isSearchingLibriVox = false
             return
         }
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
-            await self?.runSearch(query: query, modelContext: modelContext)
+            await self?.performSearch(query: query, modelContext: modelContext)
         }
     }
 
@@ -206,13 +214,60 @@ final class BrowseLibriVoxViewModel {
     }
 
     @MainActor
-    private func runSearch(query: String, modelContext: ModelContext) async {
+    func performSearch(query: String, modelContext: ModelContext) async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lang = selectedLanguage
-        guard !trimmed.isEmpty || lang != nil || selectedGenre != nil || selectedDuration != nil else {
+        guard !trimmed.isEmpty || (filtersAvailable && hasActiveFilters) else {
             searchResults = []
+            searchSource = nil
             return
         }
+
+        searchFailureMessage = nil
+        if isLocalSearchReady {
+            isSearchingLibriVox = false
+            performLocalSearch(query: trimmed, modelContext: modelContext, source: .local)
+            return
+        }
+
+        guard !trimmed.isEmpty else {
+            searchResults = []
+            searchSource = nil
+            return
+        }
+
+        isSearchingLibriVox = true
+        defer { isSearchingLibriVox = false }
+        do {
+            let apiBooks = try await remoteSearch.search(query: trimmed)
+            try Task.checkCancellation()
+            try LibriVoxCatalogSync.seed(apiBooks, into: modelContext)
+            try Task.checkCancellation()
+
+            let ids = apiBooks.map(\.id)
+            let predicate = #Predicate<LibriVoxBook> { ids.contains($0.id) }
+            let stored = try modelContext.fetch(FetchDescriptor(predicate: predicate))
+            let byID = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            searchResults = ids.compactMap { byID[$0] }
+            searchSource = .librivox
+        } catch is CancellationError {
+            return
+        } catch {
+            if isNetworkUnavailable(error) {
+                performLocalSearch(query: trimmed, modelContext: modelContext, source: .savedFallback)
+            } else {
+                searchResults = []
+                searchSource = nil
+                searchFailureMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func performLocalSearch(
+        query trimmed: String,
+        modelContext: ModelContext,
+        source: SearchSource
+    ) {
+        let lang = selectedLanguage
         do {
             var raw: [LibriVoxBook]
             let hasText = !trimmed.isEmpty
@@ -268,8 +323,24 @@ final class BrowseLibriVoxViewModel {
             } else {
                 searchResults = Array(raw.sorted { $0.title < $1.title }.prefix(500))
             }
+            searchSource = source
         } catch {
             searchResults = []
+            searchSource = nil
+        }
+    }
+
+    func refreshBookIfStale(
+        _ book: LibriVoxBook,
+        modelContext: ModelContext,
+        now: Date = .now
+    ) async {
+        guard now.timeIntervalSince(book.lastSyncedAt) >= 86_400 else { return }
+        do {
+            guard let refreshed = try await remoteSearch.fetchBook(id: book.id) else { return }
+            try LibriVoxCatalogSync.seed([refreshed], into: modelContext)
+        } catch {
+            // Detail stays usable with cached metadata when LibriVox is unavailable.
         }
     }
 
@@ -456,61 +527,29 @@ final class BrowseLibriVoxViewModel {
             if featuredBooks.isEmpty { preloadFeaturedClassics(modelContext: modelContext) }
             return
         }
-        switch syncState {
-        case .idle, .failed:
-            syncTask = Task { [weak self] in
-                // 1. Curated classics first — fast and shown the instant they arrive, so the tab
-                //    has content immediately after onboarding.
-                await self?.performPreload(modelContext: modelContext)
-                // 2. Only then start the multi-minute full catalog sync, in the background.
-                await self?.performSync(modelContext: modelContext, force: false)
-            }
-        default:
-            if LibriVoxCatalogSync.syncedBookCount > 0 {
-                Task { [weak self] in
-                    if self?.featuredBooks.isEmpty == true {
-                        await self?.loadFeaturedBooks(modelContext: modelContext)
-                    }
-                    self?.loadTodaysPick(modelContext: modelContext)
-                    await self?.loadAvailableFilters(modelContext: modelContext)
+        guard LibriVoxCatalogSync.isSyncDue else {
+            Task { [weak self] in
+                if self?.featuredBooks.isEmpty == true {
+                    await self?.loadFeaturedBooks(modelContext: modelContext)
                 }
+                self?.loadTodaysPick(modelContext: modelContext)
+                await self?.loadAvailableFilters(modelContext: modelContext)
             }
+            return
         }
-    }
 
-    /// Erases the cached LibriVox catalog and rebuilds it from scratch: cancels any
-    /// in-flight sync, clears all derived browse state, drops the local rows, then
-    /// re-runs the classics preload followed by a forced full sync.
-    @MainActor
-    func resetCatalog(modelContext: ModelContext) {
-        syncTask?.cancel()
-        syncTask = nil
-        preloadTask?.cancel()
-        preloadTask = nil
-        searchTask?.cancel()
-        searchQuery = ""
-        searchResults = []
-        featuredBooks = []
-        todaysPick = nil
-        availableLanguages = []
-        availableGenres = []
-        filtersComputedForCount = -1
-        selectedLanguage = nil
-        selectedGenre = nil
-        selectedDuration = nil
-        cachedFirstTrackURLs = [:]
-        isPreloadingFeatured = false
-        syncState = .idle
-        try? LibriVoxCatalogSync.reset(modelContext: modelContext)
-        syncTask = Task { [weak self] in
-            await self?.performPreload(modelContext: modelContext)
-            await self?.performSync(modelContext: modelContext, force: true)
+        syncTask = Task(priority: .utility) { [weak self] in
+            // Curated content arrives first on a fresh install. Remote search remains usable
+            // throughout; the full local index is a background optimization.
+            if self?.isLocalSearchReady == false {
+                await self?.performPreload(modelContext: modelContext)
+            }
+            await self?.performSync(modelContext: modelContext)
         }
     }
 
     @MainActor
     func forceRefresh(modelContext: ModelContext) {
-        syncTask?.cancel()
         availableLanguages = []
         availableGenres = []
         filtersComputedForCount = -1
@@ -520,28 +559,34 @@ final class BrowseLibriVoxViewModel {
             if self?.featuredBooks.isEmpty == true {
                 await self?.performPreload(modelContext: modelContext)
             }
-            await self?.performSync(modelContext: modelContext, force: true)
+            await self?.performSync(modelContext: modelContext)
         }
     }
 
     @MainActor
-    private func performSync(modelContext: ModelContext, force: Bool) async {
-        isFirstFullSync = LibriVoxCatalogSync.syncedBookCount == 0
+    private func performSync(modelContext: ModelContext) async {
+        let wasReady = isLocalSearchReady
+        isFirstFullSync = !wasReady
+        var lastProgress = 0
         syncState = .syncing(fetched: 0)
         do {
-            if force {
-                try await LibriVoxCatalogSync.forceFullSync(modelContext: modelContext) { [weak self] fetched in
-                    self?.syncState = .syncing(fetched: fetched)
-                }
-            } else {
-                try await LibriVoxCatalogSync.syncIfNeeded(modelContext: modelContext) { [weak self] fetched in
-                    self?.syncState = .syncing(fetched: fetched)
-                }
+            try await LibriVoxCatalogSync.syncIfNeeded(modelContext: modelContext) { [weak self] fetched in
+                lastProgress = fetched
+                self?.syncState = .syncing(fetched: fetched)
             }
             syncState = .done
             await loadAvailableFilters(modelContext: modelContext)
             await loadFeaturedBooks(modelContext: modelContext)
             loadTodaysPick(modelContext: modelContext)
+            if !wasReady && isLocalSearchReady {
+                showTemporaryUpdateMessage("Offline search ready")
+            } else if lastProgress > 0 {
+                showTemporaryUpdateMessage("\(lastProgress.formatted()) new book\(lastProgress == 1 ? "" : "s") added")
+            }
+            let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedQuery.isEmpty || hasActiveFilters {
+                await performSearch(query: searchQuery, modelContext: modelContext)
+            }
         } catch {
             let offline = isNetworkUnavailable(error)
             let message = offline
@@ -550,6 +595,16 @@ final class BrowseLibriVoxViewModel {
             syncState = .failed(message, isOffline: offline)
         }
         syncTask = nil
+    }
+
+    private func showTemporaryUpdateMessage(_ message: String) {
+        statusTask?.cancel()
+        backgroundUpdateMessage = message
+        statusTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard !Task.isCancelled else { return }
+            self?.backgroundUpdateMessage = nil
+        }
     }
 
     private func isNetworkUnavailable(_ error: Error) -> Bool {

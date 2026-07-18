@@ -132,7 +132,7 @@ final class LibriVoxDownloadManifestStore: @unchecked Sendable {
 
     private func validate(_ job: LibriVoxDownloadJob, fileURL: URL) throws {
         guard !job.catalogID.isEmpty else {
-            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "empty catalog ID")
+            throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "empty LibriVox book ID")
         }
         guard fileURL.deletingPathExtension().lastPathComponent == job.attemptID.uuidString else {
             throw LibriVoxDownloadManifestStoreError.invalidJob(fileURL, "manifest attempt identity mismatch")

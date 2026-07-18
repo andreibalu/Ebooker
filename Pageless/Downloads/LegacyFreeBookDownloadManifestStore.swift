@@ -110,7 +110,7 @@ final class LegacyFreeBookDownloadManifestStore: @unchecked Sendable {
         guard !job.catalogID.isEmpty,
               isSafePathComponent(job.folderName),
               !job.catalogEntry.tracks.isEmpty
-        else { throw LegacyFreeBookDownloadManifestStoreError.invalidJob("missing catalog, folder, or tracks") }
+        else { throw LegacyFreeBookDownloadManifestStoreError.invalidJob("missing book metadata, folder, or tracks") }
         if let fileURL,
            fileURL.deletingPathExtension().lastPathComponent != job.attemptID.uuidString {
             throw LegacyFreeBookDownloadManifestStoreError.invalidJob("manifest attempt identity mismatch")

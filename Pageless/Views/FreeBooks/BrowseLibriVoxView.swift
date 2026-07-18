@@ -90,18 +90,23 @@ struct BrowseLibriVoxView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
 
+                if !viewModel.filtersAvailable {
+                    Text("Filters available when offline search is ready.")
+                        .font(.system(size: FBType.body, design: .serif))
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 5)
+                }
+
                 statusLine
 
                 contentArea
             }
             .background(Color.cream.ignoresSafeArea())
 
-            if viewModel.isInitialLoading {
-                firstLoadOverlay
-                    .transition(.opacity)
-            }
         }
-        .animation(.easeInOut(duration: 0.35), value: viewModel.isInitialLoading)
         .animation(.easeInOut(duration: 0.3), value: viewModel.featuredBooks.count)
         .navigationDestination(item: $selectedDownloadBook) { book in
             LibriVoxBookDetailView(
@@ -255,6 +260,8 @@ struct BrowseLibriVoxView: View {
 
             Spacer()
         }
+        .disabled(!viewModel.filtersAvailable)
+        .opacity(viewModel.filtersAvailable ? 1 : 0.45)
     }
 
     private func filterLabel(_ text: String, isSelected: Bool) -> some View {
@@ -283,16 +290,56 @@ struct BrowseLibriVoxView: View {
 
     @ViewBuilder
     private var statusLine: some View {
-        // Full catalog streaming in behind already-visible classics/cached data (non-blocking).
-        if viewModel.isLoadingFullCatalog, case .syncing(let fetched) = viewModel.syncState {
+        if viewModel.isSearchingLibriVox {
+            HStack(spacing: 8) {
+                FBSpinner(size: 12)
+                Text("Searching LibriVox…")
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+        } else if let message = viewModel.backgroundUpdateMessage {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.amber)
+                Text(message)
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+        // Offline preparation continues behind usable remote search and curated content.
+        } else if viewModel.isLoadingFullCatalog, case .syncing(let fetched) = viewModel.syncState {
             HStack(spacing: 8) {
                 FBSpinner(size: 12)
                 Text(viewModel.isFirstFullSync
-                     ? "Fetching the catalog… \(fetched.formatted()) of 20,000"
-                     : "Refreshing catalog… \(fetched.formatted()) updated")
+                     ? "Preparing offline search… \(fetched.formatted()) saved"
+                     : "Checking for new books…")
                     .font(.system(size: FBType.body, design: .serif))
                     .italic()
                     .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+        } else if viewModel.searchSource == .savedFallback {
+            HStack(spacing: 8) {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.amber)
+                Text("Offline — showing saved matches.")
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
                     .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -353,40 +400,6 @@ struct BrowseLibriVoxView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - First-load overlay
-
-    private var firstLoadOverlay: some View {
-        ZStack {
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(Color.cream.opacity(0.6))
-                .ignoresSafeArea()
-
-            VStack(spacing: 18) {
-                FBSpinner(size: 28)
-
-                VStack(spacing: 8) {
-                    Text(viewModel.isPreloadingFeatured ? "Finding the classics." : "Building your free library.")
-                        .font(.system(size: FBType.headline, weight: .medium, design: .serif))
-
-                    Text(viewModel.isPreloadingFeatured
-                         ? "A handful of timeless audiobooks, on their way to you."
-                         : "Fetching the catalog of 20,000+ public-domain recordings.")
-                        .font(.system(size: FBType.body, design: .serif))
-                        .italic()
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .padding(.vertical, 34)
-            .padding(.horizontal, 30)
-            .frame(maxWidth: 300)
-            .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 24, y: 14)
-            .padding(.horizontal, 44)
-        }
-    }
-
     // MARK: - Content area
 
     @ViewBuilder
@@ -395,11 +408,11 @@ struct BrowseLibriVoxView: View {
             noInternetState
         } else if viewModel.loadFailedWithNoData {
             loadFailedState
+        } else if isSearching && viewModel.isSearchingLibriVox {
+            Spacer()
         } else if !isSearching {
             if !viewModel.featuredBooks.isEmpty {
                 browseContent
-            } else if viewModel.isInitialLoading {
-                Spacer() // overlay is covering the screen; keep layout stable
             } else {
                 emptySearch
             }
@@ -661,10 +674,10 @@ struct BrowseLibriVoxView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 30))
                 .foregroundStyle(.tertiary)
-            Text("Nothing on this shelf.")
+            Text(viewModel.searchFailureMessage == nil ? "Nothing on this shelf." : "Couldn’t search LibriVox.")
                 .font(.system(size: FBType.headline, weight: .medium, design: .serif))
                 .padding(.top, 14)
-            Text("Try a different title or author, or clear a filter.")
+            Text(viewModel.searchFailureMessage ?? "Try a different title or author, or clear a filter.")
                 .font(.system(size: FBType.body, design: .serif))
                 .italic()
                 .foregroundStyle(.secondary)

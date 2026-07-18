@@ -670,7 +670,7 @@ final class CarPlayCoordinator: NSObject {
             guard let self else { return }
             let context = self.modelContainer.mainContext
             guard let book = context.model(for: persistentId) as? LibriVoxBook else {
-                self.presentInfoAlert(title: "Couldn't open book", message: "This book is no longer in the catalog.")
+                self.presentInfoAlert(title: "Couldn't open book", message: "This book is no longer available from LibriVox.")
                 return
             }
 

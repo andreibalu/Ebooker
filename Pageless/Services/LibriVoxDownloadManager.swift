@@ -156,7 +156,7 @@ final class LibriVoxDownloadManager {
         var errorDescription: String? {
             switch self {
             case .catalogBookNotFound:
-                "This LibriVox book is no longer available in the local catalog."
+                "This book is no longer available from LibriVox."
             case .audiobookNotFound:
                 "This audiobook is no longer in the library."
             }

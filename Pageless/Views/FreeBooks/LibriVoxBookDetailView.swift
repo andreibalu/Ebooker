@@ -67,6 +67,14 @@ struct LibriVoxBookDetailView: View {
                 viewModel.refreshIdentity(book: book, modelContext: modelContext)
             }
         }
+        .task(id: book.id) {
+            if let browseViewModel {
+                await browseViewModel.refreshBookIfStale(book, modelContext: modelContext)
+            } else if Date.now.timeIntervalSince(book.lastSyncedAt) >= 86_400,
+                      let refreshed = try? await LibriVoxAPIClient.fetchBook(id: book.id) {
+                try? LibriVoxCatalogSync.seed([refreshed], into: modelContext)
+            }
+        }
         .onChange(of: downloadManager.entry(for: book.id)?.phase) { _, _ in
             viewModel.refreshIdentity(book: book, modelContext: modelContext)
         }

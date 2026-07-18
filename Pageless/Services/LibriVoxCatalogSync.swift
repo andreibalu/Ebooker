@@ -23,6 +23,29 @@ enum LibriVoxCatalogSync {
         UserDefaults.standard.integer(forKey: syncedCountKey)
     }
 
+    /// Partial pages, curated seeds, and remote-search results never enable local-only
+    /// search. A complete full pass (including the one-time genres backfill) does.
+    static var isLocalSearchReady: Bool {
+        lastSyncDate != nil && UserDefaults.standard.bool(forKey: genresBackfillKey)
+    }
+
+    static var isSyncDue: Bool {
+        syncIsDue(
+            isLocalSearchReady: isLocalSearchReady,
+            lastSyncDate: lastSyncDate,
+            now: .now
+        )
+    }
+
+    static func syncIsDue(
+        isLocalSearchReady: Bool,
+        lastSyncDate: Date?,
+        now: Date
+    ) -> Bool {
+        guard isLocalSearchReady, let lastSyncDate else { return true }
+        return now.timeIntervalSince(lastSyncDate) >= 86_400
+    }
+
     /// Runs a full sync if never synced before, or an incremental sync if the last sync
     /// was more than 24 hours ago. Skips entirely if synced within the last 24 hours.
     static func syncIfNeeded(
@@ -40,24 +63,6 @@ enum LibriVoxCatalogSync {
         } else {
             try await fullSync(modelContext: modelContext, onProgress: onProgress)
         }
-    }
-
-    /// Force a full re-sync regardless of last sync date.
-    static func forceFullSync(
-        modelContext: ModelContext,
-        onProgress: @escaping (Int) -> Void
-    ) async throws {
-        try await fullSync(modelContext: modelContext, onProgress: onProgress)
-    }
-
-    /// Deletes the entire cached catalog and clears sync bookkeeping so the next
-    /// sync rebuilds from scratch. Library audiobooks are untouched — only the
-    /// local-store `LibriVoxBook` cache is dropped.
-    static func reset(modelContext: ModelContext) throws {
-        try modelContext.delete(model: LibriVoxBook.self)
-        try modelContext.save()
-        UserDefaults.standard.removeObject(forKey: lastSyncKey)
-        UserDefaults.standard.removeObject(forKey: syncedCountKey)
     }
 
     /// Upserts a small set of pre-fetched API books into the store and saves.
@@ -92,6 +97,15 @@ enum LibriVoxCatalogSync {
             let page = try await fetchPageWithRetry(offset: offset)
             guard !page.isEmpty else { break }
 
+            // Remote search can seed rows while this long-running scan is suspended on
+            // network I/O. Refresh identities for this page before inserting so both paths
+            // converge on the same SwiftData objects instead of racing the unique ID.
+            let pageIDs = page.map(\.id)
+            let pagePredicate = #Predicate<LibriVoxBook> { pageIDs.contains($0.id) }
+            for book in try modelContext.fetch(FetchDescriptor(predicate: pagePredicate)) {
+                booksByID[book.id] = book
+            }
+
             for apiBook in page {
                 if let existing = booksByID[apiBook.id] {
                     apply(apiBook, to: existing)
@@ -112,6 +126,8 @@ enum LibriVoxCatalogSync {
             offset += page.count
         }
 
+        let total = try modelContext.fetchCount(FetchDescriptor<LibriVoxBook>())
+        UserDefaults.standard.set(total, forKey: syncedCountKey)
         UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
         UserDefaults.standard.set(true, forKey: genresBackfillKey)
     }
@@ -121,14 +137,14 @@ enum LibriVoxCatalogSync {
         modelContext: ModelContext,
         onProgress: @escaping (Int) -> Void
     ) async throws {
-        let updates = try await LibriVoxAPIClient.fetchCatalogSince(timestamp: since)
-        guard !updates.isEmpty else {
+        let newBooks = try await LibriVoxAPIClient.fetchCatalogSince(timestamp: since)
+        guard !newBooks.isEmpty else {
             UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
             return
         }
 
         var upserted = 0
-        for apiBook in updates {
+        for apiBook in newBooks {
             try upsert(apiBook, into: modelContext)
             upserted += 1
             if upserted % 50 == 0 {
@@ -139,6 +155,8 @@ enum LibriVoxCatalogSync {
 
         try modelContext.save()
         onProgress(upserted)
+        let total = try modelContext.fetchCount(FetchDescriptor<LibriVoxBook>())
+        UserDefaults.standard.set(total, forKey: syncedCountKey)
         UserDefaults.standard.set(Date.now.timeIntervalSince1970, forKey: lastSyncKey)
     }
 
