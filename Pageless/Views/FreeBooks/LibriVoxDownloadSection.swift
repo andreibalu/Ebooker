@@ -12,7 +12,14 @@ struct LibriVoxDownloadPresentation {
     var statusText: String {
         switch entry.phase {
         case .preparing: "Preparing…"
-        case .downloading: "\(entry.completedTracks) of \(entry.totalTracks) tracks"
+        case .downloading:
+            if isFinishing {
+                "Finishing…"
+            } else if let currentTrackNumber {
+                "Track \(currentTrackNumber) of \(entry.totalTracks)"
+            } else {
+                "Downloading…"
+            }
         case .cancelling: "Cancelling…"
         case .failed: entry.errorMessage ?? "Download failed"
         case .complete: "Downloaded"
@@ -21,7 +28,19 @@ struct LibriVoxDownloadPresentation {
 
     var progress: Double? {
         guard entry.phase == .downloading, entry.totalTracks > 0 else { return nil }
-        return entry.progress
+        if isFinishing { return 1 }
+        return min(1, max(0, entry.currentTrackFraction))
+    }
+
+    var isFinishing: Bool {
+        entry.phase == .downloading
+            && entry.totalTracks > 0
+            && entry.completedTracks >= entry.totalTracks
+    }
+
+    private var currentTrackNumber: Int? {
+        guard entry.phase == .downloading, entry.totalTracks > 0 else { return nil }
+        return min(entry.totalTracks, max(1, entry.completedTracks + 1))
     }
 
     var showsSpinner: Bool { entry.phase == .preparing || entry.phase == .cancelling }
@@ -36,7 +55,15 @@ struct LibriVoxDownloadPresentation {
         guard let entry else { return isStreamingOnly ? "Stream" : nil }
         switch entry.phase {
         case .preparing: return "Preparing"
-        case .downloading: return "Downloading \(entry.completedTracks) of \(entry.totalTracks)"
+        case .downloading:
+            let presentation = LibriVoxDownloadPresentation(entry: entry)
+            if presentation.isFinishing {
+                return "Finishing download"
+            }
+            if let currentTrackNumber = presentation.currentTrackNumber {
+                return "Downloading track \(currentTrackNumber) of \(entry.totalTracks)"
+            }
+            return "Downloading"
         case .cancelling: return "Cancelling"
         case .failed: return "Download Failed"
         case .complete: return "Downloaded"
@@ -210,21 +237,31 @@ struct LibriVoxDetailDownloadStatus: View {
     }
 
     var body: some View {
+        let presentation = LibriVoxDownloadPresentation(entry: entry)
         VStack(alignment: .leading, spacing: 8) {
             Group {
                 switch entry.phase {
                 case .preparing:
-                    Label("Preparing download…", systemImage: "arrow.down.circle")
-                        .foregroundStyle(.secondary)
-                case .downloading:
-                    HStack {
-                        Text("Downloading…").fontWeight(.medium)
-                        Spacer()
-                        Text("\(entry.completedTracks) / \(entry.totalTracks) tracks")
-                            .font(.caption)
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Preparing download…")
                             .foregroundStyle(.secondary)
                     }
-                    ProgressView(value: entry.progress)
+                case .downloading:
+                    if presentation.isFinishing {
+                        Text("Finishing download…")
+                            .fontWeight(.medium)
+                    } else {
+                        HStack {
+                            Text("Downloading…").fontWeight(.medium)
+                            Spacer()
+                            Text(presentation.statusText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    ProgressView(value: presentation.progress ?? 0)
                         .tint(progressTint)
                 case .cancelling:
                     HStack(spacing: 10) {

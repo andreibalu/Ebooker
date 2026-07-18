@@ -13,7 +13,7 @@ struct LibriVoxDownloadPresentationTests {
         "Maps every manager phase to its visible state",
         arguments: [
             PhaseExpectation(.preparing, "Preparing…", true, true, false, false),
-            PhaseExpectation(.downloading, "2 of 5 tracks", false, true, false, false),
+            PhaseExpectation(.downloading, "Track 3 of 5", false, true, false, false),
             PhaseExpectation(.cancelling, "Cancelling…", true, false, false, false),
             PhaseExpectation(.failed, "Connection lost", false, false, true, true),
             PhaseExpectation(.complete, "Downloaded", false, false, false, false)
@@ -29,20 +29,36 @@ struct LibriVoxDownloadPresentationTests {
         #expect(presentation.canDismiss == expectation.canDismiss)
     }
 
-    @Test("Downloading maps track progress to a bounded fraction")
+    @Test("Downloading presents current-track progress instead of slow whole-book progress")
     func mapsProgress() {
         let presentation = LibriVoxDownloadPresentation(
-            entry: entry(phase: .downloading, currentTrackFraction: 0.5)
+            entry: entry(phase: .downloading, currentTrackFraction: 0.25)
         )
 
-        #expect(presentation.progress == 0.5)
+        #expect(presentation.progress == 0.25)
+    }
+
+    @Test("Completed final track stays visibly full while download finalizes")
+    func finalTrackShowsFinishingState() {
+        let presentation = LibriVoxDownloadPresentation(
+            entry: entry(
+                phase: .downloading,
+                completedTracks: 5,
+                totalTracks: 5,
+                currentTrackFraction: 0
+            )
+        )
+
+        #expect(presentation.statusText == "Finishing…")
+        #expect(presentation.progress == 1)
+        #expect(presentation.isFinishing)
     }
 
     @Test("Manager status takes precedence over Stream on a library card")
     func managerStatusOverridesStreaming() {
         let active = entry(phase: .downloading)
 
-        #expect(LibriVoxDownloadPresentation.cardStatus(entry: active, isStreamingOnly: true) == "Downloading 2 of 5")
+        #expect(LibriVoxDownloadPresentation.cardStatus(entry: active, isStreamingOnly: true) == "Downloading track 3 of 5")
         #expect(LibriVoxDownloadPresentation.cardStatus(entry: nil, isStreamingOnly: true) == "Stream")
         #expect(LibriVoxDownloadPresentation.cardStatus(entry: nil, isStreamingOnly: false) == nil)
     }
@@ -124,6 +140,8 @@ struct LibriVoxDownloadPresentationTests {
     private func entry(
         phase: LibriVoxDownloadManager.Phase,
         target: LibriVoxDownloadManager.Target = .fresh,
+        completedTracks: Int = 2,
+        totalTracks: Int = 5,
         currentTrackFraction: Double = 0
     ) -> LibriVoxDownloadManager.Entry {
         .init(
@@ -133,8 +151,8 @@ struct LibriVoxDownloadPresentationTests {
                 target: target
             ),
             phase: phase,
-            completedTracks: 2,
-            totalTracks: 5,
+            completedTracks: completedTracks,
+            totalTracks: totalTracks,
             currentTrackFraction: currentTrackFraction,
             errorMessage: phase == .failed ? "Connection lost" : nil
         )
