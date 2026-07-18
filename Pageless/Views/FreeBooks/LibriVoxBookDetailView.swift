@@ -11,11 +11,25 @@ struct LibriVoxBookDetailView: View {
     let onOpenPlayer: () -> Void
     let browseViewModel: BrowseLibriVoxViewModel?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var modelContext
     @Environment(LibriVoxDownloadManager.self) private var downloadManager
     @State private var viewModel = LibriVoxBookDetailViewModel()
     @State private var descriptionExpanded = false
     @State private var sampleTrackURL: URL?
+
+    private enum DownloadActionContainerState: Equatable {
+        case ready
+        case active
+        case downloaded
+    }
+
+    private var downloadActionContainerState: DownloadActionContainerState {
+        if downloadManager.entry(for: book.id) != nil {
+            return .active
+        }
+        return viewModel.isDownloaded ? .downloaded : .ready
+    }
 
     init(book: LibriVoxBook, onOpenPlayer: @escaping () -> Void, browseViewModel: BrowseLibriVoxViewModel? = nil) {
         self.book = book
@@ -29,7 +43,15 @@ struct LibriVoxBookDetailView: View {
                 header
                 sampleSection
                 descriptionSection
-                actionSection
+                Group {
+                    actionSection
+                        .id(downloadActionContainerState)
+                        .transition(AppMotion.stateTransition(reduceMotion: reduceMotion))
+                }
+                .animation(
+                    AppMotion.stateChangeAnimation(reduceMotion: reduceMotion),
+                    value: downloadActionContainerState
+                )
                 completionSection
                 LibriVoxAlternativesSection(book: book, onOpenPlayer: onOpenPlayer)
             }
@@ -39,7 +61,11 @@ struct LibriVoxBookDetailView: View {
         .navigationTitle(book.title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            viewModel.refreshIdentity(book: book, modelContext: modelContext)
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                viewModel.refreshIdentity(book: book, modelContext: modelContext)
+            }
         }
         .onChange(of: downloadManager.entry(for: book.id)?.phase) { _, _ in
             viewModel.refreshIdentity(book: book, modelContext: modelContext)
