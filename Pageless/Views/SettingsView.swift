@@ -12,6 +12,7 @@ struct SettingsView: View {
     @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var aiEntitlement: AIEntitlementStore
     @EnvironmentObject private var icloudSubscription: ICloudSubscriptionStore
+    @EnvironmentObject private var coffeeTip: CoffeeTipStore
     @Query private var existingAudiobooks: [Audiobook]
 
     @State private var navigationPath: [SettingsDestination] = []
@@ -43,6 +44,8 @@ struct SettingsView: View {
                         AISettingsView(onDismissSheet: { dismiss() })
                     case .icloud:
                         ICloudSettingsView(onDismissSheet: { dismiss() })
+                    case .coffee:
+                        BuyMeACoffeeView(onDismissSheet: { dismiss() })
                     }
                 }
         }
@@ -59,6 +62,7 @@ struct SettingsView: View {
             ScrollView {
                 LazyVStack(spacing: 22) {
                     unlockSection
+                    supportSection
                     playbackSection
                     appSection
                     aboutSection
@@ -77,6 +81,7 @@ struct SettingsView: View {
             await aiEntitlement.loadProduct()
             await icloudSubscription.loadProduct()
             await icloudSubscription.refreshEntitlements()
+            await coffeeTip.loadProduct()
         }
         .alert(
             "Purchase",
@@ -102,20 +107,64 @@ struct SettingsView: View {
         }
     }
 
-    // MARK: - Unlock section (two gradient hero cards)
+    // MARK: - Unlock section (compact gradient cards)
 
     private var unlockSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             SettingsSectionHeader(eyebrow: "Unlock", title: "Make it yours.")
 
-            VStack(spacing: 10) {
-                if hideAIEntirely {
+            if hideAIEntirely {
+                VStack(spacing: 10) {
                     aiUnsupportedRow
-                } else {
-                    aiHeroCard
+                    iCloudHeroCard
                 }
-                iCloudHeroCard
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    aiHeroCard
+                        .frame(maxWidth: .infinity)
+                    iCloudHeroCard
+                        .frame(maxWidth: .infinity)
+                }
+                .frame(maxWidth: .infinity)
             }
+        }
+    }
+
+    private var supportSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSectionHeader(eyebrow: "Support", title: "Support Unpaged.")
+
+            NavigationLink(value: SettingsDestination.coffee) {
+                SettingsCard {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.amber.opacity(0.16))
+                            Image(systemName: "cup.and.saucer.fill")
+                                .font(.system(size: 21, weight: .semibold))
+                                .foregroundStyle(Color.amber)
+                        }
+                        .frame(width: 44, height: 44)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Buy me a coffee")
+                                .font(SettingsDesign.displayFont(16, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Text("Optional one-time support. No features attached.")
+                                .font(.system(size: 11))
+                                .foregroundStyle(SettingsDesign.secondaryLabel)
+                                .lineSpacing(1)
+                        }
+
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(SettingsDesign.tertiaryLabel)
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -467,7 +516,7 @@ private struct HeroCard<Pill: View>: View {
         ZStack(alignment: .topLeading) {
             gradient
             Image(systemName: cornerSymbol)
-                .font(.system(size: 140))
+                .font(.system(size: 92))
                 .foregroundStyle(.white)
                 .opacity(0.18)
                 .rotationEffect(.degrees(cornerRotation))
@@ -476,40 +525,52 @@ private struct HeroCard<Pill: View>: View {
                 .padding(.trailing, -14)
                 .padding(.top, -10)
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
                     Image(systemName: eyebrowSymbol)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
+                        .accessibilityHidden(true)
                     Text(eyebrowText)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .tracking(1.5)
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.6))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
-                .padding(.top, 18)
+                .padding(.top, 14)
 
                 Text(title)
-                    .font(SettingsDesign.displayFont(24, weight: .bold))
-                    .tracking(-0.4)
+                    .font(SettingsDesign.displayFont(18, weight: .bold))
+                    .tracking(-0.25)
                     .foregroundStyle(.white)
-                    .lineSpacing(1)
-                    .padding(.top, 8)
+                    .lineSpacing(0)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.82)
+                    .padding(.top, 6)
 
-                HStack(spacing: 10) {
+                Spacer(minLength: 8)
+
+                VStack(alignment: .leading, spacing: 6) {
                     pill
                     Text(trailingLink)
-                        .font(.system(size: 12))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.white.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
-                .padding(.top, 12)
-                .padding(.bottom, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 14)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 14)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156, alignment: .topLeading)
         .clipShape(RoundedRectangle(cornerRadius: SettingsDesign.heroCornerRadius, style: .continuous))
         .shadow(color: shadowColor, radius: 20, x: 0, y: 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens settings")
     }
 }
 
@@ -518,6 +579,7 @@ private struct HeroCard<Pill: View>: View {
 enum SettingsDestination: Hashable {
     case ai
     case icloud
+    case coffee
 }
 
 // MARK: - Inline expanding option picker (replaces the pushed option list)
@@ -688,5 +750,6 @@ private struct HomeTabRow: View {
     SettingsView()
         .environmentObject(AIEntitlementStore())
         .environmentObject(ICloudSubscriptionStore.shared)
+        .environmentObject(CoffeeTipStore(startTasks: false))
         .environment(OnboardingManager())
 }

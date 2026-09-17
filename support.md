@@ -1,6 +1,6 @@
 # Unpaged — Support
 
-_Last updated: July 2, 2026_
+_Last updated: September 17, 2026_
 
 Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
@@ -66,12 +66,18 @@ Anything you've downloaded plays offline, including LibriVox titles. Streaming-o
 
 ### How do I restore my purchases on a new device?
 
-As long as you're signed in with the same Apple ID, your purchases reactivate via **Restore Purchases**:
+As long as you're signed in with the same Apple ID, your paid unlock and subscription reactivate via **Restore Purchases**:
 
 - **AI Features unlock** — open the **AI Settings** sheet and tap **Restore Purchases**.
 - **iCloud Sync subscription** — open **Settings → iCloud Sync** and tap **Restore Purchases**.
 
 You can cancel or change the iCloud Sync subscription anytime from **Settings → iCloud Sync → Manage Subscription**, or in your Apple ID subscription settings.
+
+The optional **Buy me a coffee** purchase is a consumable tip. It has no entitlement and cannot be restored; you can buy it again whenever you want.
+
+### Can I buy you a coffee?
+
+Yes. Open **Settings → Buy me a coffee** to make an optional, one-time support purchase through the App Store. The price is shown in your local currency by Apple. It does not unlock features, add content, or provide any other benefit, and you can make the same purchase again later.
 
 ### How do I delete an audiobook?
 

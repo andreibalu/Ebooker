@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: July 1, 2026_
+_Last updated: September 17, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) and with LibriVox/Internet Archive (free-book browsing, streaming, and downloads). Unpaged never receives your name, email, or payment details.
 
@@ -13,7 +13,7 @@ Everything you create or import in Unpaged stays on your device unless you expli
 - Bookmarks ("moments"), notes, transcripts, AI-generated names and recaps
 - Playback preferences (sort order, skip intervals, sleep timer, equalizer settings)
 - Free-book downloads from LibriVox and the bundled catalog
-- In-app purchase entitlement state and the AI feature trial counter
+- In-app purchase entitlement state for AI Features and iCloud Sync, plus the AI feature trial counter. The optional coffee tip is a consumable purchase processed by Apple and does not create an app entitlement.
 
 This data is stored in the app's private container on your iPhone. Unpaged does not upload it to any server controlled by the developer. Deleting the app removes the local copy; data previously synced to your private iCloud database remains there until you delete it through Apple's iCloud controls.
 
@@ -51,12 +51,13 @@ The first time transcription runs, iOS may download Apple's on-device speech-rec
 
 ## In-app purchases
 
-Unpaged offers two in-app purchases, both processed by Apple via StoreKit:
+Unpaged offers three in-app purchases, all processed by Apple via StoreKit:
 
 - **AI Features** — a one-time non-consumable unlock.
 - **iCloud Sync** — an auto-renewing monthly subscription (US$0.99/month; prices vary by region) that turns on cross-device sync.
+- **Buy me a coffee** — an optional one-time consumable tip. It does not unlock features, add content, or provide any other benefit. Consumable tips are not entitlements and cannot be restored; a user can purchase one again.
 
-Both are handled entirely by Apple's StoreKit. Unpaged never sees your payment information, and no purchase data is sent to any third party. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
+All three are handled entirely by Apple's StoreKit. Unpaged never sees your payment information, and no purchase data is sent to any third party. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
 
 ## LibriVox content
 

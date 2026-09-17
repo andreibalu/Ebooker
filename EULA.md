@@ -3,7 +3,7 @@
 **App:** Unpaged
 **Developer:** Andrei Baluta
 **Contact:** andrei.baluta@yahoo.com
-**Last updated:** July 1, 2026
+**Last updated:** September 17, 2026
 
 This End User License Agreement ("Agreement") is a legal agreement between you
 ("you") and Andrei Baluta ("Developer," "we," "us") for the use of the Unpaged
@@ -59,8 +59,15 @@ managed through your Apple ID:
   on-device Apple Intelligence features (AI bookmark naming and AI recaps) after
   the included free trial uses are exhausted.
 
-All payments are processed by Apple. Restoring previous purchases on a new device
-requires signing in with the same Apple ID.
+- **Buy me a coffee** — an **optional, one-time consumable purchase** that lets
+  you support the Developer. It does not unlock features, add content, provide
+  priority, or provide any other benefit. It creates no entitlement and cannot be
+  restored; you may purchase it again whenever you choose. The price shown at
+  purchase is the price charged by Apple for your storefront.
+
+All payments are processed by Apple. Restoring the AI Features unlock or iCloud
+Sync subscription on a new device requires signing in with the same Apple ID;
+the consumable coffee tip is intentionally not restorable.
 
 ## 4. Maintenance and Support
 
@@ -122,8 +129,9 @@ Developer. AI generation runs on-device using Apple Intelligence. Primary AI
   transcription also runs on-device; the legacy Speech fallback requires
   on-device recognition support and does not permit server processing. Network
 requests support free-book browsing, streaming, and downloads through
-LibriVox/Internet Archive, purchases through Apple, and optional iCloud Sync in
-your private iCloud account. The Developer operates no backend server.
+  LibriVox/Internet Archive, purchases through Apple (including the optional
+  coffee tip), and optional iCloud Sync in your private iCloud account. The
+  Developer operates no backend server.
 Full details are in the Privacy Policy:
 <https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262>
 

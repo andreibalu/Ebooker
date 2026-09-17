@@ -18,6 +18,21 @@
       "productID" : "andreibaludev.Pageless.ai_unlock",
       "referenceName" : "AI features unlock",
       "type" : "NonConsumable"
+    },
+    {
+      "displayPrice" : "2.99",
+      "familyShareable" : false,
+      "internalID" : "D9E0F1A2-B3C4-5678-9ABC-DEF012345678",
+      "localizations" : [
+        {
+          "description" : "Optional one-time support for Unpaged.",
+          "displayName" : "Buy me a coffee",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "andreibaludev.Pageless.tip.coffee",
+      "referenceName" : "Buy me a coffee",
+      "type" : "Consumable"
     }
   ],
   "settings" : {
