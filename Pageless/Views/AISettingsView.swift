@@ -88,6 +88,7 @@ struct AISettingsView: View {
         .background(Color.cream.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .settingsInteractiveBackGesture()
         .task {
             await aiEntitlement.loadProduct()
         }

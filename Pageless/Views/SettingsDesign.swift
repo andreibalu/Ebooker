@@ -170,6 +170,91 @@ struct SettingsSheetHeader: View {
     }
 }
 
+// MARK: - Native edge-swipe back navigation
+
+/// Restores UIKit's interactive pop gesture for settings destinations that use a custom
+/// header and hide the system navigation bar/back button.
+private struct SettingsInteractiveBackGesture: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        Resolver()
+    }
+
+    func updateUIViewController(_ viewController: UIViewController, context: Context) {
+        (viewController as? Resolver)?.installIfPossible()
+    }
+
+    private final class Resolver: UIViewController {
+        private lazy var gestureDelegate = SettingsPopGestureDelegate()
+        private weak var installedNavigationController: UINavigationController?
+        private var previousGestureDelegate: UIGestureRecognizerDelegate?
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            installIfPossible()
+        }
+
+        override func viewDidAppear(_ animated: Bool) {
+            super.viewDidAppear(animated)
+            installIfPossible()
+        }
+
+        override func willMove(toParent parent: UIViewController?) {
+            if parent == nil {
+                restoreGestureDelegate()
+            }
+            super.willMove(toParent: parent)
+        }
+
+        func installIfPossible() {
+            guard let navigationController,
+                  let popGesture = navigationController.interactivePopGestureRecognizer else {
+                return
+            }
+
+            if installedNavigationController !== navigationController {
+                restoreGestureDelegate()
+                installedNavigationController = navigationController
+                previousGestureDelegate = popGesture.delegate
+            }
+
+            gestureDelegate.navigationController = navigationController
+            popGesture.delegate = gestureDelegate
+            popGesture.isEnabled = true
+        }
+
+        private func restoreGestureDelegate() {
+            guard let navigationController = installedNavigationController,
+                  let popGesture = navigationController.interactivePopGestureRecognizer else {
+                installedNavigationController = nil
+                previousGestureDelegate = nil
+                return
+            }
+
+            if popGesture.delegate === gestureDelegate {
+                popGesture.delegate = previousGestureDelegate
+            }
+            installedNavigationController = nil
+            previousGestureDelegate = nil
+            gestureDelegate.navigationController = nil
+        }
+    }
+}
+
+private final class SettingsPopGestureDelegate: NSObject, UIGestureRecognizerDelegate {
+    weak var navigationController: UINavigationController?
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        (navigationController?.viewControllers.count ?? 0) > 1
+    }
+}
+
+extension View {
+    /// Keeps the custom settings header while restoring the native left-edge swipe gesture.
+    func settingsInteractiveBackGesture() -> some View {
+        background(SettingsInteractiveBackGesture().frame(width: 0, height: 0))
+    }
+}
+
 // MARK: - Primary blue CTA
 
 struct SettingsPrimaryButton: View {

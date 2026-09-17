@@ -60,6 +60,7 @@ struct ICloudSettingsView: View {
         .background(Color.cream.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
+        .settingsInteractiveBackGesture()
         .task {
             await subscriptionStore.loadProduct()
             await subscriptionStore.refreshEntitlements()
