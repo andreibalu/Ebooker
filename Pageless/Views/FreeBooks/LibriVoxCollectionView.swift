@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct LibriVoxCollectionView: View {
     let collection: LibriVoxCollection
