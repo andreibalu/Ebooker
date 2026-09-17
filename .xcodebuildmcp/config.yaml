@@ -1,0 +1,10 @@
+schemaVersion: 1
+enabledWorkflows:
+  - simulator
+  - device
+  - debugging
+  - ui-automation
+sessionDefaults:
+  projectPath: ./Pageless.xcodeproj
+  scheme: Pageless
+  simulatorName: iPhone 18 Pro

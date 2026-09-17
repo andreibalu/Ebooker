@@ -1,12 +1,13 @@
 # AGENTS.md
 
-Guidance for Codex (Codex.ai/code) working in this repo.
+Canonical instructions for coding agents in this repo (Codex and Claude Code both read this file).
+Claude-Code-only notes — tool availability and Codex delegation — live in `CLAUDE.md`, which imports this file.
 
 ## App Identity
 
 - **Marketing name (App Store / home screen)**: Unpaged
 - **Xcode scheme**: `Pageless` · **source folder**: `Pageless/` · **bundle id prefix**: `andreibaludev.Pageless`
-- **Marketing version**: see `VERSION` (currently 1.3.3)
+- **Marketing version**: see `VERSION` (currently 1.3.4)
 
 Three names = intentional historical layers — no "fix". New user-facing copy says "Unpaged".
 
@@ -28,18 +29,64 @@ After editing, remind the user to push the new content to the public Gist(s).
 
 Use [@app-store-connect-analytics](plugin://app-store-connect-analytics@personal) when pulling Unpaged App Store Connect data for marketing, ASO, launch analysis, sales/download summaries, purchases, subscriptions, or other App Store performance questions. Bundle id / SKU: `andreibaludev.Pageless`. Do not substitute RevenueCat for App Store Connect data unless explicitly requested.
 
+## Release & Submission
+
+Releases go out from the CLI, not Xcode's Organizer. **This repo is public — never commit API key ids, issuer ids, `.p8` contents, or any other credential.** Credentials live outside the repo: `~/.appstoreconnect/issuer_id` and `~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8` (the key id is the filename; more than one key is present, so pick the one registered for this app). App Store Connect app id `6761081641`.
+
+1. Bump `MARKETING_VERSION` in `project.pbxproj` **and** `VERSION` together, and set `CURRENT_PROJECT_VERSION` above every build already uploaded for that marketing version.
+2. Green full test run on the simulator (see "Testing").
+3. `xcodebuild archive` (Release, `-destination generic/platform=iOS`) → `xcodebuild -exportArchive` with an `ExportOptions.plist` using `method: app-store-connect`, `signingStyle: automatic`, `manageAppVersionAndBuildNumber: false`.
+4. `xcrun altool --validate-app` then `--upload-app` against the exported `.ipa` (it lands in `<export-dir>/Pageless.ipa`, not the export dir itself).
+5. Wait for `processingState: VALID`, then attach and submit.
+
+The App Store Connect web UI is a slow SPA that often renders blank in a narrow browser pane; the REST API is faster and scriptable for the last mile — `PATCH /v1/appStoreVersions/{id}/relationships/build`, adding the version to the open `reviewSubmission`, and flipping `submitted: true`. An IAP and the app version submitted together each become a `reviewSubmissionItem` on one submission.
+
+**Python here has no `jwt` or `cryptography` module**, so every off-the-shelf ASC snippet fails. Sign the ES256 JWT by piping the `header.payload` through `openssl dgst -sha256 -sign` and converting the DER `SEQUENCE{INTEGER r, INTEGER s}` to raw `r||s` (32 bytes each).
+
+Release checklist beyond the build: IAP review screenshot + review notes must match the *shipping* UI (a stale screenshot showing removed copy is a review risk), external docs pushed to their Gists (see above), and release notes saved on the version.
+
 ## Build & Run
 
-XcodeBuildMCP for all build/run. Only device tools enabled in this MCP profile — no `*_sim` variants. Call `mcp__XcodeBuildMCP__session_show_defaults` first to verify project/scheme/device.
+**Host**: Mac mini (Apple silicon, macOS 27, Xcode 27). Simulators are always available — build, test, and visual checks all run there by default. A connected device is no longer required for routine work.
 
-- **Build & run**: `mcp__XcodeBuildMCP__build_run_device` (scheme `Pageless`)
-- **Build only**: `mcp__XcodeBuildMCP__build_device`
-- **Tests**: `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]` (Mac can't handle parallel destinations)
+**Codex** uses XcodeBuildMCP. Call `mcp__XcodeBuildMCP__session_show_defaults` first to verify project/scheme/destination (`.xcodebuildmcp/config.yaml` pins project `Pageless.xcodeproj`, scheme `Pageless`, simulator `iPhone 18 Pro`).
+
+- **Build & run**: `mcp__XcodeBuildMCP__build_run_sim` / `build_run_device`
+- **Build only**: `mcp__XcodeBuildMCP__build_sim` / `build_device`
+- **Tests**: `mcp__XcodeBuildMCP__test_sim` / `test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]` (parallel destinations are unreliable here)
 - **Clean**: `mcp__XcodeBuildMCP__clean`
 
-**Device target**: always Andrei's iPhone 15 Pro — identifier `00008130-000471A80C81001C` (UDID `BAE98D59-834B-5B20-8E9A-8943DCE6F7FD`). Apple Intelligence (`FoundationModels`) only runs on 15 Pro / 16+ hardware, so the simulator can't exercise AI surfaces. `xcode-device-build` skill helps with device setup.
+**Claude Code has no XcodeBuildMCP** — use the CLI equivalents through `Bash`:
 
-If the phone is unavailable and the user explicitly authorizes a simulator, use a known cached simulator with native `xcodebuild` and keep `-parallel-testing-enabled NO`. Treat that as non-AI regression coverage only.
+```bash
+xcodebuild -project Pageless.xcodeproj -scheme Pageless \
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
+  -configuration Debug -derivedDataPath <scratch>/dd build
+```
+
+Swap `build` for `test -parallel-testing-enabled NO`, or the destination for
+`'platform=iOS,name=balubalu'` (physical iPhone 17e, UDID `00008150-000203220A10C01C`).
+Always pass `-derivedDataPath` into the scratch directory so runs don't fight over
+the shared DerivedData. Run builds in the background and tail the log — a clean
+build is several minutes.
+
+### Simulator (headless)
+
+**`Simulator.app` is not installed on this Mac** (`.../Xcode.app/Contents/Developer/Applications/` does not exist), so there is no simulator *window* and the Claude Code iOS Simulator MCP fails with a misleading "Xcode is installed but not selected" error. `xcode-select -p` is already correct — **never** suggest `sudo xcode-select -s` for this.
+
+Everything still works headlessly via `simctl`, including visual verification:
+
+```bash
+xcrun simctl list devices available          # pick a udid
+xcrun simctl boot <udid>                     # ~10-15s to settle
+xcrun simctl install <udid> <path>/Pageless.app
+xcrun simctl launch  <udid> andreibaludev.Pageless
+xcrun simctl io <udid> screenshot shot.png   # then read the png
+```
+
+Useful extras: `simctl ui <udid> appearance dark|light`, `simctl status_bar <udid> override --time 9:41`, `simctl privacy <udid> grant microphone andreibaludev.Pageless`, `simctl uninstall` for a clean-install/onboarding run. Installed runtimes: iOS 18.0, 26.5, 27.0 — use an 18.0 device to exercise the `Unavailable…` AI fallbacks and a 26.5/27.0 device for the real `FoundationModels` path.
+
+**Device-only cases**: background audio behavior, CarPlay, StoreKit against a real sandbox account, and anything needing on-device Apple Intelligence hardware. `FoundationModels` on a simulator depends on the host Mac having Apple Intelligence enabled; if it can't run, treat that pass as non-AI regression coverage only.
 
 **External packages: none.** Native Apple frameworks only (AVFoundation, MediaToolbox, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI, StoreKit, Intents, CarPlay, Network). RevenueCat was removed — see "In-App Purchases".
 
@@ -60,7 +107,8 @@ Pageless/
 │                    AppDelegate (ModelContainer; re-runs orphan detection on CloudKit import batches),
 │                    CarPlaySceneDelegate
 ├── AppIntents/      AudiobookIntents — `PlayLatestBookIntent` + `UnpagedAppShortcuts`
-├── Configuration/   AIProductID (both IAP ids), Products.storekit (local StoreKit test config)
+├── Configuration/   AIProductID (AI + iCloud ids), CoffeeTipProductID, Products.storekit
+│                    (local StoreKit test config, wired into the scheme)
 ├── Models/          SwiftData models + settings/stats enums (see Data Layer)
 ├── ViewModels/      six ViewModels (see table)
 ├── Views/           ContentView (root tabs + per-tab sort + header iCloud button), player /
@@ -117,6 +165,7 @@ Protocol implementations typically `struct`. `LibraryImportService` and catalog/
 | `RecapProviding` | `RecapService` (iOS 26+) · `UnavailableRecapProvider` (iOS 18 fallback) | FoundationModels |
 | `AudioExtracting` | `AudioExtractionService` | AVFoundation (AVAssetExportSession) |
 | `FreeBookDownloading` | `FreeBookDownloadService` | URLSession (background) — legacy seed catalog |
+| Coffee tip purchase | `CoffeeTipStore` | StoreKit 2 (consumable) |
 
 ## AI & On-Device Intelligence
 
@@ -130,19 +179,21 @@ Protocol implementations typically `struct`. `LibraryImportService` and catalog/
 - **iOS 18 deployment-target rule.** `FoundationModels` is iOS 26-only. Shared types (`MomentAnalysis`, `MomentNamingError`, `RecapError`, `RecapGenerationResult`, `SegmentTranscriptionError`) live in the protocol files so iOS-18 callers + mocks need no availability gating. ViewModel default inits branch on `if #available(iOS 26, *)` to pick real service vs `Unavailable…` stub. Never reference `FoundationModels` symbols outside an `@available`-gated type or `if #available` block.
 - **~4096-token budget shared between input + output** (same model regardless of guardrails). In `@Generable` structs, order cheap structured fields first, longest prose field last — fields generate in declaration order and the trailing one gets clipped when the budget runs out (recap's `progressHeadline` comes **before** `recap` for the same reason). Post-process free-text fields for mid-sentence truncation (see `MomentNamingService.trimToCompleteSentences` / `sanitizedQuoteLine`); never trust the model to honor word/sentence-count guides.
 
-### In-App Purchases (two products)
+### In-App Purchases (three products)
 
-Both StoreKit-owned; the app gates on `Transaction.currentEntitlements` directly — no third-party purchase SDK.
+All purchases are StoreKit-owned; AI and iCloud access is gated on `Transaction.currentEntitlements` directly. The coffee tip is a repeatable consumable with no entitlement or restore path. No third-party purchase SDK is used.
 
 | Product | Store ID | Type | Owner store |
 |---------|----------|------|-------------|
 | AI Features unlock | `andreibaludev.Pageless.ai_unlock` | Non-consumable | `AIEntitlementStore` |
 | iCloud Sync | `andreibaludev.Pageless.icloudsync.monthly` | Auto-renewable monthly ($0.99, **no free trial**) | `ICloudSubscriptionStore.shared` |
+| Buy me a coffee | `andreibaludev.Pageless.tip.coffee` | Consumable, one-time optional support | `CoffeeTipStore` |
 
 - **`ICloudSubscriptionStore`** mirrors `AIEntitlementStore`'s shape (`loadProduct`, `refreshEntitlements`, `purchase`, `restorePurchases`, `Transaction.updates` listener). **Singleton** because `AppDelegate.init` reads `isSubscribedAtLaunch()` (UserDefaults cache) when choosing the SwiftData CloudKit database before SwiftUI env objects exist.
 - **No free trial.** `introOfferDisplay` returns nil unless the App Store product actually carries a `.freeTrial` intro offer, so the UI shows "Subscribe" + "$0.99/month". Don't reintroduce a hardcoded trial string.
 - **Reachability (Apple 3.1.1).** The iCloud Sync purchase must stay reachable in the reviewed build: Settings → "iCloud Sync" hero card (shown **unconditionally** in `SettingsView.unlockSection`) → `ICloudSettingsView` → "Subscribe" — **not** hidden behind iCloud sign-in. A prior build was rejected under 3.1.1 for this.
 - **RevenueCat (removed).** StoreKit 2 is the only entitlement owner. No RevenueCat package, imports, configuration, observer calls, credentials, or reactivation blocks remain in source. Any future provider reintroduction needs a new product/privacy plan and matching external-document updates; credential rotation remains maintainer-owned and never belongs in this repository. End-to-end third-party verification, if separately approved, needs TestFlight rather than local `Products.storekit` receipts.
+- **Buy me a coffee.** `CoffeeTipStore` loads the single localized consumable product, serializes purchase calls on the main actor, finishes only verified coffee transactions (including delayed approvals and unfinished startup transactions), and exposes explicit cancelled/pending/unavailable/failed/succeeded states. A verified tip never unlocks a feature or creates an entitlement, and no restore button is provided because consumables cannot be restored. Local `Products.storekit` uses $2.99 as a tentative test price; App Store Connect remains the production source of price and localization.
 
 ## Feature Systems
 
@@ -231,8 +282,8 @@ Library metadata, progress, moments, EQ config, reading sessions sync via CloudK
 
 ## Testing
 
-Swift Testing (`import Testing`). Run via `mcp__XcodeBuildMCP__test_device` with `extraArgs: ["-parallel-testing-enabled", "NO"]`.
+Swift Testing (`import Testing`). Codex: `mcp__XcodeBuildMCP__test_sim` (or `test_device`) with `extraArgs: ["-parallel-testing-enabled", "NO"]`. Claude Code: the `xcodebuild … test -parallel-testing-enabled NO` form from "Build & Run". Full suite is ~492 unit tests across 59 suites plus 6 UI tests; run it on the simulator before any release build.
 
 - Mocks in `PagelessTests/Mocks/`: `MockTranscriptionService`, `MockSegmentTranscriber`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService` — one per protocol service. LibriVox-path code is tested integration-style against in-memory SwiftData containers; if you add a protocol there, add a matching mock.
-- **In-memory test containers: always pass `cloudKitDatabase: .none`** to `ModelConfiguration`. The default `.automatic` picks up the host app's CloudKit entitlement on device and fails CloudKit-shape validation. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one intentional `.private(...)` validation, via a file-backed temp store.
+- **In-memory test containers: always pass `cloudKitDatabase: .none`** to `ModelConfiguration`. The default `.automatic` picks up the host app's CloudKit entitlement and fails CloudKit-shape validation. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one intentional `.private(...)` validation, via a file-backed temp store.
 - **Hold the container in a local**: `let container = try makeContainer(); let context = container.mainContext` — never `try makeContainer().mainContext` (container deallocates; first fetch crashes the host app).
