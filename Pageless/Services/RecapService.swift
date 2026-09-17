@@ -11,7 +11,7 @@ import FoundationModels
 struct RecapService: RecapProviding {
     /// See MomentNamingService.model — same rationale.
     static let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
-    static let options = GenerationOptions(sampling: .greedy, maximumResponseTokens: 300)
+    static let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 300)
 
     @Generable(description: "A brief recap of recent audiobook events")
     struct RecapSuggestion {
@@ -86,6 +86,8 @@ struct RecapService: RecapProviding {
                     progressHeadline: nil
                 )
             }
+        } catch is CancellationError {
+            throw CancellationError()
         } catch FoundationModelGeneration.Failure.unsafeContent {
             throw RecapError.unsafeContent
         } catch let error as RecapError {

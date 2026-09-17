@@ -129,6 +129,7 @@ final class AudiobookDetailViewModel {
         modelContext: ModelContext? = nil,
         onSuccessfulRecap: (() -> Void)? = nil
     ) async {
+        guard !Task.isCancelled else { return }
         isLoadingRecap = true
         defer { isLoadingRecap = false }
 
@@ -140,6 +141,7 @@ final class AudiobookDetailViewModel {
         guard audiobook.isDownloaded,
               let fileURL = try? LibraryImportService.fileURL(for: tracks[trackIndex], in: audiobook)
         else {
+            guard !Task.isCancelled else { return }
             recapError = "Audio for this book isn't on this iPhone."
             return
         }
@@ -147,9 +149,20 @@ final class AudiobookDetailViewModel {
         let startSeconds = max(0, progressTime - 200)
         guard progressTime > startSeconds else { return }
 
-        guard let transcript = await obtainTranscript(
-            fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime
-        ), !transcript.isEmpty else {
+        let transcript: String?
+        do {
+            transcript = try await obtainTranscript(
+                fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime
+            )
+        } catch is CancellationError {
+            // Cancellation should not be reported as a transcription failure.
+            return
+        } catch {
+            transcript = nil
+        }
+
+        guard !Task.isCancelled else { return }
+        guard let transcript, !transcript.isEmpty else {
             if recapError == nil { recapError = "Could not transcribe audio." }
             return
         }
@@ -166,14 +179,24 @@ final class AudiobookDetailViewModel {
 
     /// SpeechAnalyzer first (no permission, no export); legacy export +
     /// SFSpeechRecognizer fallback. Internal for tests.
-    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double) async -> String? {
-        if let transcript = try? await segmentTranscriber.transcribeSegment(
-            fileURL: fileURL, startSeconds: startSeconds, endSeconds: endSeconds
-        ), !transcript.isEmpty {
-            return transcript
+    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String? {
+        try Task.checkCancellation()
+        do {
+            let transcript = try await segmentTranscriber.transcribeSegment(
+                fileURL: fileURL, startSeconds: startSeconds, endSeconds: endSeconds
+            )
+            try Task.checkCancellation()
+            if !transcript.isEmpty { return transcript }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // A genuine primary-path failure is the only condition that can
+            // enter the legacy permission/export fallback.
         }
 
+        try Task.checkCancellation()
         let authStatus = await transcription.requestAuthorization()
+        try Task.checkCancellation()
         guard authStatus == .authorized else {
             recapError = "Speech recognition not authorized."
             return nil
@@ -183,7 +206,12 @@ final class AudiobookDetailViewModel {
                 from: fileURL, startSeconds: startSeconds, endSeconds: endSeconds
             )
             defer { try? FileManager.default.removeItem(at: audioURL) }
-            return try await transcription.transcribe(audioURL: audioURL)
+            try Task.checkCancellation()
+            let transcript = try await transcription.transcribe(audioURL: audioURL)
+            try Task.checkCancellation()
+            return transcript
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             return nil
         }
@@ -198,12 +226,15 @@ final class AudiobookDetailViewModel {
         modelContext: ModelContext?,
         onSuccessfulRecap: (() -> Void)?
     ) async {
+        guard !Task.isCancelled else { return }
+
         do {
             let result = try await recapProvider.generateRecap(
                 transcript: transcript,
                 audiobookTitle: audiobook.title,
                 includeProgressHeadline: includeProgressHeadline
             )
+            guard !Task.isCancelled else { return }
             recapText = result.recap
             recapProgressHeadline = result.progressHeadline
             recapError = nil
@@ -215,9 +246,14 @@ final class AudiobookDetailViewModel {
             )
             try? modelContext?.save()
             onSuccessfulRecap?()
+        } catch is CancellationError {
+            // A cancelled task must not leave a user-visible generation error.
+            return
         } catch let error as RecapError {
+            guard !Task.isCancelled else { return }
             recapError = error.errorDescription
         } catch {
+            guard !Task.isCancelled else { return }
             recapError = RecapError.generationFailed.errorDescription
         }
     }

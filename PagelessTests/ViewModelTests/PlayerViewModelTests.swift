@@ -14,7 +14,7 @@ struct PlayerViewModelTests {
         transcription: MockTranscriptionService = MockTranscriptionService(),
         analyzer: MockMomentAnalyzer = MockMomentAnalyzer(),
         extractor: MockAudioExtractor = MockAudioExtractor(),
-        segmentTranscriber: MockSegmentTranscriber = MockSegmentTranscriber()
+        segmentTranscriber: any SegmentTranscribing = MockSegmentTranscriber()
     ) -> PlayerViewModel {
         PlayerViewModel(
             transcription: transcription,
@@ -88,13 +88,13 @@ struct PlayerViewModelTests {
 
     // MARK: - obtainTranscript
 
-    @Test func obtainTranscriptUsesPrimaryPathWithoutAuthorization() async {
+    @Test func obtainTranscriptUsesPrimaryPathWithoutAuthorization() async throws {
         let transcription = MockTranscriptionService()
         let segment = MockSegmentTranscriber()
         segment.transcriptToReturn = "primary transcript"
         let vm = makeViewModel(transcription: transcription, segmentTranscriber: segment)
 
-        let result = await vm.obtainTranscript(
+        let result = try await vm.obtainTranscript(
             fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), currentTime: 100, duration: 600
         )
 
@@ -103,11 +103,11 @@ struct PlayerViewModelTests {
         #expect(transcription.transcribeCallCount == 0)
     }
 
-    @Test func obtainTranscriptUsesBacktrackHeavyWindow() async {
+    @Test func obtainTranscriptUsesBacktrackHeavyWindow() async throws {
         let segment = MockSegmentTranscriber()
         let vm = makeViewModel(segmentTranscriber: segment)
 
-        _ = await vm.obtainTranscript(
+        _ = try await vm.obtainTranscript(
             fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), currentTime: 100, duration: 600
         )
 
@@ -115,11 +115,11 @@ struct PlayerViewModelTests {
         #expect(segment.lastRange?.end == 115)    // 100 + 15
     }
 
-    @Test func obtainTranscriptClampsWindowToTrackBounds() async {
+    @Test func obtainTranscriptClampsWindowToTrackBounds() async throws {
         let segment = MockSegmentTranscriber()
         let vm = makeViewModel(segmentTranscriber: segment)
 
-        _ = await vm.obtainTranscript(
+        _ = try await vm.obtainTranscript(
             fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), currentTime: 10, duration: 18
         )
 
@@ -127,14 +127,14 @@ struct PlayerViewModelTests {
         #expect(segment.lastRange?.end == 18)
     }
 
-    @Test func obtainTranscriptFallsBackToLegacyWhenPrimaryThrows() async {
+    @Test func obtainTranscriptFallsBackToLegacyWhenPrimaryThrows() async throws {
         let transcription = MockTranscriptionService()
         transcription.transcriptToReturn = "legacy transcript"
         let segment = MockSegmentTranscriber()
         segment.shouldThrow = true
         let vm = makeViewModel(transcription: transcription, segmentTranscriber: segment)
 
-        let result = await vm.obtainTranscript(
+        let result = try await vm.obtainTranscript(
             fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), currentTime: 100, duration: 600
         )
 
@@ -142,14 +142,40 @@ struct PlayerViewModelTests {
         #expect(transcription.authorizationRequestCount == 1)
     }
 
-    @Test func obtainTranscriptReturnsNilWhenPrimaryFailsAndAuthDenied() async {
+    @Test func obtainTranscriptPropagatesCancellationWithoutLegacyFallback() async throws {
+        let transcription = MockTranscriptionService()
+        let segment = BlockingSegmentTranscriber()
+        let vm = makeViewModel(transcription: transcription, segmentTranscriber: segment)
+
+        let task = Task { @MainActor in
+            try await vm.obtainTranscript(
+                fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), currentTime: 100, duration: 600
+            )
+        }
+        await segment.waitUntilStarted()
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            Issue.record("Cancellation should propagate from the primary path")
+        } catch is CancellationError {
+            // Expected: cancellation must not be interpreted as a primary failure.
+        } catch {
+            Issue.record("Unexpected error after cancellation: \(error)")
+        }
+
+        #expect(transcription.authorizationRequestCount == 0)
+        #expect(transcription.transcribeCallCount == 0)
+    }
+
+    @Test func obtainTranscriptReturnsNilWhenPrimaryFailsAndAuthDenied() async throws {
         let transcription = MockTranscriptionService()
         transcription.authorizationStatus = .denied
         let segment = MockSegmentTranscriber()
         segment.shouldThrow = true
         let vm = makeViewModel(transcription: transcription, segmentTranscriber: segment)
 
-        let result = await vm.obtainTranscript(
+        let result = try await vm.obtainTranscript(
             fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), currentTime: 100, duration: 600
         )
 

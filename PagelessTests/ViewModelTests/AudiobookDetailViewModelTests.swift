@@ -392,6 +392,38 @@ struct AudiobookDetailViewModelTests {
         #expect(transcription.transcribeCallCount == 1)
     }
 
+    @Test func obtainTranscriptPropagatesCancellationWithoutLegacyFallback() async throws {
+        let transcription = MockTranscriptionService()
+        let segment = BlockingSegmentTranscriber()
+        let vm = AudiobookDetailViewModel(
+            audiobook: makeAudiobook(),
+            transcription: transcription,
+            audioExtractor: MockAudioExtractor(),
+            recapProvider: MockRecapService(),
+            segmentTranscriber: segment
+        )
+
+        let task = Task { @MainActor in
+            try await vm.obtainTranscript(
+                fileURL: URL(fileURLWithPath: "/tmp/a.mp3"), startSeconds: 10, endSeconds: 30
+            )
+        }
+        await segment.waitUntilStarted()
+        task.cancel()
+
+        do {
+            _ = try await task.value
+            Issue.record("Cancellation should propagate from the primary path")
+        } catch is CancellationError {
+            // Expected: cancellation must not be interpreted as a primary failure.
+        } catch {
+            Issue.record("Unexpected error after cancellation: \(error)")
+        }
+
+        #expect(transcription.authorizationRequestCount == 0)
+        #expect(transcription.transcribeCallCount == 0)
+    }
+
     @Test func produceRecapSurfacesUnsafeContentCopy() async {
         let recap = MockRecapService()
         recap.errorToThrow = RecapError.unsafeContent
@@ -412,4 +444,3 @@ struct AudiobookDetailViewModelTests {
         #expect(vm.recapText == nil)
     }
 }
-

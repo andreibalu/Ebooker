@@ -106,17 +106,34 @@ final class PlayerViewModel {
         guard let audiobook = player.currentAudiobook,
               let track = player.currentTrack else { return }
 
+        guard !Task.isCancelled else { return }
+
         isProcessingSmartSave = true
         defer { isProcessingSmartSave = false }
 
-        guard let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook),
-              let transcript = await obtainTranscript(
-                  fileURL: fileURL,
-                  currentTime: player.currentTime,
-                  duration: player.duration
-              ),
-              !transcript.isEmpty
-        else {
+        guard let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
+            resetMomentState()
+            pendingMomentTime = savedTime
+            return
+        }
+
+        let transcript: String?
+        do {
+            transcript = try await obtainTranscript(
+                fileURL: fileURL,
+                currentTime: player.currentTime,
+                duration: player.duration
+            )
+        } catch is CancellationError {
+            // Cancellation means the user no longer wants this operation. Do not
+            // open the legacy permission/export path or replace the pending state.
+            return
+        } catch {
+            transcript = nil
+        }
+
+        guard !Task.isCancelled else { return }
+        guard let transcript, !transcript.isEmpty else {
             resetMomentState()
             pendingMomentTime = savedTime
             return
@@ -133,27 +150,42 @@ final class PlayerViewModel {
     /// SpeechAnalyzer first (no permission, no export); legacy export +
     /// SFSpeechRecognizer fallback, which is the only path that needs authorization.
     /// Internal for tests.
-    func obtainTranscript(fileURL: URL, currentTime: Double, duration: Double) async -> String? {
+    func obtainTranscript(fileURL: URL, currentTime: Double, duration: Double) async throws -> String? {
+        try Task.checkCancellation()
         momentAnalyzer.prewarm() // overlap model load with transcription
 
         let start = max(0, currentTime - Self.momentContextBackSeconds)
         let end = min(duration, currentTime + Self.momentContextForwardSeconds)
-        if end > start,
-           let transcript = try? await segmentTranscriber.transcribeSegment(
-               fileURL: fileURL, startSeconds: start, endSeconds: end
-           ),
-           !transcript.isEmpty {
-            return transcript
+        if end > start {
+            do {
+                let transcript = try await segmentTranscriber.transcribeSegment(
+                    fileURL: fileURL, startSeconds: start, endSeconds: end
+                )
+                try Task.checkCancellation()
+                if !transcript.isEmpty { return transcript }
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                // A genuine primary-path failure is the only condition that can
+                // enter the legacy permission/export fallback.
+            }
         }
 
+        try Task.checkCancellation()
         let authStatus = await transcription.requestAuthorization()
+        try Task.checkCancellation()
         guard authStatus == .authorized else { return nil }
         do {
             let audioURL = try await audioExtractor.extractSegment(
                 from: fileURL, currentTime: currentTime, duration: duration
             )
             defer { try? FileManager.default.removeItem(at: audioURL) }
-            return try await transcription.transcribe(audioURL: audioURL)
+            try Task.checkCancellation()
+            let transcript = try await transcription.transcribe(audioURL: audioURL)
+            try Task.checkCancellation()
+            return transcript
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             return nil
         }
@@ -166,11 +198,14 @@ final class PlayerViewModel {
         savedTime: Double,
         onSuccessfulSmartAI: (() -> Void)? = nil
     ) async {
+        guard !Task.isCancelled else { return }
+
         do {
             let analysis = try await momentAnalyzer.analyzeMoment(
                 transcript: transcript,
                 audiobookTitle: audiobookTitle
             )
+            try Task.checkCancellation()
             momentNameInput = analysis.name
             momentNoteInput = analysis.note
             pendingMomentTranscript = transcript
@@ -182,7 +217,11 @@ final class PlayerViewModel {
             pendingSmartSaveUnsafeWarning = false
             pendingMomentTime = savedTime
             onSuccessfulSmartAI?()
+        } catch is CancellationError {
+            // A cancelled analysis must not present a partial fallback draft.
+            return
         } catch {
+            guard !Task.isCancelled else { return }
             resetMomentState()
             pendingMomentTranscript = transcript
             pendingSmartSaveUnsafeWarning = (error as? MomentNamingError) == .unsafeContent

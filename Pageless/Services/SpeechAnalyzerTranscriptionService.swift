@@ -17,13 +17,16 @@ struct SpeechAnalyzerTranscriptionService: SegmentTranscribing {
     private static let chunkFrames: AVAudioFrameCount = 65_536
 
     func transcribeSegment(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String {
+        try Task.checkCancellation()
         guard endSeconds > startSeconds else { throw SegmentTranscriptionError.invalidRange }
 
         let locale = try await Self.resolveLocale()
+        try Task.checkCancellation()
         let transcriber = SpeechTranscriber(locale: locale, preset: .transcription)
         if let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) {
             try await request.downloadAndInstall()
         }
+        try Task.checkCancellation()
 
         let audioFile: AVAudioFile
         do {
@@ -46,6 +49,7 @@ struct SpeechAnalyzerTranscriptionService: SegmentTranscribing {
             compatibleWith: [transcriber],
             considering: fileFormat
         )
+        try Task.checkCancellation()
 
         let analyzer = SpeechAnalyzer(modules: [transcriber])
         let (inputSequence, inputBuilder) = AsyncStream<AnalyzerInput>.makeStream()
@@ -69,24 +73,48 @@ struct SpeechAnalyzerTranscriptionService: SegmentTranscribing {
             return pieces.joined(separator: " ")
         }
 
-        do {
-            _ = try await analyzer.analyzeSequence(inputSequence)
-            try await feedTask.value
-            try await analyzer.finalizeAndFinishThroughEndOfInput()
-        } catch {
-            feedTask.cancel()
-            resultsTask.cancel()
-            throw SegmentTranscriptionError.analysisFailed
-        }
+        let operation = SpeechAnalyzerOperation(
+            analyzer: analyzer,
+            inputBuilder: inputBuilder,
+            feedTask: feedTask,
+            resultsTask: resultsTask
+        )
 
-        let text: String
-        do {
-            text = try await resultsTask.value.trimmingCharacters(in: .whitespacesAndNewlines)
-        } catch {
-            throw SegmentTranscriptionError.analysisFailed
-        }
-        guard !text.isEmpty else { throw SegmentTranscriptionError.emptyResult }
-        return text
+        return try await withTaskCancellationHandler(operation: {
+            do {
+                try Task.checkCancellation()
+                _ = try await analyzer.analyzeSequence(inputSequence)
+                try Task.checkCancellation()
+                try await feedTask.value
+                try Task.checkCancellation()
+                try await analyzer.finalizeAndFinishThroughEndOfInput()
+                try Task.checkCancellation()
+            } catch {
+                await operation.cancelAndWait()
+                if error is CancellationError || Task.isCancelled {
+                    throw CancellationError()
+                }
+                throw SegmentTranscriptionError.analysisFailed
+            }
+
+            let text: String
+            do {
+                text = try await resultsTask.value.trimmingCharacters(in: .whitespacesAndNewlines)
+                try Task.checkCancellation()
+            } catch {
+                await operation.cancelAndWait()
+                if error is CancellationError || Task.isCancelled {
+                    throw CancellationError()
+                }
+                throw SegmentTranscriptionError.analysisFailed
+            }
+
+            try Task.checkCancellation()
+            guard !text.isEmpty else { throw SegmentTranscriptionError.emptyResult }
+            return text
+        }, onCancel: {
+            operation.cancel()
+        })
     }
 
     /// Installed locales first (no download), then supported (one-time asset
@@ -109,6 +137,63 @@ struct SpeechAnalyzerTranscriptionService: SegmentTranscribing {
             return sameLanguage
         }
         return locales.first(where: { $0.language.languageCode == Locale.LanguageCode("en") })
+    }
+}
+
+/// Owns the unstructured feeder/results tasks for one analyzer operation. The
+/// cancellation handler is synchronous, so it starts analyzer cancellation and
+/// the operation body awaits that task plus both child tasks before returning.
+@available(iOS 26, *)
+private nonisolated final class SpeechAnalyzerOperation: @unchecked Sendable {
+    private let analyzer: SpeechAnalyzer
+    private let inputBuilder: AsyncStream<AnalyzerInput>.Continuation
+    private let feedTask: Task<Void, Error>
+    private let resultsTask: Task<String, Error>
+
+    private let lock = NSLock()
+    private var cancellationTask: Task<Void, Never>?
+
+    init(
+        analyzer: SpeechAnalyzer,
+        inputBuilder: AsyncStream<AnalyzerInput>.Continuation,
+        feedTask: Task<Void, Error>,
+        resultsTask: Task<String, Error>
+    ) {
+        self.analyzer = analyzer
+        self.inputBuilder = inputBuilder
+        self.feedTask = feedTask
+        self.resultsTask = resultsTask
+    }
+
+    func cancel() {
+        inputBuilder.finish()
+        feedTask.cancel()
+        resultsTask.cancel()
+
+        lock.lock()
+        defer { lock.unlock() }
+        guard cancellationTask == nil else { return }
+        let analyzer = self.analyzer
+        cancellationTask = Task {
+            await analyzer.cancelAndFinishNow()
+        }
+    }
+
+    func cancelAndWait() async {
+        cancel()
+
+        if let cancellationTask = cancellationTaskSnapshot() {
+            await cancellationTask.value
+        }
+
+        _ = try? await feedTask.value
+        _ = try? await resultsTask.value
+    }
+
+    private func cancellationTaskSnapshot() -> Task<Void, Never>? {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancellationTask
     }
 }
 

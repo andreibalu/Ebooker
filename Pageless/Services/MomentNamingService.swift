@@ -17,7 +17,7 @@ struct MomentNamingService: MomentAnalyzing {
 
     /// Greedy decoding — extraction tasks want determinism, not creativity.
     /// Token cap bounds worst-case latency; the schema fits comfortably under it.
-    static let options = GenerationOptions(sampling: .greedy, maximumResponseTokens: 500)
+    static let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 500)
 
     /// Single source for the @Guide literals below; unit tests assert these match
     /// `MomentCategory`/`MomentMood`. (Literals are repeated inside @Guide because
@@ -141,6 +141,8 @@ struct MomentNamingService: MomentAnalyzing {
                 )
                 return response.content
             }
+        } catch is CancellationError {
+            throw CancellationError()
         } catch FoundationModelGeneration.Failure.unsafeContent {
             throw MomentNamingError.unsafeContent
         } catch let error as MomentNamingError {
