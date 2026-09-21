@@ -113,6 +113,28 @@ struct LibriVoxDownloadPresentationTests {
         ))
     }
 
+    @Test("Library header count matches the books visible in the Library grid")
+    func libraryHeaderCountExcludesHiddenCloudRecords() {
+        let visibleBooks = (0..<6).map {
+            Audiobook(title: "Visible \($0)", folderName: "visible-\($0)")
+        }
+        let archived = Audiobook(
+            title: "Archived",
+            folderName: "archived",
+            isFreeBook: true,
+            catalogId: "archived",
+            isDownloaded: false
+        )
+        archived.isArchived = true
+
+        let count = LibraryBookVisibility.visibleCount(
+            in: visibleBooks + [archived],
+            downloadEntry: { _ in nil }
+        )
+
+        #expect(count == 6)
+    }
+
     @Test("Download animation key ignores progress but tracks phase and membership")
     func animationKeyScopesChanges() {
         let initial = entry(phase: .downloading, currentTrackFraction: 0.1)

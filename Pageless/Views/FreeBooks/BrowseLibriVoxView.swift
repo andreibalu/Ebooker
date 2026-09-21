@@ -373,9 +373,12 @@ struct BrowseLibriVoxView: View {
                     .font(.system(size: FBType.body, design: .serif))
                     .italic()
                     .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .layoutPriority(1)
                 Spacer()
                 retryButton
+                    .fixedSize()
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)

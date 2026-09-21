@@ -43,6 +43,23 @@ enum LibraryBookVisibility {
         else { return false }
         return targetID == bookID
     }
+
+    static func visibleCount(
+        in books: [Audiobook],
+        downloadEntry: (Audiobook) -> LibriVoxDownloadManager.Entry?
+    ) -> Int {
+        books.filter { book in
+            includes(
+                bookID: book.id,
+                isDownloaded: book.isDownloaded,
+                isFreeBook: book.isFreeBook,
+                isArchived: book.isArchived,
+                isFavorite: book.isFavorite,
+                tab: .allBooks,
+                downloadEntry: downloadEntry(book)
+            )
+        }.count
+    }
 }
 
 struct ContentView: View {
@@ -333,7 +350,7 @@ struct ContentView: View {
                 Circle()
                     .fill(Color.primary)
                     .frame(width: 48, height: 48)
-                Text("\(audiobooks.count)")
+                Text("\(visibleLibraryBookCount)")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(Color.cream)
             }
@@ -725,6 +742,12 @@ struct ContentView: View {
     }
 
     // MARK: - Computed
+
+    private var visibleLibraryBookCount: Int {
+        LibraryBookVisibility.visibleCount(in: audiobooks) { audiobook in
+            audiobook.catalogId.flatMap(downloadManager.entry(for:))
+        }
+    }
 
     private func displayedBooks(for tab: LibraryTab) -> [Audiobook] {
         // Owned books synced from iCloud may exist without their audio on this device.

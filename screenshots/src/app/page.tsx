@@ -63,15 +63,9 @@ type Theme = typeof CREAM;
 const IMAGE_PATHS = [
   "/mockup.png",
   "/app-icon.png",
-  "/screenshots/en/home.png",
-  "/screenshots/en/library.png",
   "/screenshots/en/ai-moments.png",
-  "/screenshots/en/alternatives.png",
   "/screenshots/en/recap.png",
-  "/screenshots/en/free-books.png",
-  "/screenshots/en/onboarding-choice.png",
   "/screenshots/en/reading-stats.png",
-  "/screenshots/en/icloud-library.png",
 ];
 
 const imageCache: Record<string, string> = {};
@@ -199,7 +193,7 @@ function Caption({
       <div
         style={{
           fontFamily: SF,
-          fontSize: cW * 0.024,
+          fontSize: cW * 0.03,
           fontWeight: 700,
           letterSpacing: 0,
           textTransform: "uppercase",
@@ -226,7 +220,7 @@ function Caption({
           style={{
             marginTop: cW * 0.04,
             fontFamily: SF,
-            fontSize: cW * 0.028,
+            fontSize: cW * 0.036,
             fontWeight: 400,
             color: theme.muted,
             maxWidth: cW * 0.78,
@@ -274,128 +268,17 @@ type SlideDef = {
   component: (p: SlideProps) => React.ReactElement;
 };
 
-/* --- Slide 1: hero — free-books grid --- */
-const SlideHeroGrid: SlideDef = {
-  id: "hero-free-grid",
+/* --- Slide 1: on-device moments --- */
+const SlideMoments: SlideDef = {
+  id: "moments-in-focus",
   component: ({ cW, cH }) => {
     const fw = phoneW(cW, cH, 0.86) * 100;
     return (
       <SlideBg theme={CREAM}>
         <Caption
           cW={cW}
-          label="FREE AUDIOBOOK PLAYER"
+          label="ON-DEVICE INTELLIGENCE"
           theme={CREAM}
-          headline={
-            <>
-              Free forever.
-              <br />
-              No ads.
-            </>
-          }
-          sub="Twenty thousand free audiobooks built in, with curated collections. No account, no catch."
-        />
-        <Phone
-          src={img("/screenshots/en/free-books.png")}
-          alt="Free books"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            width: `${fw}%`,
-            left: "50%",
-            transform: "translateX(-50%) translateY(14%)",
-            filter: "drop-shadow(0 30px 60px rgba(26,20,16,0.18))",
-          }}
-        />
-      </SlideBg>
-    );
-  },
-};
-
-/* --- Slide 2: onboarding choice — free vs own --- */
-const SlideChoose: SlideDef = {
-  id: "choose-start",
-  component: ({ cW, cH }) => {
-    const fw = phoneW(cW, cH, 0.84) * 100;
-    return (
-      <SlideBg theme={CREAM}>
-        <Caption
-          cW={cW}
-          label="TWO WAYS TO LISTEN"
-          theme={CREAM}
-          headline={
-            <>
-              Free books, or
-              <br />
-              your own.
-            </>
-          }
-          sub="Stream thousands of classics, or import audiobooks you already own. Your call."
-        />
-        <Phone
-          src={img("/screenshots/en/onboarding-choice.png")}
-          alt="Choose how to start"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            width: `${fw}%`,
-            left: "50%",
-            transform: "translateX(-50%) translateY(14%)",
-            filter: "drop-shadow(0 30px 60px rgba(26,20,16,0.18))",
-          }}
-        />
-      </SlideBg>
-    );
-  },
-};
-
-/* --- Slide 3: import your own --- */
-const SlideImport: SlideDef = {
-  id: "import-own",
-  component: ({ cW, cH }) => {
-    const fw = phoneW(cW, cH, 0.82) * 100;
-    return (
-      <SlideBg theme={CREAM}>
-        <Caption
-          cW={cW}
-          label="IMPORT MP3 & M4B"
-          theme={CREAM}
-          headline={
-            <>
-              Any book.
-              <br />
-              Yours, played.
-            </>
-          }
-          sub="Import MP3, M4B, or AAC files from any source. No store. No lock-in."
-        />
-        <Phone
-          src={img("/screenshots/en/library.png")}
-          alt="Import library"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            width: `${fw}%`,
-            left: "-7%",
-            transform: "translateY(12%) rotate(3deg)",
-            filter: "drop-shadow(0 30px 60px rgba(26,20,16,0.18))",
-          }}
-        />
-      </SlideBg>
-    );
-  },
-};
-
-/* --- Slide 4: AI moments --- */
-const SlideAIMoments: SlideDef = {
-  id: "ai-moments",
-  component: ({ cW, cH }) => {
-    const fw = phoneW(cW, cH, 0.84) * 100;
-    return (
-      <SlideBg theme={DARK}>
-        <Caption
-          cW={cW}
-          label="ON-DEVICE APPLE INTELLIGENCE"
-          theme={DARK}
           headline={
             <>
               Bookmarks that
@@ -403,19 +286,18 @@ const SlideAIMoments: SlideDef = {
               name themselves.
             </>
           }
-          sub="Apple Intelligence names the moment, pulls the quote, tags the mood. On your iPhone. Nothing uploaded."
+          sub="Name the moment, pull the quote, and keep the story close — right on your iPhone."
         />
         <Phone
           src={img("/screenshots/en/ai-moments.png")}
-          alt="AI moments"
+          alt="On-device moment naming"
           style={{
             position: "absolute",
             bottom: 0,
             width: `${fw}%`,
             left: "50%",
-            transform: "translateX(-50%) translateY(13%)",
-            filter:
-              "drop-shadow(0 0 80px rgba(232,195,155,0.18)) drop-shadow(0 30px 60px rgba(0,0,0,0.5))",
+            transform: "translateX(-50%) translateY(14%)",
+            filter: "drop-shadow(0 30px 60px rgba(26,20,16,0.18))",
           }}
         />
       </SlideBg>
@@ -423,7 +305,7 @@ const SlideAIMoments: SlideDef = {
   },
 };
 
-/* --- Slide 5: AI recap --- */
+/* --- Slide 2: recap --- */
 const SlideRecap: SlideDef = {
   id: "recap-resume",
   component: ({ cW, cH }) => {
@@ -436,16 +318,16 @@ const SlideRecap: SlideDef = {
           theme={CREAM}
           headline={
             <>
-              Forgot where
+              Never lose
               <br />
-              you left off?
+              the thread.
             </>
           }
-          sub="A two-line recap, written for you. Press play and you're back in the story."
+          sub="A concise recap brings you back into the story, exactly where you paused."
         />
         <Phone
           src={img("/screenshots/en/recap.png")}
-          alt="Recap"
+          alt="Audiobook recap"
           style={{
             position: "absolute",
             bottom: 0,
@@ -460,44 +342,7 @@ const SlideRecap: SlideDef = {
   },
 };
 
-/* --- Slide 6: other recordings --- */
-const SlideAlternatives: SlideDef = {
-  id: "other-recordings",
-  component: ({ cW, cH }) => {
-    const fw = phoneW(cW, cH, 0.82) * 100;
-    return (
-      <SlideBg theme={CREAM}>
-        <Caption
-          cW={cW}
-          label="OTHER RECORDINGS"
-          theme={CREAM}
-          headline={
-            <>
-              Same book.
-              <br />
-              Different options.
-            </>
-          }
-          sub="Compare narrators, sample each version, and choose the recording that fits."
-        />
-        <Phone
-          src={img("/screenshots/en/alternatives.png")}
-          alt="Other recordings"
-          style={{
-            position: "absolute",
-            bottom: 0,
-            width: `${fw}%`,
-            right: "-8%",
-            transform: "translateY(12%) rotate(-3deg)",
-            filter: "drop-shadow(0 30px 60px rgba(26,20,16,0.18))",
-          }}
-        />
-      </SlideBg>
-    );
-  },
-};
-
-/* --- Slide 7: reading stats --- */
+/* --- Slide 3: reading stats --- */
 const SlideStats: SlideDef = {
   id: "reading-stats",
   component: ({ cW, cH }) => {
@@ -535,77 +380,99 @@ const SlideStats: SlideDef = {
   },
 };
 
-/* --- Slide 8: iCloud backup --- */
-const SlideICloud: SlideDef = {
-  id: "icloud-backup",
-  component: ({ cW, cH }) => {
-    const fw = phoneW(cW, cH, 0.82) * 100;
+/* --- Slide 4: feature overview --- */
+const SlideFeatures: SlideDef = {
+  id: "built-for-audiobooks",
+  component: ({ cW }) => {
+    const features = [
+      {
+        label: "PLAYBACK",
+        body: "Resume exactly where you stopped.",
+      },
+      {
+        label: "MOMENTS",
+        body: "Save a timestamp, name, and note.",
+      },
+      {
+        label: "ACTIVITY",
+        body: "See listening time, streaks, and finished books.",
+      },
+    ];
     return (
       <SlideBg theme={CREAM}>
         <Caption
           cW={cW}
-          label="ICLOUD BACKUP"
+          label="THE ESSENTIALS"
           theme={CREAM}
           headline={
             <>
-              Your library,
-              <br />
-              safe in iCloud.
+              Built for
+              <br />audiobooks.
             </>
           }
-          sub="Progress, bookmarks, and moments sync across your iPhones. Never lose your place."
+          sub="Playback controls, saved moments, recaps, and listening history."
         />
-        <Phone
-          src={img("/screenshots/en/icloud-library.png")}
-          alt="iCloud library"
+        <div
           style={{
             position: "absolute",
-            bottom: 0,
-            width: `${fw}%`,
-            right: "-8%",
-            transform: "translateY(12%) rotate(-3deg)",
-            filter: "drop-shadow(0 30px 60px rgba(26,20,16,0.18))",
+            top: cW * 0.58,
+            left: cW * 0.075,
+            right: cW * 0.075,
+            borderTop: "1px solid rgba(26,20,16,0.22)",
           }}
-        />
+        >
+          {features.map((feature) => (
+            <div
+              key={feature.label}
+              style={{
+                display: "grid",
+                gridTemplateColumns: `${cW * 0.2}px 1fr`,
+                gap: cW * 0.04,
+                alignItems: "baseline",
+                padding: `${cW * 0.045}px 0 ${cW * 0.05}px`,
+                borderBottom: "1px solid rgba(26,20,16,0.22)",
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: SF,
+                  fontSize: cW * 0.03,
+                  fontWeight: 700,
+                  color: CREAM.accent,
+                  letterSpacing: cW * 0.0015,
+                }}
+              >
+                {feature.label}
+              </div>
+              <div
+                style={{
+                  fontFamily: SF,
+                  fontSize: cW * 0.047,
+                  fontWeight: 560,
+                  lineHeight: 1.25,
+                  color: CREAM.fg,
+                  letterSpacing: -0.5,
+                }}
+              >
+                {feature.body}
+              </div>
+            </div>
+          ))}
+        </div>
       </SlideBg>
     );
   },
 };
 
-function FeaturePill({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontFamily: SF,
-        fontSize: 34,
-        fontWeight: 600,
-        lineHeight: 1,
-        color: DARK.fg,
-        padding: "24px 34px 26px",
-        borderRadius: 999,
-        background: "linear-gradient(180deg, #262629 0%, #202023 100%)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 30px rgba(0,0,0,0.2)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* --- Slide 9: closer --- */
+/* --- Slide 5: closer --- */
 const SlideCloser: SlideDef = {
-  id: "closer-everything-free",
+  id: "your-books-your-pace",
   component: ({ cW }) => {
-    const pills = [
-      "Free forever",
-      "No ads",
-      "No account",
-      "20,000 LibriVox books",
-      "Collections",
-      "Other recordings",
+    const features = [
       "MP3 & M4B import",
-      "Reading stats",
+      "Moments & recaps",
+      "Listening stats",
+      "Other recordings",
       "CarPlay",
       "Siri shortcuts",
       "Sleep timer",
@@ -650,27 +517,36 @@ const SlideCloser: SlideDef = {
             color: DARK.fg,
           }}
         >
-          Everything you
+          Your books.
           <br />
-          need.
-          <br />
-          Pay nothing.
+          Your pace.
         </div>
         <div
           style={{
             position: "absolute",
             top: cW * 0.93,
-            left: cW * 0.08,
-            right: cW * 0.08,
-            display: "flex",
-            flexWrap: "wrap",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 26,
+            left: cW * 0.1,
+            right: cW * 0.1,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            columnGap: cW * 0.07,
           }}
         >
-          {pills.map((pill) => (
-            <FeaturePill key={pill}>{pill}</FeaturePill>
+          {features.map((feature) => (
+            <div
+              key={feature}
+              style={{
+                padding: `${cW * 0.038}px 0 ${cW * 0.042}px`,
+                borderTop: "1px solid rgba(255,255,255,0.16)",
+                fontFamily: SF,
+                fontSize: cW * 0.042,
+                fontWeight: 520,
+                lineHeight: 1.2,
+                color: DARK.fg,
+              }}
+            >
+              {feature}
+            </div>
           ))}
         </div>
         <div
@@ -681,29 +557,25 @@ const SlideCloser: SlideDef = {
             right: 0,
             textAlign: "center",
             fontFamily: SF,
-            fontSize: cW * 0.022,
+            fontSize: cW * 0.028,
             fontWeight: 700,
             letterSpacing: 0,
             color: DARK.accent,
           }}
         >
-          FOR READERS
+          UNPAGED · AUDIOBOOK PLAYER
         </div>
       </SlideBg>
     );
   },
 };
 
-/* Registry — App Store set, one source screenshot per feature plus a closer. */
+/* Registry — conservative App Store set built only from approved inputs. */
 const SLIDES: SlideDef[] = [
-  SlideHeroGrid,
-  SlideChoose,
-  SlideAlternatives,
-  SlideAIMoments,
+  SlideMoments,
   SlideRecap,
   SlideStats,
-  SlideICloud,
-  SlideImport,
+  SlideFeatures,
   SlideCloser,
 ];
 

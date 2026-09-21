@@ -344,7 +344,7 @@ struct OBPermissionsScene: View {
                     setGranted(mic: true, speech: speechGranted)
                     scheduleAdvanceIfComplete()
                 }
-                // Denied: the button simply stays "Allow" — no extra error UI.
+                // Denied: the Continue button stays available to open Settings — no extra error UI.
             }
         default:
             // .denied — the system prompt can't be shown again; route to Settings.
@@ -398,8 +398,9 @@ struct OBPermissionsScene: View {
     }
 }
 
-/// Icon tile + title + description with a full-width Allow button. Granted: tile fills accent,
-/// button flips to accent-soft "Allowed" with a leading check, card gains an accent ring + glow.
+/// Icon tile + title + description with a full-width Continue button before authorization. Granted:
+/// tile fills accent, button flips to accent-soft "Allowed" with a leading check, card gains an
+/// accent ring + glow. Continue also routes to Settings when authorization was previously denied.
 private struct OBPermissionCard: View {
     let icon: String
     let title: String
@@ -441,7 +442,7 @@ private struct OBPermissionCard: View {
                             .frame(width: 19, height: 19)
                             .background(Circle().fill(OB.accent))
                     }
-                    Text(granted ? "Allowed" : "Allow")
+                    Text(granted ? "Allowed" : "Continue")
                         .font(.system(size: 15, weight: .bold))
                         .tracking(-0.15)
                 }
