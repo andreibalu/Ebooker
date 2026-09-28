@@ -28,8 +28,8 @@ struct OnboardingFlowView: View {
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
 
-    // Persists the "Free books" home choice so relaunched users open on Free Books and get the
-    // reordered tab layout (Favorites / Free Books / Library). Default false = unchanged behavior.
+    // Persists the Shelves home choice so relaunched users open there and get the reordered
+    // tab layout (Favorites / Shelves / Library). Keep the existing key for returning users.
     @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
 
     @State private var choice: OnboardingChoice?

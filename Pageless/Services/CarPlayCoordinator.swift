@@ -10,7 +10,7 @@ import UIKit
 
 private let carPlayLog = Logger(subsystem: "andreibaludev.Pageless", category: "CarPlay")
 
-/// CarPlay UI: library tabs (Favorites / Library / Free Books), playback via `CPNowPlayingTemplate`, non-AI moments named "CarPlay N".
+/// CarPlay UI: library tabs (Favorites / Library / Shelves), playback via `CPNowPlayingTemplate`, non-AI moments named "CarPlay N".
 @MainActor
 final class CarPlayCoordinator: NSObject {
     enum LegacyCatalogAction: Equatable {
@@ -94,13 +94,13 @@ final class CarPlayCoordinator: NSObject {
             title: LibraryTab.allBooks.title,
             sections: [CPListSection(items: [], header: nil, sectionIndexTitle: nil)]
         )
-        allBooks.tabImage = UIImage(systemName: "books.vertical.fill")
+        allBooks.tabImage = UIImage(systemName: "square.stack.fill")
 
         let freeBooks = CPListTemplate(
-            title: "Free Books",
+            title: LibraryTab.freeBooks.title,
             sections: [CPListSection(items: [], header: nil, sectionIndexTitle: nil)]
         )
-        freeBooks.tabImage = UIImage(systemName: "gift.fill")
+        freeBooks.tabImage = UIImage(systemName: "books.vertical.fill")
         freeBooksTemplate = freeBooks
 
         let tabBar = CPTabBarTemplate(templates: [favorites, allBooks, freeBooks])
@@ -295,7 +295,7 @@ final class CarPlayCoordinator: NSObject {
         interfaceController.pushTemplate(nowPlayingTemplate, animated: true) { _, _ in }
     }
 
-    // MARK: - Free Books Tab
+    // MARK: - Shelves Tab
 
     private func loadFreeBookCatalog() {
         Task { @MainActor [weak self] in
@@ -586,10 +586,10 @@ final class CarPlayCoordinator: NSObject {
         }
 
         let section = CPListSection(items: items, header: "Results for “\(query)”", sectionIndexTitle: nil)
-        let resultsTemplate = CPListTemplate(title: "Free Books", sections: [section])
+        let resultsTemplate = CPListTemplate(title: LibraryTab.freeBooks.title, sections: [section])
 
         // Dismiss the modally-presented voice template before pushing the results
-        // template onto the navigation stack, so the back arrow returns to Free Books.
+        // template onto the navigation stack, so the back arrow returns to Shelves.
         if interfaceController.presentedTemplate === voiceTemplate {
             interfaceController.dismissTemplate(animated: false) { [weak interfaceController] _, _ in
                 interfaceController?.pushTemplate(resultsTemplate, animated: true) { _, _ in }

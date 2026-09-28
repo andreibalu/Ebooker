@@ -451,7 +451,7 @@ final class BrowseLibriVoxViewModel {
         }
     }
 
-    /// Preloads a handful of curated classics so the Free Books tab shows content
+    /// Preloads a handful of curated classics so the Shelves tab shows content
     /// immediately on a fresh install, before the multi-minute full catalog sync.
     /// Idempotent and offline-safe: skips work if featured books are already shown
     /// or the curated rows already exist locally, and silently degrades (no featured)

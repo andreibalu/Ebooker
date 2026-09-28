@@ -143,8 +143,8 @@ struct OBChoiceScene: View {
                     .padding(.top, 9)
 
                 VStack(spacing: 14) {
-                    choiceCard(.free, icon: "books.vertical.fill", title: "Free books",
-                               desc: "Thousands of public-domain audiobooks, ready to play.",
+                    choiceCard(.free, icon: "books.vertical.fill", title: "Shelves",
+                               desc: "Thousands of free public-domain audiobooks, ready to play.",
                                tag: "No import needed")
                     choiceCard(.own, icon: "arrow.down.circle", title: "My books",
                                desc: "Bring audiobooks you already own. Import from Files.",
@@ -178,7 +178,7 @@ struct OBChoiceScene: View {
 
     private var headline: String {
         switch choice {
-        case .free: "Starting with free books."
+        case .free: "Starting with Shelves."
         case .own:  "Starting with your books."
         case nil:   "How do you want to start?"
         }
@@ -1201,7 +1201,7 @@ struct OBDoneScene: View {
                 OBHeadline(text: "You're all set.", size: 34).padding(.top, 22)
 
                 (Text("Starting with ").foregroundColor(OB.secondary)
-                 + Text(choice == .own ? "your books" : "free books").foregroundColor(OB.label).fontWeight(.semibold)
+                 + Text(choice == .own ? "your books" : "Shelves").foregroundColor(OB.label).fontWeight(.semibold)
                  + Text(". Adjust anything in Settings whenever you like.").foregroundColor(OB.secondary))
                     .font(.system(size: 15.5))
                     .multilineTextAlignment(.center)
@@ -1255,7 +1255,7 @@ struct OBDoneScene: View {
 
     private var summaryCard: some View {
         let rows: [(String, String)] = [
-            ("Home tab", choice == .own ? "My books" : "Free books"),
+            ("Home tab", choice == .own ? "My books" : "Shelves"),
             ("Voice access", voiceAccess),
             ("On resume", resumeShort(ResumeBacktrackOption(rawValue: resume) ?? .oneMinute)),
             ("Skip", "\(skipShort(skipBack)) / \(skipShort(skipForward))"),

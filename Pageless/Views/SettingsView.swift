@@ -700,7 +700,7 @@ private struct HomeTabRow: View {
             }
 
             HStack(spacing: 4) {
-                segment(title: "Free Books", icon: "books.vertical.fill", isOn: startOnFreeBooks) {
+                segment(title: "Shelves", icon: "books.vertical.fill", isOn: startOnFreeBooks) {
                     startOnFreeBooks = true
                 }
                 segment(title: LibraryTab.allBooks.title, icon: "square.stack.fill", isOn: !startOnFreeBooks) {

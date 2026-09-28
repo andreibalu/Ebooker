@@ -87,7 +87,7 @@ struct LibriVoxDownloadAnimationKey: Equatable {
     }
 }
 
-/// Shared, compact download surface used by Free Books and the Library tab.
+/// Shared, compact download surface used by Shelves and the Library tab.
 struct LibriVoxDownloadSection: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(LibriVoxDownloadManager.self) private var manager
