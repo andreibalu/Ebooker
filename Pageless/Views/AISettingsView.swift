@@ -3,16 +3,16 @@
 //  Pageless
 //
 
-import StoreKit
 import SwiftUI
 
 struct AISettingsView: View {
-    /// Closure passed down from `SettingsView` so the "Done" pill in the header
-    /// can dismiss the entire sheet (not just pop this pushed view).
+    /// The Done pill dismisses the entire Settings sheet.
     var onDismissSheet: () -> Void = {}
+    /// Returns to the Settings root, where the Unpaged Plus card is shown.
+    var onShowPlusCard: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+    @EnvironmentObject private var plusEntitlement: PlusEntitlementStore
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
@@ -28,31 +28,20 @@ struct AISettingsView: View {
     }
 
     private var aiSubTogglesDisabled: Bool {
-        !useLocalAIFeatures || !aiEntitlement.canUseAIFeatures || !isSmartNamingAvailable
+        !useLocalAIFeatures || !plusEntitlement.isPlus || !isSmartNamingAvailable
     }
 
     private var masterToggleDisabled: Bool {
-        if aiEntitlement.isUnlocked {
-            return !isSmartNamingAvailable
-        }
-        if aiEntitlement.trialUsesRemaining == 0 {
-            return true
-        }
-        return !isSmartNamingAvailable
-    }
-
-    private var masterToggleTitle: String {
-        aiEntitlement.isUnlocked ? "Use local AI features" : "Try local AI features"
+        !isSmartNamingAvailable || (!plusEntitlement.isPlus && !useLocalAIFeatures)
     }
 
     private var masterToggleCaption: String {
-        if aiEntitlement.isUnlocked {
+        if plusEntitlement.isPlus {
             return "Enable Apple Intelligence features for this app"
         }
-        if aiEntitlement.trialUsesRemaining > 0 {
-            return "\(aiEntitlement.trialUsesRemaining) free uses left. Turn off anytime."
-        }
-        return "Free tries are used up. Unlock below to keep using AI."
+        return useLocalAIFeatures
+            ? "Turn off local AI features."
+            : "Included with Unpaged Plus."
     }
 
     var body: some View {
@@ -68,15 +57,21 @@ struct AISettingsView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    paywallCard
+                    explanationCard
 
-                    if availabilityState == .ready, !aiEntitlement.isUnlocked {
-                        trialPill
+                    if availabilityState != .ready {
+                        availabilityCard
                     }
 
                     togglesCard
 
-                    footerCopy
+                    if !plusEntitlement.isPlus {
+                        plusLinkCard
+                    }
+
+                    Text("AI generation and transcription stay on this iPhone. Features require Apple Intelligence and a compatible device.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(SettingsDesign.secondaryLabel)
 
                     SettingsLegalLinks()
                 }
@@ -89,18 +84,7 @@ struct AISettingsView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .settingsInteractiveBackGesture()
-        .task {
-            await aiEntitlement.loadProduct()
-        }
-        .onAppear {
-            refreshTogglesIfAccessLost()
-        }
-        .onChange(of: aiEntitlement.trialUsesRemaining) { _, _ in
-            refreshTogglesIfAccessLost()
-        }
-        .onChange(of: aiEntitlement.isUnlocked) { _, _ in
-            refreshTogglesIfAccessLost()
-        }
+        .task { await plusEntitlement.refreshEntitlements() }
         .onChange(of: useLocalAIFeatures) { _, enabled in
             if !enabled {
                 useSmartMomentNaming = false
@@ -109,161 +93,52 @@ struct AISettingsView: View {
             }
         }
         .onChange(of: useSmartSummary) { _, enabled in
-            if !enabled {
-                shortenSummary = false
-            }
-        }
-        .alert(
-            "Purchase",
-            isPresented: Binding(
-                get: { aiEntitlement.purchaseError != nil },
-                set: { if !$0 { aiEntitlement.purchaseError = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) { aiEntitlement.purchaseError = nil }
-        } message: {
-            Text(aiEntitlement.purchaseError ?? "")
-        }
-        .alert(
-            "Restore",
-            isPresented: Binding(
-                get: { aiEntitlement.restoreError != nil },
-                set: { if !$0 { aiEntitlement.restoreError = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) { aiEntitlement.restoreError = nil }
-        } message: {
-            Text(aiEntitlement.restoreError ?? "")
+            if !enabled { shortenSummary = false }
         }
     }
 
-    // MARK: - Paywall card
-
-    @ViewBuilder
-    private var paywallCard: some View {
+    private var explanationCard: some View {
         SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
-            VStack(alignment: .leading, spacing: 12) {
-                aiPurchaseBlock
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Thoughtful moments, picked up where you left off.")
+                    .font(SettingsDesign.displayFont(15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text("Apple Intelligence can suggest names, quotes, characters and moods for saved moments, and recap the passage around your last listening point. Processing runs on-device.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
+                    .lineSpacing(1.4)
+                Text("These features require an Apple Intelligence–compatible device with Apple Intelligence available.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
         }
     }
 
-    @ViewBuilder
-    private var aiPurchaseBlock: some View {
-        if aiEntitlement.isUnlocked {
-            Label("AI features unlocked", systemImage: "checkmark.circle.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(SettingsDesign.secondaryLabel)
-            restorePurchasesButton
-        } else {
-            switch availabilityState {
-            case .ready:
-                readyPurchaseBlock
-            case .needsActivation:
-                needsActivationPurchaseBlock
-            case .needsIOSUpgrade:
-                needsIOSUpgradePurchaseBlock
-            case .unsupportedDevice:
-                unsupportedDevicePurchaseBlock
+    private var availabilityCard: some View {
+        SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(Color.amber)
+                Text(availabilityState.explanation)
+                    .font(.system(size: 12))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
+            .padding(14)
         }
     }
-
-    @ViewBuilder
-    private var readyPurchaseBlock: some View {
-        Text("Unlock smart moment naming and progress summaries powered by on-device Apple Intelligence.")
-            .font(.system(size: 12))
-            .foregroundStyle(SettingsDesign.secondaryLabel)
-            .lineSpacing(1)
-
-        if let loadError = aiEntitlement.loadError {
-            Text(loadError)
-                .font(.system(size: 12))
-                .foregroundStyle(.red)
-        }
-
-        SettingsPrimaryButton(
-            title: "Unlock — \(aiEntitlement.unlockPriceDisplay)",
-            isLoading: aiEntitlement.isPurchasing,
-            isDisabled: aiEntitlement.product == nil
-                || aiEntitlement.isLoadingProduct
-                || !aiEntitlement.canMakePayments
-        ) {
-            Task { await aiEntitlement.purchase() }
-        }
-
-        restorePurchasesButton
-    }
-
-    @ViewBuilder
-    private var needsActivationPurchaseBlock: some View {
-        Text(AIAvailabilityState.needsActivation.explanation)
-            .font(.system(size: 12))
-            .foregroundStyle(SettingsDesign.secondaryLabel)
-
-        SettingsPrimaryButton(
-            title: "Unlock — \(aiEntitlement.unlockPriceDisplay)",
-            isDisabled: true
-        ) {}
-
-        restorePurchasesButton
-    }
-
-    @ViewBuilder
-    private var needsIOSUpgradePurchaseBlock: some View {
-        Text(AIAvailabilityState.needsIOSUpgrade.explanation)
-            .font(.system(size: 12))
-            .foregroundStyle(SettingsDesign.secondaryLabel)
-
-        Text("If you already purchased on another device, use Restore purchases.")
-            .font(.system(size: 11))
-            .foregroundStyle(SettingsDesign.tertiaryLabel)
-
-        restorePurchasesButton
-    }
-
-    @ViewBuilder
-    private var unsupportedDevicePurchaseBlock: some View {
-        Text(AIAvailabilityState.unsupportedDevice.explanation)
-            .font(.system(size: 12))
-            .foregroundStyle(SettingsDesign.secondaryLabel)
-
-        Text("If you already purchased on another device, use Restore purchases.")
-            .font(.system(size: 11))
-            .foregroundStyle(SettingsDesign.tertiaryLabel)
-
-        restorePurchasesButton
-    }
-
-    private var restorePurchasesButton: some View {
-        SettingsTextLinkButton(title: "Restore purchases") {
-            Task { await aiEntitlement.restorePurchases() }
-        }
-    }
-
-    // MARK: - Trial pill
-
-    private var trialPill: some View {
-        Text(
-            aiEntitlement.trialUsesRemaining > 0
-                ? "\(aiEntitlement.trialUsesRemaining) of \(AIEntitlementStore.initialTrialUses) free uses remaining"
-                : "No free uses left"
-        )
-        .font(.system(size: 13, weight: .medium))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(SettingsDesign.chipFill, in: Capsule())
-    }
-
-    // MARK: - Toggles card
 
     private var togglesCard: some View {
         SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
             VStack(alignment: .leading, spacing: 0) {
                 SettingsToggleRow(isOn: $useLocalAIFeatures, isDisabled: masterToggleDisabled) {
-                    SettingsRowLabel(title: masterToggleTitle, caption: masterToggleCaption)
+                    SettingsRowLabel(
+                        title: "Use local AI features",
+                        caption: masterToggleCaption
+                    )
                 }
 
                 if useLocalAIFeatures {
@@ -292,16 +167,9 @@ struct AISettingsView: View {
                     }
                 }
 
-                if !aiEntitlement.isUnlocked {
+                if !plusEntitlement.isPlus {
                     dividerInset
-                    Text("Purchase the AI unlock for unlimited use on a compatible device.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SettingsDesign.secondaryLabel)
-                        .padding(.top, 8)
-                        .padding(.horizontal, 4)
-                } else if !isSmartNamingAvailable, let reason = AppleIntelligenceCapability.unavailabilityReason {
-                    dividerInset
-                    Text(reason)
+                    Text("Unpaged Plus includes these features.")
                         .font(.system(size: 11))
                         .foregroundStyle(SettingsDesign.secondaryLabel)
                         .padding(.top, 8)
@@ -312,36 +180,29 @@ struct AISettingsView: View {
         }
     }
 
+    private var plusLinkCard: some View {
+        SettingsCard(cornerRadius: SettingsDesign.innerCardCornerRadius) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Apple Intelligence features are part of Unpaged Plus.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
+                SettingsTextLinkButton(title: "View Unpaged Plus") {
+                    onShowPlusCard()
+                }
+            }
+            .padding(12)
+        }
+    }
+
     private var dividerInset: some View {
         SettingsHairline().padding(.leading, 4)
     }
 
-    @ViewBuilder
-    private var footerCopy: some View {
-        if aiEntitlement.isUnlocked, isSmartNamingAvailable {
-            Text("Requires Apple Intelligence and a compatible device. Suggested moment names can be edited before saving.")
-                .font(.system(size: 11))
-                .foregroundStyle(SettingsDesign.secondaryLabel)
-        } else if !aiEntitlement.isUnlocked {
-            Text("Unlock once per Apple ID. Restore purchases if you reinstall or use a new device.")
-                .font(.system(size: 11))
-                .foregroundStyle(SettingsDesign.secondaryLabel)
-        }
-    }
-
-    private func refreshTogglesIfAccessLost() {
-        guard !aiEntitlement.canUseAIFeatures, !aiEntitlement.isUnlocked else { return }
-        guard useLocalAIFeatures else { return }
-        useLocalAIFeatures = false
-        useSmartMomentNaming = false
-        useSmartSummary = false
-        shortenSummary = false
-    }
 }
 
 #Preview {
     NavigationStack {
         AISettingsView()
-            .environmentObject(AIEntitlementStore())
+            .environmentObject(PlusEntitlementStore.shared)
     }
 }

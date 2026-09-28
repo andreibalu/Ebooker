@@ -45,7 +45,7 @@ AI generation and transcription run entirely on your iPhone. If primary transcri
 
 ### Do AI features require a paid unlock?
 
-A free trial is included. After the trial, AI features are unlocked with a one-time purchase (no subscription). The rest of the app — playback, bookmarks without AI, library, free books, CarPlay, EQ — is always free.
+Apple Intelligence moment naming and recaps are included with **Unpaged Plus**, an auto-renewing monthly (US$2.99) or yearly (US$14.99) subscription. Each plan includes a seven-day introductory offer when Apple makes it available to your Apple ID; the price and offer shown by Apple at purchase apply. Unpaged Plus also includes optional iCloud Sync. The rest of the app — playback, bookmarks without AI, library, free books, CarPlay, EQ — is always free. Existing AI Features unlock purchases remain recognized without expiration, and active legacy iCloud Sync subscriptions remain recognized while active.
 
 ### Which devices support the AI features?
 
@@ -66,12 +66,7 @@ Anything you've downloaded plays offline, including LibriVox titles. Streaming-o
 
 ### How do I restore my purchases on a new device?
 
-As long as you're signed in with the same Apple ID, your paid unlock and subscription reactivate via **Restore Purchases**:
-
-- **AI Features unlock** — open the **AI Settings** sheet and tap **Restore Purchases**.
-- **iCloud Sync subscription** — open **Settings → iCloud Sync** and tap **Restore Purchases**.
-
-You can cancel or change the iCloud Sync subscription anytime from **Settings → iCloud Sync → Manage Subscription**, or in your Apple ID subscription settings.
+As long as you're signed in with the same Apple ID, Unpaged Plus and recognized legacy purchases reactivate through **Settings → Unpaged Plus → Restore Purchases**. You can change or cancel a Plus subscription from **Settings → Unpaged Plus → Manage Subscription** or in your Apple ID subscription settings.
 
 The optional **Buy me a coffee** purchase is a consumable tip. It has no entitlement and cannot be restored; you can buy it again whenever you want.
 
@@ -95,7 +90,7 @@ With sync off, removing a free book simply takes it out of your library; you can
 
 ### Will my bookmarks and progress sync to other devices?
 
-Yes — opt-in iCloud sync is available as an auto-renewing subscription (US$0.99/month, billed through your Apple ID; prices vary by region). Open **Settings** inside Unpaged, tap the **iCloud Sync** card, and subscribe, then turn on **Sync library with iCloud**. The toggle controls the next launch: after either turning sync on or turning it off, quit and reopen Unpaged so its iCloud-backed store can be selected. Until relaunch, this launch keeps its existing sync state and its backup/delete behavior stays unchanged. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ. Cancel anytime in your Apple ID subscription settings; access continues through the end of the billing period. Everything else in Unpaged stays free.
+Yes — optional iCloud sync is included with Unpaged Plus, an auto-renewing monthly (US$2.99) or yearly (US$14.99) subscription billed through your Apple ID; prices vary by region. Both plans include a seven-day introductory offer when Apple makes it available to your Apple ID. Open **Settings → Unpaged Plus** to subscribe; you do not need to sign in to iCloud to purchase. Then sign in to iCloud and turn on **Sync library with iCloud** in **Settings → iCloud Sync**. The toggle controls the next launch: after either turning sync on or turning it off, quit and reopen Unpaged so its iCloud-backed store can be selected. Until relaunch, this launch keeps its existing sync state and its backup/delete behavior stays unchanged. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. The audio files themselves stay on each device — see the next FAQ. Cancel anytime in your Apple ID subscription settings; access continues through the end of the billing period. Everything else in Unpaged stays free.
 
 ### How do I know a book is backed up to iCloud?
 
@@ -133,9 +128,9 @@ Voice search needs Microphone and Speech Recognition permissions. Unpaged asks f
 
 Confirm your iPhone supports Apple Intelligence (iPhone 15 Pro/Pro Max or any iPhone 16+) and that it's turned on in **Settings → Apple Intelligence & Siri**. The feature also requires the on-device model to be fully downloaded — this can take time after a fresh iOS install or update. The first AI bookmark or recap can be slower while iOS downloads its on-device speech model for your language; once installed, the primary AI path works offline.
 
-### My free trial counter feels wrong
+### How do I manage the Unpaged Plus introductory offer?
 
-The AI trial tracks five successful AI uses, not days. Restoring purchases does not change the counter. If you believe the count is incorrect, email me.
+The offer and renewal price for the selected monthly or yearly plan are shown by Apple before purchase. Manage or cancel it in **Settings → Unpaged Plus → Manage Subscription** or your Apple ID subscription settings. Existing AI Features unlock purchases remain recognized without expiration; an older iCloud Sync subscription grants Plus while active.
 
 ## Privacy
 

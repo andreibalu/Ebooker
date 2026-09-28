@@ -9,13 +9,13 @@ import Testing
 
 struct IcloudSyncGateTests {
     @Test func launchEvaluatorRequiresSubscriptionPreferenceAndUbiquityIdentity() {
-        for subscriptionIsActive in [false, true] {
+        for plusIsActive in [false, true] {
             for desiredPreference in [false, true] {
                 for hasUbiquityIdentity in [false, true] {
-                    let expected = subscriptionIsActive && desiredPreference && hasUbiquityIdentity
+                    let expected = plusIsActive && desiredPreference && hasUbiquityIdentity
                     #expect(
                         IcloudSyncGate.evaluate(
-                            subscriptionIsActive: subscriptionIsActive,
+                            plusIsActive: plusIsActive,
                             desiredPreference: desiredPreference,
                             hasUbiquityIdentity: hasUbiquityIdentity
                         ) == expected
@@ -23,6 +23,48 @@ struct IcloudSyncGateTests {
                 }
             }
         }
+    }
+
+    @Test func absentPlusBlocksSyncAndEachGrandfatheredEntitlementAllowsIt() {
+        let now = Date(timeIntervalSince1970: 10_000)
+        #expect(!IcloudSyncGate.evaluate(
+            plusIsActive: false,
+            desiredPreference: true,
+            hasUbiquityIdentity: true
+        ))
+
+        let legacyRecords = [
+            PlusEntitlementRecord(
+                productID: AIProductID.unlock,
+                expirationDate: nil,
+                revocationDate: nil
+            ),
+            PlusEntitlementRecord(
+                productID: ICloudSyncProductID.monthly,
+                expirationDate: now.addingTimeInterval(3_600),
+                revocationDate: nil
+            )
+        ]
+
+        for record in legacyRecords {
+            let plusIsActive = PlusEntitlementStore.hasPlusEntitlement(in: [record], now: now)
+            #expect(plusIsActive)
+            #expect(IcloudSyncGate.evaluate(
+                plusIsActive: plusIsActive,
+                desiredPreference: true,
+                hasUbiquityIdentity: true
+            ))
+        }
+
+        let expiredLegacySubscription = PlusEntitlementRecord(
+            productID: ICloudSyncProductID.monthly,
+            expirationDate: now.addingTimeInterval(-1),
+            revocationDate: nil
+        )
+        #expect(!PlusEntitlementStore.hasPlusEntitlement(
+            in: [expiredLegacySubscription],
+            now: now
+        ))
     }
 
     @Test func capturedActiveStateIgnoresPreferenceMutationUntilRelaunch() {

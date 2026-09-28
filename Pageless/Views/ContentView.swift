@@ -69,7 +69,7 @@ struct ContentView: View {
     @Environment(LibriVoxDownloadManager.self) private var downloadManager
     @Environment(UnpagedRouter.self) private var router
     @EnvironmentObject private var player: AudioPlayerManager
-    @EnvironmentObject private var aiEntitlementStore: AIEntitlementStore
+    @EnvironmentObject private var plusEntitlementStore: PlusEntitlementStore
     @Query private var audiobooks: [Audiobook]
     @Query(sort: \ReadingSession.date, order: .reverse) private var readingSessions: [ReadingSession]
     @Namespace private var readingStatsNamespace
@@ -149,7 +149,7 @@ struct ContentView: View {
                     onDragEnded: handlePlayerDismissDragEnded
                 )
                     .environmentObject(player)
-                    .environmentObject(aiEntitlementStore)
+                    .environmentObject(plusEntitlementStore)
                     .offset(y: reduceMotion ? 0 : playerYOffset)
                     .opacity(playerOpacity)
                     .ignoresSafeArea()
@@ -186,7 +186,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView()
-            .environmentObject(aiEntitlementStore)
+            .environmentObject(plusEntitlementStore)
             .environment(onboarding)
         }
         .sheet(isPresented: $isCloudLibraryPresented) {
@@ -194,7 +194,7 @@ struct ContentView: View {
                 CloudLibraryView()
             }
             .environmentObject(player)
-            .environmentObject(aiEntitlementStore)
+            .environmentObject(plusEntitlementStore)
             .environment(onboarding)
         }
         .overlay {
@@ -379,6 +379,7 @@ struct ContentView: View {
                 } label: {
                     toolbarIconButton(systemName: "slider.horizontal.3")
                 }
+                .accessibilityIdentifier("settingsButton")
 
                 Button {
                     isImporterPresented = true

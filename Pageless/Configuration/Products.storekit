@@ -79,6 +79,77 @@
           "type" : "RecurringSubscription"
         }
       ]
+    },
+    {
+      "id" : "E1F2A3B4-C5D6-4789-8ABC-DEF012345678",
+      "localizations" : [
+        {
+          "description" : "Apple Intelligence features and private iCloud sync across your devices.",
+          "displayName" : "Unpaged Plus",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "UnpagedPlus",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "2.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "F2A3B4C5-D6E7-489A-8BCD-EF0123456789",
+          "introductoryOffer" : {
+            "numberOfPeriods" : 1,
+            "paymentMode" : "freeTrial",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Monthly access to Apple Intelligence features and iCloud sync, with a seven-day free trial.",
+              "displayName" : "Unpaged Plus monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "andreibaludev.Pageless.plus.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Unpaged Plus monthly",
+          "subscriptionGroupID" : "E1F2A3B4-C5D6-4789-8ABC-DEF012345678",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "14.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "A3B4C5D6-E7F8-49AB-8CDE-F0123456789A",
+          "introductoryOffer" : {
+            "numberOfPeriods" : 1,
+            "paymentMode" : "freeTrial",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "Annual access to Apple Intelligence features and iCloud sync, with a seven-day free trial.",
+              "displayName" : "Unpaged Plus yearly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "andreibaludev.Pageless.plus.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Unpaged Plus yearly",
+          "subscriptionGroupID" : "E1F2A3B4-C5D6-4789-8ABC-DEF012345678",
+          "type" : "RecurringSubscription"
+        }
+      ]
     }
   ],
   "version" : {

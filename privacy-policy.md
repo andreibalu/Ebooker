@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: September 17, 2026_
+_Last updated: September 28, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) and with LibriVox/Internet Archive (free-book browsing, streaming, and downloads). Unpaged never receives your name, email, or payment details.
 
@@ -13,7 +13,7 @@ Everything you create or import in Unpaged stays on your device unless you expli
 - Bookmarks ("moments"), notes, transcripts, AI-generated names and recaps
 - Playback preferences (sort order, skip intervals, sleep timer, equalizer settings)
 - Free-book downloads from LibriVox and the bundled catalog
-- In-app purchase entitlement state for AI Features and iCloud Sync, plus the AI feature trial counter. The optional coffee tip is a consumable purchase processed by Apple and does not create an app entitlement.
+- In-app purchase entitlement state for Unpaged Plus and recognized legacy purchases. Apple processes subscription and introductory-offer eligibility; the optional coffee tip is a consumable purchase and does not create an app entitlement.
 
 This data is stored in the app's private container on your iPhone. Unpaged does not upload it to any server controlled by the developer. Deleting the app removes the local copy; data previously synced to your private iCloud database remains there until you delete it through Apple's iCloud controls.
 
@@ -26,9 +26,9 @@ This data is stored in the app's private container on your iPhone. Unpaged does 
 
 On iOS 26 and later, the AI features (moment naming and recaps) first use Apple's newer on-device speech engine, which does not require the Speech Recognition permission. Permission is requested only if the app falls back to the older Speech path. That fallback also requires on-device recognition support. If you decline these permissions, CarPlay voice search is disabled and fallback AI transcription cannot run. The rest of the app continues to work.
 
-## iCloud Sync (optional, paid)
+## iCloud Sync (optional, included with Unpaged Plus)
 
-Unpaged offers an opt-in iCloud Sync feature, available as an auto-renewing monthly subscription (US$0.99/month; prices vary by region), that you can enable in Settings. The subscription is processed by Apple via StoreKit — Unpaged never sees your payment information. When on, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
+Unpaged Plus is an auto-renewing subscription that includes optional iCloud Sync and on-device Apple Intelligence features. Plus is offered monthly (US$2.99/month) and yearly (US$14.99/year), with a seven-day introductory free trial configured for each plan; prices and offer eligibility vary by region and Apple ID. Apple processes purchases and introductory offers through StoreKit — Unpaged never sees your payment information. When you enable sync, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
 
 - Audiobook titles, authors, cover art, and your favorite/finished flags
 - Per-book progress, playback rate, equalizer state, and progress recaps
@@ -39,7 +39,7 @@ Unpaged offers an opt-in iCloud Sync feature, available as an auto-renewing mont
 
 The audio files themselves are **never** uploaded — they stay on each device. Audio you imported continues to be local-only; on a new device you re-add the file and Unpaged matches it to the synced book record using the fingerprint described above.
 
-Sync is off by default and is gated by an active iCloud Sync subscription plus your iCloud account on the device. When sync is off (or you have no subscription), Unpaged behaves exactly as the original local-only experience. The Settings toggle records your desired state for the next launch; the active iCloud/local store choice stays fixed until you quit and reopen Unpaged. This relaunch is required both after enabling and after disabling sync, so current-launch backup and deletion behavior cannot contradict its store. Once disabled after relaunch, Unpaged stops further uploads but does not delete previously synced data from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
+Sync is off by default and is gated by an active Unpaged Plus or recognized legacy entitlement, your iCloud account on the device, and the Settings toggle. Purchasing Plus does not require signing in to iCloud; an iCloud account is required only to turn on sync. When sync is off (or you have no qualifying entitlement), Unpaged behaves exactly as the original local-only experience. The Settings toggle records your desired state for the next launch; the active iCloud/local store choice stays fixed until you quit and reopen Unpaged. This relaunch is required both after enabling and after disabling sync, so current-launch backup and deletion behavior cannot contradict its store. Once disabled after relaunch, Unpaged stops further uploads but does not delete previously synced data from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
 
 Apple's [iCloud privacy](https://www.apple.com/legal/privacy/data/en/icloud/) covers transport, storage, and access on Apple's side. Unpaged never sees a backend copy of this data — there is no Unpaged server.
 
@@ -51,13 +51,12 @@ The first time transcription runs, iOS may download Apple's on-device speech-rec
 
 ## In-app purchases
 
-Unpaged offers three in-app purchases, all processed by Apple via StoreKit:
+Unpaged offers two types of in-app purchases, both processed by Apple via StoreKit:
 
-- **AI Features** — a one-time non-consumable unlock.
-- **iCloud Sync** — an auto-renewing monthly subscription (US$0.99/month; prices vary by region) that turns on cross-device sync.
+- **Unpaged Plus** — auto-renewing monthly and yearly subscriptions (US$2.99/month or US$14.99/year; prices vary by region) that include Apple Intelligence features and optional iCloud Sync. Each plan has a seven-day introductory free trial configured; Apple determines offer eligibility.
 - **Buy me a coffee** — an optional one-time consumable tip. It does not unlock features, add content, or provide any other benefit. Consumable tips are not entitlements and cannot be restored; a user can purchase one again.
 
-All three are handled entirely by Apple's StoreKit. Unpaged never sees your payment information, and no purchase data is sent to any third party. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
+Previously purchased AI Features unlocks and active legacy iCloud Sync subscriptions continue to be recognized as Plus entitlements under their existing terms. Unpaged never sees your payment information, and no purchase data is sent to any third party. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
 
 ## LibriVox content
 

@@ -6,33 +6,30 @@
 import Foundation
 import FoundationModels
 
-/// Four real states the AI Settings UI cares about. Used to drive Buy-button
-/// visibility/enablement and explanatory copy.
+/// Four real states the AI Settings UI uses to explain feature availability.
 enum AIAvailabilityState: Equatable {
-    /// Apple Intelligence is on and the model is available. Buy enabled.
+    /// Apple Intelligence is on and the model is available.
     case ready
     /// Hardware + OS support Apple Intelligence but the user hasn't turned it on
-    /// (or the model is still loading). Buy visible but disabled until activated.
+    /// (or the model is still loading).
     case needsActivation
     /// Hardware is Apple Intelligence–capable but the device is running an iOS
-    /// version older than 26. Buy hidden; user is told to update iOS.
+    /// version older than 26. User is told to update iOS.
     case needsIOSUpgrade
     /// This iPhone can't run Apple Intelligence at all (incompatible hardware
     /// regardless of iOS version). Buy hidden.
     case unsupportedDevice
 
     /// Only `.ready` allows purchase — anything else means the unlock wouldn't be usable.
-    var allowsPurchase: Bool { self == .ready }
-
-    /// Short user-facing explanation. Empty in `.ready` since the Buy block carries its own copy.
+    /// Short user-facing explanation. Empty in `.ready` since the feature is available.
     var explanation: String {
         switch self {
         case .ready:
             return ""
         case .needsActivation:
-            return "Apple Intelligence isn't turned on. Open iOS Settings → Apple Intelligence & Siri to enable it, then return here to unlock."
+            return "Apple Intelligence isn't turned on. Open iOS Settings → Apple Intelligence & Siri to enable it, then return here to use these features."
         case .needsIOSUpgrade:
-            return "AI features require iOS 26 or later. Update iOS in Settings → General → Software Update, then return here to unlock."
+            return "AI features require iOS 26 or later. Update iOS in Settings → General → Software Update, then return here to use these features."
         case .unsupportedDevice:
             return "AI features aren't supported on this iPhone."
         }
@@ -70,12 +67,6 @@ enum AppleIntelligenceCapability {
         case .unavailable:
             return .needsActivation
         }
-    }
-
-    /// Whether this device can buy the AI unlock right now. Only `.ready` qualifies —
-    /// purchasing on `.needsActivation` would leave the user unable to use what they paid for.
-    static var canPurchaseAIUnlockOnThisDevice: Bool {
-        availabilityState == .ready
     }
 
     /// Human-readable reason when Smart Naming is unavailable.

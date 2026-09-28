@@ -13,7 +13,7 @@ struct PlayerView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
-    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+    @EnvironmentObject private var plusEntitlement: PlusEntitlementStore
     @EnvironmentObject private var equalizer: AudioEqualizerService
 
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
@@ -29,7 +29,7 @@ struct PlayerView: View {
     @State private var showEqualizer = false
 
     private var useSmartSave: Bool {
-        aiEntitlement.canUseAIFeatures
+        plusEntitlement.isPlus
             && useLocalAIFeatures
             && useSmartMomentNaming
             && AppleIntelligenceCapability.isSmartNamingAvailable
@@ -324,10 +324,7 @@ struct PlayerView: View {
                 viewModel.saveMoment(
                     player: player,
                     useSmartSave: useSmartSave,
-                    momentBacktrackSeconds: momentBacktrackSeconds,
-                    onSuccessfulSmartAI: {
-                        aiEntitlement.consumeTrialUse()
-                    }
+                    momentBacktrackSeconds: momentBacktrackSeconds
                 )
             } label: {
                 if viewModel.isProcessingSmartSave {

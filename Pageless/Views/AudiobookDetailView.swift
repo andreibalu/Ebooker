@@ -12,7 +12,7 @@ struct AudiobookDetailView: View {
     let openPlayer: () -> Void
 
     @EnvironmentObject private var player: AudioPlayerManager
-    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
+    @EnvironmentObject private var plusEntitlement: PlusEntitlementStore
     @Environment(\.modelContext) private var modelContext
     @Environment(LibriVoxDownloadManager.self) private var downloadManager
     @Environment(\.dismiss) private var dismiss
@@ -481,10 +481,7 @@ struct AudiobookDetailView: View {
                                         trackIndex: progressTrackIndex,
                                         progressTime: progressTime,
                                         includeProgressHeadline: shortenSummary,
-                                        modelContext: modelContext,
-                                        onSuccessfulRecap: {
-                                            aiEntitlement.consumeTrialUse()
-                                        }
+                                        modelContext: modelContext
                                     )
                                 }
                             } label: {
@@ -748,7 +745,7 @@ struct AudiobookDetailView: View {
     }
 
     private var smartSummaryEnabled: Bool {
-        aiEntitlement.canUseAIFeatures
+        plusEntitlement.isPlus
             && useLocalAIFeatures
             && useSmartSummary
             && AppleIntelligenceCapability.isSmartNamingAvailable

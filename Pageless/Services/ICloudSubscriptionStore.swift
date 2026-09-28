@@ -13,69 +13,20 @@ nonisolated struct LaunchEntitlementCache: Codable, Equatable {
     let validUntil: Date?
 }
 
-/// StoreKit 2 state for the auto-renewable iCloud Sync subscription.
-///
-/// A singleton (`shared`) is required because `AppDelegate.init` reads subscription state
-/// when building the SwiftData container at process launch — before SwiftUI environment
-/// objects exist. The same instance is also injected as an `@EnvironmentObject` so views
-/// can observe published state.
+/// Read-only view of the legacy iCloud Sync subscription.
+/// New purchases are handled by `PlusEntitlementStore`; the legacy product remains readable
+/// and restorable so existing subscribers keep their entitlement.
 @MainActor
 final class ICloudSubscriptionStore: ObservableObject {
     static let shared = ICloudSubscriptionStore()
 
-    @Published private(set) var product: Product?
     @Published private(set) var isSubscribed = false
     @Published private(set) var renewsOn: Date?
-    @Published private(set) var isLoadingProduct = false
-    @Published private(set) var loadError: String?
-    @Published private(set) var isPurchasing = false
-    @Published var purchaseError: String?
     @Published var restoreError: String?
-
-    @Published private(set) var canMakePayments = true
 
     private init() {
         Task { await listenForTransactions() }
-        Task {
-            await refreshEntitlements()
-            await loadProduct()
-            canMakePayments = AppStore.canMakePayments
-        }
-    }
-
-    /// Shown in settings when StoreKit price is not loaded yet.
-    var unlockPriceDisplay: String {
-        product?.displayPrice ?? "$0.99"
-    }
-
-    /// Non-nil only when the App Store product actually carries a free-trial introductory
-    /// offer. Returns nil otherwise so the UI never promises a trial that doesn't exist.
-    var introOfferDisplay: String? {
-        guard let intro = product?.subscription?.introductoryOffer,
-              intro.paymentMode == .freeTrial else { return nil }
-        let value = intro.period.value
-        switch intro.period.unit {
-        case .day: return value == 7 ? "7-day free trial" : "\(value)-day free trial"
-        case .week: return value == 1 ? "7-day free trial" : "\(value)-week free trial"
-        case .month: return "\(value)-month free trial"
-        case .year: return "\(value)-year free trial"
-        @unknown default: return "Free trial"
-        }
-    }
-
-    func loadProduct() async {
-        isLoadingProduct = true
-        defer { isLoadingProduct = false }
-        loadError = nil
-        do {
-            let products = try await Product.products(for: [ICloudSyncProductID.monthly])
-            product = products.first
-            if product == nil {
-                loadError = "Could not load product from the App Store."
-            }
-        } catch {
-            loadError = error.localizedDescription
-        }
+        Task { await refreshEntitlements() }
     }
 
     func refreshEntitlements() async {
@@ -83,6 +34,7 @@ final class ICloudSubscriptionStore: ObservableObject {
         var found = false
         var renewal: Date?
         var missingExpiration = false
+
         for await result in Transaction.currentEntitlements {
             guard case .verified(let transaction) = result else { continue }
             guard transaction.productID == ICloudSyncProductID.monthly else { continue }
@@ -97,53 +49,18 @@ final class ICloudSubscriptionStore: ObservableObject {
                 break
             }
         }
+
         if missingExpiration {
             assertionFailure("iCloud Sync entitlement has no expiration date")
             found = false
             renewal = nil
         }
-        if isSubscribed != found {
-            isSubscribed = found
-        }
-        if renewsOn != renewal {
-            renewsOn = renewal
-        }
+        isSubscribed = found
+        renewsOn = renewal
         Self.writeLaunchEntitlementCache(
             LaunchEntitlementCache(isEntitled: found, verifiedAt: now, validUntil: renewal),
             defaults: .standard
         )
-    }
-
-    func purchase() async {
-        purchaseError = nil
-        guard let product else {
-            purchaseError = "Product is not available yet."
-            return
-        }
-        isPurchasing = true
-        defer { isPurchasing = false }
-        do {
-            let result = try await product.purchase()
-            switch result {
-            case .success(let verification):
-                switch verification {
-                case .verified(let transaction):
-                    guard transaction.productID == ICloudSyncProductID.monthly else { return }
-                    await transaction.finish()
-                    await refreshEntitlements()
-                case .unverified(_, let error):
-                    purchaseError = error.localizedDescription
-                }
-            case .userCancelled:
-                break
-            case .pending:
-                purchaseError = "Purchase is pending approval."
-            @unknown default:
-                break
-            }
-        } catch {
-            purchaseError = error.localizedDescription
-        }
     }
 
     func restorePurchases() async {
@@ -156,9 +73,7 @@ final class ICloudSubscriptionStore: ObservableObject {
         }
     }
 
-    /// Synchronous launch hint used before StoreKit's async entitlement APIs are available.
-    /// Encoded entitlements require a future expiration. Legacy Boolean-only installs receive
-    /// a bounded migration window so they do not retain indefinite access.
+    /// Synchronous launch hint retained for migration from the legacy subscription cache.
     nonisolated static func isSubscribedAtLaunch(
         now: Date = .now,
         defaults: UserDefaults = .standard

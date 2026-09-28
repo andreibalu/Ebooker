@@ -8,12 +8,12 @@
 
 import Foundation
 
-enum AIProductID {
+nonisolated enum AIProductID {
     /// Unlocks on-device AI features (smart moment naming + smart summary).
     static let unlock = "andreibaludev.Pageless.ai_unlock"
 }
 
-enum ICloudSyncProductID {
+nonisolated enum ICloudSyncProductID {
     /// Auto-renewable monthly subscription that unlocks iCloud library sync.
     static let monthly = "andreibaludev.Pageless.icloudsync.monthly"
 }

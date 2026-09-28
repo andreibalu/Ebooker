@@ -10,8 +10,7 @@ import SwiftUI
 @main
 struct PagelessApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var aiEntitlementStore = AIEntitlementStore()
-    @StateObject private var icloudSubscriptionStore = ICloudSubscriptionStore.shared
+    @StateObject private var plusEntitlementStore = PlusEntitlementStore.shared
     @StateObject private var coffeeTipStore = CoffeeTipStore()
     @State private var onboardingManager = OnboardingManager()
     @Environment(\.scenePhase) private var scenePhase
@@ -24,8 +23,7 @@ struct PagelessApp: App {
             )
                 .environmentObject(appDelegate.audioPlayer)
                 .environmentObject(appDelegate.audioPlayer.equalizer)
-                .environmentObject(aiEntitlementStore)
-                .environmentObject(icloudSubscriptionStore)
+                .environmentObject(plusEntitlementStore)
                 .environmentObject(coffeeTipStore)
                 .environment(onboardingManager)
                 .environment(appDelegate.freeBookDownloader)

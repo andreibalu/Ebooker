@@ -10,8 +10,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(OnboardingManager.self) private var onboarding
-    @EnvironmentObject private var aiEntitlement: AIEntitlementStore
-    @EnvironmentObject private var icloudSubscription: ICloudSubscriptionStore
+    @EnvironmentObject private var plusEntitlement: PlusEntitlementStore
     @EnvironmentObject private var coffeeTip: CoffeeTipStore
     @Query private var existingAudiobooks: [Audiobook]
 
@@ -41,9 +40,15 @@ struct SettingsView: View {
                 .navigationDestination(for: SettingsDestination.self) { destination in
                     switch destination {
                     case .ai:
-                        AISettingsView(onDismissSheet: { dismiss() })
+                        AISettingsView(
+                            onDismissSheet: { dismiss() },
+                            onShowPlusCard: showPlusCard
+                        )
                     case .icloud:
-                        ICloudSettingsView(onDismissSheet: { dismiss() })
+                        ICloudSettingsView(
+                            onDismissSheet: { dismiss() },
+                            onShowPlusCard: showPlusCard
+                        )
                     case .coffee:
                         BuyMeACoffeeView(onDismissSheet: { dismiss() })
                     }
@@ -78,55 +83,46 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .task {
-            await aiEntitlement.loadProduct()
-            await icloudSubscription.loadProduct()
-            await icloudSubscription.refreshEntitlements()
+            await plusEntitlement.refreshEntitlements()
+            await plusEntitlement.loadProduct()
             await coffeeTip.loadProduct()
         }
         .alert(
-            "Purchase",
+            "Unpaged Plus",
             isPresented: Binding(
-                get: { aiEntitlement.purchaseError != nil },
-                set: { if !$0 { aiEntitlement.purchaseError = nil } }
+                get: { plusEntitlement.purchaseError != nil || plusEntitlement.restoreError != nil },
+                set: {
+                    if !$0 {
+                        plusEntitlement.purchaseError = nil
+                        plusEntitlement.restoreError = nil
+                    }
+                }
             )
         ) {
-            Button("OK", role: .cancel) { aiEntitlement.purchaseError = nil }
+            Button("OK", role: .cancel) {
+                plusEntitlement.purchaseError = nil
+                plusEntitlement.restoreError = nil
+            }
         } message: {
-            Text(aiEntitlement.purchaseError ?? "")
-        }
-        .alert(
-            "Restore",
-            isPresented: Binding(
-                get: { aiEntitlement.restoreError != nil },
-                set: { if !$0 { aiEntitlement.restoreError = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) { aiEntitlement.restoreError = nil }
-        } message: {
-            Text(aiEntitlement.restoreError ?? "")
+            Text(plusEntitlement.purchaseError ?? plusEntitlement.restoreError ?? "")
         }
     }
 
-    // MARK: - Unlock section (compact gradient cards)
+    private func showPlusCard() {
+        navigationPath.removeAll()
+    }
+
+    // MARK: - Unpaged Plus
 
     private var unlockSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsSectionHeader(eyebrow: "Unlock", title: "Make it yours.")
-
-            if hideAIEntirely {
-                VStack(spacing: 10) {
-                    aiUnsupportedRow
-                    iCloudHeroCard
-                }
-            } else {
-                HStack(alignment: .top, spacing: 10) {
-                    aiHeroCard
-                        .frame(maxWidth: .infinity)
-                    iCloudHeroCard
-                        .frame(maxWidth: .infinity)
-                }
-                .frame(maxWidth: .infinity)
-            }
+            SettingsSectionHeader(eyebrow: "Membership", title: "Go further with Plus.")
+            UnpagedPlusCard(
+                store: plusEntitlement,
+                includesAI: !hideAIEntirely,
+                onAISettings: { navigationPath.append(.ai) },
+                onICloudSettings: { navigationPath.append(.icloud) }
+            )
         }
     }
 
@@ -166,119 +162,6 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    private var aiHeroCard: some View {
-        NavigationLink(value: SettingsDestination.ai) {
-            HeroCard(
-                gradient: LinearGradient(
-                    colors: [
-                        Color(red: 0.13, green: 0.10, blue: 0.27),
-                        Color(red: 0.09, green: 0.07, blue: 0.21)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                shadowColor: Color(red: 40/255, green: 30/255, blue: 70/255, opacity: 0.18),
-                cornerSymbol: "sparkles",
-                cornerRotation: 12,
-                eyebrowSymbol: "sparkles",
-                eyebrowText: "APPLE INTELLIGENCE",
-                title: "Smart moments &\nprogress recaps.",
-                pill: aiPillView,
-                trailingLink: aiTrailingLinkText
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var aiPillView: some View {
-        let label: String = {
-            if aiEntitlement.isUnlocked { return "Unlocked" }
-            let remaining = aiEntitlement.trialUsesRemaining
-            return remaining > 0 ? "\(remaining) free \(remaining == 1 ? "try" : "tries") left" : "Free trial used up"
-        }()
-
-        Text(label)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.white.opacity(0.18), in: Capsule())
-    }
-
-    private var aiTrailingLinkText: String {
-        if aiEntitlement.isUnlocked { return "Manage \u{2192}" }
-        return "Unlock \(aiEntitlement.unlockPriceDisplay) \u{2192}"
-    }
-
-    private var aiUnsupportedRow: some View {
-        SettingsCard {
-            HStack(spacing: 12) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 22))
-                    .foregroundStyle(SettingsDesign.tertiaryLabel)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("AI Features")
-                        .font(.system(size: 15, weight: .medium))
-                    Text("Requires an Apple Intelligence\u{2013}compatible device.")
-                        .font(.system(size: 11))
-                        .foregroundStyle(SettingsDesign.secondaryLabel)
-                }
-                Spacer(minLength: 8)
-            }
-            .padding(16)
-        }
-    }
-
-    private var iCloudHeroCard: some View {
-        NavigationLink(value: SettingsDestination.icloud) {
-            HeroCard(
-                gradient: LinearGradient(
-                    colors: [
-                        Color(red: 0.13, green: 0.27, blue: 0.46),
-                        Color(red: 0.07, green: 0.14, blue: 0.30)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                shadowColor: Color(red: 20/255, green: 40/255, blue: 80/255, opacity: 0.18),
-                cornerSymbol: "icloud.fill",
-                cornerRotation: -8,
-                eyebrowSymbol: "icloud.fill",
-                eyebrowText: "ICLOUD SYNC",
-                title: "Your library,\neverywhere.",
-                pill: iCloudPillView,
-                trailingLink: iCloudTrailingLinkText
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var iCloudPillView: some View {
-        if icloudSubscription.isSubscribed {
-            Text("ACTIVE")
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(0.66)
-                .foregroundStyle(Color(red: 0xd6/255, green: 1, blue: 0xe5/255))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(SettingsDesign.systemGreen.opacity(0.28), in: Capsule())
-        } else {
-            Text(icloudSubscription.introOfferDisplay ?? "\(icloudSubscription.unlockPriceDisplay)/month")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Color.white.opacity(0.18), in: Capsule())
-        }
-    }
-
-    private var iCloudTrailingLinkText: String {
-        if icloudSubscription.isSubscribed { return "Manage \u{2192}" }
-        return "\(icloudSubscription.unlockPriceDisplay)/month \u{2192}"
     }
 
     // MARK: - Playback section
@@ -499,81 +382,6 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Hero card
-
-private struct HeroCard<Pill: View>: View {
-    let gradient: LinearGradient
-    let shadowColor: Color
-    let cornerSymbol: String
-    let cornerRotation: Double
-    let eyebrowSymbol: String
-    let eyebrowText: String
-    let title: String
-    let pill: Pill
-    let trailingLink: String
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            gradient
-            Image(systemName: cornerSymbol)
-                .font(.system(size: 92))
-                .foregroundStyle(.white)
-                .opacity(0.18)
-                .rotationEffect(.degrees(cornerRotation))
-                .offset(x: 0, y: -10)
-                .frame(maxWidth: .infinity, alignment: .topTrailing)
-                .padding(.trailing, -14)
-                .padding(.top, -10)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    Image(systemName: eyebrowSymbol)
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .accessibilityHidden(true)
-                    Text(eyebrowText)
-                        .font(.system(size: 9, weight: .semibold))
-                        .tracking(1.2)
-                        .foregroundStyle(.white.opacity(0.6))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-                .padding(.top, 14)
-
-                Text(title)
-                    .font(SettingsDesign.displayFont(18, weight: .bold))
-                    .tracking(-0.25)
-                    .foregroundStyle(.white)
-                    .lineSpacing(0)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.82)
-                    .padding(.top, 6)
-
-                Spacer(minLength: 8)
-
-                VStack(alignment: .leading, spacing: 6) {
-                    pill
-                    Text(trailingLink)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.7))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.bottom, 14)
-            }
-            .padding(.horizontal, 14)
-        }
-        .frame(maxWidth: .infinity, minHeight: 156, maxHeight: 156, alignment: .topLeading)
-        .clipShape(RoundedRectangle(cornerRadius: SettingsDesign.heroCornerRadius, style: .continuous))
-        .shadow(color: shadowColor, radius: 20, x: 0, y: 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens settings")
-    }
-}
-
 // MARK: - Navigation destinations
 
 enum SettingsDestination: Hashable {
@@ -748,8 +556,7 @@ private struct HomeTabRow: View {
 
 #Preview {
     SettingsView()
-        .environmentObject(AIEntitlementStore())
-        .environmentObject(ICloudSubscriptionStore.shared)
+        .environmentObject(PlusEntitlementStore.shared)
         .environmentObject(CoffeeTipStore(startTasks: false))
         .environment(OnboardingManager())
 }

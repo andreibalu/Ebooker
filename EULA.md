@@ -3,7 +3,7 @@
 **App:** Unpaged
 **Developer:** Andrei Baluta
 **Contact:** andrei.baluta@yahoo.com
-**Last updated:** September 17, 2026
+**Last updated:** September 28, 2026
 
 This End User License Agreement ("Agreement") is a legal agreement between you
 ("you") and Andrei Baluta ("Developer," "we," "us") for the use of the Unpaged
@@ -43,21 +43,26 @@ law.
 The Application offers the following optional paid features, purchased and
 managed through your Apple ID:
 
-- **iCloud Sync** — an **auto-renewable subscription** that keeps your library,
-  progress, bookmarks, recaps, equalizer settings, and listening history in sync
-  privately across your devices via iCloud. The subscription is billed monthly
-  to your Apple ID at the price shown at purchase (US$0.99/month; prices vary by
-  region). Your subscription automatically renews unless auto-renew is turned off
-  at least 24 hours before the end of the current period. Your account is charged
-  for renewal within 24 hours prior to the end of the current period. You can
-  manage or cancel your subscription at any time in your Apple ID account
-  settings; cancellation takes effect at the end of the current billing period,
-  and no refund is provided for the unused portion of a term except as required
-  by law. Audio files themselves are not synced and remain on each device.
+- **Unpaged Plus** — an **auto-renewable subscription** that includes on-device
+  Apple Intelligence moment naming and recaps, plus optional private iCloud Sync
+  for your library, progress, bookmarks, recaps, equalizer settings, and
+  listening history. Plus is offered monthly (US$2.99/month) and yearly
+  (US$14.99/year); prices vary by region and the price shown by Apple at purchase
+  applies. Each plan may show a seven-day free trial when Apple offers it to your
+  account. After any displayed trial, the subscription automatically renews at
+  the selected plan's price unless auto-renew is turned off at least 24 hours
+  before the trial or current period ends. Your account is charged for renewal
+  within 24 hours before the current period ends. You can manage or cancel the
+  subscription in your Apple ID account settings; cancellation takes effect at
+  the end of the current period, and no refund is provided for the unused
+  portion of a term except as required by law. iCloud Sync is opt-in and requires
+  an iCloud account on the device. Audio files themselves are not synced and
+  remain on each device.
 
-- **AI Features** — a **one-time, non-consumable purchase** that unlocks the
-  on-device Apple Intelligence features (AI bookmark naming and AI recaps) after
-  the included free trial uses are exhausted.
+- **Earlier paid purchases** — an owned, non-consumable AI Features unlock
+  continues to include Plus without an expiration. An active legacy iCloud Sync
+  subscription continues to include Plus while that subscription is active.
+  These existing entitlements do not require a new Plus purchase.
 
 - **Buy me a coffee** — an **optional, one-time consumable purchase** that lets
   you support the Developer. It does not unlock features, add content, provide
@@ -65,9 +70,9 @@ managed through your Apple ID:
   restored; you may purchase it again whenever you choose. The price shown at
   purchase is the price charged by Apple for your storefront.
 
-All payments are processed by Apple. Restoring the AI Features unlock or iCloud
-Sync subscription on a new device requires signing in with the same Apple ID;
-the consumable coffee tip is intentionally not restorable.
+All payments are processed by Apple. Restore purchases in Unpaged Plus settings
+on a new device using the same Apple ID. The consumable coffee tip is
+intentionally not restorable.
 
 ## 4. Maintenance and Support
 
@@ -130,7 +135,7 @@ Developer. AI generation runs on-device using Apple Intelligence. Primary AI
   on-device recognition support and does not permit server processing. Network
 requests support free-book browsing, streaming, and downloads through
   LibriVox/Internet Archive, purchases through Apple (including the optional
-  coffee tip), and optional iCloud Sync in your private iCloud account. The
+  coffee tip), and optional Plus iCloud Sync in your private iCloud account. The
   Developer operates no backend server.
 Full details are in the Privacy Policy:
 <https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262>
