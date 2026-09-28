@@ -5,7 +5,7 @@
 
 import Foundation
 
-/// A hand-curated, bundled shelf of LibriVox audiobooks shown on the Free Books tab.
+/// A hand-curated, bundled shelf of LibriVox audiobooks shown on the Shelves tab.
 ///
 /// Collections are static app content (no backend): each entry is a list of LibriVox
 /// project IDs verified against the live feed API (librivox.org/api/feed/audiobooks).

@@ -16,8 +16,12 @@ enum LibraryTab {
         switch self {
         case .favorites: "Favorites"
         case .allBooks: "Library"
-        case .freeBooks: "Free Books"
+        case .freeBooks: "Shelves"
         }
+    }
+
+    static func order(startOnFreeBooks: Bool) -> [LibraryTab] {
+        startOnFreeBooks ? [.favorites, .freeBooks, .allBooks] : [.favorites, .allBooks, .freeBooks]
     }
 }
 
@@ -79,9 +83,11 @@ struct ContentView: View {
     // key so existing users keep their saved choice; Favorites gets its own independent key.
     @AppStorage("librarySortOption") private var allBooksSortRaw = LibrarySortOption.recent.rawValue
     @AppStorage("favoritesSortOption") private var favoritesSortRaw = LibrarySortOption.recent.rawValue
-    // When the user chose "Free books" in onboarding, the app always opens on Free Books and the
-    // tabs reorder to Favorites / Free Books / Library. Default false = unchanged behavior.
+    // When the user chose Shelves in onboarding, the app always opens there and the tabs reorder
+    // to Favorites / Shelves / Library. Keep the existing key for returning users.
     @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
+    @AppStorage(ShelvesSourcePreference.storageKey)
+    private var storedShelvesSourceID = ShelvesSourcePreference.defaultSourceID
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
@@ -250,13 +256,13 @@ struct ContentView: View {
                 if IcloudSyncGate.isEnabled() {
                     Text("Removes this book from your library on this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream it again anytime.")
                 } else {
-                    Text("This will remove the book from your library. You can add it again from the free books section.")
+                    Text("This will remove the book from your library. You can add it again from Shelves.")
                 }
             } else if viewModel.deleteCandidate?.isFreeBook == true {
                 if IcloudSyncGate.isEnabled() {
                     Text("Removes the download from this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream or re-download it anytime.")
                 } else {
-                    Text("This will remove the downloaded audiobook. You can download it again from the free books section.")
+                    Text("This will remove the downloaded audiobook. You can download it again from Shelves.")
                 }
             } else if IcloudSyncGate.isEnabled() {
                 Text("Removes the audio from this iPhone. The book stays in your iCloud Library, and you can restore it anytime.")
@@ -282,8 +288,9 @@ struct ContentView: View {
             Text(viewModel.alertMessage)
         }
         .onAppear {
+            storedShelvesSourceID = resolvedShelvesSourceID
             // One-time launch-tab application for relaunched users (first-run routing is handled by
-            // the onboarding onFinish closure). Free-books choosers open on Free Books every launch.
+            // the onboarding onFinish closure). Shelves choosers open there on every launch.
             if !didApplyInitialTab {
                 didApplyInitialTab = true
                 if onboarding.isComplete && startOnFreeBooks {
@@ -400,10 +407,18 @@ struct ContentView: View {
 
     // MARK: - Tab Picker
 
-    /// Tab order is fixed for own-book users (Favorites / Library / Free Books). Users who chose
-    /// "Free books" in onboarding get Free Books promoted to the center (Favorites / Free Books / Library).
+    /// Tab order is fixed for own-book users (Favorites / Library / Shelves). Users who chose
+    /// Shelves in onboarding get it promoted to the center (Favorites / Shelves / Library).
     private var tabOrder: [LibraryTab] {
-        startOnFreeBooks ? [.favorites, .freeBooks, .allBooks] : [.favorites, .allBooks, .freeBooks]
+        LibraryTab.order(startOnFreeBooks: startOnFreeBooks)
+    }
+
+    private var registeredBookSources: [BookSource] {
+        BookSourceRegistry.sources
+    }
+
+    private var resolvedShelvesSourceID: String {
+        ShelvesSourcePreference.resolvedSourceID(storedShelvesSourceID, from: registeredBookSources)
     }
 
     private var tabPicker: some View {
@@ -423,8 +438,57 @@ struct ContentView: View {
         case .allBooks:
             sortableTabButton(title: tab.title, tab: .allBooks, sortRaw: $allBooksSortRaw)
         case .freeBooks:
-            tabButton(title: "Free Books", tab: .freeBooks)
+            sourceTabButton(title: tab.title, tab: .freeBooks)
         }
+    }
+
+    /// The Shelves tab mirrors `sortableTabButton`: tapping it while inactive switches to it,
+    /// tapping it *while already active* drops a menu down from the title — here choosing which
+    /// catalog the tab shows. Buttons rather than a `Picker` so an unconfigured source can be
+    /// disabled and say so.
+    @ViewBuilder
+    private func sourceTabButton(title: String, tab: LibraryTab) -> some View {
+        let isSelected = selectedTab == tab
+        // With a single registered source the menu would be a one-item no-op, so the chevron and
+        // the menu only appear once there is something to switch between.
+        let offersChoice = isSelected && registeredBookSources.count > 1
+        Group {
+            if offersChoice {
+                Menu {
+                    Section("Catalog source") {
+                        ForEach(registeredBookSources, id: \.id) { source in
+                            Button {
+                                storedShelvesSourceID = source.id
+                            } label: {
+                                if source.id == resolvedShelvesSourceID {
+                                    Label(source.name, systemImage: "checkmark")
+                                } else if source.isConfigured {
+                                    Text(source.name)
+                                } else {
+                                    Text("\(source.name) — Set up to browse")
+                                }
+                            }
+                            .disabled(!source.isConfigured)
+                            .accessibilityIdentifier("shelvesSource.\(source.id)")
+                        }
+                    }
+                } label: {
+                    tabColumn(title: title, isSelected: true, showsChevron: true)
+                }
+            } else {
+                Button {
+                    guard !isSelected else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedTab = tab
+                    }
+                } label: {
+                    tabColumn(title: title, isSelected: isSelected, showsChevron: false)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("shelvesTab")
     }
 
     /// A tab that owns its own sort preference. Tapping it while it's *not* the active tab simply
@@ -480,19 +544,6 @@ struct ContentView: View {
         .contentShape(Rectangle())
     }
 
-    private func tabButton(title: String, tab: LibraryTab) -> some View {
-        let isSelected = selectedTab == tab
-        return Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                selectedTab = tab
-            }
-        } label: {
-            tabColumn(title: title, isSelected: isSelected, showsChevron: false)
-        }
-        .buttonStyle(.plain)
-        .frame(maxWidth: .infinity)
-    }
-
     // MARK: - Library Content
 
     @ViewBuilder
@@ -514,9 +565,9 @@ struct ContentView: View {
         case .allBooks:
             booksGrid(for: .allBooks)
         case .freeBooks:
-            BrowseLibriVoxView(onOpenPlayer: {
-                openPlayer()
-            }, viewModel: browseViewModel)
+            // `resolvedShelvesSourceID` always names a configured source (falling back to
+            // LibriVox), so the tab is never blank. A second source branches here on that id.
+            BrowseLibriVoxView(onOpenPlayer: openPlayer, viewModel: browseViewModel)
         }
     }
 
@@ -819,7 +870,7 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .foregroundStyle(Color(UIColor.systemBackground))
 
-                Button("Browse Free Books") {
+                Button("Browse Shelves") {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         selectedTab = .freeBooks
                     }

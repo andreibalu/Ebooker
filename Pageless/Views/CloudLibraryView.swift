@@ -340,7 +340,7 @@ struct CloudLibraryView: View {
                 .controlSize(.small)
                 .disabled(streamRestoreInFlight.contains(book.id))
             } else {
-                Text("Open in Free Books tab")
+                Text("Open in Shelves")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

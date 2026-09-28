@@ -697,7 +697,7 @@ struct BrowseLibriVoxView: View {
         ContentUnavailableView {
             Label("No Internet Connection", systemImage: "wifi.slash")
         } description: {
-            Text("Free Books needs a connection the first time to load audiobooks from LibriVox. Connect to Wi‑Fi or cellular and tap Retry.")
+            Text("Shelves needs a connection the first time to load audiobooks from LibriVox. Connect to Wi‑Fi or cellular and tap Retry.")
         } actions: {
             Button("Retry") {
                 viewModel.forceRefresh(modelContext: modelContext)
@@ -708,7 +708,7 @@ struct BrowseLibriVoxView: View {
 
     private var loadFailedState: some View {
         ContentUnavailableView {
-            Label("Couldn’t Load Free Books", systemImage: "exclamationmark.icloud")
+            Label("Couldn’t Load Shelves", systemImage: "exclamationmark.icloud")
         } description: {
             Text(viewModel.failureMessage ?? "Something went wrong reaching LibriVox. Please try again in a moment.")
         } actions: {

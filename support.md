@@ -1,6 +1,6 @@
 # Unpaged — Support
 
-_Last updated: September 17, 2026_
+_Last updated: September 28, 2026_
 
 Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
 
@@ -18,9 +18,9 @@ If the selected files exactly match an audiobook already active in your library,
 
 ### Where do the free books come from?
 
-The **Free Books** tab streams or downloads public-domain audiobooks from [LibriVox](https://librivox.org). Over 20,000 titles are cached locally for fast browsing. You can stream a book without downloading it, or download for offline listening.
+The **Shelves** tab streams or downloads public-domain audiobooks from [LibriVox](https://librivox.org). Over 20,000 titles are cached locally for fast browsing. You can stream a book without downloading it, or download for offline listening.
 
-Download progress stays visible in both **Free Books** and **Library**, even if you navigate away from the book. Downloads continue while Unpaged is suspended in the background and reconnect to their saved progress if iOS relaunches the app. You can cancel an active download or retry/dismiss a failed one from either tab.
+Download progress stays visible in both **Shelves** and **Library**, even if you navigate away from the book. Downloads continue while Unpaged is suspended in the background and reconnect to their saved progress if iOS relaunches the app. You can cancel an active download or retry/dismiss a failed one from either tab.
 
 On supported iOS versions, Unpaged also shows one download Live Activity on the Lock Screen. Compatible iPhones show the same progress in the Dynamic Island. Multiple book downloads are combined into one activity; tap it to open **Library → Downloads**. You can disable Live Activities in **Settings → Unpaged → Live Activities** without disabling background downloads.
 
@@ -28,7 +28,7 @@ At the top of the tab, **Collections** are hand-picked shelves of classics group
 
 ### Can I choose a different narrator for a free book?
 
-Often, yes. Many classics were recorded more than once by LibriVox volunteers. When other recordings of the same book exist, the book's detail page shows an **Other Recordings** section listing every alternative version in the same language — each with its length and a 20-second sample button that starts after the usual LibriVox intro so you can compare narrators before downloading. This works both from the Free Books tab and from a free book already in your library.
+Often, yes. Many classics were recorded more than once by LibriVox volunteers. When other recordings of the same book exist, the book's detail page shows an **Other Recordings** section listing every alternative version in the same language — each with its length and a 20-second sample button that starts after the usual LibriVox intro so you can compare narrators before downloading. This works both from the Shelves tab and from a free book already in your library.
 
 ### Why don't covers load for some LibriVox books?
 
@@ -45,7 +45,7 @@ AI generation and transcription run entirely on your iPhone. If primary transcri
 
 ### Do AI features require a paid unlock?
 
-Apple Intelligence moment naming and recaps are included with **Unpaged Plus**, an auto-renewing monthly (US$2.99) or yearly (US$14.99) subscription. Each plan includes a seven-day introductory offer when Apple makes it available to your Apple ID; the price and offer shown by Apple at purchase apply. Unpaged Plus also includes optional iCloud Sync. The rest of the app — playback, bookmarks without AI, library, free books, CarPlay, EQ — is always free. Existing AI Features unlock purchases remain recognized without expiration, and active legacy iCloud Sync subscriptions remain recognized while active.
+Apple Intelligence moment naming and recaps are included with **Unpaged Plus**, an auto-renewing monthly (US$2.99) or yearly (US$14.99) subscription. Each plan includes a seven-day introductory offer when Apple makes it available to your Apple ID; the price and offer shown by Apple at purchase apply. Unpaged Plus also includes optional iCloud Sync. The rest of the app — playback, bookmarks without AI, library, Shelves, CarPlay, EQ — is always free. Existing AI Features unlock purchases remain recognized without expiration, and active legacy iCloud Sync subscriptions remain recognized while active.
 
 ### Which devices support the AI features?
 
@@ -83,10 +83,10 @@ Long-press the book cover in your library and choose **Delete**.
 
 **Free books work the same way.** With iCloud Sync on, removing a free (LibriVox) book from your library keeps its progress and bookmarks in your **iCloud Library**. There are two ways to pick up where you left off:
 
-- **Re-add it from the Free Books tab.** Because every free book carries its LibriVox ID, Unpaged recognises and reuses its iCloud record automatically, restoring progress, bookmarks, favorites, and equalizer settings whether you stream it or download it. It never creates a second copy of the same LibriVox recording.
+- **Re-add it from the Shelves tab.** Because every free book carries its LibriVox ID, Unpaged recognises and reuses its iCloud record automatically, restoring progress, bookmarks, favorites, and equalizer settings whether you stream it or download it. It never creates a second copy of the same LibriVox recording.
 - **From iCloud Library.** Open **Settings → iCloud Library**, find it under **Removed free books**, and tap **Stream**.
 
-With sync off, removing a free book simply takes it out of your library; you can always add it again from the **Free Books** tab.
+With sync off, removing a free book simply takes it out of your library; you can always add it again from the **Shelves** tab.
 
 ### Will my bookmarks and progress sync to other devices?
 
