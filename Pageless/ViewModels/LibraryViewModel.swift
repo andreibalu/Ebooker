@@ -164,6 +164,17 @@ final class LibraryViewModel {
         }
     }
 
+    /// An Audiobookshelf book's audio lives on the user's server, so removing it only drops the
+    /// Unpaged row (progress already pushed to the server survives there). No archive state: the
+    /// book can be added again from Shelves at any time.
+    func deleteAudiobookshelfBook(_ audiobook: Audiobook, modelContext: ModelContext) {
+        do {
+            try LibraryImportService.deleteAudiobook(audiobook, deleteFiles: false, modelContext: modelContext)
+        } catch {
+            presentAlert(message: error.localizedDescription)
+        }
+    }
+
     func deleteFreeBook(_ audiobook: Audiobook, modelContext: ModelContext) {
         do {
             if IcloudSyncGate.isEnabled() {

@@ -20,6 +20,17 @@ enum OrphanDetectionService {
         }
     }
 
+    /// Only books that claim local audio are inspected. Streaming entries — free books and books
+    /// from the user's Audiobookshelf server — legitimately have no folder and are never orphans.
+    static func needsLocalFileCheck(_ book: Audiobook) -> Bool {
+        guard book.isDownloaded, !book.isAudiobookshelfBook else { return false }
+        return !book.tracks.contains(where: { $0.remoteURL != nil && $0.storedFileName.isEmpty })
+    }
+
+    static func shouldMarkOrphan(_ book: Audiobook, hasLocalFiles: Bool) -> Bool {
+        needsLocalFileCheck(book) && !hasLocalFiles
+    }
+
     private static func run(modelContainer: ModelContainer) async {
         let context = ModelContext(modelContainer)
         guard let books = try? context.fetch(FetchDescriptor<Audiobook>()) else { return }
@@ -34,10 +45,7 @@ enum OrphanDetectionService {
         let libraryURL = appSupport.appendingPathComponent("Audiobooks", isDirectory: true)
 
         var flipped = 0
-        for book in books where book.isDownloaded {
-            // Streaming-only books legitimately have no folder; skip them.
-            if book.tracks.contains(where: { $0.remoteURL != nil && $0.storedFileName.isEmpty }) { continue }
-
+        for book in books where needsLocalFileCheck(book) {
             let folderURL = libraryURL.appendingPathComponent(book.folderName, isDirectory: true)
             let exists = fm.fileExists(atPath: folderURL.path(percentEncoded: false))
             let contents = exists
@@ -47,7 +55,7 @@ enum OrphanDetectionService {
 
             log.info("Inspect local audiobook storage exists=\(exists, privacy: .public) hasFiles=\(hasFiles, privacy: .public) fileCount=\(contents.count, privacy: .public) trackCount=\(book.tracks.count, privacy: .public)")
 
-            if !hasFiles {
+            if shouldMarkOrphan(book, hasLocalFiles: hasFiles) {
                 book.isDownloaded = false
                 flipped += 1
             }

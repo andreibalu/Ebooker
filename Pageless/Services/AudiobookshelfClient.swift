@@ -9,6 +9,14 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
     case serverError(status: Int)
     case unreadableResponse
     case invalidMediaURL
+    /// The API key is well-formed but the server refuses it — ABS creates keys inactive by default.
+    case inactiveAPIKey
+    /// The device has no network path at all (distinct from a server that doesn't answer).
+    case offline
+    /// App Transport Security refused a plain-http address outside the local network.
+    case insecureConnection
+    /// Something answered, but not an Audiobookshelf server (e.g. 404 on `/login`).
+    case notAudiobookshelfServer
 }
 
 /// Standalone ABS transport. URLSession is injectable so no running server is needed in tests.
@@ -35,16 +43,28 @@ actor AudiobookshelfClient {
             throw AudiobookshelfError.unreadableResponse
         }
         try credentials.save(ABSConnection(baseURL: baseURL,
-                                           credential: .session(accessToken: access, refreshToken: refresh)))
+                                           credential: .session(accessToken: access, refreshToken: refresh),
+                                           username: response.user.username ?? username))
     }
 
     func connect(serverURL: URL, apiKey: String) async throws {
         let baseURL = try Self.normalized(serverURL)
         guard !apiKey.isEmpty else { throw AudiobookshelfError.badCredentials }
         let candidate = ABSConnection(baseURL: baseURL, credential: .apiKey(apiKey))
-        _ = try await send(baseURL: baseURL, path: ["api", "authorize"], method: "POST",
-                           body: nil, headers: [:], auth: candidate.credential)
-        try credentials.save(candidate)
+        let data: Data
+        do {
+            data = try await send(baseURL: baseURL, path: ["api", "authorize"], method: "POST",
+                                  body: nil, headers: [:], auth: candidate.credential)
+        } catch AudiobookshelfError.badCredentials {
+            // ABS answers a disabled key and a mistyped key with the same bare 401. A key that
+            // decodes as an ABS API-key token was issued by the server, so it is almost certainly
+            // switched off (new keys start inactive) rather than wrong.
+            throw ABSJWT.isAudiobookshelfAPIKey(apiKey)
+                ? AudiobookshelfError.inactiveAPIKey
+                : AudiobookshelfError.badCredentials
+        }
+        let username = (try? JSONDecoder().decode(LoginResponse.self, from: data))?.user.username
+        try credentials.save(ABSConnection(baseURL: baseURL, credential: candidate.credential, username: username))
     }
 
     func disconnect() throws { try credentials.clear() }
@@ -113,6 +133,38 @@ actor AudiobookshelfClient {
         return request
     }
 
+    /// Token-less absolute URL for a track — the only form ever written to SwiftData (synced rows
+    /// reach the user's iCloud, so a credential there would be a leak).
+    func storedStreamURL(for track: ABSAudioTrack) throws -> URL {
+        let connection = try requiredConnection()
+        return try Self.sameOriginURL(track.contentUrl, base: connection.baseURL)
+    }
+
+    /// Playable URL for AVPlayer, which cannot send headers: the verified `?token=` form works for
+    /// both a login JWT and an API key. Never persist the result.
+    func streamURL(for track: ABSAudioTrack) throws -> URL {
+        let connection = try requiredConnection()
+        let url = try Self.sameOriginURL(track.contentUrl, base: connection.baseURL)
+        return try Self.appendingToken(Self.token(for: connection.credential), to: url)
+    }
+
+    /// Resolves a stored (token-less) track URL at play time. Refreshes a login session that is
+    /// close to expiry first, so a book added long ago keeps playing across JWT rotations and a
+    /// fresh token covers the range requests AVPlayer keeps making while it streams.
+    func playbackURL(forStoredURL stored: URL) async throws -> URL {
+        var connection = try requiredConnection()
+        let url = try Self.sameOriginURL(stored.absoluteString, base: connection.baseURL)
+        if case .session(let access, _) = connection.credential,
+           let expiry = ABSJWT.expiry(of: access),
+           expiry.timeIntervalSinceNow < Self.minimumStreamTokenLifetime {
+            connection = try await refresh(after: access)
+        }
+        return try Self.appendingToken(Self.token(for: connection.credential), to: url)
+    }
+
+    /// A stream token must outlive a long listening stretch; below this the session refreshes.
+    static let minimumStreamTokenLifetime: TimeInterval = 45 * 60
+
     func mediaProgress(itemID: String) async throws -> ABSMediaProgress? {
         do { return try decode(await request(path: ["api", "me", "progress", itemID])) }
         catch AudiobookshelfError.serverError(status: 404) { return nil }
@@ -161,7 +213,8 @@ actor AudiobookshelfClient {
                 throw AudiobookshelfError.unreadableResponse
             }
             let renewed = ABSConnection(baseURL: current.baseURL,
-                                        credential: .session(accessToken: newAccess, refreshToken: newRefresh))
+                                        credential: .session(accessToken: newAccess, refreshToken: newRefresh),
+                                        username: current.username)
             try credentials.save(renewed)
             return renewed
         }
@@ -174,12 +227,20 @@ actor AudiobookshelfClient {
                       query: [URLQueryItem] = [], headers: [String: String],
                       auth: ABSCredential?) async throws -> Data {
         var request = URLRequest(url: try makeURL(baseURL: baseURL, path: path, query: query))
+        // A wrong LAN address should fail in seconds, not after URLSession's default minute.
+        request.timeoutInterval = 20
         request.httpMethod = method
         request.httpBody = body
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         if let auth { Self.applyAuth(auth, to: &request) }
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let error as URLError {
+            throw Self.mapped(error)
+        }
         guard let http = response as? HTTPURLResponse else { throw AudiobookshelfError.unreadableResponse }
         switch http.statusCode {
         case 200..<300: return data
@@ -187,6 +248,8 @@ actor AudiobookshelfClient {
             if path == ["login"] { throw AudiobookshelfError.badCredentials }
             if case .some(.apiKey) = auth { throw AudiobookshelfError.badCredentials }
             throw AudiobookshelfError.expiredToken
+        case 404 where path == ["login"] || path == ["api", "authorize"]:
+            throw AudiobookshelfError.notAudiobookshelfServer
         case 502, 503, 504: throw AudiobookshelfError.unreachableServer
         default: throw AudiobookshelfError.serverError(status: http.statusCode)
         }
@@ -221,6 +284,81 @@ actor AudiobookshelfClient {
         return url.absoluteURL
     }
 
+    /// Parses what a person types into the server field. A bare host gets `https://`, except
+    /// hosts that can only be on the local network (localhost, `.local`, private IPv4), which get
+    /// `http://` because that is how a home server is almost always reached.
+    nonisolated static func serverURL(from input: String) throws -> URL {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !text.contains(" ") else { throw AudiobookshelfError.invalidServerURL }
+        if !text.lowercased().hasPrefix("http://") && !text.lowercased().hasPrefix("https://") {
+            guard !text.contains("://") else { throw AudiobookshelfError.invalidServerURL }
+            let host = text.split(separator: "/").first.map(String.init) ?? text
+            text = (isLocalNetworkHost(host) ? "http://" : "https://") + text
+        }
+        while text.hasSuffix("/") && text.count > "https://".count { text.removeLast() }
+        guard let url = URL(string: text) else { throw AudiobookshelfError.invalidServerURL }
+        return try normalized(url)
+    }
+
+    nonisolated static func isLocalNetworkHost(_ hostAndPort: String) -> Bool {
+        let host = (hostAndPort.split(separator: ":").first.map(String.init) ?? hostAndPort).lowercased()
+        if host == "localhost" || host.hasSuffix(".local") || !host.contains(".") { return true }
+        let octets = host.split(separator: ".").compactMap { Int($0) }
+        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
+        switch (octets[0], octets[1]) {
+        case (10, _), (127, _), (192, 168), (169, 254): return true
+        case (172, let b) where (16...31).contains(b): return true
+        case (100, let b) where (64...127).contains(b): return true   // CGNAT / Tailscale
+        default: return false
+        }
+    }
+
+    nonisolated private static func mapped(_ error: URLError) -> AudiobookshelfError {
+        switch error.code {
+        case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
+            return .offline
+        case .appTransportSecurityRequiresSecureConnection:
+            return .insecureConnection
+        case .badURL, .unsupportedURL:
+            return .invalidServerURL
+        default:
+            return .unreachableServer
+        }
+    }
+
+    nonisolated private static func sameOriginURL(_ string: String, base: URL) throws -> URL {
+        guard let url = URL(string: string, relativeTo: base)?.absoluteURL,
+              url.host == base.host, url.scheme == base.scheme, url.port == base.port else {
+            throw AudiobookshelfError.invalidMediaURL
+        }
+        // Stored URLs must never carry a credential, even one that slipped into the input.
+        guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw AudiobookshelfError.invalidMediaURL
+        }
+        parts.queryItems = parts.queryItems?.filter { $0.name != "token" }
+        if parts.queryItems?.isEmpty == true { parts.queryItems = nil }
+        guard let clean = parts.url else { throw AudiobookshelfError.invalidMediaURL }
+        return clean
+    }
+
+    nonisolated private static func appendingToken(_ token: String, to url: URL) throws -> URL {
+        guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            throw AudiobookshelfError.invalidMediaURL
+        }
+        var items = parts.queryItems ?? []
+        items.append(URLQueryItem(name: "token", value: token))
+        parts.queryItems = items
+        guard let result = parts.url else { throw AudiobookshelfError.invalidMediaURL }
+        return result
+    }
+
+    nonisolated private static func token(for credential: ABSCredential) -> String {
+        switch credential {
+        case .session(let access, _): access
+        case .apiKey(let key): key
+        }
+    }
+
     private static func applyAuth(_ credential: ABSCredential, to request: inout URLRequest) {
         switch credential {
         case .session(let access, _): request.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
@@ -234,7 +372,36 @@ private nonisolated struct LibrariesResponse: Decodable { let libraries: [ABSLib
 private nonisolated struct MediaProgressResponse: Decodable { let mediaProgress: [ABSMediaProgress] }
 private nonisolated struct LoginResponse: Decodable {
     let user: User
-    struct User: Decodable { let accessToken: String?; let refreshToken: String? }
+    struct User: Decodable {
+        let accessToken: String?
+        let refreshToken: String?
+        var username: String? = nil
+    }
+}
+
+/// Reads (never verifies) the payload of an ABS-issued JWT. Used only for UX decisions — the
+/// server stays the authority on whether a token is valid.
+nonisolated enum ABSJWT {
+    static func payload(of token: String) -> [String: Any]? {
+        let parts = token.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var base64 = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        base64 += String(repeating: "=", count: (4 - base64.count % 4) % 4)
+        guard let data = Data(base64Encoded: base64),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object
+    }
+
+    static func expiry(of token: String) -> Date? {
+        guard let exp = payload(of: token)?["exp"] as? Double else { return nil }
+        return Date(timeIntervalSince1970: exp)
+    }
+
+    /// ABS API keys are JWTs whose payload carries `type: "api"` and a `keyId` (verified on 2.36.1).
+    static func isAudiobookshelfAPIKey(_ token: String) -> Bool {
+        guard let payload = payload(of: token) else { return false }
+        return payload["type"] as? String == "api" && payload["keyId"] != nil
+    }
 }
 private nonisolated struct PlaybackRequest: Encodable {
     let deviceInfo: DeviceInfo

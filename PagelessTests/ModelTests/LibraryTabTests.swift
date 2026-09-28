@@ -20,7 +20,7 @@ struct LibraryTabTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let sources = BookSourceRegistry.sources
+        let sources = BookSourceRegistry.sources(isAudiobookshelfConfigured: false)
         defaults.set("librivox", forKey: ShelvesSourcePreference.storageKey)
 
         #expect(defaults.string(forKey: ShelvesSourcePreference.storageKey) == "librivox")
@@ -36,24 +36,35 @@ struct LibraryTabTests {
         ) == "librivox")
     }
 
-    @Test func registryProvidesLibriVoxAsItsOnlyConfiguredSource() {
-        let sources = BookSourceRegistry.sources
+    @Test func registryListsLibriVoxThenAudiobookshelf() {
+        let sources = BookSourceRegistry.sources(isAudiobookshelfConfigured: false)
 
-        #expect(sources.map(\.id) == ["librivox"])
+        #expect(sources.map(\.id) == ["librivox", "audiobookshelf"])
         #expect(sources.first?.name == "LibriVox")
         #expect(sources.first?.isConfigured == true)
+        #expect(sources.last?.name == "Audiobookshelf")
+        #expect(sources.last?.isConfigured == false)
+        #expect(BookSourceRegistry.sources(isAudiobookshelfConfigured: true).last?.isConfigured == true)
     }
 
-    @Test func aSingleRegisteredSourceOffersNoChoice() {
-        // The Shelves tab only grows its chevron + source menu once there is something to switch
-        // between; today LibriVox is alone, so the tab behaves like any other tab.
-        #expect(BookSourceRegistry.sources.count == 1)
+    @Test func theShelvesMenuAlwaysOffersAChoice() {
+        // Audiobookshelf is always listed (choosing it unconfigured opens the connect sheet), so the
+        // Shelves tab always shows its chevron + source menu.
+        #expect(BookSourceRegistry.sources(isAudiobookshelfConfigured: false).count == 2)
     }
 
-    @Test func unconfiguredSourceNeverResolvesAsTheSelection() {
-        let pending = BookSource(id: "audiobookshelf", name: "Audiobookshelf", isConfigured: false)
-        let sources = BookSourceRegistry.sources + [pending]
-
+    @Test func unconfiguredAudiobookshelfFallsBackToLibriVox() {
+        let sources = BookSourceRegistry.sources(isAudiobookshelfConfigured: false)
         #expect(ShelvesSourcePreference.resolvedSourceID("audiobookshelf", from: sources) == "librivox")
+    }
+
+    @Test func configuredAudiobookshelfIsHonouredAndSurvivesDisconnect() {
+        let connected = BookSourceRegistry.sources(isAudiobookshelfConfigured: true)
+        #expect(ShelvesSourcePreference.resolvedSourceID("audiobookshelf", from: connected) == "audiobookshelf")
+        #expect(ShelvesSourcePreference.resolvedSourceID("librivox", from: connected) == "librivox")
+
+        // After Disconnect the stored id stays, but resolves to LibriVox so the tab is never blank.
+        let disconnected = BookSourceRegistry.sources(isAudiobookshelfConfigured: false)
+        #expect(ShelvesSourcePreference.resolvedSourceID("audiobookshelf", from: disconnected) == "librivox")
     }
 }

@@ -116,7 +116,7 @@ struct ImportAudiobookSheet: View {
     /// this is the fallback path when import couldn't auto-match the files to a backup.
     private var showsCloudMatchHint: Bool {
         IcloudSyncGate.isEnabled()
-            && allBooks.contains { !$0.isDownloaded && !$0.isFreeBook }
+            && allBooks.contains { $0.isCloudOnlyOrphan }
     }
 
     private func importAudiobook() {

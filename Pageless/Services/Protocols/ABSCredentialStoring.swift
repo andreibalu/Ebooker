@@ -8,6 +8,14 @@ nonisolated enum ABSCredential: Codable, Equatable, Sendable {
 nonisolated struct ABSConnection: Codable, Equatable, Sendable {
     let baseURL: URL
     let credential: ABSCredential
+    /// Display-only ("Signed in as …"). Optional so a connection saved before it existed decodes.
+    var username: String? = nil
+
+    init(baseURL: URL, credential: ABSCredential, username: String? = nil) {
+        self.baseURL = baseURL
+        self.credential = credential
+        self.username = username
+    }
 }
 
 nonisolated protocol ABSCredentialStoring: Sendable {

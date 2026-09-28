@@ -25,7 +25,7 @@ struct MatchCloudEntrySheet: View {
 
     private var candidates: [Audiobook] {
         allBooks
-            .filter { $0.id != localBook.id && !$0.isDownloaded && !$0.isFreeBook }
+            .filter { $0.id != localBook.id && $0.isCloudOnlyOrphan }
             .filter {
                 searchText.isEmpty
                     || $0.title.localizedCaseInsensitiveContains(searchText)

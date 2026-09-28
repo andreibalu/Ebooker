@@ -17,8 +17,22 @@ struct BookSource: Identifiable, Hashable {
 
 enum BookSourceRegistry {
     static let librivox = BookSource(id: "librivox", name: "LibriVox", isConfigured: true)
+    static let audiobookshelfID = "audiobookshelf"
 
-    static var sources: [BookSource] { [librivox] }
+    /// The user's own Audiobookshelf server. Always listed — choosing it while unconfigured opens
+    /// the connect sheet — and configured once a connection is stored in the Keychain.
+    static func audiobookshelf(isConfigured: Bool) -> BookSource {
+        BookSource(id: audiobookshelfID, name: "Audiobookshelf", isConfigured: isConfigured)
+    }
+
+    static func sources(isAudiobookshelfConfigured: Bool) -> [BookSource] {
+        [librivox, audiobookshelf(isConfigured: isAudiobookshelfConfigured)]
+    }
+
+    /// Live registry: ABS configuration follows the stored credentials via `ABSAccount`.
+    static var sources: [BookSource] {
+        sources(isAudiobookshelfConfigured: ABSAccount.shared.isConnected)
+    }
 }
 
 enum ShelvesSourcePreference {

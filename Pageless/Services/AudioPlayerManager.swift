@@ -72,6 +72,9 @@ struct AudioPlayerLoadPreparation {
     let loadDuration: @MainActor (AVAsset) async throws -> CMTime
     /// Preparation-only hook. Must not seek the shared AVPlayer.
     let prepareSeek: @MainActor (AVAsset, CMTime) async -> Bool
+    /// Turns a stored, token-less Audiobookshelf track URL into a playable one. Resolved here, at
+    /// play time, so no credential is ever persisted and a JWT refresh never breaks an older book.
+    var resolveAudiobookshelfURL: @MainActor (URL) async throws -> URL = { url in url }
 }
 
 @MainActor
@@ -109,6 +112,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var interruptionController = AudioSessionInterruptionController()
     private var loadPreparation: AudioPlayerLoadPreparation
 
+    /// Receives Audiobookshelf progress at the recorder flush points. Fire-and-forget by contract.
+    var audiobookshelfProgressSink: @MainActor (ABSProgressSnapshot) -> Void = { ABSProgressReporter.report($0) }
+    /// One silent re-resolve per load when an Audiobookshelf stream fails (e.g. its token aged out
+    /// mid-listen); a second failure surfaces the error.
+    private var audiobookshelfRecoveryLoadToken: UInt64?
+
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
     private let sessionRecorder = ReadingSessionRecorder()
@@ -137,7 +146,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 loadDuration: { asset in
                     try await asset.load(.duration)
                 },
-                prepareSeek: { _, _ in true }
+                prepareSeek: { _, _ in true },
+                resolveAudiobookshelfURL: { url in
+                    try await ABSAccount.shared.client.playbackURL(forStoredURL: url)
+                }
             )
         }
         player.automaticallyWaitsToMinimizeStalling = true
@@ -156,6 +168,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 self.updateProgressMarkerIfNeeded()
                 self.persistPlayback(force: true)
                 self.sessionRecorder.flush(context: self.modelContext)
+                self.reportAudiobookshelfProgress()
             }
         }
 
@@ -300,6 +313,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         updateProgressMarkerIfNeeded()
         persistPlayback(force: true)
         sessionRecorder.flush(context: modelContext)
+        reportAudiobookshelfProgress()
         updateNowPlayingInfo()
     }
 
@@ -418,11 +432,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     // MARK: - Private
 
-    private func load(audiobook: Audiobook, trackIndex: Int, time: Double, autoplay: Bool) async {
+    private func load(
+        audiobook: Audiobook,
+        trackIndex: Int,
+        time: Double,
+        autoplay: Bool,
+        isAudiobookshelfRecovery: Bool = false
+    ) async {
         guard audiobook.sortedTracks.indices.contains(trackIndex) else { return }
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
 
         let loadToken = beginLoad()
+        audiobookshelfRecoveryLoadToken = isAudiobookshelfRecovery ? loadToken : nil
         persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
         let showsStreamLoading = !audiobook.isDownloaded && autoplay
         loadingPlaybackBookID = showsStreamLoading ? audiobook.id : nil
@@ -436,12 +457,24 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             } else if let remoteURL = track.remoteURL {
                 guard loadPreparation.isNetworkAvailable() else {
                     failCurrentLoad(
-                        "You're offline. Download this book to listen without internet.",
+                        audiobook.isAudiobookshelfBook
+                            ? "You're offline. Connect to the internet to stream from your Audiobookshelf server."
+                            : "You're offline. Download this book to listen without internet.",
                         loadToken: loadToken
                     )
                     return
                 }
-                assetURL = remoteURL
+                if audiobook.isAudiobookshelfBook {
+                    do {
+                        assetURL = try await loadPreparation.resolveAudiobookshelfURL(remoteURL)
+                    } catch {
+                        failCurrentLoad(Self.audiobookshelfPlaybackMessage(for: error), loadToken: loadToken)
+                        return
+                    }
+                    guard isCurrentLoad(loadToken) else { return }
+                } else {
+                    assetURL = remoteURL
+                }
             } else {
                 failCurrentLoad("No audio source available for this track.", loadToken: loadToken)
                 return
@@ -471,6 +504,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             // Commit only after every suspending preparation step succeeds. Until this point,
             // current model state and shared AVPlayer remain owned by prior request.
             player.currentItem?.cancelPendingSeeks()
+            // Track or book change is a flush point: hand the outgoing position to the server.
+            reportAudiobookshelfProgress()
             player.pause()
             isPlaying = false
             player.replaceCurrentItem(with: item)
@@ -498,9 +533,23 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 let failed = item.status == .failed
                 Task { @MainActor [weak self] in
                     guard let self, failed, self.isCurrentLoad(loadToken) else { return }
+                    let failedBook = self.currentAudiobook?.id == audiobookID ? self.currentAudiobook : nil
+                    if let failedBook, failedBook.isAudiobookshelfBook, self.audiobookshelfRecoveryLoadToken == nil {
+                        // Re-resolve once with a fresh token from where the listener was.
+                        let resumeAt = self.currentTime
+                        let index = self.currentTrackIndex
+                        let resumePlaying = self.isPlaying || self.loadingPlaybackBookID == audiobookID
+                        Task { @MainActor in
+                            await self.load(audiobook: failedBook, trackIndex: index, time: resumeAt,
+                                            autoplay: resumePlaying, isAudiobookshelfRecovery: true)
+                        }
+                        return
+                    }
                     self.isLoadingItem = false
                     self.clearLoadingPlayback(for: audiobookID)
-                    self.playerErrorMessage = "Unpaged could not open this audio stream."
+                    self.playerErrorMessage = failedBook?.isAudiobookshelfBook == true
+                        ? "Unpaged couldn't stream this book from your Audiobookshelf server."
+                        : "Unpaged could not open this audio stream."
                 }
             }
 
@@ -667,7 +716,38 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         )
         sessionRecorder.end(context: modelContext)
         currentTime = duration
+        reportAudiobookshelfProgress(isFinished: true)
         updateNowPlayingInfo()
+    }
+
+    // MARK: - Audiobookshelf progress
+
+    /// Pushes the current position of an Audiobookshelf book to its server. Called at the same
+    /// flush points as the reading-session recorder: pause, track/book change, background, finish.
+    private func reportAudiobookshelfProgress(isFinished: Bool = false) {
+        guard let audiobook = currentAudiobook, audiobook.isAudiobookshelfBook,
+              let snapshot = AudiobookshelfLibraryService.progressSnapshot(
+                  for: audiobook,
+                  trackIndex: currentTrackIndex,
+                  timeInTrack: currentTime,
+                  isFinished: isFinished
+              ) else { return }
+        audiobookshelfProgressSink(snapshot)
+    }
+
+    static func audiobookshelfPlaybackMessage(for error: Error) -> String {
+        switch error as? AudiobookshelfError {
+        case .notConnected?:
+            return "Connect your Audiobookshelf server in Settings to play this book."
+        case .invalidMediaURL?:
+            return "This book is from a different Audiobookshelf server. Connect to that server to play it."
+        case .badCredentials?, .expiredToken?, .inactiveAPIKey?:
+            return "Your Audiobookshelf sign-in has expired. Reconnect in Settings to keep listening."
+        case .offline?:
+            return "You're offline. Connect to the internet to stream from your Audiobookshelf server."
+        default:
+            return "Unpaged can't reach your Audiobookshelf server right now."
+        }
     }
 
     private static var hasConfiguredAudioSessionCategory = false

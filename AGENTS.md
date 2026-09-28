@@ -213,6 +213,16 @@ All purchases are StoreKit-owned; AI and iCloud access is gated on `Transaction.
 
 2. **Legacy seed catalog (CarPlay)** — `FreeBookCatalogService`: 5 hand-picked Internet Archive classics, downloaded via `FreeBookDownloadService` (background URLSession; published progress/errors). Consumed only by `CarPlayCoordinator` + `LibraryViewModel`. **Don't extend this path for new iPhone features — use the LibriVox path.**
 
+### Audiobookshelf (user's own server, Shelves source)
+
+- `BookSourceRegistry.sources` = LibriVox + Audiobookshelf (always listed; choosing it unconfigured opens `ABSConnectView`). `isConfigured` follows `ABSAccount.shared` (Keychain via `ABSKeychainCredentialStore`). `ShelvesSourcePreference` falls back to LibriVox when ABS is not connected.
+- `AudiobookshelfClient` (actor) — login (`x-return-tokens`) or API key (Bearer); 401 → one shared refresh. An API-key-shaped JWT that gets 401 maps to `.inactiveAPIKey`.
+- **Tokens never persist outside the Keychain.** `AudioTrack.remoteURLString` for ABS books is token-less (`storedStreamURL`); `AudioPlayerManager` appends `?token=` at play time via `playbackURL(forStoredURL:)` (refreshes a session with <45 min left). `AudiobookshelfLibraryService.addToLibrary` refuses credential-bearing URLs.
+- ABS books are marked by `Audiobook.absItemID` (`_absItemID` backing field), `isDownloaded == false`, `isFreeBook == false`. They are `isStreamingOnly`, never `isCloudOnlyOrphan` — use those computed properties (and `isInActiveLibrary`) instead of raw `!isDownloaded && !isFreeBook` checks. Cloud Library bucket: Streaming. Delete = remove from Unpaged only.
+- Progress: `ABSProgressReporter` pushes the book-global position fire-and-forget at load/track change, pause, background and finish. Adding a book seeds its position from server progress.
+- ATS: only `NSAllowsLocalNetworking` (+ `NSLocalNetworkUsageDescription`). Non-local `http://` servers are intentionally unsupported (`.insecureConnection`).
+- UI in `Views/Shelves/Audiobookshelf/` (connect sheet, browse, detail, `ABSServerSettingsView`); view models in `ViewModels/ABSViewModels.swift`.
+
 ### Reading Activity & Stats
 
 - `ReadingSession` = only persisted row — one chunk = one book × one wall-clock hour bucket, metadata snapshotted.

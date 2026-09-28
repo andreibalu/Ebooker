@@ -190,12 +190,31 @@ struct PlayerView: View {
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Color.amber)
+            } else if let book = player.currentAudiobook, book.absItemID != nil {
+                // Audiobookshelf books: the file ordinal means nothing to a listener. Name the
+                // book instead (the track line above already carries the chapter).
+                if let line = audiobookshelfContextLine(for: book) {
+                    Text(line)
+                        .font(.system(.caption, design: .serif))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("player.bookContext")
+                }
             } else {
                 Text("File \(player.currentTrackIndex + 1)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    /// "Frankenstein · Part 1 of 2" for multi-file books; nil for single-file books, whose track
+    /// line already shows the book title (`AudioTrack.displayTitle`).
+    private func audiobookshelfContextLine(for book: Audiobook) -> String? {
+        let count = book.tracks.count
+        guard count > 1 else { return nil }
+        let part = min(player.currentTrackIndex, count - 1) + 1
+        return "\(book.title) · Part \(part) of \(count)"
     }
 
     // MARK: - Progress

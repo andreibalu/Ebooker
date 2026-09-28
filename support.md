@@ -26,6 +26,18 @@ On supported iOS versions, Unpaged also shows one download Live Activity on the 
 
 At the top of the tab, **Collections** are hand-picked shelves of classics grouped by theme — for example Gothic & Horror, Detective & Mystery, or Short Listens you can finish in an afternoon. Every collection book streams, downloads, and samples exactly like the rest of the free catalog.
 
+### Can I use my Audiobookshelf server?
+
+Yes. If you run [Audiobookshelf](https://www.audiobookshelf.org) (or someone shares a server with you), open the **Shelves** tab, tap **Shelves** again to open the source menu, and choose **Audiobookshelf** — or go to **Settings → Audiobookshelf Server**. Enter your server address (for example `https://abs.example.com`) and either sign in with your username and password or paste an API key.
+
+- **API keys** are created in Audiobookshelf under **Settings → API Keys**. A new key may need to be switched on there before Unpaged can use it.
+- **Browsing:** Shelves shows your book libraries with **Continue Listening**, **Recently Added**, and the full library with search. If your server has several book libraries, tap the library name to switch. Podcast libraries aren't shown.
+- **Listening:** tap **Play** on a book to add it to your Library as a streaming book and start listening. Nothing is downloaded, so your server has to be reachable while you listen. Your position is sent back to the server when you pause, leave the app, or finish, so other Audiobookshelf apps pick up where you left off.
+- **Addresses:** `https://` addresses work anywhere. A plain `http://` address only works for a server on your local network (for example `http://192.168.1.20:13378` or `http://nas.local:13378`); iOS will ask to allow **Local Network** access the first time. For remote access, put the server behind HTTPS (for example with a reverse proxy or Tailscale HTTPS certificates).
+- **Privacy:** your login stays on this iPhone, in the Keychain. **Settings → Audiobookshelf Server → Disconnect** removes it. Books you added stay in your Library but won't play until you reconnect.
+
+Removing an Audiobookshelf book from your Library only removes it from Unpaged; it stays on your server and you can add it again from Shelves.
+
 ### Can I choose a different narrator for a free book?
 
 Often, yes. Many classics were recorded more than once by LibriVox volunteers. When other recordings of the same book exist, the book's detail page shows an **Other Recordings** section listing every alternative version in the same language — each with its length and a 20-second sample button that starts after the usual LibriVox intro so you can compare narrators before downloading. This works both from the Shelves tab and from a free book already in your library.
@@ -62,7 +74,7 @@ Yes. Browse your library, play and pause, skip between tracks, and save bookmark
 
 ### Does Unpaged work offline?
 
-Anything you've downloaded plays offline, including LibriVox titles. Streaming-only library entries and the LibriVox catalog browser require an internet connection.
+Anything you've downloaded plays offline, including LibriVox titles. Streaming-only library entries (including books from your Audiobookshelf server) and the LibriVox catalog browser require a network connection.
 
 ### How do I restore my purchases on a new device?
 
@@ -102,7 +114,7 @@ When iCloud Sync is on, every book shows a small **iCloud checkmark** — on its
 2. Open **Settings → Sync library with iCloud**, turn it on, then quit and reopen Unpaged. Within a minute or two your library titles and metadata will appear.
 3. Open **Settings → iCloud Library** to see **every book you've ever added** — nothing is hidden. Books are grouped so you can tell at a glance what's backed up and what's on this device:
    - **On this iPhone** — books whose audio is downloaded here (your own imports and downloaded free books). These show a checkmark; they're safe in iCloud and ready to play offline.
-   - **Streaming** — free books you're keeping as streaming entries. No download, but fully backed up.
+   - **Streaming** — free books and Audiobookshelf books you're keeping as streaming entries. No download, but fully backed up. Audiobookshelf books play again on a new iPhone once you connect the same server there.
    - **In iCloud only** — your own imports that synced down without their audio. Tap **Locate…**, pick the same audio file from Files / iCloud Drive, and Unpaged will fingerprint-match it. If the file matches, your bookmarks and progress flow straight back onto it. If it doesn't match exactly, Unpaged asks you to explicitly confirm adoption before replacing the cloud book's audio.
    - **Removed free books** — free books you removed from your library. Tap **Stream** to bring one back instantly, or open it and re-download for offline listening. Your bookmarks, progress, EQ, and recaps are already restored.
 4. You can also just re-import a book the normal way (tap **+** in the library) — if the file matches an iCloud copy, Unpaged offers to restore it for you on the spot.

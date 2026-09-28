@@ -53,7 +53,7 @@ struct PagelessApp: App {
         // skip cloud-only own orphans and archived (removed) free books. The flags are computed
         // over private backing fields, so they can't be expressed in #Predicate; filter in memory.
         guard let latest = try? context.fetch(descriptor).first(where: {
-            ($0.isDownloaded || $0.isFreeBook) && !$0.isArchived
+            $0.isInActiveLibrary
         }) else { return }
         let player = appDelegate.audioPlayer
         Task { @MainActor in

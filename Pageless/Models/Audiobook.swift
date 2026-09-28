@@ -70,9 +70,30 @@ final class Audiobook: Identifiable {
         set { _isArchived = newValue }
     }
 
+    // Nullable for lightweight migration (same pattern as _catalogId). The Audiobookshelf library
+    // item id for a book added from the user's own ABS server; nil for every other book. No
+    // `.unique` — this is a synced model. Never store a server token alongside it.
+    private var _absItemID: String?
+
+    var absItemID: String? {
+        get { _absItemID }
+        set { _absItemID = newValue }
+    }
+
+    /// Streamed from the user's Audiobookshelf server. Such a book is `!isDownloaded && !isFreeBook`
+    /// — the same shape as an own-book iCloud orphan — so every orphan check must exclude it.
+    var isAudiobookshelfBook: Bool { !(absItemID ?? "").isEmpty }
+
     // Own books that synced from iCloud but lack local files have isDownloaded==false too —
-    // isFreeBook distinguishes them from genuinely streaming LibriVox entries.
-    var isStreamingOnly: Bool { !isDownloaded && isFreeBook }
+    // isFreeBook / isAudiobookshelfBook distinguish them from genuinely streaming entries.
+    var isStreamingOnly: Bool { !isDownloaded && (isFreeBook || isAudiobookshelfBook) }
+
+    /// An own (imported) book whose audio is missing on this device: restorable from Cloud Library
+    /// via "Locate…". Free and Audiobookshelf books stream from a URL and are never orphans.
+    var isCloudOnlyOrphan: Bool { !isDownloaded && !isFreeBook && !isAudiobookshelfBook }
+
+    /// Belongs in the main grid (and CarPlay / Siri) on this device: playable here, not removed.
+    var isInActiveLibrary: Bool { (isDownloaded || isFreeBook || isAudiobookshelfBook) && !isArchived }
 
     var isFavorite: Bool {
         get { _isFavorite ?? false }
@@ -193,6 +214,7 @@ final class Audiobook: Identifiable {
         isFavorite: Bool = false,
         isFreeBook: Bool = false,
         catalogId: String? = nil,
+        absItemID: String? = nil,
         isDownloaded: Bool = true,
         tracks: [AudioTrack] = []
     ) {
@@ -211,6 +233,7 @@ final class Audiobook: Identifiable {
         self._isFavorite = isFavorite
         self._isFreeBook = isFreeBook
         self._catalogId = catalogId
+        self._absItemID = absItemID
         self._isDownloaded = isDownloaded
         self._tracks = tracks
     }

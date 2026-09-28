@@ -136,6 +136,150 @@ struct AudiobookshelfClientTests {
         #expect(progress.map(\.libraryItemId) == ["item1"])
     }
 
+    // MARK: - Stream URLs (tokens only at play time)
+
+    private static let track = ABSAudioTrack(index: 1, startOffset: 0, duration: 20, title: "chapter-01.mp3",
+                                             contentUrl: "/api/items/item1/file/42", mimeType: "audio/mpeg")
+
+    @Test func storedStreamURLIsSameOriginAndTokenless() async throws {
+        let client = makeSessionClient()
+        let stored = try await client.storedStreamURL(for: Self.track)
+        #expect(stored.absoluteString == "https://books.example.test/api/items/item1/file/42")
+        #expect(!stored.absoluteString.contains("token"))
+        #expect(!stored.absoluteString.contains("old"))
+        #expect(AudiobookshelfLibraryService.containsCredential(stored) == false)
+    }
+
+    @Test func storedStreamURLStripsATokenSmuggledInByTheServer() async throws {
+        let client = makeSessionClient()
+        let track = ABSAudioTrack(index: 1, startOffset: 0, duration: 20, title: "chapter-01.mp3",
+                                  contentUrl: "/api/items/item1/file/42?token=leak&x=1", mimeType: nil)
+        let stored = try await client.storedStreamURL(for: track)
+        #expect(stored.absoluteString == "https://books.example.test/api/items/item1/file/42?x=1")
+    }
+
+    @Test func streamURLAppendsTheCurrentToken() async throws {
+        let url = try await makeSessionClient().streamURL(for: Self.track)
+        #expect(url.absoluteString == "https://books.example.test/api/items/item1/file/42?token=old")
+
+        let keyStore = MockABSCredentialStore(ABSConnection(baseURL: base, credential: .apiKey("k3y")))
+        let keyClient = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: keyStore)
+        let keyURL = try await keyClient.streamURL(for: Self.track)
+        #expect(URLComponents(url: keyURL, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "token", value: "k3y")])
+    }
+
+    @Test func crossOriginTrackURLsAreRejected() async throws {
+        let client = makeSessionClient()
+        let foreign = ABSAudioTrack(index: 1, startOffset: 0, duration: 1, title: "x",
+                                    contentUrl: "https://evil.example/steal.mp3", mimeType: nil)
+        await #expect(throws: AudiobookshelfError.invalidMediaURL) { try await client.storedStreamURL(for: foreign) }
+        await #expect(throws: AudiobookshelfError.invalidMediaURL) { try await client.streamURL(for: foreign) }
+    }
+
+    @Test func playbackURLUsesAFreshTokenWithoutRefreshingWhenFarFromExpiry() async throws {
+        let access = Self.jwt(["exp": Date().addingTimeInterval(3 * 3600).timeIntervalSince1970, "type": "access"])
+        let store = MockABSCredentialStore(ABSConnection(baseURL: base, credential: .session(accessToken: access, refreshToken: "r")))
+        MockABSURLProtocol.handler = { _ in
+            Issue.record("No network expected")
+            return (500, Data())
+        }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        let url = try await client.playbackURL(forStoredURL: URL(string: "https://books.example.test/api/items/item1/file/42")!)
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first?.value == access)
+    }
+
+    @Test func playbackURLRefreshesANearlyExpiredSessionFirst() async throws {
+        let access = Self.jwt(["exp": Date().addingTimeInterval(120).timeIntervalSince1970, "type": "access"])
+        let store = MockABSCredentialStore(ABSConnection(baseURL: base, credential: .session(accessToken: access, refreshToken: "r"), username: "reader"))
+        MockABSURLProtocol.handler = { request in
+            #expect(request.url?.path == "/auth/refresh")
+            return (200, Self.json(#"{"user":{"accessToken":"fresh","refreshToken":"r2"}}"#))
+        }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        let url = try await client.playbackURL(forStoredURL: URL(string: "https://books.example.test/api/items/item1/file/42")!)
+        #expect(url.absoluteString == "https://books.example.test/api/items/item1/file/42?token=fresh")
+        #expect(try store.load()?.credential == .session(accessToken: "fresh", refreshToken: "r2"))
+        #expect(try store.load()?.username == "reader")
+    }
+
+    @Test func playbackURLRefusesAStoredURLFromAnotherServer() async throws {
+        let client = makeSessionClient()
+        await #expect(throws: AudiobookshelfError.invalidMediaURL) {
+            try await client.playbackURL(forStoredURL: URL(string: "https://other.example/api/items/item1/file/42")!)
+        }
+    }
+
+    // MARK: - Connect errors
+
+    @Test func inactiveAPIKeyIsDistinguishedFromAWrongKey() async throws {
+        MockABSURLProtocol.handler = { _ in (401, Self.json("Unauthorized")) }
+        let apiKeyToken = Self.jwt(["keyId": "abc", "name": "phone", "type": "api", "iat": 1])
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: MockABSCredentialStore())
+        await #expect(throws: AudiobookshelfError.inactiveAPIKey) { try await client.connect(serverURL: base, apiKey: apiKeyToken) }
+        await #expect(throws: AudiobookshelfError.badCredentials) { try await client.connect(serverURL: base, apiKey: "typo") }
+    }
+
+    @Test func apiKeyConnectRemembersTheUsername() async throws {
+        let store = MockABSCredentialStore()
+        MockABSURLProtocol.handler = { _ in (200, Self.json(#"{"user":{"username":"reader"}}"#)) }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        try await client.connect(serverURL: base, apiKey: "key")
+        #expect(try store.load()?.username == "reader")
+    }
+
+    @Test func aServerWithoutTheLoginRouteIsNotAudiobookshelf() async throws {
+        MockABSURLProtocol.handler = { _ in (404, Self.json("<html>Not found</html>")) }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: MockABSCredentialStore())
+        await #expect(throws: AudiobookshelfError.notAudiobookshelfServer) {
+            try await client.login(serverURL: base, username: "a", password: "b")
+        }
+    }
+
+    // MARK: - Server address parsing
+
+    @Test func serverAddressParsing() throws {
+        #expect(try AudiobookshelfClient.serverURL(from: "abs.example.com").absoluteString.hasPrefix("https://abs.example.com"))
+        #expect(try AudiobookshelfClient.serverURL(from: "  https://abs.example.com/  ").host() == "abs.example.com")
+        #expect(try AudiobookshelfClient.serverURL(from: "192.168.1.20:13378").scheme == "http")
+        #expect(try AudiobookshelfClient.serverURL(from: "localhost:13378").port == 13378)
+        #expect(try AudiobookshelfClient.serverURL(from: "nas.local").scheme == "http")
+        #expect(try AudiobookshelfClient.serverURL(from: "http://example.org").scheme == "http")
+        #expect(throws: AudiobookshelfError.invalidServerURL) { try AudiobookshelfClient.serverURL(from: "") }
+        #expect(throws: AudiobookshelfError.invalidServerURL) { try AudiobookshelfClient.serverURL(from: "ftp://files.example") }
+        #expect(throws: AudiobookshelfError.invalidServerURL) { try AudiobookshelfClient.serverURL(from: "my server") }
+    }
+
+    @Test func localNetworkHostClassification() {
+        for host in ["localhost", "nas.local", "nas", "10.0.0.2", "127.0.0.1:13378", "172.20.1.1", "192.168.0.5", "100.100.1.1"] {
+            #expect(AudiobookshelfClient.isLocalNetworkHost(host), "\(host)")
+        }
+        for host in ["abs.example.com", "8.8.8.8", "172.32.0.1", "myhost.ts.net"] {
+            #expect(!AudiobookshelfClient.isLocalNetworkHost(host), "\(host)")
+        }
+    }
+
+    // MARK: - Expanded item shape (ABS 2.36)
+
+    @Test func expandedItemReadsTracksAndTagTitles() throws {
+        let json = #"{"id":"i","libraryId":"l","mediaType":"book","addedAt":1700000000000,"media":{"metadata":{"title":"Frankenstein","authorName":"Mary Shelley","narratorName":""},"duration":40,"coverPath":null,"audioTracks":null,"tracks":[{"index":2,"startOffset":20,"duration":20,"title":"chapter-02.mp3","contentUrl":"/api/items/i/file/2","mimeType":"audio/mpeg","metaTags":{}},{"index":1,"startOffset":0,"duration":20,"title":"chapter-01.mp3","contentUrl":"/api/items/i/file/1","mimeType":"audio/mpeg","metaTags":{"tagTitle":"Letter 1"}}],"chapters":[]}}"#
+        let item = try JSONDecoder().decode(ABSLibraryItem.self, from: Data(json.utf8))
+        #expect(item.media.playableTracks.map(\.displayTitle) == ["Letter 1", "chapter-02"])
+        #expect(item.media.hasCover == false)
+        #expect(item.media.chapterCount == 2)
+        #expect(item.media.metadata.displayNarrator == nil)
+        #expect(item.addedDate == Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    private static func jwt(_ payload: [String: Any]) -> String {
+        func b64(_ data: Data) -> String {
+            data.base64EncodedString().replacingOccurrences(of: "+", with: "-")
+                .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
+        }
+        let header = b64(Data(#"{"alg":"HS256","typ":"JWT"}"#.utf8))
+        let body = b64(try! JSONSerialization.data(withJSONObject: payload))
+        return "\(header).\(body).signature"
+    }
+
     private func makeSessionClient() -> AudiobookshelfClient {
         let store = MockABSCredentialStore(ABSConnection(baseURL: base,
             credential: .session(accessToken: "old", refreshToken: "refresh-old")))

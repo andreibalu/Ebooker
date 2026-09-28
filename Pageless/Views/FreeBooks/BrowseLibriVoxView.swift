@@ -13,8 +13,8 @@ import SwiftUI
 
 /// The page's entire type scale — four text sizes, nothing else. Every label on
 /// this surface uses one of these so the editorial look never drifts into a
-/// dozen near-identical sizes.
-private enum FBType {
+/// dozen near-identical sizes. Shared with the Audiobookshelf shelf (via `ABSType`).
+enum FBType {
     static let eyebrow: CGFloat = 10   // small-caps section labels & metadata
     static let body: CGFloat = 12      // serif-italic authors, status copy, blurbs
     static let title: CGFloat = 15     // serif row titles, rank numbers, search text
@@ -22,7 +22,7 @@ private enum FBType {
 }
 
 /// Small-caps eyebrow label: SF, semibold, tracked, uppercased, tabular digits.
-private struct FBEyebrow: View {
+struct FBEyebrow: View {
     let text: String
     var color: Color = .secondary
 
@@ -37,7 +37,7 @@ private struct FBEyebrow: View {
 
 /// Thin circular spinner — black arc on a 10% track, matching the prototype's
 /// custom spinner rather than the stock UIActivityIndicator.
-private struct FBSpinner: View {
+struct FBSpinner: View {
     var size: CGFloat = 22
     @State private var spinning = false
 

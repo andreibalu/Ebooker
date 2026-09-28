@@ -12,6 +12,14 @@ struct SettingsView: View {
     @Environment(OnboardingManager.self) private var onboarding
     @EnvironmentObject private var plusEntitlement: PlusEntitlementStore
     @EnvironmentObject private var coffeeTip: CoffeeTipStore
+    /// Called by Audiobookshelf → "Open in Shelves"; the presenter dismisses Settings and switches
+    /// the Shelves tab to the server.
+    var onOpenAudiobookshelf: () -> Void = {}
+    @State private var absAccount = ABSAccount.shared
+
+    init(onOpenAudiobookshelf: @escaping () -> Void = {}) {
+        self.onOpenAudiobookshelf = onOpenAudiobookshelf
+    }
     @Query private var existingAudiobooks: [Audiobook]
 
     @State private var navigationPath: [SettingsDestination] = []
@@ -51,6 +59,12 @@ struct SettingsView: View {
                         )
                     case .coffee:
                         BuyMeACoffeeView(onDismissSheet: { dismiss() })
+                    case .audiobookshelf:
+                        ABSServerSettingsView(
+                            onDismissSheet: { dismiss() },
+                            onOpenInShelves: onOpenAudiobookshelf,
+                            account: absAccount
+                        )
                     }
                 }
         }
@@ -68,6 +82,7 @@ struct SettingsView: View {
                 LazyVStack(spacing: 22) {
                     unlockSection
                     supportSection
+                    sourcesSection
                     playbackSection
                     appSection
                     aboutSection
@@ -162,6 +177,60 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - Sources
+
+    private var sourcesSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSectionHeader(eyebrow: "Sources", title: "Your own shelf.")
+
+            NavigationLink(value: SettingsDestination.audiobookshelf) {
+                SettingsCard {
+                    HStack(spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(SettingsDesign.chipFill)
+                            Image(systemName: "books.vertical")
+                                .font(.system(size: 19, weight: .semibold))
+                                .foregroundStyle(.primary)
+                        }
+                        .frame(width: 44, height: 44)
+                        .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Audiobookshelf Server")
+                                .font(SettingsDesign.displayFont(16, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            Text(absStatusText)
+                                .font(.footnote)
+                                .foregroundStyle(SettingsDesign.secondaryLabel)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .accessibilityIdentifier("settings.audiobookshelf.status")
+                        }
+
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(SettingsDesign.tertiaryLabel)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("settings.audiobookshelf")
+        }
+    }
+
+    private var absStatusText: String {
+        guard let summary = absAccount.summary else { return "Not connected" }
+        if let username = summary.username, !username.isEmpty {
+            return "\(username) · \(summary.host)"
+        }
+        return summary.host
     }
 
     // MARK: - Playback section
@@ -388,6 +457,7 @@ enum SettingsDestination: Hashable {
     case ai
     case icloud
     case coffee
+    case audiobookshelf
 }
 
 // MARK: - Inline expanding option picker (replaces the pushed option list)

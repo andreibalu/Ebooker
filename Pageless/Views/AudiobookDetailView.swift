@@ -98,7 +98,8 @@ struct AudiobookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                if audiobook.isStreamingOnly || downloadEntry != nil {
+                // Offline download is a LibriVox feature; Audiobookshelf books always stream.
+                if (audiobook.isStreamingOnly && !audiobook.isAudiobookshelfBook) || downloadEntry != nil {
                     streamingDownloadSection
                 }
                 resumeAnchorRow

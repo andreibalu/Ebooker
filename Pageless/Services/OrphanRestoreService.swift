@@ -19,7 +19,7 @@ enum OrphanRestoreService {
     static func fetchOrphanCandidates(modelContext: ModelContext) -> [Audiobook] {
         guard let all = try? modelContext.fetch(FetchDescriptor<Audiobook>()) else { return [] }
         return all.filter { book in
-            !book.isDownloaded && !book.isFreeBook
+            book.isCloudOnlyOrphan
         }
     }
 

@@ -33,10 +33,13 @@ enum LibraryBookVisibility {
         isFreeBook: Bool,
         isArchived: Bool,
         isFavorite: Bool,
+        isAudiobookshelfBook: Bool = false,
         tab: LibraryTab,
         downloadEntry: LibriVoxDownloadManager.Entry?
     ) -> Bool {
-        let normallyVisible = (isDownloaded || isFreeBook) && !isArchived
+        // Audiobookshelf books stream from the user's server, so like free books they are visible
+        // without local files — they are never cloud-only orphans.
+        let normallyVisible = (isDownloaded || isFreeBook || isAudiobookshelfBook) && !isArchived
         if tab == .favorites {
             return normallyVisible && isFavorite
         }
@@ -59,6 +62,7 @@ enum LibraryBookVisibility {
                 isFreeBook: book.isFreeBook,
                 isArchived: book.isArchived,
                 isFavorite: book.isFavorite,
+                isAudiobookshelfBook: book.isAudiobookshelfBook,
                 tab: .allBooks,
                 downloadEntry: downloadEntry(book)
             )
@@ -94,6 +98,8 @@ struct ContentView: View {
 
     @State private var viewModel = LibraryViewModel()
     @State private var browseViewModel = BrowseLibriVoxViewModel()
+    @State private var absAccount = ABSAccount.shared
+    @State private var isABSConnectPresented = false
     @State private var selectedTab: LibraryTab = .favorites
     @State private var didApplyInitialTab = false
     @State private var isImporterPresented = false
@@ -191,9 +197,15 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView()
+            SettingsView(onOpenAudiobookshelf: openAudiobookshelfShelves)
             .environmentObject(plusEntitlementStore)
             .environment(onboarding)
+        }
+        .sheet(isPresented: $isABSConnectPresented) {
+            ABSConnectView(account: absAccount) {
+                storedShelvesSourceID = BookSourceRegistry.audiobookshelfID
+                selectedTab = .freeBooks
+            }
         }
         .sheet(isPresented: $isCloudLibraryPresented) {
             NavigationStack {
@@ -222,7 +234,14 @@ struct ContentView: View {
             deleteAlertTitle,
             isPresented: deleteConfirmationBinding
         ) {
-            if viewModel.deleteCandidate?.isStreamingOnly == true {
+            if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
+                Button("Remove from Library", role: .destructive) {
+                    if let book = viewModel.deleteCandidate {
+                        viewModel.deleteAudiobookshelfBook(book, modelContext: modelContext)
+                        viewModel.deleteCandidate = nil
+                    }
+                }
+            } else if viewModel.deleteCandidate?.isStreamingOnly == true {
                 Button("Remove from Library", role: .destructive) {
                     if let book = viewModel.deleteCandidate {
                         viewModel.deleteFreeBook(book, modelContext: modelContext)
@@ -252,7 +271,9 @@ struct ContentView: View {
                 viewModel.deleteCandidate = nil
             }
         } message: {
-            if viewModel.deleteCandidate?.isStreamingOnly == true {
+            if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
+                Text("Removes this book from Unpaged. It stays on your Audiobookshelf server, and you can add it again from Shelves.")
+            } else if viewModel.deleteCandidate?.isStreamingOnly == true {
                 if IcloudSyncGate.isEnabled() {
                     Text("Removes this book from your library on this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream it again anytime.")
                 } else {
@@ -414,7 +435,20 @@ struct ContentView: View {
     }
 
     private var registeredBookSources: [BookSource] {
-        BookSourceRegistry.sources
+        // Read through the observed account so the menu and tab page update on connect/disconnect.
+        BookSourceRegistry.sources(isAudiobookshelfConfigured: absAccount.isConnected)
+    }
+
+    /// Settings → Audiobookshelf → "Open in Shelves": close Settings and show the server's shelf.
+    private func openAudiobookshelfShelves() {
+        isSettingsPresented = false
+        isCloudLibraryPresented = false
+        if absAccount.isConnected {
+            storedShelvesSourceID = BookSourceRegistry.audiobookshelfID
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedTab = .freeBooks
+        }
     }
 
     private var resolvedShelvesSourceID: String {
@@ -458,17 +492,22 @@ struct ContentView: View {
                     Section("Catalog source") {
                         ForEach(registeredBookSources, id: \.id) { source in
                             Button {
-                                storedShelvesSourceID = source.id
+                                if source.isConfigured {
+                                    storedShelvesSourceID = source.id
+                                } else if source.id == BookSourceRegistry.audiobookshelfID {
+                                    // Unconfigured server source: choosing it starts setup.
+                                    isABSConnectPresented = true
+                                }
                             } label: {
                                 if source.id == resolvedShelvesSourceID {
                                     Label(source.name, systemImage: "checkmark")
                                 } else if source.isConfigured {
                                     Text(source.name)
                                 } else {
-                                    Text("\(source.name) — Set up to browse")
+                                    Text("\(source.name)")
+                                    Text("Connect your server")
                                 }
                             }
-                            .disabled(!source.isConfigured)
                             .accessibilityIdentifier("shelvesSource.\(source.id)")
                         }
                     }
@@ -567,7 +606,11 @@ struct ContentView: View {
         case .freeBooks:
             // `resolvedShelvesSourceID` always names a configured source (falling back to
             // LibriVox), so the tab is never blank. A second source branches here on that id.
-            BrowseLibriVoxView(onOpenPlayer: openPlayer, viewModel: browseViewModel)
+            if resolvedShelvesSourceID == BookSourceRegistry.audiobookshelfID {
+                ABSBrowseView(onOpenPlayer: openPlayer, account: absAccount)
+            } else {
+                BrowseLibriVoxView(onOpenPlayer: openPlayer, viewModel: browseViewModel)
+            }
         }
     }
 
@@ -814,6 +857,7 @@ struct ContentView: View {
                 isFreeBook: audiobook.isFreeBook,
                 isArchived: audiobook.isArchived,
                 isFavorite: audiobook.isFavorite,
+                isAudiobookshelfBook: audiobook.isAudiobookshelfBook,
                 tab: tab,
                 downloadEntry: audiobook.catalogId.flatMap(downloadManager.entry(for:))
             )

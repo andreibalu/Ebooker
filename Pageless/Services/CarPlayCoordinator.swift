@@ -238,7 +238,7 @@ final class CarPlayCoordinator: NSObject {
 
         // Mirror the iPhone grid: only books playable on this device — never cloud-only own
         // orphans or archived (user-removed) free books that live solely in the iCloud Library.
-        let library = all.filter { ($0.isDownloaded || $0.isFreeBook) && !$0.isArchived }
+        let library = all.filter { $0.isInActiveLibrary }
         let favoriteBooks = libraryViewModel.sorted(library.filter(\.isFavorite), by: sortRaw)
         let sortedAll = libraryViewModel.sorted(library, by: sortRaw)
 

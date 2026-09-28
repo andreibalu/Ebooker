@@ -35,6 +35,13 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Unpaged connects to the Audiobookshelf server you add, which may be on your local network, to browse and stream your audiobooks.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Unpaged uses the microphone for hands-free voice search of free books while you drive.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>

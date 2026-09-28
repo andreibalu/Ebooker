@@ -74,7 +74,8 @@ final class CloudLibraryRestoreFlow {
 /// shown whether or not its audio is present on this device — so the user can always confirm their
 /// data is backed up. Four buckets cover every possible state with nothing hidden:
 ///   • "On this iPhone"     — downloaded own + free books (audio present locally).
-///   • "Streaming"          — active free books kept as streaming entries (backed up, no local files).
+///   • "Streaming"          — active free books and Audiobookshelf books kept as streaming entries
+///                            (backed up, no local files; ABS books are never orphans).
 ///   • "In iCloud only"     — own books synced without their audio; restore via a "Locate…" picker.
 ///   • "Removed free books" — free books the user removed; one-tap "Stream" brings them back.
 /// A row is only ever removed from iCloud by an explicit swipe-to-delete here.
@@ -106,25 +107,25 @@ struct CloudLibraryView: View {
 
     // Everything whose audio is present on this device — own imports and downloaded free books alike.
     private var onThisPhone: [Audiobook] {
-        byRecency(allBooks.filter { $0.isDownloaded && !$0.isArchived })
+        byRecency(allBooks.filter { CloudLibraryBucket.bucket(for: $0) == .onThisPhone })
     }
 
     // Active free books kept in the library as streaming entries (no local files, but fully backed up).
     // Surfacing these is the whole point of "I always see every book": a streaming free book is safe
     // in iCloud even though nothing is downloaded.
     private var streamingFree: [Audiobook] {
-        byRecency(allBooks.filter { !$0.isDownloaded && $0.isFreeBook && !$0.isArchived })
+        byRecency(allBooks.filter { CloudLibraryBucket.bucket(for: $0) == .streaming })
     }
 
     // Own books that synced down without their audio on this device — restorable via "Locate…".
     private var ownOrphans: [Audiobook] {
-        byRecency(allBooks.filter { !$0.isDownloaded && !$0.isFreeBook })
+        byRecency(allBooks.filter { CloudLibraryBucket.bucket(for: $0) == .iCloudOnly })
     }
 
     // Free books the user removed from their library but that stay backed up in iCloud ("Stream" to
     // bring them back).
     private var archivedFree: [Audiobook] {
-        byRecency(allBooks.filter { $0.isArchived && $0.isFreeBook })
+        byRecency(allBooks.filter { CloudLibraryBucket.bucket(for: $0) == .removedFree })
     }
 
     var body: some View {
@@ -464,5 +465,23 @@ struct CloudLibraryView: View {
 
     private func stopSecurityScopedAccess(_ url: URL) {
         url.stopAccessingSecurityScopedResource()
+    }
+}
+
+/// The four mutually exclusive Cloud Library sections. Audiobookshelf books stream from the
+/// user's server, so they sit under Streaming — never "In iCloud only", which would offer a
+/// "Locate…" file picker for audio that was never on this device.
+enum CloudLibraryBucket: Equatable {
+    case onThisPhone
+    case streaming
+    case iCloudOnly
+    case removedFree
+
+    static func bucket(for book: Audiobook) -> CloudLibraryBucket? {
+        if book.isArchived { return book.isFreeBook ? .removedFree : nil }
+        if book.isDownloaded { return .onThisPhone }
+        if book.isStreamingOnly { return .streaming }
+        if book.isCloudOnlyOrphan { return .iCloudOnly }
+        return nil
     }
 }
