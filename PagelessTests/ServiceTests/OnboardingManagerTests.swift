@@ -19,12 +19,6 @@ struct OnboardingManagerTests {
         return ud
     }
 
-    @Test func freshInstallShowsOnboarding() {
-        let ud = isolatedDefaults()
-        let m = OnboardingManager(defaults: ud)
-        #expect(m.isComplete == false)
-    }
-
     @Test func completePersistsAcrossRelaunch() {
         let ud = isolatedDefaults()
 

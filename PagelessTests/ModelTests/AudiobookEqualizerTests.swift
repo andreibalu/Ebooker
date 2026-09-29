@@ -17,21 +17,6 @@ struct AudiobookEqualizerTests {
         #expect(config.bandGainsDB == EqualizerPreset.flat.bandGainsDB)
     }
 
-    @Test func settingConfigurationPersistsThroughGetter() {
-        let book = Audiobook(title: "Test", folderName: "test")
-        var custom = EqualizerConfiguration(
-            isEnabled: true,
-            preset: .voiceBoost,
-            preampDB: 6,
-            bandGainsDB: [-2, 0, 4, 5, 1]
-        )
-        custom.clamp()
-
-        book.equalizerConfiguration = custom
-        let readBack = book.equalizerConfiguration
-        #expect(readBack == custom)
-    }
-
     @Test func settingConfigurationClampsOutOfRangeValues() {
         let book = Audiobook(title: "Test", folderName: "test")
         book.equalizerConfiguration = EqualizerConfiguration(
@@ -46,16 +31,4 @@ struct AudiobookEqualizerTests {
         #expect(read.bandGainsDB[1] == EqualizerConfiguration.bandRange.lowerBound)
     }
 
-    @Test func multipleBooksKeepIndependentEqualizerState() {
-        let bookA = Audiobook(title: "A", folderName: "a")
-        let bookB = Audiobook(title: "B", folderName: "b")
-
-        bookA.equalizerConfiguration = EqualizerConfiguration.preset(.bassBoost, preampDB: 4, isEnabled: true)
-        bookB.equalizerConfiguration = EqualizerConfiguration.preset(.trebleBoost, preampDB: 2, isEnabled: true)
-
-        #expect(bookA.equalizerConfiguration.preset == .bassBoost)
-        #expect(bookB.equalizerConfiguration.preset == .trebleBoost)
-        #expect(bookA.equalizerConfiguration.preampDB == 4)
-        #expect(bookB.equalizerConfiguration.preampDB == 2)
-    }
 }

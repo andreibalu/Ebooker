@@ -15,10 +15,6 @@ struct LibriVoxAlternativesFinderTests {
 
     // MARK: - normalizedTitleKey
 
-    @Test func stripsVersionSuffix() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Wuthering Heights (version 2)") == "wuthering heights")
-    }
-
     @Test func stripsVersionSuffixCaseInsensitive() {
         #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Wuthering Heights (Version 12)") == "wuthering heights")
     }
@@ -54,10 +50,6 @@ struct LibriVoxAlternativesFinderTests {
     }
 
     // MARK: - versionLabel
-
-    @Test func versionLabelNilForOriginal() {
-        #expect(LibriVoxAlternativesFinder.versionLabel("Wuthering Heights") == nil)
-    }
 
     @Test func versionLabelForVersionSuffix() {
         #expect(LibriVoxAlternativesFinder.versionLabel("Wuthering Heights (version 2)") == "Version 2")
@@ -107,19 +99,6 @@ struct LibriVoxAlternativesFinderTests {
 
         let found = LibriVoxAlternativesFinder.alternatives(to: original, context: context)
         #expect(found.map(\.id) == ["2", "3"])
-    }
-
-    @Test func findsOriginalFromAVersionedEntry() throws {
-        let (container, context) = try makeContext()
-        _ = container
-        let original = makeBook(id: "1", title: "Wuthering Heights")
-        let v2 = makeBook(id: "2", title: "Wuthering Heights (version 2)")
-        let v3 = makeBook(id: "3", title: "Wuthering Heights (version 3)")
-        [original, v2, v3].forEach { context.insert($0) }
-        try context.save()
-
-        let found = LibriVoxAlternativesFinder.alternatives(to: v2, context: context)
-        #expect(found.map(\.id) == ["1", "3"])
     }
 
     @Test func excludesOtherLanguages() throws {

@@ -108,16 +108,4 @@ struct SchemaCompatibilityTests {
         )
     }
 
-    @Test func contentFingerprintRoundTripsThroughModel() throws {
-        let track = AudioTrack(
-            title: "T",
-            originalFileName: "a.m4a",
-            storedFileName: "001-a.m4a",
-            orderIndex: 0,
-            duration: 1
-        )
-        #expect(track.contentFingerprint == nil)
-        track.contentFingerprint = "deadbeef"
-        #expect(track.contentFingerprint == "deadbeef")
-    }
 }

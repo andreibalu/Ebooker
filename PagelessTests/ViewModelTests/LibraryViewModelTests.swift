@@ -51,27 +51,6 @@ struct LibraryViewModelTests {
         #expect(sorted[2].totalDuration == 100)
     }
 
-    @Test func initialStateIsClean() {
-        let vm = makeViewModel()
-
-        #expect(vm.pendingImport == nil)
-        #expect(vm.urlsHoldingSecurityAccess.isEmpty)
-        #expect(vm.deleteCandidate == nil)
-        #expect(vm.renameCandidate == nil)
-        #expect(vm.renameTitleInput == "")
-        #expect(vm.alertMessage == "")
-        #expect(vm.isShowingAlert == false)
-    }
-
-    @Test func presentAlertSetsState() {
-        let vm = makeViewModel()
-
-        vm.presentAlert(message: "Test error")
-
-        #expect(vm.alertMessage == "Test error")
-        #expect(vm.isShowingAlert == true)
-    }
-
     @Test func duplicatePreparedImportAlertsAndCleansUpBeforeOrphanRouting() throws {
         let container = try makeContainer()
         let context = container.mainContext

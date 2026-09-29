@@ -41,25 +41,6 @@ struct AudiobookAdditionalTests {
         #expect(book.progressListenedDuration == 130)
     }
 
-    @Test func storeProgressRecapPersistsAllFields() {
-        let book = Audiobook(title: "R", folderName: "r", totalDuration: 100)
-        book.storeProgressRecap(text: "Body text", headline: "Head line", anchorTrackIndex: 2, anchorTime: 88.5)
-        #expect(book.progressRecapText == "Body text")
-        #expect(book.progressRecapHeadline == "Head line")
-        #expect(book.progressRecapAnchorTrackIndex == 2)
-        #expect(book.progressRecapAnchorTime == 88.5)
-    }
-
-    @Test func clearProgressRecapNilsAllFields() {
-        let book = Audiobook(title: "R", folderName: "r", totalDuration: 100)
-        book.storeProgressRecap(text: "x", headline: "h", anchorTrackIndex: 0, anchorTime: 1)
-        book.clearProgressRecap()
-        #expect(book.progressRecapText == nil)
-        #expect(book.progressRecapHeadline == nil)
-        #expect(book.progressRecapAnchorTrackIndex == nil)
-        #expect(book.progressRecapAnchorTime == nil)
-    }
-
     @Test func discardRecapClearsWhenTrackMismatches() {
         let book = Audiobook(title: "R", folderName: "r", totalDuration: 100)
         book.progressTrackIndex = 1

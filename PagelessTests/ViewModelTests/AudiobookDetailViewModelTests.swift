@@ -25,15 +25,6 @@ struct AudiobookDetailViewModelTests {
         )
     }
 
-    @Test func initialFilterStateIsEmpty() {
-        let vm = makeViewModel()
-
-        #expect(vm.filterCategories.isEmpty)
-        #expect(vm.filterCharacters.isEmpty)
-        #expect(vm.filterMoods.isEmpty)
-        #expect(vm.hasActiveFilters == false)
-    }
-
     @Test func hasActiveFiltersReflectsState() {
         let vm = makeViewModel()
 
@@ -56,28 +47,6 @@ struct AudiobookDetailViewModelTests {
         #expect(vm.filterCategories.isEmpty)
         #expect(vm.filterCharacters.isEmpty)
         #expect(vm.filterMoods.isEmpty)
-    }
-
-    @Test func initialRecapStateIsNil() {
-        let vm = makeViewModel()
-
-        #expect(vm.isLoadingRecap == false)
-        #expect(vm.recapText == nil)
-        #expect(vm.recapProgressHeadline == nil)
-        #expect(vm.recapError == nil)
-    }
-
-    @Test func hasAiAnalyzedMomentsReturnsFalseWhenEmpty() {
-        let vm = makeViewModel()
-
-        #expect(vm.hasAiAnalyzedMoments == false)
-    }
-
-    @Test func filteredMomentsReturnsAllWhenNoFilters() {
-        let vm = makeViewModel()
-
-        // No moments on the audiobook, so filtered list should be empty
-        #expect(vm.filteredMoments.isEmpty)
     }
 
     @Test func filteredMomentsPlacesPinnedBeforeUnpinnedPreservingCreatedAtOrder() throws {

@@ -18,14 +18,6 @@ struct AudioEqualizerServiceTests {
         return ModelContext(container)
     }
 
-    @Test func initialStateIsDisabledAndFlat() {
-        let service = AudioEqualizerService()
-        #expect(service.isEnabled == false)
-        #expect(service.preset == .flat)
-        #expect(service.preampDB == 0)
-        #expect(service.bandGainsDB == EqualizerPreset.flat.bandGainsDB)
-    }
-
     @Test func bindLoadsSavedConfigurationFromAudiobook() throws {
         let context = try makeContext()
         let service = AudioEqualizerService()

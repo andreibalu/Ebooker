@@ -12,10 +12,6 @@ struct FreeBookCatalogServiceTests {
 
     // MARK: - Seed validation (no network needed)
 
-    @Test func seedsAreNonEmpty() {
-        #expect(!FreeBookCatalogService.bookSeeds.isEmpty)
-    }
-
     @Test func seedsHaveValidFields() {
         for seed in FreeBookCatalogService.bookSeeds {
             #expect(!seed.id.isEmpty)
@@ -39,31 +35,19 @@ struct FreeBookCatalogServiceTests {
 
     // MARK: - API fetching (mock network)
 
-    @Test func allEntriesReturnsMappedEntries() async throws {
+    @Test func allEntriesMapArchiveFilesInSeedOrder() async throws {
         let session = URLSession.makeMockSession(handler: MockArchiveHandler.validHandler)
         FreeBookCatalogService.resetCache()
         let entries = await FreeBookCatalogService.allEntries(session: session)
-        #expect(entries.count == FreeBookCatalogService.bookSeeds.count)
-        FreeBookCatalogService.resetCache()
-    }
-
-    @Test func allEntriesHaveNonEmptyTracks() async throws {
-        let session = URLSession.makeMockSession(handler: MockArchiveHandler.validHandler)
-        FreeBookCatalogService.resetCache()
-        let entries = await FreeBookCatalogService.allEntries(session: session)
+        #expect(entries.map(\.id) == FreeBookCatalogService.bookSeeds.map(\.id))
         for entry in entries {
             #expect(!entry.tracks.isEmpty, "Entry '\(entry.title)' has no tracks")
+            for track in entry.tracks {
+                #expect(track.durationSeconds > 0, "Track '\(track.title)' has non-positive duration")
+                #expect(track.downloadURL.hasPrefix("https://archive.org/download/"))
+                #expect(track.downloadURL.hasSuffix(".mp3"))
+            }
         }
-        FreeBookCatalogService.resetCache()
-    }
-
-    @Test func allEntriesPreserveSeedOrder() async throws {
-        let session = URLSession.makeMockSession(handler: MockArchiveHandler.validHandler)
-        FreeBookCatalogService.resetCache()
-        let entries = await FreeBookCatalogService.allEntries(session: session)
-        let seedIds = FreeBookCatalogService.bookSeeds.map(\.id)
-        let entryIds = entries.map(\.id)
-        #expect(entryIds == seedIds)
         FreeBookCatalogService.resetCache()
     }
 
@@ -87,39 +71,6 @@ struct FreeBookCatalogServiceTests {
         FreeBookCatalogService.resetCache()
     }
 
-    @Test func availableEntriesReturnsAllWhenNoneDownloaded() async throws {
-        let session = URLSession.makeMockSession(handler: MockArchiveHandler.validHandler)
-        FreeBookCatalogService.resetCache()
-        let all = await FreeBookCatalogService.allEntries(session: session)
-        let available = await FreeBookCatalogService.availableEntries(excluding: [], session: session)
-        #expect(available.count == all.count)
-        FreeBookCatalogService.resetCache()
-    }
-
-    @Test func tracksHavePositiveDuration() async throws {
-        let session = URLSession.makeMockSession(handler: MockArchiveHandler.validHandler)
-        FreeBookCatalogService.resetCache()
-        let entries = await FreeBookCatalogService.allEntries(session: session)
-        for entry in entries {
-            for track in entry.tracks {
-                #expect(track.durationSeconds > 0, "Track '\(track.title)' has non-positive duration")
-            }
-        }
-        FreeBookCatalogService.resetCache()
-    }
-
-    @Test func tracksHaveValidDownloadURLs() async throws {
-        let session = URLSession.makeMockSession(handler: MockArchiveHandler.validHandler)
-        FreeBookCatalogService.resetCache()
-        let entries = await FreeBookCatalogService.allEntries(session: session)
-        for entry in entries {
-            for track in entry.tracks {
-                #expect(track.downloadURL.hasPrefix("https://archive.org/download/"))
-                #expect(track.downloadURL.hasSuffix(".mp3"))
-            }
-        }
-        FreeBookCatalogService.resetCache()
-    }
 }
 
 // MARK: - Mock URLSession

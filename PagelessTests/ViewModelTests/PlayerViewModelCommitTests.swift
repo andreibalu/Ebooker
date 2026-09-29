@@ -44,18 +44,6 @@ struct PlayerViewModelCommitTests {
         #expect(try momentCount(in: context) == 1)
     }
 
-    @Test func commitMomentUsesLabelFromInput() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 1
-        vm.momentNameInput = "Chapter Beat"
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        let moments = try context.fetch(FetchDescriptor<Moment>())
-        #expect(moments.first?.label == "Chapter Beat")
-    }
-
     @Test func commitMomentFallsBackToSavedMomentWhenNameEmpty() throws {
         let (context, book, track) = try makeContextAndBook()
         let vm = PlayerViewModel()

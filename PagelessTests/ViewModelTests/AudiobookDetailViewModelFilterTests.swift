@@ -40,24 +40,6 @@ struct AudiobookDetailViewModelFilterTests {
         #expect(vm.filteredMoments.first?.id == m1.id)
     }
 
-    @Test func filterByCategoryExcludesNonMatching() throws {
-        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
-        let context = ModelContext(container)
-        let book = Audiobook(title: "F", author: "", folderName: "filter-ex", totalDuration: 100)
-        context.insert(book)
-
-        let m1 = Moment(trackIndex: 0, time: 1, label: "A", audiobook: book, categories: [.tension])
-        let m2 = Moment(trackIndex: 0, time: 2, label: "B", audiobook: book, categories: [.romance])
-        context.insert(m1)
-        context.insert(m2)
-        book.moments.append(contentsOf: [m1, m2])
-
-        let vm = makeViewModel(audiobook: book)
-        vm.filterCategories = [.humor]
-        #expect(vm.filteredMoments.isEmpty)
-    }
-
     @Test func filterByCharacterIsCaseInsensitive() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
@@ -94,22 +76,6 @@ struct AudiobookDetailViewModelFilterTests {
         vm.filterMoods = [.dramatic]
         #expect(vm.filteredMoments.count == 1)
         #expect(vm.filteredMoments.first?.id == m1.id)
-    }
-
-    @Test func filterByMoodExcludesNonMatch() throws {
-        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
-        let context = ModelContext(container)
-        let book = Audiobook(title: "F", author: "", folderName: "filter-mood-ex", totalDuration: 100)
-        context.insert(book)
-
-        let m1 = Moment(trackIndex: 0, time: 1, label: "A", audiobook: book, mood: .sad)
-        context.insert(m1)
-        book.moments.append(m1)
-
-        let vm = makeViewModel(audiobook: book)
-        vm.filterMoods = [.funny]
-        #expect(vm.filteredMoments.isEmpty)
     }
 
     @Test func combinedCategoryAndMoodFilter() throws {

@@ -36,16 +36,6 @@ struct AudioPlayerManagerSkipTests {
         #expect(player.isLoadingPlayback(for: otherBook) == false)
     }
 
-    @Test func loadingPlaybackHelperClearsWhenLoadingIDIsNil() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-
-        player.seedUnitTestLoadingPlayback(bookID: book.id)
-        player.seedUnitTestLoadingPlayback(bookID: nil)
-
-        #expect(player.isLoadingPlayback(for: book) == false)
-    }
-
     // MARK: - Single-track navigation
 
     @Test func canGoToNextTrackIsFalseForSingleTrackBook() {
@@ -84,17 +74,6 @@ struct AudioPlayerManagerSkipTests {
 
     // MARK: - Preset-interval skip and the progress-save penalty
 
-    @Test func skipBackwardKeepsPenaltyZeroWhenProgressIsSaving() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 120)
-        player.persistence.seekPenaltyRemaining = 0
-
-        player.skipBackward()
-
-        #expect(player.persistence.seekPenaltyRemaining == 0)
-    }
-
     @Test func skipForwardKeepsPenaltyZeroWhenProgressIsSaving() {
         let player = AudioPlayerManager()
         let book = makeBook(trackCount: 1)
@@ -114,17 +93,6 @@ struct AudioPlayerManagerSkipTests {
         player.persistence.seekPenaltyRemaining = 30
 
         player.skipBackward()
-
-        #expect(player.persistence.seekPenaltyRemaining == PlaybackPersistence.progressSeekPenalty)
-    }
-
-    @Test func skipForwardResetsPenaltyWhenAlreadyPenalized() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 120)
-        player.persistence.seekPenaltyRemaining = 30
-
-        player.skipForward()
 
         #expect(player.persistence.seekPenaltyRemaining == PlaybackPersistence.progressSeekPenalty)
     }

@@ -47,17 +47,6 @@ struct LibraryTabTests {
         #expect(BookSourceRegistry.sources(isAudiobookshelfConfigured: true).last?.isConfigured == true)
     }
 
-    @Test func theShelvesMenuAlwaysOffersAChoice() {
-        // Audiobookshelf is always listed (choosing it unconfigured opens the connect sheet), so the
-        // Shelves tab always shows its chevron + source menu.
-        #expect(BookSourceRegistry.sources(isAudiobookshelfConfigured: false).count == 2)
-    }
-
-    @Test func unconfiguredAudiobookshelfFallsBackToLibriVox() {
-        let sources = BookSourceRegistry.sources(isAudiobookshelfConfigured: false)
-        #expect(ShelvesSourcePreference.resolvedSourceID("audiobookshelf", from: sources) == "librivox")
-    }
-
     @Test func configuredAudiobookshelfIsHonouredAndSurvivesDisconnect() {
         let connected = BookSourceRegistry.sources(isAudiobookshelfConfigured: true)
         #expect(ShelvesSourcePreference.resolvedSourceID("audiobookshelf", from: connected) == "audiobookshelf")

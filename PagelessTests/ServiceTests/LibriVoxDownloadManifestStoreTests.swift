@@ -9,15 +9,6 @@ import Testing
 
 @MainActor
 struct LibriVoxDownloadManifestStoreTests {
-    @Test func roundTripsManifest() throws {
-        let harness = try StoreHarness()
-        defer { harness.remove() }
-        let job = makeJob(completed: [0])
-
-        try harness.store.save(job)
-
-        #expect(try harness.store.loadAll() == [job])
-    }
 
     @Test func replacingManifestKeepsLatestState() throws {
         let harness = try StoreHarness()

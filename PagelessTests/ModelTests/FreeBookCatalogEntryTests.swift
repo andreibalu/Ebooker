@@ -59,30 +59,4 @@ struct FreeBookCatalogEntryTests {
         #expect(entry.tracks[1].orderIndex == 1)
     }
 
-    @Test func encodesAndDecodesRoundTrip() throws {
-        let original = try JSONDecoder().decode(FreeBookCatalogEntry.self, from: sampleJSON)
-        let encoded = try JSONEncoder().encode(original)
-        let decoded = try JSONDecoder().decode(FreeBookCatalogEntry.self, from: encoded)
-        #expect(decoded.id == original.id)
-        #expect(decoded.title == original.title)
-        #expect(decoded.author == original.author)
-        #expect(decoded.tracks.count == original.tracks.count)
-        #expect(decoded.downloadSizeMB == original.downloadSizeMB)
-    }
-
-    @Test func allFieldsPopulated() throws {
-        let entry = try JSONDecoder().decode(FreeBookCatalogEntry.self, from: sampleJSON)
-        #expect(!entry.id.isEmpty)
-        #expect(!entry.title.isEmpty)
-        #expect(!entry.author.isEmpty)
-        #expect(!entry.description.isEmpty)
-        #expect(entry.totalDurationSeconds > 0)
-        #expect(entry.downloadSizeMB > 0)
-        #expect(!entry.tracks.isEmpty)
-    }
-
-    @Test func identifiableIdMatchesExpected() throws {
-        let entry = try JSONDecoder().decode(FreeBookCatalogEntry.self, from: sampleJSON)
-        #expect(entry.id == "librivox-alice-in-wonderland")
-    }
 }

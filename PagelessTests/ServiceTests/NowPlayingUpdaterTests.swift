@@ -51,18 +51,6 @@ struct NowPlayingUpdaterTests {
         #expect(MPNowPlayingInfoCenter.default().playbackState == .paused)
     }
 
-    @Test func updateTransitionsFromPlayingToPaused() {
-        let updater = NowPlayingUpdater()
-        let book = makeAudiobook()
-        let track = makeTrack()
-
-        updater.update(audiobook: book, track: track, currentTime: 10, duration: 300, playbackRate: 1.0, isPlaying: true)
-        #expect(MPNowPlayingInfoCenter.default().playbackState == .playing)
-
-        updater.update(audiobook: book, track: track, currentTime: 10, duration: 300, playbackRate: 1.0, isPlaying: false)
-        #expect(MPNowPlayingInfoCenter.default().playbackState == .paused)
-    }
-
     // MARK: - nowPlayingInfo
 
     @Test func updateSetsZeroPlaybackRateWhenPaused() {

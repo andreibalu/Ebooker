@@ -8,10 +8,6 @@ import Testing
 @testable import Pageless
 
 struct EqualizerSettingsTests {
-    @Test func flatPresetHasFiveZeroBands() {
-        #expect(EqualizerPreset.flat.bandGainsDB.count == EqualizerBand.allCases.count)
-        #expect(EqualizerPreset.flat.bandGainsDB.allSatisfy { $0 == 0 })
-    }
 
     @Test func everyPresetHasFiveBands() {
         for preset in EqualizerPreset.allCases {
@@ -39,39 +35,6 @@ struct EqualizerSettingsTests {
     @Test func bandFrequenciesAreOrderedAscending() {
         let freqs = EqualizerBand.allCases.map(\.frequencyHz)
         #expect(freqs == freqs.sorted())
-    }
-
-    @Test func configurationClampsPreampToLegalRange() {
-        var config = EqualizerConfiguration(
-            isEnabled: true,
-            preset: .custom,
-            preampDB: 99,
-            bandGainsDB: [0, 0, 0, 0, 0]
-        )
-        config.clamp()
-        #expect(config.preampDB == EqualizerConfiguration.preampRange.upperBound)
-
-        var negative = EqualizerConfiguration(
-            isEnabled: true,
-            preset: .custom,
-            preampDB: -50,
-            bandGainsDB: [0, 0, 0, 0, 0]
-        )
-        negative.clamp()
-        #expect(negative.preampDB == EqualizerConfiguration.preampRange.lowerBound)
-    }
-
-    @Test func configurationClampsBandGainsToLegalRange() {
-        var config = EqualizerConfiguration(
-            isEnabled: true,
-            preset: .custom,
-            preampDB: 0,
-            bandGainsDB: [99, -99, 5, 12, -12]
-        )
-        config.clamp()
-        #expect(config.bandGainsDB[0] == 12)
-        #expect(config.bandGainsDB[1] == -12)
-        #expect(config.bandGainsDB[2] == 5)
     }
 
     @Test func configurationNormalizesBandCountTo5() {

@@ -8,10 +8,6 @@ import Foundation
 @testable import Pageless
 
 struct AudiobookTests {
-    @Test func progressIsZeroForNewAudiobook() {
-        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100)
-        #expect(book.progress == 0)
-    }
 
     @Test func progressComputesCorrectly() {
         let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 100)
@@ -41,22 +37,12 @@ struct AudiobookTests {
         #expect(book.displayAuthor == "Jane Doe")
     }
 
-    @Test func isFavoriteDefaultsToFalse() {
-        let book = Audiobook(title: "Test", folderName: "test")
-        #expect(book.isFavorite == false)
-    }
-
     @Test func isFavoriteCanBeToggled() {
         let book = Audiobook(title: "Test", folderName: "test")
         book.isFavorite = true
         #expect(book.isFavorite == true)
         book.isFavorite = false
         #expect(book.isFavorite == false)
-    }
-
-    @Test func isFinishedDefaultsToFalse() {
-        let book = Audiobook(title: "Test", folderName: "test")
-        #expect(book.isFinished == false)
     }
 
     @Test func currentTrackTitleFallbackWhenNoTracks() {

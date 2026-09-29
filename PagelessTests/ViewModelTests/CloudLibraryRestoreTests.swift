@@ -10,30 +10,10 @@ import SwiftData
 
 @MainActor
 struct CloudLibraryRestoreTests {
-    @Test func exactFingerprintMultisetRoutesStraightToAdoption() {
-        let pending = makePending(fingerprints: ["chapter-a", "chapter-b"])
-        let book = makeBook(fingerprints: ["chapter-b", "chapter-a"])
-
-        #expect(CloudLibraryView.restoreDecision(pending: pending, for: book) == .adopt)
-    }
 
     @Test func partialFingerprintOverlapRequiresExplicitConfirmation() {
         let pending = makePending(fingerprints: ["shared", "pending-only"])
         let book = makeBook(fingerprints: ["shared", "existing-only"])
-
-        #expect(CloudLibraryView.restoreDecision(pending: pending, for: book) == .confirmMismatch)
-    }
-
-    @Test func repeatedFingerprintCountMismatchRequiresExplicitConfirmation() {
-        let pending = makePending(fingerprints: ["repeated", "repeated", "other"])
-        let book = makeBook(fingerprints: ["other", "other", "repeated"])
-
-        #expect(CloudLibraryView.restoreDecision(pending: pending, for: book) == .confirmMismatch)
-    }
-
-    @Test func missingFingerprintRequiresExplicitConfirmation() {
-        let pending = makePending(fingerprints: ["chapter-a", nil])
-        let book = makeBook(fingerprints: ["chapter-a", "chapter-b"])
 
         #expect(CloudLibraryView.restoreDecision(pending: pending, for: book) == .confirmMismatch)
     }

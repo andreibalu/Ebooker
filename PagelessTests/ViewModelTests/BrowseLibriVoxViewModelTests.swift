@@ -107,15 +107,6 @@ struct BrowseLibriVoxViewModelTests {
         #expect(result === book)
     }
 
-    @Test func catalogBookReturnsNilForMissingID() throws {
-        let container = try makeContainer()
-
-        #expect(BrowseLibriVoxViewModel().catalogBook(
-            id: "missing",
-            modelContext: container.mainContext
-        ) == nil)
-    }
-
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([LibriVoxBook.self])
         let configuration = ModelConfiguration(

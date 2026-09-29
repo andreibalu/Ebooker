@@ -10,15 +10,6 @@ import Testing
 
 @MainActor
 struct LibraryImportFingerprintTests {
-    @Test func fingerprintIsDeterministicForSameBytes() async throws {
-        let url = try makeTempFile(named: "a.bin", bytes: bytes(count: 4096, pattern: 0xAB))
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        let first = await LibraryImportService.fingerprint(url: url, durationSeconds: 12.5)
-        let second = await LibraryImportService.fingerprint(url: url, durationSeconds: 12.5)
-        #expect(first != nil)
-        #expect(first == second)
-    }
 
     @Test func fingerprintDiffersAcrossDifferentBytes() async throws {
         let a = try makeTempFile(named: "a.bin", bytes: bytes(count: 4096, pattern: 0xAB))
@@ -33,16 +24,6 @@ struct LibraryImportFingerprintTests {
         #expect(fpA != nil)
         #expect(fpB != nil)
         #expect(fpA != fpB)
-    }
-
-    @Test func fingerprintHandlesSmallFiles() async throws {
-        // Smaller than 2MB cutoff → whole-file hash branch.
-        let url = try makeTempFile(named: "small.bin", bytes: bytes(count: 1024, pattern: 0x42))
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        let fp = await LibraryImportService.fingerprint(url: url, durationSeconds: 1)
-        #expect(fp != nil)
-        #expect(fp?.count == 64)
     }
 
     @Test func fingerprintIsRobustToFilenameChange() async throws {

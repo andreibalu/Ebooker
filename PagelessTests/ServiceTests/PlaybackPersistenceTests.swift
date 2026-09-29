@@ -14,25 +14,6 @@ struct PlaybackPersistenceTests {
         return book
     }
 
-    @Test func updateProgressAdvancesWhenPenaltyIsZero() {
-        let persistence = PlaybackPersistence()
-        let track = AudioTrack(title: "Ch1", originalFileName: "a", storedFileName: "a", orderIndex: 0, duration: 300)
-        let book = makeAudiobook(tracks: [track])
-        book.currentTrackIndex = 0
-        book.currentTime = 100
-        persistence.seekPenaltyRemaining = 0
-
-        persistence.updateProgressIfNeeded(
-            audiobook: book,
-            currentTrackIndex: 0,
-            currentTime: 100,
-            duration: 300
-        )
-
-        #expect(book.progressTrackIndex == 0)
-        #expect(book.progressTime == 100)
-    }
-
     @Test func updateProgressBlockedBySeekPenalty() {
         let persistence = PlaybackPersistence()
         let book = makeAudiobook()

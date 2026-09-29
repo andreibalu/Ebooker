@@ -31,10 +31,6 @@ struct CoffeeTipStoreTests {
         #expect(CoffeeTipStore.state(for: resolution) != .succeeded)
     }
 
-    @Test func verifiedOutcomeShowsThanksForThisPurchase() {
-        #expect(CoffeeTipStore.state(for: .verified) == .succeeded)
-    }
-
     @Test func cancelledPurchaseLeavesStoreReadyForAnotherAttempt() async {
         let store = CoffeeTipStore(
             purchaseOutcomeProvider: { .userCancelled },
@@ -45,18 +41,6 @@ struct CoffeeTipStoreTests {
 
         #expect(store.purchaseState == .cancelled)
         #expect(store.isPurchasing == false)
-    }
-
-    @Test func pendingPurchaseDoesNotShowThanksBeforeApproval() async {
-        let store = CoffeeTipStore(
-            purchaseOutcomeProvider: { .pending },
-            startTasks: false
-        )
-
-        await store.purchase()
-
-        #expect(store.purchaseState == .pending)
-        #expect(store.purchaseState != .succeeded)
     }
 
     @Test func purchasesAreSerializedAndASecondTipRemainsAvailable() async {

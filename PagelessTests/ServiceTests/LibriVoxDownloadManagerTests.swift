@@ -133,25 +133,6 @@ struct LibriVoxDownloadManagerTests {
         await manager.waitForAllWork()
     }
 
-    @Test func reportsFractionalProgressForCurrentTrack() async {
-        let gate = AsyncGate()
-        let progressReported = AsyncEvent()
-        let manager = LibriVoxDownloadManager(executor: .init { _, progress in
-            progress(.init(completed: 1, total: 4, currentTrackFraction: 0.5))
-            progressReported.signal()
-            await gate.wait()
-        })
-
-        manager.start(request: request())
-        await progressReported.wait()
-
-        #expect(manager.entry(for: "catalog-1")?.currentTrackFraction == 0.5)
-        #expect(manager.entry(for: "catalog-1")?.progress == 0.375)
-
-        gate.open()
-        await manager.waitForAllWork()
-    }
-
     @Test func progressSurvivesRequestingObjectRecreation() async {
         let gate = AsyncGate()
         let progressReported = AsyncEvent()

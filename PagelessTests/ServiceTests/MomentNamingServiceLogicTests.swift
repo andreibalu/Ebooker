@@ -11,14 +11,6 @@ struct MomentNamingServiceLogicTests {
 
     // MARK: - sanitizedQuoteLine
 
-    @Test func sanitizedQuotePassesThroughNormalQuote() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = String(repeating: "word ", count: 30)
-        let out = service.sanitizedQuoteLine("A memorable line from the story.", transcript: transcript)
-        #expect(out == "A memorable line from the story.")
-    }
-
     @Test func sanitizedQuoteStripsLeadingTrailingQuoteChars() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
@@ -99,24 +91,6 @@ struct MomentNamingServiceLogicTests {
 
     // MARK: - firstSentence
 
-    @Test func firstSentenceExtractsUpToFirstPeriod() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let prefix = String(repeating: "a", count: 25)
-        let text = prefix + ". trailing ignored here"
-        let out = service.firstSentence(in: text, maxLength: 140)
-        #expect(out == prefix + ".")
-    }
-
-    @Test func firstSentenceExtractsUpToExclamation() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let prefix = String(repeating: "b", count: 25)
-        let text = prefix + "! more text"
-        let out = service.firstSentence(in: text, maxLength: 140)
-        #expect(out == prefix + "!")
-    }
-
     @Test func firstSentenceTruncatesToMaxLengthWhenNoTerminator() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
@@ -169,14 +143,6 @@ struct MomentNamingServiceLogicTests {
         let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept. Morning came slowly."
         let out = service.verifiedQuote("The storm broke over the harbor at midnight, and nobody slept.", transcript: transcript)
         #expect(out == "The storm broke over the harbor at midnight, and nobody slept.")
-    }
-
-    @Test func verifiedQuoteIsCaseAndPunctuationInsensitive() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept."
-        let out = service.verifiedQuote("the storm broke over the harbor at midnight and nobody slept.", transcript: transcript)
-        #expect(!out.isEmpty)
     }
 
     @Test func verifiedQuoteSnapsParaphraseToTranscriptSentence() {

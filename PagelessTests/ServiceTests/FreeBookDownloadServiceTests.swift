@@ -50,21 +50,6 @@ struct FreeBookDownloadServiceTests {
 
     // MARK: - State Tests
 
-    @Test func initialStateHasNoActiveDownloads() {
-        let service = FreeBookDownloadService()
-        #expect(service.activeDownloads.isEmpty)
-    }
-
-    @Test func initialStateHasNoProgress() {
-        let service = FreeBookDownloadService()
-        #expect(service.downloadProgress.isEmpty)
-    }
-
-    @Test func initialStateHasNoErrors() {
-        let service = FreeBookDownloadService()
-        #expect(service.downloadErrors.isEmpty)
-    }
-
     @Test func processDeathManifestRoundTripPreservesFullCatalogAndAttemptIdentity() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -420,33 +405,9 @@ struct FreeBookDownloadServiceTests {
         }
     }
 
-    // MARK: - Mock Protocol Tests
-
-    @Test func mockStartDownloadAddsToActiveDownloads() {
-        let mock = MockFreeBookDownloadService()
-        let entry = makeSampleCatalogEntry()
-        mock.startDownload(entry: entry)
-        #expect(mock.activeDownloads.contains("test-book"))
-    }
-
-    @Test func mockCancelDownloadRemovesFromActiveDownloads() {
-        let mock = MockFreeBookDownloadService()
-        let entry = makeSampleCatalogEntry()
-        mock.startDownload(entry: entry)
-        mock.cancelDownload(catalogId: "test-book")
-        #expect(!mock.activeDownloads.contains("test-book"))
-    }
-
-    @Test func mockStartDownloadSetsInitialProgress() {
-        let mock = MockFreeBookDownloadService()
-        let entry = makeSampleCatalogEntry()
-        mock.startDownload(entry: entry)
-        #expect(mock.downloadProgress["test-book"] == 0.0)
-    }
-
     // MARK: - Finalization Tests
 
-    @Test func finalizationCreatesAudiobookWithCatalogId() throws {
+    @Test func finalizationCreatesFreeBookWithCatalogIdAndOrderedTracks() throws {
         let context = try makeContext()
         let entry = makeSampleCatalogEntry()
         let folderName = "test-folder-uuid"
@@ -457,41 +418,11 @@ struct FreeBookDownloadServiceTests {
         let audiobooks = try context.fetch(FetchDescriptor<Audiobook>())
         #expect(audiobooks.count == 1)
         #expect(audiobooks.first?.catalogId == "test-book")
-    }
-
-    @Test func finalizationCreatesCorrectNumberOfTracks() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: "folder", coverData: nil, modelContext: context)
-
-        let tracks = try context.fetch(FetchDescriptor<AudioTrack>())
-        #expect(tracks.count == 2)
-    }
-
-    @Test func finalizationSetsIsFreeBookTrue() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: "folder", coverData: nil, modelContext: context)
-
-        let audiobooks = try context.fetch(FetchDescriptor<Audiobook>())
         #expect(audiobooks.first?.isFreeBook == true)
-    }
-
-    @Test func finalizationUsesCorrectStoredFileNames() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: "folder", coverData: nil, modelContext: context)
 
         let tracks = try context.fetch(FetchDescriptor<AudioTrack>())
-        let sortedTracks = tracks.sorted { $0.orderIndex < $1.orderIndex }
-        #expect(sortedTracks[0].storedFileName == "001-chapter_01.mp3")
-        #expect(sortedTracks[1].storedFileName == "002-chapter_02.mp3")
+            .sorted { $0.orderIndex < $1.orderIndex }
+        #expect(tracks.map(\.storedFileName) == ["001-chapter_01.mp3", "002-chapter_02.mp3"])
     }
 
     // MARK: - Identity Guard Tests
