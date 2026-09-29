@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<link rel="canonical" href="{{canonical}}">
+<meta name="apple-itunes-app" content="app-id={{appId}}">
+<meta name="theme-color" content="#f7f4ed" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1f" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Unpaged">
+<meta property="og:title" content="{{ogTitle}}">
+<meta property="og:description" content="{{description}}">
+<meta property="og:url" content="{{canonical}}">
+<meta property="og:image" content="{{siteUrl}}/assets/img/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Unpaged app icon: a cream bookmark with an amber dot, beside the words Unpaged, audiobooks for iPhone.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ogTitle}}">
+<meta name="twitter:description" content="{{description}}">
+<meta name="twitter:image" content="{{siteUrl}}/assets/img/og.jpg">
+<link rel="icon" type="image/png" sizes="32x32" href="{{root}}assets/img/favicon-32.png">
+<link rel="apple-touch-icon" href="{{root}}assets/img/apple-touch-icon.png">
+<link rel="stylesheet" href="{{root}}assets/css/site.css">
+</head>
+<body class="{{bodyClass}}">
+<a class="skip" href="#main">Skip to content</a>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="{{root}}"><img src="{{root}}assets/img/icon-192.png" alt="" width="28" height="28">Unpaged</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="{{root}}support/"{{currentSupport}}>Support</a>
+      <a href="{{root}}privacy/"{{currentPrivacy}}>Privacy</a>
+      <a class="nav-cta" href="{{appStoreUrl}}">Get the app</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+{{content}}
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="{{root}}"><img src="{{root}}assets/img/icon-192.png" alt="" width="28" height="28">Unpaged</a>
+      <p>A clean, private audiobook player for iPhone. Made by Andrei Baluta.</p>
+      <p><a href="mailto:andrei.baluta@yahoo.com">andrei.baluta@yahoo.com</a></p>
+    </div>
+    <nav aria-label="Footer">
+      <ul>
+        <li><a href="{{root}}support/">Support</a></li>
+        <li><a href="{{root}}privacy/">Privacy Policy</a></li>
+        <li><a href="{{root}}terms/">Terms of Use</a></li>
+        <li><a href="{{appStoreUrl}}">App Store</a></li>
+      </ul>
+    </nav>
+    <p class="legal">&copy; {{year}} Andrei Baluta. Free audiobooks are public-domain recordings from LibriVox. Audiobookshelf is an independent open-source project and is not affiliated with Unpaged. Apple, the Apple logo, iPhone, CarPlay, Siri and Apple Intelligence are trademarks of Apple Inc. App Store is a service mark of Apple Inc.</p>
+  </div>
+</footer>
+</body>
+</html>
