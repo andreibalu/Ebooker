@@ -336,7 +336,7 @@ struct ABSBookTile: View {
 
     private var accessibilityText: String {
         var parts = [item.media.metadata.displayTitle, "by \(item.media.metadata.displayAuthor)"]
-        if let progress { parts.append("\(Int((progress * 100).rounded())) percent listened") }
+        if let progress { parts.append("\(TimeFormatter.percentValue(progress)) percent listened") }
         return parts.joined(separator: ", ")
     }
 }

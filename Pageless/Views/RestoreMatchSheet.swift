@@ -32,7 +32,7 @@ struct RestoreMatchSheet: View {
 
     private var progressText: String? {
         guard orphan.progress > 0 else { return nil }
-        return "\(Int(orphan.progress * 100))% through"
+        return "\(TimeFormatter.percentValue(orphan.progress))% through"
     }
 
     var body: some View {

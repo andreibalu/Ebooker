@@ -202,12 +202,14 @@ struct LibriVoxAPITrack: Decodable {
     /// Duration in seconds parsed from "HH:MM:SS" or "MM:SS" playtime string.
     var durationSeconds: Double {
         let parts = playtime.split(separator: ":").compactMap { Double($0) }
+        let raw: Double
         switch parts.count {
-        case 3: return parts[0] * 3600 + parts[1] * 60 + parts[2]
-        case 2: return parts[0] * 60 + parts[1]
-        case 1: return parts[0]
-        default: return 0
+        case 3: raw = parts[0] * 3600 + parts[1] * 60 + parts[2]
+        case 2: raw = parts[0] * 60 + parts[1]
+        case 1: raw = parts[0]
+        default: raw = 0
         }
+        return TimeFormatter.sanitizedSeconds(raw)
     }
 }
 

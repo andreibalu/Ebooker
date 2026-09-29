@@ -30,7 +30,7 @@ enum StreamingLibraryService {
         // generated letter template render in every cover surface instead.
         let folderName = UUID().uuidString
 
-        let totalDuration = tracks.reduce(0.0) { $0 + $1.durationSeconds }
+        let totalDuration = TimeFormatter.sanitizedSeconds(tracks.reduce(0.0) { $0 + $1.durationSeconds })
 
         let audiobook = Audiobook(
             title: book.title,

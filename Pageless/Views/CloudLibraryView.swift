@@ -353,7 +353,7 @@ struct CloudLibraryView: View {
         let count = book.moments.count
         let pieces: [String] = [
             count > 0 ? "\(count) moment\(count == 1 ? "" : "s")" : nil,
-            book.progress > 0 ? "\(Int(book.progress * 100))%" : nil,
+            book.progress > 0 ? "\(TimeFormatter.percentValue(book.progress))%" : nil,
         ].compactMap { $0 }
         return Text(pieces.joined(separator: " · "))
             .font(.caption2)

@@ -127,7 +127,7 @@ struct ABSBookDetailView: View {
     /// "11 hr 32 min", "2 hr", "45 min", "under 1 min".
     static func durationText(_ seconds: Double) -> String {
         guard seconds >= 60 else { return "under 1 min" }
-        let totalMinutes = Int(seconds / 60)
+        let totalMinutes = Int(TimeFormatter.sanitizedSeconds(seconds) / 60)
         let hours = totalMinutes / 60
         let minutes = totalMinutes % 60
         switch (hours, minutes) {
