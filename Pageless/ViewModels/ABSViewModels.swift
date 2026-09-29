@@ -339,7 +339,7 @@ final class ABSBookDetailViewModel {
     }
 
     private static func percentText(_ fraction: Double) -> String {
-        let percent = min(max(Int((fraction * 100).rounded()), 1), 99)
+        let percent = min(max(TimeFormatter.percentValue(fraction), 1), 99)
         return "\(percent)% listened"
     }
 

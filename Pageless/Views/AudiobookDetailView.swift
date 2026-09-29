@@ -740,7 +740,7 @@ struct AudiobookDetailView: View {
 
     private var progressSummary: String {
         if audiobook.isFinished { return "Finished" }
-        let pct = Int((audiobook.progress * 100).rounded())
+        let pct = TimeFormatter.percentValue(audiobook.progress)
         let remaining = TimeFormatter.durationSummary(seconds: audiobook.remainingDuration)
         return "\(pct)% · \(remaining) remaining"
     }

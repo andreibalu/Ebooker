@@ -344,7 +344,7 @@ final class CarPlayCoordinator: NSObject {
         let detail: String
         let isDownloading = freeBookDownloader.activeDownloads.contains(entry.id)
         if isDownloading, let progress = freeBookDownloader.downloadProgress[entry.id] {
-            detail = "Downloading · \(Int(progress * 100))%"
+            detail = "Downloading · \(TimeFormatter.percentValue(progress))%"
         } else {
             detail = "\(entry.author) · \(durationText)"
         }
