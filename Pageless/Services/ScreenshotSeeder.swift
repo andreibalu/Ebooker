@@ -52,6 +52,7 @@ enum ScreenshotSeeder {
 
     @MainActor
     private static func seed(context: ModelContext) async -> Audiobook? {
+        let siteCapture = ProcessInfo.processInfo.environment["UITEST_SITE_SCREENSHOTS"] == "1"
         clearExistingLibrary(context: context)
 
         var pride: Audiobook?
@@ -64,10 +65,52 @@ enum ScreenshotSeeder {
 
         if let pride {
             seedMoments(on: pride, context: context)
+            if siteCapture {
+                seedSiteContent(on: pride, context: context)
+            }
             try? context.save()
         }
 
         return pride
+    }
+
+    @MainActor
+    private static func seedSiteContent(on pride: Audiobook, context: ModelContext) {
+        // A local catalog cluster makes the real LibriVox detail and its alternatives work
+        // without waiting for a network sync. These are screenshot fixtures, not feed IDs.
+        let previousFixtures = (try? context.fetch(FetchDescriptor<LibriVoxBook>())) ?? []
+        for book in previousFixtures where book.id.hasPrefix("site-pride-") {
+            context.delete(book)
+        }
+        try? context.save()
+        let recordings: [(String, String, Int)] = [
+            ("site-pride-original", "Pride and Prejudice", 40_320),
+            ("site-pride-v2", "Pride and Prejudice (version 2)", 42_180),
+            ("site-pride-v3", "Pride and Prejudice (version 3)", 38_940),
+            ("site-pride-dramatic", "Pride and Prejudice (dramatic reading)", 43_020),
+        ]
+        for (id, title, duration) in recordings {
+            context.insert(LibriVoxBook(
+                id: id,
+                title: title,
+                authorDisplay: "Jane Austen",
+                bookDescription: "Elizabeth Bennet and Fitzwilliam Darcy discover how much first impressions can conceal in Jane Austen’s classic novel.",
+                language: "English",
+                totalTimeSecs: duration
+            ))
+        }
+        pride.isFreeBook = true
+        pride.catalogId = recordings[0].0
+        pride.progressTrackIndex = 1
+        pride.progressTime = 240
+        pride.storeProgressRecap(
+            text: "Elizabeth Bennet has met the wealthy, reserved Mr. Darcy, whose pride left a poor first impression. At Netherfield, their sharp conversations reveal a growing curiosity beneath their disagreement. Jane’s affection for Mr. Bingley has deepened, while Elizabeth remains wary of Darcy’s judgment and the expectations of their families.",
+            headline: "The story so far",
+            anchorTrackIndex: 1,
+            anchorTime: 240
+        )
+        let books = (try? context.fetch(FetchDescriptor<Audiobook>())) ?? []
+        ReadingActivitySeeder.seed(audiobooks: books, context: context)
     }
 
     private static func clearExistingLibrary(context: ModelContext) {

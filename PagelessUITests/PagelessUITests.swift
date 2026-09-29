@@ -243,4 +243,63 @@ final class PagelessUITests: XCTestCase {
         app.swipeUp()
         snap("06-essentials-eq")
     }
+
+    /// Fresh, light-appearance captures for the marketing website. The extra fixture data is
+    /// enabled only for this test; normal screenshot captures keep their existing library.
+    @MainActor
+    func testCaptureSiteScreenshots() throws {
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments += ["-onboardingComplete", "YES", "-forceDarkMode", "NO"]
+        app.launchEnvironment["UITEST_SEED_SCREENSHOTS"] = "1"
+        app.launchEnvironment["UITEST_SITE_SCREENSHOTS"] = "1"
+        app.launch()
+
+        func snap(_ name: String) {
+            Thread.sleep(forTimeInterval: 2)
+            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+
+        func scrollUntilHittable(_ element: XCUIElement, attempts: Int = 8) {
+            for _ in 0..<attempts {
+                if element.isHittable { return }
+                app.swipeUp()
+            }
+            XCTAssertTrue(element.isHittable, "Could not scroll to \(element.label)")
+        }
+
+        // The final imported book is the launch-seeding anchor. Reading sessions and the
+        // catalog versions are inserted before the seeder returns.
+        XCTAssertTrue(app.staticTexts["Pride and Prejudice"].waitForExistence(timeout: 180))
+
+        let activity = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'ACTIVITY'")).firstMatch
+        XCTAssertTrue(activity.waitForExistence(timeout: 20), "Seeded reading activity was not shown")
+        activity.tap()
+        XCTAssertTrue(app.staticTexts["Page by page."].waitForExistence(timeout: 15))
+        snap("stats")
+
+        app.buttons["Library"].tap()
+        app.buttons.matching(NSPredicate(format: "label ==[c] 'Library'")).firstMatch.tap()
+        let prideCards = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Pride and Prejudice'"))
+        XCTAssertTrue(prideCards.firstMatch.waitForExistence(timeout: 15))
+        let prideCard = (0..<prideCards.count).map { prideCards.element(boundBy: $0) }
+            .first { $0.frame.midY < app.frame.height - 100 && $0.frame.midX >= 0 && $0.frame.midX <= app.frame.width }
+        XCTAssertNotNil(prideCard, "Seeded library card was not on screen")
+        prideCard?.tap()
+        let recap = app.staticTexts["Where Was I?"]
+        XCTAssertTrue(recap.waitForExistence(timeout: 15), "Seeded recap was not displayed")
+        scrollUntilHittable(recap)
+        snap("recap")
+
+        let version = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'Version 2'")).firstMatch
+        scrollUntilHittable(version)
+        version.tap()
+        let recordings = app.staticTexts["Other Recordings"]
+        XCTAssertTrue(recordings.waitForExistence(timeout: 15))
+        scrollUntilHittable(recordings)
+        snap("recordings")
+    }
 }
