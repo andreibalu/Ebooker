@@ -54,8 +54,9 @@ final class CarPlayVoiceSearch {
             throw VoiceError.recognizerUnavailable
         }
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
+        let request = try Self.makeRecognitionRequest(
+            supportsOnDeviceRecognition: recognizer.supportsOnDeviceRecognition
+        )
         recognitionRequest = request
         lastTranscript = ""
 
@@ -88,6 +89,15 @@ final class CarPlayVoiceSearch {
                 }
             }
         }
+    }
+
+    /// Reject unsupported locales before recording and prohibit server fallback.
+    static func makeRecognitionRequest(supportsOnDeviceRecognition: Bool) throws -> SFSpeechAudioBufferRecognitionRequest {
+        try OnDeviceSpeechPolicy.requireSupport(supportsOnDeviceRecognition)
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.requiresOnDeviceRecognition = true
+        request.shouldReportPartialResults = true
+        return request
     }
 
     func cancel() {
