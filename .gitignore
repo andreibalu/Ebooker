@@ -19,3 +19,6 @@ screenshots/out/
 screenshots/build/
 screenshots/.env*
 screenshots/*.tsbuildinfo
+
+# Marketing site build output (site/build.mjs)
+site/dist/
