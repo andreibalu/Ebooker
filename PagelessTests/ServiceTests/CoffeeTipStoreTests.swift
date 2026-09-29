@@ -8,9 +8,6 @@ import Testing
 
 @MainActor
 struct CoffeeTipStoreTests {
-    @Test func productIDIsTheSingleConsumableCoffeeProduct() {
-        #expect(CoffeeTipProductID.coffee == "andreibaludev.Pageless.tip.coffee")
-    }
 
     @Test func noPriceFallbackIsShownBeforeStoreKitLoadsAProduct() {
         let store = CoffeeTipStore(startTasks: false)

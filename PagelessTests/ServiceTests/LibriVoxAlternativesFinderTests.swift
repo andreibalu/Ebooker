@@ -15,51 +15,29 @@ struct LibriVoxAlternativesFinderTests {
 
     // MARK: - normalizedTitleKey
 
-    @Test func stripsVersionSuffixCaseInsensitive() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Wuthering Heights (Version 12)") == "wuthering heights")
-    }
-
-    @Test func stripsDramaticReadingSuffix() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Hamlet (dramatic reading)") == "hamlet")
-    }
-
-    @Test func stripsAbridgementSuffixes() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Moby Dick (abridged)") == "moby dick")
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Moby Dick (unabridged)") == "moby dick")
-    }
-
-    @Test func stripsCombinedVersionDramaticReadingSuffix() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("A Christmas Carol (version 5 dramatic reading)") == "a christmas carol")
-    }
-
-    @Test func stripsStackedSuffixes() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Hamlet (dramatic reading) (version 2)") == "hamlet")
-    }
-
-    @Test func keepsUnknownParentheticals() {
-        // Different translations are different texts — must NOT merge.
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("The Iliad (Pope Translation)") == "the iliad (pope translation)")
-    }
-
-    @Test func foldsDiacriticsAndCase() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("Brontë Poems") == "bronte poems")
-    }
-
-    @Test func collapsesWhitespace() {
-        #expect(LibriVoxAlternativesFinder.normalizedTitleKey("  Wuthering   Heights  ") == "wuthering heights")
+    @Test func normalizedTitleKeyStripsOnlyKnownRecordingSuffixes() {
+        let cases: [(title: String, key: String)] = [
+            ("Wuthering Heights (Version 12)", "wuthering heights"),
+            ("Hamlet (dramatic reading)", "hamlet"),
+            ("Moby Dick (abridged)", "moby dick"),
+            ("Moby Dick (unabridged)", "moby dick"),
+            ("A Christmas Carol (version 5 dramatic reading)", "a christmas carol"),
+            ("Hamlet (dramatic reading) (version 2)", "hamlet"),
+            // Different translations are different texts — must NOT merge.
+            ("The Iliad (Pope Translation)", "the iliad (pope translation)"),
+            ("Brontë Poems", "bronte poems"),
+            ("  Wuthering   Heights  ", "wuthering heights"),
+        ]
+        for (title, key) in cases {
+            #expect(LibriVoxAlternativesFinder.normalizedTitleKey(title) == key)
+        }
     }
 
     // MARK: - versionLabel
 
-    @Test func versionLabelForVersionSuffix() {
+    @Test func versionLabelNamesOnlyKnownRecordingSuffixes() {
         #expect(LibriVoxAlternativesFinder.versionLabel("Wuthering Heights (version 2)") == "Version 2")
-    }
-
-    @Test func versionLabelForDramaticReading() {
         #expect(LibriVoxAlternativesFinder.versionLabel("Hamlet (Dramatic Reading)") == "Dramatic Reading")
-    }
-
-    @Test func versionLabelNilForUnknownParenthetical() {
         #expect(LibriVoxAlternativesFinder.versionLabel("The Iliad (Pope Translation)") == nil)
     }
 

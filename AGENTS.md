@@ -296,7 +296,7 @@ Library metadata, progress, moments, EQ config, reading sessions sync via CloudK
 
 ## Testing
 
-Swift Testing (`import Testing`). Codex: `mcp__XcodeBuildMCP__test_sim` (or `test_device`) with `extraArgs: ["-parallel-testing-enabled", "NO"]`. Claude Code: the `xcodebuild … test -parallel-testing-enabled NO` form from "Build & Run". Full suite is ~492 unit tests across 59 suites plus 6 UI tests; run it on the simulator before any release build.
+Swift Testing (`import Testing`). Codex: `mcp__XcodeBuildMCP__test_sim` (or `test_device`) with `extraArgs: ["-parallel-testing-enabled", "NO"]`. Claude Code: the `xcodebuild … test -parallel-testing-enabled NO` form from "Build & Run". Full suite is ~360 unit tests across 60 suites plus 6 UI tests; run it on the simulator before any release build.
 
 - Mocks in `PagelessTests/Mocks/`: `MockTranscriptionService`, `MockSegmentTranscriber`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService` — one per protocol service. LibriVox-path code is tested integration-style against in-memory SwiftData containers; if you add a protocol there, add a matching mock.
 - **In-memory test containers: always pass `cloudKitDatabase: .none`** to `ModelConfiguration`. The default `.automatic` picks up the host app's CloudKit entitlement and fails CloudKit-shape validation. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one intentional `.private(...)` validation, via a file-backed temp store.

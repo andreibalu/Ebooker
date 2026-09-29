@@ -9,32 +9,20 @@ import Foundation
 
 struct AudiobookTests {
 
-    @Test func progressComputesCorrectly() {
+    @Test func progressAndRemainingDurationFollowListenedTime() {
         let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 100)
         let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100, currentTime: 50, tracks: [track])
         // listenedDuration = min(0 + 50, 100) = 50
         #expect(book.progress == 0.5)
-    }
+        #expect(book.remainingDuration == 50)
+        #expect(book.progressListenedDuration == 0)
 
-    @Test func progressIsZeroWhenTotalDurationIsZero() {
-        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 0)
-        #expect(book.progress == 0)
-    }
-
-    @Test func remainingDurationComputesCorrectly() {
-        let track = AudioTrack(title: "Ch1", originalFileName: "a.m4a", storedFileName: "a.m4a", orderIndex: 0, duration: 100)
-        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100, currentTime: 30, tracks: [track])
-        #expect(book.remainingDuration == 70)
+        #expect(Audiobook(title: "Empty", folderName: "empty", totalDuration: 0).progress == 0)
     }
 
     @Test func displayAuthorFallsBackToUnknown() {
-        let book = Audiobook(title: "Test", author: "", folderName: "test")
-        #expect(book.displayAuthor == "Unknown author")
-    }
-
-    @Test func displayAuthorUsesActualAuthor() {
-        let book = Audiobook(title: "Test", author: "Jane Doe", folderName: "test")
-        #expect(book.displayAuthor == "Jane Doe")
+        #expect(Audiobook(title: "Test", author: "", folderName: "test").displayAuthor == "Unknown author")
+        #expect(Audiobook(title: "Test", author: "Jane Doe", folderName: "test").displayAuthor == "Jane Doe")
     }
 
     @Test func isFavoriteCanBeToggled() {
@@ -53,10 +41,5 @@ struct AudiobookTests {
     @Test func castListIsEmptyWithNoMoments() {
         let book = Audiobook(title: "Test", folderName: "test")
         #expect(book.castList.isEmpty)
-    }
-
-    @Test func progressListenedDurationIsZeroWithNoProgress() {
-        let book = Audiobook(title: "Test", folderName: "test", totalDuration: 100)
-        #expect(book.progressListenedDuration == 0)
     }
 }

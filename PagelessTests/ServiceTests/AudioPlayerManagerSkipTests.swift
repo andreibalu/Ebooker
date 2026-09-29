@@ -38,38 +38,20 @@ struct AudioPlayerManagerSkipTests {
 
     // MARK: - Single-track navigation
 
-    @Test func canGoToNextTrackIsFalseForSingleTrackBook() {
+    @Test func trackNavigationIsDisabledOnlyForSingleTrackBooks() {
         let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 60)
-
-        #expect(player.canGoToNextTrack == false)
-    }
-
-    @Test func canGoToPreviousTrackIsFalseForSingleTrackBookEvenAfterFiveSeconds() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
+        let single = makeBook(trackCount: 1)
         // currentTime > 5 would normally enable "previous" (restart current track),
         // but single-track books should disable the button entirely.
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 60)
-
+        player.seedUnitTestPlaybackState(audiobook: single, track: single.sortedTracks[0], trackIndex: 0, currentTime: 60)
+        #expect(player.canGoToNextTrack == false)
         #expect(player.canGoToPreviousTrack == false)
-    }
 
-    @Test func canGoToPreviousTrackRespectsTimeForMultiTrackBook() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 3)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 60)
-
-        #expect(player.canGoToPreviousTrack == true)
-    }
-
-    @Test func canGoToNextTrackIsTrueForMultiTrackBookNotAtEnd() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 3)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 0)
-
-        #expect(player.canGoToNextTrack == true)
+        let multiPlayer = AudioPlayerManager()
+        let multi = makeBook(trackCount: 3)
+        multiPlayer.seedUnitTestPlaybackState(audiobook: multi, track: multi.sortedTracks[0], trackIndex: 0, currentTime: 60)
+        #expect(multiPlayer.canGoToNextTrack == true)
+        #expect(multiPlayer.canGoToPreviousTrack == true)
     }
 
     // MARK: - Preset-interval skip and the progress-save penalty

@@ -47,16 +47,10 @@ struct FreeBookCatalogEntryTests {
         #expect(entry.coverAssetName == "cover-alice")
         #expect(entry.totalDurationSeconds == 10200)
         #expect(entry.downloadSizeMB == 85.5)
-    }
-
-    @Test func tracksDecodeCorrectly() throws {
-        let entry = try JSONDecoder().decode(FreeBookCatalogEntry.self, from: sampleJSON)
-        #expect(entry.tracks.count == 2)
-        #expect(entry.tracks[0].id == "alice-ch01")
+        #expect(entry.tracks.map(\.id) == ["alice-ch01", "alice-ch02"])
         #expect(entry.tracks[0].title == "Chapter 1 - Down the Rabbit-Hole")
         #expect(entry.tracks[0].fileName == "chapter_01.mp3")
-        #expect(entry.tracks[0].orderIndex == 0)
-        #expect(entry.tracks[1].orderIndex == 1)
+        #expect(entry.tracks.map(\.orderIndex) == [0, 1])
     }
 
 }

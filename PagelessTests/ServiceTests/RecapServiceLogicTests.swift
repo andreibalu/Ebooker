@@ -8,22 +8,11 @@ import Testing
 
 struct RecapServiceLogicTests {
 
-    @Test func sanitizeHeadlineTruncatesToFourWords() {
+    @Test func sanitizeHeadlineTrimsAndKeepsAtMostFourWords() {
         guard #available(iOS 26, *) else { return }
-        let out = RecapService.sanitizeHeadline("alpha beta gamma delta epsilon zeta")
-        #expect(out == "alpha beta gamma delta")
-    }
-
-    @Test func sanitizeHeadlineTrimsWhitespace() {
-        guard #available(iOS 26, *) else { return }
-        let out = RecapService.sanitizeHeadline("   left right   ")
-        #expect(out == "left right")
-    }
-
-    @Test func sanitizeHeadlineHandlesEmptyString() {
-        guard #available(iOS 26, *) else { return }
-        let out = RecapService.sanitizeHeadline("")
-        #expect(out.isEmpty)
+        #expect(RecapService.sanitizeHeadline("alpha beta gamma delta epsilon zeta") == "alpha beta gamma delta")
+        #expect(RecapService.sanitizeHeadline("   left right   ") == "left right")
+        #expect(RecapService.sanitizeHeadline("").isEmpty)
     }
 
 }

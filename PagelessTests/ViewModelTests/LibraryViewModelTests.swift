@@ -21,34 +21,13 @@ struct LibraryViewModelTests {
         return [a, b, c]
     }
 
-    @Test func sortByTitle() {
+    @Test func sortsByTitleAuthorAndLongestDuration() {
         let vm = makeViewModel()
         let books = makeBooks()
-        let sorted = vm.sorted(books, by: LibrarySortOption.title.rawValue)
 
-        #expect(sorted[0].title == "Alpha Book")
-        #expect(sorted[1].title == "Middle Book")
-        #expect(sorted[2].title == "Zebra Book")
-    }
-
-    @Test func sortByAuthor() {
-        let vm = makeViewModel()
-        let books = makeBooks()
-        let sorted = vm.sorted(books, by: LibrarySortOption.author.rawValue)
-
-        #expect(sorted[0].author == "Adam")
-        #expect(sorted[1].author == "Mike")
-        #expect(sorted[2].author == "Zach")
-    }
-
-    @Test func sortByDuration() {
-        let vm = makeViewModel()
-        let books = makeBooks()
-        let sorted = vm.sorted(books, by: LibrarySortOption.duration.rawValue)
-
-        #expect(sorted[0].totalDuration == 300)
-        #expect(sorted[1].totalDuration == 200)
-        #expect(sorted[2].totalDuration == 100)
+        #expect(vm.sorted(books, by: LibrarySortOption.title.rawValue).map(\.title) == ["Alpha Book", "Middle Book", "Zebra Book"])
+        #expect(vm.sorted(books, by: LibrarySortOption.author.rawValue).map(\.author) == ["Adam", "Mike", "Zach"])
+        #expect(vm.sorted(books, by: LibrarySortOption.duration.rawValue).map(\.totalDuration) == [300, 200, 100])
     }
 
     @Test func duplicatePreparedImportAlertsAndCleansUpBeforeOrphanRouting() throws {
@@ -91,21 +70,14 @@ struct LibraryViewModelTests {
         #expect(try context.fetch(FetchDescriptor<Audiobook>()).count == 1)
     }
 
-    @Test func beginRenameSetsState() {
-        let vm = makeViewModel()
-        let book = Audiobook(title: "Original Title", folderName: "test")
-
-        vm.beginRename(book)
-
-        #expect(vm.renameCandidate === book)
-        #expect(vm.renameTitleInput == "Original Title")
-    }
-
-    @Test func commitRenameUpdatesTitle() {
+    @Test func renameSeedsInputThenCommitsNewTitle() {
         let vm = makeViewModel()
         let book = Audiobook(title: "Old Title", folderName: "test")
 
         vm.beginRename(book)
+        #expect(vm.renameCandidate === book)
+        #expect(vm.renameTitleInput == "Old Title")
+
         vm.renameTitleInput = "New Title"
         vm.commitRename()
 

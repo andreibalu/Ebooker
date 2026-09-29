@@ -25,81 +25,40 @@ struct NowPlayingUpdaterTests {
 
     // MARK: - playbackState
 
-    @Test func updateSetsPlayingStateWhenIsPlayingTrue() {
+    @Test func updateMirrorsPlayStateAndRate() {
         let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(),
-            track: makeTrack(),
-            currentTime: 30,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: true
-        )
-        #expect(MPNowPlayingInfoCenter.default().playbackState == .playing)
-    }
-
-    @Test func updateSetsPausedStateWhenIsPlayingFalse() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(),
-            track: makeTrack(),
-            currentTime: 30,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: false
-        )
-        #expect(MPNowPlayingInfoCenter.default().playbackState == .paused)
+        for isPlaying in [true, false] {
+            updater.update(
+                audiobook: makeAudiobook(),
+                track: makeTrack(),
+                currentTime: 30,
+                duration: 300,
+                playbackRate: 1.5,
+                isPlaying: isPlaying
+            )
+            let rate = MPNowPlayingInfoCenter.default().nowPlayingInfo?[MPNowPlayingInfoPropertyPlaybackRate] as? Double
+            #expect(MPNowPlayingInfoCenter.default().playbackState == (isPlaying ? .playing : .paused))
+            #expect(rate == (isPlaying ? 1.5 : 0))
+        }
     }
 
     // MARK: - nowPlayingInfo
 
-    @Test func updateSetsZeroPlaybackRateWhenPaused() {
+    @Test func updateSetsTrackAlbumAndArtistOnlyWhenAuthorIsPresent() {
         let updater = NowPlayingUpdater()
         updater.update(
-            audiobook: makeAudiobook(),
-            track: makeTrack(),
-            currentTime: 0,
-            duration: 300,
-            playbackRate: 1.5,
-            isPlaying: false
-        )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        let rate = info?[MPNowPlayingInfoPropertyPlaybackRate] as? Double
-        #expect(rate == 0)
-    }
-
-    @Test func updateSetsActualPlaybackRateWhenPlaying() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(),
-            track: makeTrack(),
-            currentTime: 0,
-            duration: 300,
-            playbackRate: 1.5,
-            isPlaying: true
-        )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        let rate = info?[MPNowPlayingInfoPropertyPlaybackRate] as? Double
-        #expect(rate == 1.5)
-    }
-
-    @Test func updateSetsTrackAndAlbumTitles() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(title: "My Book"),
+            audiobook: makeAudiobook(title: "My Book", author: "Jane Austen"),
             track: makeTrack(title: "Prologue"),
             currentTime: 0,
             duration: 300,
             playbackRate: 1.0,
             isPlaying: true
         )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+        var info = MPNowPlayingInfoCenter.default().nowPlayingInfo
         #expect(info?[MPMediaItemPropertyTitle] as? String == "Prologue")
         #expect(info?[MPMediaItemPropertyAlbumTitle] as? String == "My Book")
-    }
+        #expect(info?[MPMediaItemPropertyArtist] as? String == "Jane Austen")
 
-    @Test func updateOmitsArtistWhenAuthorIsEmpty() {
-        let updater = NowPlayingUpdater()
         updater.update(
             audiobook: makeAudiobook(author: ""),
             track: makeTrack(),
@@ -108,22 +67,8 @@ struct NowPlayingUpdaterTests {
             playbackRate: 1.0,
             isPlaying: true
         )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+        info = MPNowPlayingInfoCenter.default().nowPlayingInfo
         #expect(info?[MPMediaItemPropertyArtist] == nil)
-    }
-
-    @Test func updateSetsArtistWhenAuthorIsPresent() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(author: "Jane Austen"),
-            track: makeTrack(),
-            currentTime: 0,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: true
-        )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        #expect(info?[MPMediaItemPropertyArtist] as? String == "Jane Austen")
     }
 
     // MARK: - Remote command routing (AirPods double/triple-click)

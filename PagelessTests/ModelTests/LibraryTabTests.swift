@@ -4,13 +4,10 @@ import Testing
 
 @MainActor
 struct LibraryTabTests {
-    @Test func visibleTitlesUseLibraryNaming() {
+    @Test func tabTitlesAndOrderKeepTheExistingHomePreference() {
         #expect(LibraryTab.favorites.title == "Favorites")
         #expect(LibraryTab.allBooks.title == "Library")
         #expect(LibraryTab.freeBooks.title == "Shelves")
-    }
-
-    @Test func tabOrderKeepsTheExistingHomePreference() {
         #expect(LibraryTab.order(startOnFreeBooks: true) == [.favorites, .freeBooks, .allBooks])
         #expect(LibraryTab.order(startOnFreeBooks: false) == [.favorites, .allBooks, .freeBooks])
     }

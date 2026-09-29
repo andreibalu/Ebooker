@@ -41,22 +41,16 @@ struct AudiobookAdditionalTests {
         #expect(book.progressListenedDuration == 130)
     }
 
-    @Test func discardRecapClearsWhenTrackMismatches() {
-        let book = Audiobook(title: "R", folderName: "r", totalDuration: 100)
-        book.progressTrackIndex = 1
-        book.progressTime = 50
-        book.storeProgressRecap(text: "stale", headline: "h", anchorTrackIndex: 0, anchorTime: 50)
-        book.discardProgressRecapIfAnchorMismatched()
-        #expect(book.progressRecapText == nil)
-    }
-
-    @Test func discardRecapClearsWhenTimeMismatches() {
-        let book = Audiobook(title: "R", folderName: "r", totalDuration: 100)
-        book.progressTrackIndex = 0
-        book.progressTime = 200
-        book.storeProgressRecap(text: "stale", headline: "h", anchorTrackIndex: 0, anchorTime: 50)
-        book.discardProgressRecapIfAnchorMismatched()
-        #expect(book.progressRecapText == nil)
+    @Test func discardRecapClearsWhenTrackOrTimeMismatches() {
+        // (progress track, progress time) against an anchor of track 0 at 50s.
+        for (trackIndex, time) in [(1, 50.0), (0, 200.0)] {
+            let book = Audiobook(title: "R", folderName: "r", totalDuration: 100)
+            book.progressTrackIndex = trackIndex
+            book.progressTime = time
+            book.storeProgressRecap(text: "stale", headline: "h", anchorTrackIndex: 0, anchorTime: 50)
+            book.discardProgressRecapIfAnchorMismatched()
+            #expect(book.progressRecapText == nil)
+        }
     }
 
     @Test func discardRecapKeepsWhenAnchorMatches() {

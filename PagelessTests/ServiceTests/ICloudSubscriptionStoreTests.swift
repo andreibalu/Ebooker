@@ -33,15 +33,30 @@ struct ICloudSubscriptionStoreTests {
         )
     }
 
-    @Test func falseCacheNeverAuthorizesLaunch() {
-        let defaults = isolatedDefaults()
+    @Test func untrustworthyCachesFailClosed() {
         let now = Date(timeIntervalSince1970: 1_000)
+
+        let falseCache = isolatedDefaults()
         ICloudSubscriptionStore.writeLaunchEntitlementCache(
             cache(entitled: false, verifiedAt: now, validUntil: now.addingTimeInterval(86_400)),
-            defaults: defaults
+            defaults: falseCache
         )
+        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: falseCache))
 
-        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults))
+        let trueWithoutExpiration = isolatedDefaults()
+        ICloudSubscriptionStore.writeLaunchEntitlementCache(
+            cache(entitled: true, verifiedAt: now, validUntil: nil),
+            defaults: trueWithoutExpiration
+        )
+        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: trueWithoutExpiration))
+
+        let malformed = isolatedDefaults()
+        malformed.set(Data("not-json".utf8), forKey: cacheKey)
+        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: malformed))
+
+        let legacyFalse = isolatedDefaults()
+        legacyFalse.set(false, forKey: legacySubscribedKey)
+        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: legacyFalse))
     }
 
     @Test func futureExpirationAuthorizesLaunch() {
@@ -69,37 +84,6 @@ struct ICloudSubscriptionStoreTests {
         )
 
         #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults))
-    }
-
-    @Test func encodedTrueWithoutExpirationFailsClosed() {
-        let defaults = isolatedDefaults()
-        let now = Date(timeIntervalSince1970: 1_000)
-        ICloudSubscriptionStore.writeLaunchEntitlementCache(
-            cache(entitled: true, verifiedAt: now, validUntil: nil),
-            defaults: defaults
-        )
-
-        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults))
-    }
-
-    @Test func malformedCacheFailsClosed() {
-        let defaults = isolatedDefaults()
-        defaults.set(Data("not-json".utf8), forKey: cacheKey)
-
-        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(
-            now: Date(timeIntervalSince1970: 1_000),
-            defaults: defaults
-        ))
-    }
-
-    @Test func legacyFalseNeverAuthorizesLaunch() {
-        let defaults = isolatedDefaults()
-        defaults.set(false, forKey: legacySubscribedKey)
-
-        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(
-            now: Date(timeIntervalSince1970: 1_000),
-            defaults: defaults
-        ))
     }
 
     @Test func legacyTrueAuthorizesOnlyFromFirstReadForTwentyFourHours() {

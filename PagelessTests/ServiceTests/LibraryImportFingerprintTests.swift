@@ -11,33 +11,21 @@ import Testing
 @MainActor
 struct LibraryImportFingerprintTests {
 
-    @Test func fingerprintDiffersAcrossDifferentBytes() async throws {
+    @Test func fingerprintFollowsBytesNotFilename() async throws {
         let a = try makeTempFile(named: "a.bin", bytes: bytes(count: 4096, pattern: 0xAB))
+        let renamedA = try makeTempFile(named: "renamed-a.bin", bytes: bytes(count: 4096, pattern: 0xAB))
         let b = try makeTempFile(named: "b.bin", bytes: bytes(count: 4096, pattern: 0xCD))
         defer {
-            try? FileManager.default.removeItem(at: a)
-            try? FileManager.default.removeItem(at: b)
+            for url in [a, renamedA, b] { try? FileManager.default.removeItem(at: url) }
         }
 
         let fpA = await LibraryImportService.fingerprint(url: a, durationSeconds: 10)
+        let fpRenamedA = await LibraryImportService.fingerprint(url: renamedA, durationSeconds: 10)
         let fpB = await LibraryImportService.fingerprint(url: b, durationSeconds: 10)
         #expect(fpA != nil)
         #expect(fpB != nil)
+        #expect(fpA == fpRenamedA)
         #expect(fpA != fpB)
-    }
-
-    @Test func fingerprintIsRobustToFilenameChange() async throws {
-        let payload = bytes(count: 8 * 1024, pattern: 0x77)
-        let urlA = try makeTempFile(named: "first-name.bin", bytes: payload)
-        let urlB = try makeTempFile(named: "second-name.bin", bytes: payload)
-        defer {
-            try? FileManager.default.removeItem(at: urlA)
-            try? FileManager.default.removeItem(at: urlB)
-        }
-
-        let fpA = await LibraryImportService.fingerprint(url: urlA, durationSeconds: 4)
-        let fpB = await LibraryImportService.fingerprint(url: urlB, durationSeconds: 4)
-        #expect(fpA == fpB)
     }
 
     @Test func fingerprintReturnsNilForMissingFile() async {
@@ -46,34 +34,16 @@ struct LibraryImportFingerprintTests {
         #expect(fp == nil)
     }
 
-    @Test func exactFingerprintMultisetMatchesWhenReordered() {
-        let pending = makePending(fingerprints: ["chapter-a", "chapter-b"])
-        let book = makeBook(fingerprints: ["chapter-b", "chapter-a"])
+    @Test func exactFingerprintMultisetIgnoresOrderButNotCounts() {
+        func matches(_ pending: [String?], _ existing: [String?]) -> Bool {
+            LibraryImportService.hasExactFingerprintMultiset(makePending(fingerprints: pending), matching: makeBook(fingerprints: existing))
+        }
 
-        #expect(LibraryImportService.hasExactFingerprintMultiset(pending, matching: book))
-    }
-
-    @Test func exactFingerprintMultisetPreservesRepeatedCounts() {
-        let pending = makePending(fingerprints: ["repeated", "repeated", "other"])
-        let sameCounts = makeBook(fingerprints: ["other", "repeated", "repeated"])
-        let differentCounts = makeBook(fingerprints: ["other", "other", "repeated"])
-
-        #expect(LibraryImportService.hasExactFingerprintMultiset(pending, matching: sameCounts))
-        #expect(!LibraryImportService.hasExactFingerprintMultiset(pending, matching: differentCounts))
-    }
-
-    @Test func exactFingerprintMultisetRejectsPartialOverlap() {
-        let pending = makePending(fingerprints: ["shared", "pending-only"])
-        let book = makeBook(fingerprints: ["shared", "existing-only"])
-
-        #expect(!LibraryImportService.hasExactFingerprintMultiset(pending, matching: book))
-    }
-
-    @Test func exactFingerprintMultisetRejectsNilPendingFingerprint() {
-        let pending = makePending(fingerprints: ["chapter-a", nil])
-        let book = makeBook(fingerprints: ["chapter-a", "chapter-b"])
-
-        #expect(!LibraryImportService.hasExactFingerprintMultiset(pending, matching: book))
+        #expect(matches(["chapter-a", "chapter-b"], ["chapter-b", "chapter-a"]))
+        #expect(matches(["repeated", "repeated", "other"], ["other", "repeated", "repeated"]))
+        #expect(!matches(["repeated", "repeated", "other"], ["other", "other", "repeated"]))
+        #expect(!matches(["shared", "pending-only"], ["shared", "existing-only"]))
+        #expect(!matches(["chapter-a", nil], ["chapter-a", "chapter-b"]))
     }
 
     @Test func activeDuplicateLookupIgnoresFreeBooksAndOwnBookOrphans() throws {

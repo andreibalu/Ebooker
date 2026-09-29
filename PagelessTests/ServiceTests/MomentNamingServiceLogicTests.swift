@@ -11,82 +11,47 @@ struct MomentNamingServiceLogicTests {
 
     // MARK: - sanitizedQuoteLine
 
-    @Test func sanitizedQuoteStripsLeadingTrailingQuoteChars() {
+    @Test func sanitizedQuoteStripsQuoteMarksAndCollapsesNewlines() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
         let transcript = String(repeating: "x", count: 50)
-        let out = service.sanitizedQuoteLine("\"“”'Hello there.'”\"", transcript: transcript)
-        #expect(out == "Hello there.")
+        #expect(service.sanitizedQuoteLine("\"“”'Hello there.'”\"", transcript: transcript) == "Hello there.")
+        #expect(service.sanitizedQuoteLine("Line one\nLine two\r\nLine three.", transcript: transcript) == "Line one Line two Line three.")
+        #expect(service.sanitizedQuoteLine("", transcript: "anything").isEmpty)
     }
 
-    @Test func sanitizedQuoteCollapsesInternalNewlines() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = String(repeating: "x", count: 50)
-        let out = service.sanitizedQuoteLine("Line one\nLine two\r\nLine three.", transcript: transcript)
-        #expect(out == "Line one Line two Line three.")
-    }
-
-    @Test func sanitizedQuoteDropsMidWordTruncation() {
+    @Test func sanitizedQuoteDropsQuotesWithoutAUsableCompleteSentence() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
         // The model ran out of output tokens mid-word — no terminal punctuation,
         // no recoverable complete sentence. Drop the quote rather than show a partial.
-        let transcript = String(repeating: "x", count: 500)
-        let out = service.sanitizedQuoteLine(
+        #expect(service.sanitizedQuoteLine(
             "I cannot describe to you my sensations on the near prospect of my undertaking it is impossible to communicate to you a conception of the tre",
-            transcript: transcript
-        )
-        #expect(out.isEmpty)
-    }
-
-    @Test func sanitizedQuoteTrimsToLastCompleteSentenceWhenTailIsPartial() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = String(repeating: "x", count: 500)
-        let out = service.sanitizedQuoteLine(
-            "She closed the door behind her. He followed without a word, but his hand trem",
-            transcript: transcript
-        )
-        #expect(out == "She closed the door behind her.")
-    }
-
-    @Test func sanitizedQuoteDropsOverlongQuoteWithNoTerminator() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        // No terminator in the input — there is no safe sentence to extract, so drop.
-        let long = String(repeating: "z", count: 230)
-        let transcript = String(repeating: "a", count: 1_000)
-        let out = service.sanitizedQuoteLine(long, transcript: transcript)
-        #expect(out.isEmpty)
-    }
-
-    @Test func sanitizedQuoteKeepsFirstCompleteSentenceFromOverlongQuote() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let firstSentence = "She walked into the storm without looking back."
-        let long = firstSentence + " " + String(repeating: "x", count: 230)
-        let transcript = String(repeating: "a", count: 1_000)
-        let out = service.sanitizedQuoteLine(long, transcript: transcript)
-        #expect(out == firstSentence)
-    }
-
-    @Test func sanitizedQuoteDropsTranscriptSizedQuoteWithoutCleanSentence() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
+            transcript: String(repeating: "x", count: 500)
+        ).isEmpty)
+        // Overlong with no terminator — there is no safe sentence to extract.
+        #expect(service.sanitizedQuoteLine(
+            String(repeating: "z", count: 230),
+            transcript: String(repeating: "a", count: 1_000)
+        ).isEmpty)
         // High ratio triggers the overlong branch; "Hi." is too short to be a usable
         // quote (< 20 chars after trim), and the rest has no terminator.
-        let transcript = "ab"
-        let quote = "Hi." + String(repeating: "x", count: 220)
-        let out = service.sanitizedQuoteLine(quote, transcript: transcript)
-        #expect(out.isEmpty)
+        #expect(service.sanitizedQuoteLine("Hi." + String(repeating: "x", count: 220), transcript: "ab").isEmpty)
     }
 
-    @Test func sanitizedQuoteReturnsEmptyForEmptyInput() {
+    @Test func sanitizedQuoteKeepsOnlyCompleteSentences() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
-        let out = service.sanitizedQuoteLine("", transcript: "anything")
-        #expect(out.isEmpty)
+        #expect(service.sanitizedQuoteLine(
+            "She closed the door behind her. He followed without a word, but his hand trem",
+            transcript: String(repeating: "x", count: 500)
+        ) == "She closed the door behind her.")
+
+        let firstSentence = "She walked into the storm without looking back."
+        #expect(service.sanitizedQuoteLine(
+            firstSentence + " " + String(repeating: "x", count: 230),
+            transcript: String(repeating: "a", count: 1_000)
+        ) == firstSentence)
     }
 
     // MARK: - firstSentence
@@ -101,73 +66,43 @@ struct MomentNamingServiceLogicTests {
 
     // MARK: - trimToCompleteSentences
 
-    @Test func trimNotePassesThroughCompleteNote() {
+    @Test func trimNoteKeepsWholeSentencesAndEllipsizesFragments() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
-        let note = "Victor decides to embark on a perilous voyage. The moment marks a turning point in his life."
-        let out = service.trimToCompleteSentences(note)
-        #expect(out == note)
-    }
+        let complete = "Victor decides to embark on a perilous voyage. The moment marks a turning point in his life."
+        #expect(service.trimToCompleteSentences(complete) == complete)
 
-    @Test func trimNoteCutsBackToLastFullSentenceWhenTailIsTruncated() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
         // Mirrors the truncation seen on-device when the model exhausts its output budget
         // mid-sentence after generating the longer second sentence.
-        let note = "Victor decides to embark on a perilous voyage. This moment is pivotal as it marks a significant turning point in his life, highlighting the tension between personal"
-        let out = service.trimToCompleteSentences(note)
-        #expect(out == "Victor decides to embark on a perilous voyage.")
-    }
+        let truncated = "Victor decides to embark on a perilous voyage. This moment is pivotal as it marks a significant turning point in his life, highlighting the tension between personal"
+        #expect(service.trimToCompleteSentences(truncated) == "Victor decides to embark on a perilous voyage.")
 
-    @Test func trimNoteAppendsEllipsisWhenNoCompleteSentenceExists() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let note = "Victor decides to embark on a perilous voyage and"
-        let out = service.trimToCompleteSentences(note)
-        #expect(out.hasSuffix("…"))
-        #expect(!out.contains("..."))
-    }
+        let fragment = service.trimToCompleteSentences("Victor decides to embark on a perilous voyage and")
+        #expect(fragment.hasSuffix("…"))
+        #expect(!fragment.contains("..."))
 
-    @Test func trimNoteReturnsEmptyForEmptyInput() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
         #expect(service.trimToCompleteSentences("").isEmpty)
         #expect(service.trimToCompleteSentences("   \n  ").isEmpty)
     }
 
     // MARK: - verifiedQuote
 
-    @Test func verifiedQuoteKeepsQuotePresentInTranscript() {
+    @Test func verifiedQuoteKeepsVerbatimQuoteAndSnapsParaphrase() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
         let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept. Morning came slowly."
-        let out = service.verifiedQuote("The storm broke over the harbor at midnight, and nobody slept.", transcript: transcript)
-        #expect(out == "The storm broke over the harbor at midnight, and nobody slept.")
-    }
-
-    @Test func verifiedQuoteSnapsParaphraseToTranscriptSentence() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept. Morning came slowly."
+        let sentence = "The storm broke over the harbor at midnight, and nobody slept."
+        #expect(service.verifiedQuote(sentence, transcript: transcript) == sentence)
         // Model dropped words — most of the words still come from one transcript sentence.
-        let out = service.verifiedQuote("Storm broke over harbor at midnight, nobody slept!", transcript: transcript)
-        #expect(out == "The storm broke over the harbor at midnight, and nobody slept.")
+        #expect(service.verifiedQuote("Storm broke over harbor at midnight, nobody slept!", transcript: transcript) == sentence)
     }
 
-    @Test func verifiedQuoteDropsFabricatedQuote() {
+    @Test func verifiedQuoteDropsFabricatedAndShortNonVerbatimQuotes() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
         let transcript = "It was a long night. The storm broke over the harbor at midnight, and nobody slept."
-        let out = service.verifiedQuote("To be or not to be, that is the question.", transcript: transcript)
-        #expect(out.isEmpty)
-    }
-
-    @Test func verifiedQuoteDropsVeryShortNonVerbatimQuote() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = "The storm broke over the harbor at midnight, and nobody slept."
-        let out = service.verifiedQuote("Harbor explosions!", transcript: transcript)
-        #expect(out.isEmpty)
+        #expect(service.verifiedQuote("To be or not to be, that is the question.", transcript: transcript).isEmpty)
+        #expect(service.verifiedQuote("Harbor explosions!", transcript: transcript).isEmpty)
     }
 
     // MARK: - matchKey / sentences
@@ -185,13 +120,9 @@ struct MomentNamingServiceLogicTests {
 
     // MARK: - Guide value sync (guards MomentEnums drift against the @Guide literals)
 
-    @Test func categoryGuideValuesMatchEnum() {
+    @Test func guideValuesMatchEnums() {
         guard #available(iOS 26, *) else { return }
         #expect(MomentNamingService.categoryGuideValues == MomentCategory.allCases.map(\.rawValue))
-    }
-
-    @Test func moodGuideValuesMatchEnum() {
-        guard #available(iOS 26, *) else { return }
         #expect(MomentNamingService.moodGuideValues == MomentMood.allCases.map(\.rawValue))
     }
 }

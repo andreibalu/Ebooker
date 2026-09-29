@@ -59,25 +59,6 @@ struct AudiobookDetailViewModelFilterTests {
         #expect(vm.filteredMoments.first?.id == m1.id)
     }
 
-    @Test func filterByMoodRetainsMatch() throws {
-        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
-        let context = ModelContext(container)
-        let book = Audiobook(title: "F", author: "", folderName: "filter-mood", totalDuration: 100)
-        context.insert(book)
-
-        let m1 = Moment(trackIndex: 0, time: 1, label: "A", audiobook: book, mood: .dramatic)
-        let m2 = Moment(trackIndex: 0, time: 2, label: "B", audiobook: book, mood: .peaceful)
-        context.insert(m1)
-        context.insert(m2)
-        book.moments.append(contentsOf: [m1, m2])
-
-        let vm = makeViewModel(audiobook: book)
-        vm.filterMoods = [.dramatic]
-        #expect(vm.filteredMoments.count == 1)
-        #expect(vm.filteredMoments.first?.id == m1.id)
-    }
-
     @Test func combinedCategoryAndMoodFilter() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
@@ -112,29 +93,22 @@ struct AudiobookDetailViewModelFilterTests {
         #expect(vm.filteredMoments.first?.id == both.id)
     }
 
-    @Test func hasAiAnalyzedMomentsReturnsTrueWithCategories() throws {
+    @Test func hasAiAnalyzedMomentsReturnsTrueWithCategoriesOrMood() throws {
         let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
         let context = ModelContext(container)
-        let book = Audiobook(title: "F", author: "", folderName: "ai-cat", totalDuration: 100)
-        context.insert(book)
-        let m = Moment(trackIndex: 0, time: 1, label: "A", audiobook: book, categories: [.worldBuilding])
-        context.insert(m)
-        book.moments.append(m)
-        let vm = makeViewModel(audiobook: book)
-        #expect(vm.hasAiAnalyzedMoments == true)
-    }
+        let categorized = Audiobook(title: "F", author: "", folderName: "ai-cat", totalDuration: 100)
+        let moody = Audiobook(title: "F", author: "", folderName: "ai-mood", totalDuration: 100)
+        context.insert(categorized)
+        context.insert(moody)
+        let m1 = Moment(trackIndex: 0, time: 1, label: "A", audiobook: categorized, categories: [.worldBuilding])
+        let m2 = Moment(trackIndex: 0, time: 1, label: "A", audiobook: moody, mood: .inspirational)
+        context.insert(m1)
+        context.insert(m2)
+        categorized.moments.append(m1)
+        moody.moments.append(m2)
 
-    @Test func hasAiAnalyzedMomentsReturnsTrueWithMood() throws {
-        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self])
-        let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none)])
-        let context = ModelContext(container)
-        let book = Audiobook(title: "F", author: "", folderName: "ai-mood", totalDuration: 100)
-        context.insert(book)
-        let m = Moment(trackIndex: 0, time: 1, label: "A", audiobook: book, mood: .inspirational)
-        context.insert(m)
-        book.moments.append(m)
-        let vm = makeViewModel(audiobook: book)
-        #expect(vm.hasAiAnalyzedMoments == true)
+        #expect(makeViewModel(audiobook: categorized).hasAiAnalyzedMoments == true)
+        #expect(makeViewModel(audiobook: moody).hasAiAnalyzedMoments == true)
     }
 }

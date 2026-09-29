@@ -19,27 +19,18 @@ struct OnboardingManagerTests {
         return ud
     }
 
-    @Test func completePersistsAcrossRelaunch() {
+    @Test func completeAndResetPersistAcrossRelaunch() {
         let ud = isolatedDefaults()
 
         let first = OnboardingManager(defaults: ud)
         first.complete()
         #expect(first.isComplete == true)
-
         // A new manager reading the same defaults should stay complete.
-        let relaunched = OnboardingManager(defaults: ud)
-        #expect(relaunched.isComplete == true)
-    }
+        #expect(OnboardingManager(defaults: ud).isComplete == true)
 
-    @Test func resetReshowsOnboarding() {
-        let ud = isolatedDefaults()
-        let m = OnboardingManager(defaults: ud)
-        m.complete()
-        m.reset()
-        #expect(m.isComplete == false)
-
-        let relaunched = OnboardingManager(defaults: ud)
-        #expect(relaunched.isComplete == false)
+        first.reset()
+        #expect(first.isComplete == false)
+        #expect(OnboardingManager(defaults: ud).isComplete == false)
     }
 
     @Test func legacyCompletedWalkthroughCountsAsComplete() {

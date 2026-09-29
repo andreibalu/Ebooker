@@ -7,20 +7,15 @@ import Testing
 /// ("1 month"). These read as plan names and prose instead, so the card never shows
 /// "1 Month" on a chip or "$2.99 per 1 month" in its terms.
 struct PlusPlanCopyTests {
-    @Test func planChipsReadAsPlanNames() {
+    @Test func planNamesAndPricingTermsReadAsProse() {
         #expect(PlusEntitlementStore.planNameDisplay(value: 1, unit: .month) == "Monthly")
         #expect(PlusEntitlementStore.planNameDisplay(value: 1, unit: .year) == "Yearly")
         #expect(PlusEntitlementStore.planNameDisplay(value: 1, unit: .week) == "Weekly")
-    }
-
-    @Test func multiUnitPlansKeepTheirQuantity() {
-        #expect(PlusEntitlementStore.planNameDisplay(value: 3, unit: .month) == "3 Months")
-        #expect(PlusEntitlementStore.perPeriodDisplay(value: 3, unit: .month) == "3 months")
-    }
-
-    @Test func pricingTermsDropTheLeadingOne() {
         #expect(PlusEntitlementStore.perPeriodDisplay(value: 1, unit: .month) == "month")
         #expect(PlusEntitlementStore.perPeriodDisplay(value: 1, unit: .year) == "year")
+        // Multi-unit plans keep their quantity.
+        #expect(PlusEntitlementStore.planNameDisplay(value: 3, unit: .month) == "3 Months")
+        #expect(PlusEntitlementStore.perPeriodDisplay(value: 3, unit: .month) == "3 months")
     }
 
     /// Guards the local StoreKit config against drift: the card's "Try 1 week free"

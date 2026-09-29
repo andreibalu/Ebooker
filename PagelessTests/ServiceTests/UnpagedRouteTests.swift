@@ -9,11 +9,8 @@ import Testing
 
 @MainActor
 struct UnpagedRouteTests {
-    @Test func parsesDownloadActivityURL() {
+    @Test func parsesOnlyTheDownloadActivityURL() {
         #expect(UnpagedRoute(url: URL(string: "unpaged://library/downloads")!) == .downloads)
-    }
-
-    @Test func rejectsUnknownURL() {
         #expect(UnpagedRoute(url: URL(string: "unpaged://library/other")!) == nil)
         #expect(UnpagedRoute(url: URL(string: "https://example.com")!) == nil)
     }

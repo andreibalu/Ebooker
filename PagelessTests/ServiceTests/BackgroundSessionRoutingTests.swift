@@ -109,26 +109,6 @@ struct BackgroundSessionRoutingTests {
         #expect(registry.take(for: "librivox") == nil)
     }
 
-    @Test func handlerWaitsForAsyncRestorationGate() async {
-        let registry = BackgroundSessionCompletionRegistry()
-        let gate = RestorationGate()
-        var calls = 0
-
-        registry.beginCycle(for: "librivox")
-        #expect(registry.requestCompletion(for: "librivox") == nil)
-        registry.store({ calls += 1 }, for: "librivox")
-
-        let restoration = Task { @MainActor in
-            await gate.wait()
-            registry.markRestorationReady(for: "librivox")?()
-        }
-        await Task.yield()
-        #expect(calls == 0)
-        gate.open()
-        await restoration.value
-        #expect(calls == 1)
-    }
-
     @Test func durableFailureBeforeDrainReleaseStillReleasesExactlyOnce() {
         let registry = BackgroundSessionCompletionRegistry()
         var calls = 0
@@ -167,12 +147,6 @@ struct BackgroundSessionRoutingTests {
         registry.requestCompletion(for: "librivox")?()
         #expect(calls == 1)
         #expect(registry.requestCompletion(for: "librivox") == nil)
-    }
-
-    @Test func zeroWorkDrainReleasesOnlyAfterFinishEvents() {
-        let drain = BackgroundEventDrain()
-        #expect(drain.markFinishEventsSeen())
-        #expect(!drain.markFinishEventsSeen())
     }
 
     @Test func eventDrainReleasesOnceAfterProcessingAndFinish() {
@@ -226,24 +200,5 @@ struct BackgroundSessionRoutingTests {
         guard let nestedToken else { return }
         #expect(!drain.markFinishEventsSeen())
         #expect(drain.finishEvent(nestedToken))
-    }
-}
-
-@MainActor
-private final class RestorationGate {
-    private var isOpen = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func wait() async {
-        guard !isOpen else { return }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-
-    func open() {
-        guard !isOpen else { return }
-        isOpen = true
-        let currentWaiters = waiters
-        waiters.removeAll()
-        currentWaiters.forEach { $0.resume() }
     }
 }

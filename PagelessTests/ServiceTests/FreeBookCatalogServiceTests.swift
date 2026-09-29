@@ -12,8 +12,9 @@ struct FreeBookCatalogServiceTests {
 
     // MARK: - Seed validation (no network needed)
 
-    @Test func seedsHaveValidFields() {
-        for seed in FreeBookCatalogService.bookSeeds {
+    @Test func seedsHaveValidFieldsAndUniqueIdentifiers() {
+        let seeds = FreeBookCatalogService.bookSeeds
+        for seed in seeds {
             #expect(!seed.id.isEmpty)
             #expect(!seed.title.isEmpty)
             #expect(!seed.author.isEmpty)
@@ -21,16 +22,8 @@ struct FreeBookCatalogServiceTests {
             #expect(!seed.archiveIdentifier.isEmpty)
             #expect(seed.estimatedSizeMB > 0)
         }
-    }
-
-    @Test func seedIdsAreUnique() {
-        let ids = FreeBookCatalogService.bookSeeds.map(\.id)
-        #expect(ids.count == Set(ids).count, "Seed IDs must be unique")
-    }
-
-    @Test func seedArchiveIdentifiersAreUnique() {
-        let identifiers = FreeBookCatalogService.bookSeeds.map(\.archiveIdentifier)
-        #expect(identifiers.count == Set(identifiers).count)
+        #expect(Set(seeds.map(\.id)).count == seeds.count, "Seed IDs must be unique")
+        #expect(Set(seeds.map(\.archiveIdentifier)).count == seeds.count)
     }
 
     // MARK: - API fetching (mock network)

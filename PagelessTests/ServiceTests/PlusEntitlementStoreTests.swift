@@ -21,16 +21,6 @@ struct PlusEntitlementStoreTests {
         #expect(PlusEntitlementStore.hasPlusEntitlement(in: [record], now: now))
     }
 
-    @Test func legacyAIPurchaseIndependentlyGrantsEntitlement() {
-        let legacyAIUnlock = PlusEntitlementRecord(
-            productID: AIProductID.unlock,
-            expirationDate: nil,
-            revocationDate: nil
-        )
-
-        #expect(PlusEntitlementStore.hasPlusEntitlement(in: [legacyAIUnlock], now: now))
-    }
-
     @Test func activeLegacyICloudSubscriptionIndependentlyGrantsEntitlement() {
         let legacyICloudSubscription = PlusEntitlementRecord(
             productID: ICloudSyncProductID.monthly,

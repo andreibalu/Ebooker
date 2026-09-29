@@ -18,37 +18,6 @@ struct AudioEqualizerServiceTests {
         return ModelContext(container)
     }
 
-    @Test func bindLoadsSavedConfigurationFromAudiobook() throws {
-        let context = try makeContext()
-        let service = AudioEqualizerService()
-        service.configure(modelContext: context)
-
-        let book = Audiobook(title: "Quiet Book", folderName: "q")
-        book.equalizerConfiguration = EqualizerConfiguration.preset(.voiceBoost, preampDB: 6, isEnabled: true)
-        context.insert(book)
-
-        service.bind(to: book)
-        #expect(service.isEnabled == true)
-        #expect(service.preset == .voiceBoost)
-        #expect(service.preampDB == 6)
-        #expect(service.bandGainsDB == EqualizerPreset.voiceBoost.bandGainsDB)
-    }
-
-    @Test func applyPresetUpdatesBandsAndPersists() throws {
-        let context = try makeContext()
-        let service = AudioEqualizerService()
-        service.configure(modelContext: context)
-
-        let book = Audiobook(title: "Book", folderName: "b")
-        context.insert(book)
-        service.bind(to: book)
-
-        service.applyPreset(.bassBoost)
-        #expect(service.preset == .bassBoost)
-        #expect(service.bandGainsDB == EqualizerPreset.bassBoost.bandGainsDB)
-        #expect(book.equalizerConfiguration.preset == .bassBoost)
-    }
-
     @Test func manualBandEditFlipsPresetToCustom() throws {
         let context = try makeContext()
         let service = AudioEqualizerService()

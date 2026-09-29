@@ -50,9 +50,11 @@ struct AudioSessionInterruptionTests {
 
     // MARK: - .ended
 
-    @Test func interruptionEndedResumesWhenShouldResumeSet() {
-        var controller = AudioSessionInterruptionController()
+    @Test func interruptionEndedResumesOnlyAfterPausingForShouldResume() {
+        var fresh = AudioSessionInterruptionController()
+        #expect(fresh.action(for: .ended, options: .shouldResume, isPlaying: false) == .none)
 
+        var controller = AudioSessionInterruptionController()
         #expect(controller.action(for: .began, options: [], isPlaying: true) == .pause)
         #expect(controller.action(for: .ended, options: .shouldResume, isPlaying: false) == .resume)
     }
@@ -68,11 +70,5 @@ struct AudioSessionInterruptionTests {
         try await settle()
 
         #expect(player.isPlaying == false)
-    }
-
-    @Test func interruptionEndedWithoutPriorBeganDoesNotStartPlayback() {
-        var controller = AudioSessionInterruptionController()
-
-        #expect(controller.action(for: .ended, options: .shouldResume, isPlaying: false) == .none)
     }
 }

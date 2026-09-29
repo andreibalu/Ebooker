@@ -8,31 +8,18 @@ import Testing
 @testable import Pageless
 
 struct SpeechAnalyzerTranscriptionServiceTests {
-    @Test func bestMatchPrefersExactLocale() {
+    @Test func bestMatchPrefersExactThenSameLanguageThenEnglish() {
         guard #available(iOS 26, *) else { return }
-        let locales = [Locale(identifier: "en_GB"), Locale(identifier: "en_US"), Locale(identifier: "fr_FR")]
-        let match = SpeechAnalyzerTranscriptionService.bestMatch(in: locales, for: Locale(identifier: "en_US"))
-        #expect(match?.identifier(.bcp47) == "en-US")
-    }
+        func match(_ available: [String], for requested: String) -> String? {
+            SpeechAnalyzerTranscriptionService.bestMatch(
+                in: available.map(Locale.init(identifier:)),
+                for: Locale(identifier: requested)
+            )?.identifier(.bcp47)
+        }
 
-    @Test func bestMatchFallsBackToSameLanguage() {
-        guard #available(iOS 26, *) else { return }
-        let locales = [Locale(identifier: "fr_FR"), Locale(identifier: "en_GB")]
-        let match = SpeechAnalyzerTranscriptionService.bestMatch(in: locales, for: Locale(identifier: "en_US"))
-        #expect(match?.identifier(.bcp47) == "en-GB")
-    }
-
-    @Test func bestMatchFallsBackToEnglish() {
-        guard #available(iOS 26, *) else { return }
-        let locales = [Locale(identifier: "fr_FR"), Locale(identifier: "en_US")]
-        let match = SpeechAnalyzerTranscriptionService.bestMatch(in: locales, for: Locale(identifier: "ro_RO"))
-        #expect(match?.identifier(.bcp47) == "en-US")
-    }
-
-    @Test func bestMatchReturnsNilWhenNothingFits() {
-        guard #available(iOS 26, *) else { return }
-        let locales = [Locale(identifier: "fr_FR")]
-        let match = SpeechAnalyzerTranscriptionService.bestMatch(in: locales, for: Locale(identifier: "ro_RO"))
-        #expect(match == nil)
+        #expect(match(["en_GB", "en_US", "fr_FR"], for: "en_US") == "en-US")
+        #expect(match(["fr_FR", "en_GB"], for: "en_US") == "en-GB")
+        #expect(match(["fr_FR", "en_US"], for: "ro_RO") == "en-US")
+        #expect(match(["fr_FR"], for: "ro_RO") == nil)
     }
 }

@@ -9,32 +9,20 @@ import Testing
 
 struct EqualizerSettingsTests {
 
-    @Test func everyPresetHasFiveBands() {
+    @Test func presetsShapeTheFiveAscendingBands() {
+        let freqs = EqualizerBand.allCases.map(\.frequencyHz)
+        #expect(freqs == freqs.sorted())
         for preset in EqualizerPreset.allCases {
             #expect(preset.bandGainsDB.count == EqualizerBand.allCases.count)
         }
-    }
 
-    @Test func voiceBoostRaisesMids() {
-        let gains = EqualizerPreset.voiceBoost.bandGainsDB
-        #expect(gains[EqualizerBand.mid910.rawValue] > 0)
-        #expect(gains[EqualizerBand.highMid3600.rawValue] > 0)
-    }
-
-    @Test func bassBoostRaisesLowsAndCutsHighs() {
-        let gains = EqualizerPreset.bassBoost.bandGainsDB
-        #expect(gains[EqualizerBand.low60.rawValue] > 0)
-        #expect(gains[EqualizerBand.high14k.rawValue] <= 0)
-    }
-
-    @Test func trebleBoostRaisesHighs() {
-        let gains = EqualizerPreset.trebleBoost.bandGainsDB
-        #expect(gains[EqualizerBand.high14k.rawValue] > 0)
-    }
-
-    @Test func bandFrequenciesAreOrderedAscending() {
-        let freqs = EqualizerBand.allCases.map(\.frequencyHz)
-        #expect(freqs == freqs.sorted())
+        let voice = EqualizerPreset.voiceBoost.bandGainsDB
+        #expect(voice[EqualizerBand.mid910.rawValue] > 0)
+        #expect(voice[EqualizerBand.highMid3600.rawValue] > 0)
+        let bass = EqualizerPreset.bassBoost.bandGainsDB
+        #expect(bass[EqualizerBand.low60.rawValue] > 0)
+        #expect(bass[EqualizerBand.high14k.rawValue] <= 0)
+        #expect(EqualizerPreset.trebleBoost.bandGainsDB[EqualizerBand.high14k.rawValue] > 0)
     }
 
     @Test func configurationNormalizesBandCountTo5() {

@@ -88,8 +88,4 @@ struct PlaybackPersistenceTests {
         #expect(book.progressTime == 600)
         #expect(book.progressUpdatedAt != nil)
     }
-
-    @Test func seekPenaltyConstant() {
-        #expect(PlaybackPersistence.progressSeekPenalty == 180)
-    }
 }

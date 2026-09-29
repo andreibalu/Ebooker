@@ -31,22 +31,13 @@ struct OrphanRestoreServiceTests {
         _ = other
     }
 
-    @Test func findMatchReturnsNilWhenNoFingerprintMatches() throws {
+    @Test func findMatchReturnsNilWithoutAFingerprintMatch() throws {
         let context = try makeInMemoryContext()
         _ = makeOrphan(in: context, title: "A", folderName: "a", fingerprints: ["111"])
         _ = makeOrphan(in: context, title: "B", folderName: "b", fingerprints: ["222"])
 
-        let pending = makePending(fingerprints: ["999"])
-        let found = OrphanRestoreService.findMatch(for: pending, modelContext: context)
-        #expect(found == nil)
-    }
-
-    @Test func findMatchReturnsNilWhenPendingHasNoFingerprints() throws {
-        let context = try makeInMemoryContext()
-        _ = makeOrphan(in: context, title: "A", folderName: "a", fingerprints: ["111"])
-        let pending = makePending(fingerprints: [nil, nil])
-        let found = OrphanRestoreService.findMatch(for: pending, modelContext: context)
-        #expect(found == nil)
+        #expect(OrphanRestoreService.findMatch(for: makePending(fingerprints: ["999"]), modelContext: context) == nil)
+        #expect(OrphanRestoreService.findMatch(for: makePending(fingerprints: [nil, nil]), modelContext: context) == nil)
     }
 
     @Test func adoptCopiesFilesAndUpdatesTrackPointers() throws {
