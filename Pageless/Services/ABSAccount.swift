@@ -65,6 +65,8 @@ final class ABSAccount {
     func disconnect() {
         try? credentials.clear()
         reload()
+        // Cancel any in-flight token refresh so it cannot outlive this connection.
+        Task { await client.invalidateRefresh() }
     }
 }
 

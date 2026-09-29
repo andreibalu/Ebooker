@@ -23,7 +23,13 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
 actor AudiobookshelfClient {
     private let session: URLSession
     private let credentials: any ABSCredentialStoring
-    private var refreshTask: Task<ABSConnection, Error>?
+    /// Identity of the connection a refresh was started for. A refresh may only be shared with, or
+    /// saved over, the exact connection (server + refresh token) that created it.
+    private struct RefreshIdentity: Equatable {
+        let baseURL: URL
+        let refreshToken: String
+    }
+    private var refreshTask: (id: UUID, identity: RefreshIdentity, task: Task<ABSConnection, Error>)?
 
     init(session: URLSession = .shared, credentials: any ABSCredentialStoring = ABSKeychainCredentialStore()) {
         self.session = session
@@ -42,6 +48,7 @@ actor AudiobookshelfClient {
               let refresh = response.user.refreshToken, !refresh.isEmpty else {
             throw AudiobookshelfError.unreadableResponse
         }
+        invalidateRefresh()
         try credentials.save(ABSConnection(baseURL: baseURL,
                                            credential: .session(accessToken: access, refreshToken: refresh),
                                            username: response.user.username ?? username))
@@ -64,10 +71,21 @@ actor AudiobookshelfClient {
                 : AudiobookshelfError.badCredentials
         }
         let username = (try? JSONDecoder().decode(LoginResponse.self, from: data))?.user.username
+        invalidateRefresh()
         try credentials.save(ABSConnection(baseURL: baseURL, credential: candidate.credential, username: username))
     }
 
-    func disconnect() throws { try credentials.clear() }
+    func disconnect() throws {
+        invalidateRefresh()
+        try credentials.clear()
+    }
+
+    /// Cancels any in-flight token refresh so it can neither be reused by, nor save credentials
+    /// over, a different connection. Call whenever the active connection is replaced or removed.
+    func invalidateRefresh() {
+        refreshTask?.task.cancel()
+        refreshTask = nil
+    }
 
     func libraries() async throws -> [ABSLibrary] {
         let data = try await request(path: ["api", "libraries"])
@@ -153,11 +171,15 @@ actor AudiobookshelfClient {
     /// fresh token covers the range requests AVPlayer keeps making while it streams.
     func playbackURL(forStoredURL stored: URL) async throws -> URL {
         var connection = try requiredConnection()
-        let url = try Self.sameOriginURL(stored.absoluteString, base: connection.baseURL)
+        var url = try Self.sameOriginURL(stored.absoluteString, base: connection.baseURL)
         if case .session(let access, _) = connection.credential,
            let expiry = ABSJWT.expiry(of: access),
            expiry.timeIntervalSinceNow < Self.minimumStreamTokenLifetime {
-            connection = try await refresh(after: access)
+            _ = try await refresh(after: access)
+            // The connection may have changed while suspended: re-read the active one and re-check
+            // the origin so a token is never appended to another server's URL.
+            connection = try requiredConnection()
+            url = try Self.sameOriginURL(stored.absoluteString, base: connection.baseURL)
         }
         return try Self.appendingToken(Self.token(for: connection.credential), to: url)
     }
@@ -203,23 +225,35 @@ actor AudiobookshelfClient {
             throw AudiobookshelfError.expiredToken
         }
         if access != failedAccess { return current }
-        if let refreshTask { return try await refreshTask.value }
+        let identity = RefreshIdentity(baseURL: current.baseURL, refreshToken: refresh)
+        if let existing = refreshTask {
+            if existing.identity == identity { return try await existing.task.value }
+            existing.task.cancel()
+        }
         let task = Task<ABSConnection, Error> {
-            let data = try await send(baseURL: current.baseURL, path: ["auth", "refresh"],
+            let data = try await send(baseURL: identity.baseURL, path: ["auth", "refresh"],
                                       method: "POST", body: nil, headers: ["x-refresh-token": refresh], auth: nil)
             let response: LoginResponse = try decode(data)
             guard let newAccess = response.user.accessToken, !newAccess.isEmpty,
                   let newRefresh = response.user.refreshToken, !newRefresh.isEmpty else {
                 throw AudiobookshelfError.unreadableResponse
             }
-            let renewed = ABSConnection(baseURL: current.baseURL,
+            try Task.checkCancellation()
+            // Only save over the connection this refresh was created for.
+            guard let active = try credentials.load(), active.baseURL == identity.baseURL,
+                  case .session(_, let activeRefresh) = active.credential,
+                  activeRefresh == identity.refreshToken else {
+                throw AudiobookshelfError.notConnected
+            }
+            let renewed = ABSConnection(baseURL: identity.baseURL,
                                         credential: .session(accessToken: newAccess, refreshToken: newRefresh),
-                                        username: current.username)
+                                        username: active.username)
             try credentials.save(renewed)
             return renewed
         }
-        refreshTask = task
-        defer { refreshTask = nil }
+        let id = UUID()
+        refreshTask = (id, identity, task)
+        defer { if refreshTask?.id == id { refreshTask = nil } }
         return try await task.value
     }
 

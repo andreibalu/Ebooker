@@ -209,6 +209,59 @@ struct AudiobookshelfClientTests {
         }
     }
 
+    @Test func refreshFinishingAfterAServerSwitchNeverOverwritesOrLeaksIntoTheNewConnection() async throws {
+        let access = Self.jwt(["exp": Date().addingTimeInterval(120).timeIntervalSince1970, "type": "access"])
+        let serverA = ABSConnection(baseURL: base, credential: .session(accessToken: access, refreshToken: "a-refresh"))
+        let serverB = ABSConnection(baseURL: URL(string: "https://other.example")!,
+                                    credential: .session(accessToken: "b-access", refreshToken: "b-refresh"))
+        let store = MockABSCredentialStore(serverA)
+        MockABSURLProtocol.handler = { request in
+            #expect(request.url?.host == "books.example.test")
+            // The user disconnects and signs in to server B while A's refresh is on the wire.
+            try? store.clear()
+            try? store.save(serverB)
+            return (200, Self.json(#"{"user":{"accessToken":"a-new","refreshToken":"a-new-refresh"}}"#))
+        }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        await #expect(throws: AudiobookshelfError.notConnected) {
+            try await client.playbackURL(forStoredURL: URL(string: "https://books.example.test/api/items/item1/file/42")!)
+        }
+        #expect(try store.load() == serverB)
+    }
+
+    @Test func playbackURLNeverAppendsAnotherServersTokenAfterTheConnectionChanges() async throws {
+        let access = Self.jwt(["exp": Date().addingTimeInterval(120).timeIntervalSince1970, "type": "access"])
+        let serverA = ABSConnection(baseURL: base, credential: .session(accessToken: access, refreshToken: "a-refresh"))
+        let farAccess = Self.jwt(["exp": Date().addingTimeInterval(3 * 3600).timeIntervalSince1970, "type": "access"])
+        let serverB = ABSConnection(baseURL: URL(string: "https://other.example")!,
+                                    credential: .session(accessToken: farAccess, refreshToken: "b-refresh"))
+        let store = MockABSCredentialStore(serverA)
+        MockABSURLProtocol.handler = { _ in
+            try? store.save(serverB)
+            return (200, Self.json(#"{"user":{"accessToken":"a-new","refreshToken":"a-new-refresh"}}"#))
+        }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        do {
+            let url = try await client.playbackURL(forStoredURL: URL(string: "https://books.example.test/api/items/item1/file/42")!)
+            Issue.record("Unexpected URL \(url)")
+        } catch {}
+        #expect(try store.load() == serverB)
+    }
+
+    @Test func disconnectDuringRefreshLeavesNoCredentialsBehind() async throws {
+        let access = Self.jwt(["exp": Date().addingTimeInterval(120).timeIntervalSince1970, "type": "access"])
+        let store = MockABSCredentialStore(ABSConnection(baseURL: base, credential: .session(accessToken: access, refreshToken: "r")))
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        MockABSURLProtocol.handler = { _ in
+            try? store.clear()
+            return (200, Self.json(#"{"user":{"accessToken":"a-new","refreshToken":"a-new-refresh"}}"#))
+        }
+        await #expect(throws: (any Error).self) {
+            try await client.playbackURL(forStoredURL: URL(string: "https://books.example.test/api/items/item1/file/42")!)
+        }
+        #expect(try store.load() == nil)
+    }
+
     // MARK: - Connect errors
 
     @Test func inactiveAPIKeyIsDistinguishedFromAWrongKey() async throws {
