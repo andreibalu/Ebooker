@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{lang}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{{title}}</title>
 <meta name="description" content="{{description}}">
 <link rel="canonical" href="{{canonical}}">
+{{alternates}}
 <meta name="apple-itunes-app" content="app-id={{appId}}">
 <meta name="theme-color" content="#f7f4ed" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1c1c1f" media="(prefers-color-scheme: dark)">
@@ -17,7 +18,7 @@
 <meta property="og:image" content="{{siteUrl}}/assets/img/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Unpaged app icon: a cream bookmark with an amber dot, beside the words Unpaged, audiobooks for iPhone.">
+<meta property="og:image:alt" content="{{ogImageAlt}}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ogTitle}}">
 <meta name="twitter:description" content="{{description}}">
@@ -27,14 +28,15 @@
 <link rel="stylesheet" href="{{root}}assets/css/site.css">
 </head>
 <body class="{{bodyClass}}">
-<a class="skip" href="#main">Skip to content</a>
+<a class="skip" href="#main">{{skipLabel}}</a>
 <header class="site-header">
   <div class="wrap">
     <a class="brand" href="{{root}}"><img src="{{root}}assets/img/icon-192.png" alt="" width="28" height="28">Unpaged</a>
-    <nav class="nav" aria-label="Primary">
-      <a href="{{root}}support/"{{currentSupport}}>Support</a>
-      <a href="{{root}}privacy/"{{currentPrivacy}}>Privacy</a>
-      <a class="nav-cta" href="{{appStoreUrl}}">Get the app</a>
+    <nav class="nav" aria-label="{{navLabel}}">
+      <a href="{{root}}support/"{{currentSupport}}>{{supportLabel}}</a>
+      <a href="{{root}}privacy/"{{currentPrivacy}}>{{privacyLabel}}</a>
+      {{languageSwitcher}}
+      <a class="nav-cta" href="{{appStoreUrl}}">{{getAppLabel}}</a>
     </nav>
   </div>
 </header>
@@ -45,14 +47,14 @@
   <div class="wrap">
     <div>
       <a class="brand" href="{{root}}"><img src="{{root}}assets/img/icon-192.png" alt="" width="28" height="28">Unpaged</a>
-      <p>A clean, private audiobook player for iPhone. Made by Andrei Baluta.</p>
+      <p>{{footerTagline}}</p>
       <p><a href="mailto:andrei.baluta@yahoo.com">andrei.baluta@yahoo.com</a></p>
     </div>
     <nav aria-label="Footer">
       <ul>
-        <li><a href="{{root}}support/">Support</a></li>
-        <li><a href="{{root}}privacy/">Privacy Policy</a></li>
-        <li><a href="{{root}}terms/">Terms of Use</a></li>
+        <li><a href="{{root}}support/">{{supportLabel}}</a></li>
+        <li><a href="{{root}}privacy/">{{privacyPolicyLabel}}</a></li>
+        <li><a href="{{root}}terms/">{{termsLabel}}</a></li>
         <li><a href="{{appStoreUrl}}">App Store</a></li>
       </ul>
     </nav>

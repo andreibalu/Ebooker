@@ -21,6 +21,9 @@ const config = JSON.parse(fs.readFileSync(path.join(here, "site.config.json"), "
 const siteUrl = (process.env.SITE_URL || config.siteUrl).replace(/\/+$/, "");
 const basePath = new URL(siteUrl + "/").pathname; // "/" or "/Ebooker/"
 const layout = fs.readFileSync(path.join(src, "layout.html"), "utf8");
+const localeNames = { en: "English", de: "Deutsch", es: "Español", fr: "Français", it: "Italiano", "pt-br": "Português (BR)" };
+const locales = Object.fromEntries(Object.keys(localeNames).filter((key) => key !== "en").map((key) =>
+  [key, JSON.parse(fs.readFileSync(path.join(src, "i18n", `${key}.json`), "utf8"))]));
 
 // Documents rendered from Markdown. `rewrite` maps old public URLs to site pages.
 const DOCS = [
@@ -207,12 +210,31 @@ function fill(template, vars) {
 
 function render(page, content) {
   const root = rootFor(page.path, page.absolute);
+  const locale = page.locale || "en";
+  const strings = locales[locale] || {};
+  const switcher = `<details class="language"><summary aria-label="${escapeHtml(strings.languageLabel || "Language")}">${escapeHtml(localeNames[locale])}</summary><div>${Object.entries(localeNames).map(([code, name]) => `<a href="${siteUrl}/${code === "en" ? "" : `${code}/`}"${code === locale ? ' aria-current="page"' : ""} lang="${code}">${escapeHtml(name)}</a>`).join("")}</div></details>`;
+  const alternates = page.isHome ? Object.keys(localeNames).map((code) => `<link rel="alternate" hreflang="${code === "pt-br" ? "pt-BR" : code}" href="${siteUrl}/${code === "en" ? "" : `${code}/`}">`).join("\n") + `\n<link rel="alternate" hreflang="x-default" href="${siteUrl}/">` : "";
   const vars = {
     root,
     siteUrl,
     appId: config.appId,
     appStoreUrl: config.appStoreUrl,
     year: String(new Date().getFullYear()),
+    lang: locale === "pt-br" ? "pt-BR" : locale,
+    alternates,
+    languageSwitcher: switcher,
+    skipLabel: escapeHtml(strings.skip || "Skip to content"),
+    navLabel: escapeHtml(strings.navigation || "Primary"),
+    supportLabel: escapeHtml(strings.support || "Support"),
+    privacyLabel: escapeHtml(strings.privacy || "Privacy"),
+    privacyPolicyLabel: escapeHtml(strings.privacyPolicy || "Privacy Policy"),
+    termsLabel: escapeHtml(strings.terms || "Terms of Use"),
+    getAppLabel: escapeHtml(strings.getApp || "Get the app"),
+    ogImageAlt: escapeHtml(strings.ogImageAlt || "The Unpaged app icon: a cream bookmark with an amber dot, beside the words Unpaged, audiobooks for iPhone."),
+    footerTagline: escapeHtml(strings.footer || "A clean, private audiobook player for iPhone. Made by Andrei Baluta."),
+    lostTranslations: JSON.stringify(Object.fromEntries(Object.entries(locales).map(([code, value]) => [code, {
+      title: value.notFoundTitle, body: value.notFoundBody, back: value.back, meta: value.notFoundMeta,
+    }]))),
   };
   const body = fill(content, vars);
   let html = fill(layout, {
@@ -247,6 +269,23 @@ for (const name of fs.readdirSync(path.join(src, "pages")).filter((f) => f.endsW
   written.push(render(JSON.parse(m[1]), raw.slice(m[0].length)));
 }
 
+for (const [locale, s] of Object.entries(locales)) {
+  const e = escapeHtml;
+  const badge = `<a class="badge" href="${config.appStoreUrl}"><img src="${rootFor(`${locale}/`)}assets/img/app-store-badge.svg" alt="${e(s.badgeAlt)}" width="156" height="52"></a>`;
+  const home = `<section class="hero" aria-labelledby="hero-title"><div class="wrap"><div><p class="eyebrow">${e(s.eyebrow)}</p><h1 id="hero-title">${e(s.hero)}</h1><p class="lede">${e(s.intro)}</p><div class="badge-row">${badge}</div><ul class="facts"><li>${e(s.free)}</li><li>${e(s.compatibility)}</li><li>CarPlay</li></ul></div><figure class="hero-figure"><div class="phone"><img src="{{root}}assets/screens/home.webp" width="720" height="1565" alt="${e(s.homeAlt)}"></div></figure></div></section>
+  <section class="section" aria-labelledby="classics-title"><div class="wrap split"><div><p class="eyebrow"><span class="num">i.</span> ${e(s.shelves)}</p><h2 id="classics-title">${e(s.classicsTitle)}</h2><p class="body">${e(s.classicsBody)}</p><ul class="points"><li><b>${e(s.samples)}</b><span>${e(s.samplesBody)}</span></li><li><b>${e(s.recordings)}</b><span>${e(s.recordingsBody)}</span></li><li><b>${e(s.collections)}</b><span>${e(s.collectionsBody)}</span></li></ul></div><figure class="solo"><div class="phone"><img src="{{root}}assets/screens/shelves.webp" width="720" height="1565" loading="lazy" alt="${e(s.shelvesAlt)}"></div></figure></div></section>
+  <section class="section center" aria-labelledby="library-title"><div class="wrap"><p class="eyebrow">ii. ${e(s.library)}</p><p class="formats" aria-hidden="true" style="justify-content:center"><span>MP3</span><span>M4B</span><span>AAC</span></p><h2 id="library-title">${e(s.libraryTitle)}</h2><p class="lede">${e(s.libraryBody)}</p><p class="fine">${e(s.drm)}</p></div></section>
+  <section class="section" aria-labelledby="abs-title"><div class="wrap split top"><div><p class="eyebrow">iii. Audiobookshelf · ${e(s.newIn)}</p><h2 id="abs-title">${e(s.absTitle)}</h2><p class="body">${e(s.absBody)}</p></div><ul class="points"><li><b>${e(s.signIn)}</b><span>${e(s.signInBody)}</span></li><li><b>${e(s.progress)}</b><span>${e(s.progressBody)}</span></li><li><b>${e(s.connection)}</b><span>${e(s.connectionBody)}</span></li></ul></div></section>
+  <section class="section" aria-labelledby="moments-title"><div class="wrap split"><div><p class="eyebrow">iv. ${e(s.moments)}</p><h2 id="moments-title">${e(s.momentsTitle)}</h2><p class="body">${e(s.momentsBody)}</p><p class="body">${e(s.recapBody)}</p><p class="fine">${e(s.aiNote)}</p></div><figure class="solo"><div class="phone"><img src="{{root}}assets/screens/moment.webp" width="720" height="1565" loading="lazy" alt="${e(s.momentAlt)}"></div></figure></div></section>
+  <section class="section" aria-labelledby="player-title"><div class="wrap"><p class="eyebrow">v. ${e(s.player)}</p><h2 id="player-title">${e(s.playerTitle)}</h2><div class="grid">${s.features.map(([title, body]) => `<div><h3>${e(title)}</h3><p>${e(body)}</p></div>`).join("")}</div></div></section>
+  <section class="section band" aria-labelledby="privacy-title"><div class="wrap"><p class="eyebrow">vi. ${e(s.privacy)}</p><h2 id="privacy-title">${e(s.privacyTitle)}</h2><p class="lede">${e(s.privacyBody)}</p><p><a href="{{root}}privacy/">${e(s.readPrivacy)}</a></p></div></section>
+  <section class="section" aria-labelledby="plus-title"><div class="wrap"><p class="eyebrow">vii. ${e(s.pricing)}</p><h2 id="plus-title">${e(s.pricingTitle)}</h2><p class="lede">${e(s.pricingBody)}</p><div class="plans"><div class="plan"><h3>Unpaged</h3><p class="price">${e(s.free)}</p><p>${e(s.freePlan)}</p></div><div class="plan plus"><h3>Unpaged Plus</h3><p class="price">$2.99 <small>/ ${e(s.month)}</small></p><p class="price-alt">${e(s.plusYear)}</p><p>${e(s.plusPlan)}</p></div></div><p class="fine">${e(s.priceNote)}</p></div></section>
+  <section class="section closing" aria-labelledby="closing-title"><div class="wrap"><img class="icon" src="{{root}}assets/img/icon-256.webp" width="88" height="88" alt=""><h2 id="closing-title">${e(s.closing)}</h2><p class="lede">${e(s.closingBody)}</p><div class="badge-row">${badge}</div></div></section>`;
+  written.push(render({ out: `${locale}/index.html`, path: `${locale}/`, locale, isHome: true, title: s.title, ogTitle: s.ogTitle, description: s.description, bodyClass: "home" }, home));
+  const lost = `<section class="lost" aria-labelledby="lost-title"><div class="wrap"><p class="num" aria-hidden="true">404</p><h1 id="lost-title">${e(s.notFoundTitle)}</h1><p class="lede">${e(s.notFoundBody)}</p><a class="button" href="{{root}}${locale}/">${e(s.back)}</a></div></section>`;
+  written.push(render({ out: `${locale}/404.html`, path: `${locale}/404.html`, locale, absolute: true, noindex: true, title: s.notFoundMeta, description: s.notFoundBody, bodyClass: "lost-page" }, lost));
+}
+
 for (const doc of DOCS) {
   const md = fs.readFileSync(path.join(repo, doc.file), "utf8");
   const root = rootFor(doc.path);
@@ -272,7 +311,7 @@ for (const doc of DOCS) {
   );
 }
 
-const pages = ["", "support/", "privacy/", "terms/"];
+const pages = ["", ...Object.keys(locales).map((locale) => `${locale}/`), "support/", "privacy/", "terms/"];
 fs.writeFileSync(
   path.join(dist, "sitemap.xml"),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pages

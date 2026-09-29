@@ -18,3 +18,20 @@
     <a class="button" href="{{root}}">Back to Unpaged</a>
   </div>
 </section>
+<script>
+// GitHub Pages serves this root 404 for unknown URLs in every locale.
+const locale = location.pathname.match(/\/(de|es|fr|it|pt-br)(?:\/|$)/)?.[1];
+const copy = {{lostTranslations}}[locale];
+if (copy) {
+  document.documentElement.lang = locale === "pt-br" ? "pt-BR" : locale;
+  document.title = copy.meta;
+  document.querySelector('meta[name="description"]').content = copy.body;
+  document.querySelector('meta[property="og:title"]').content = copy.meta;
+  document.querySelector('meta[property="og:description"]').content = copy.body;
+  document.querySelector('#lost-title').textContent = copy.title;
+  document.querySelector('.lost .lede').textContent = copy.body;
+  const back = document.querySelector('.lost .button');
+  back.textContent = copy.back;
+  back.href = '{{root}}' + locale + '/';
+}
+</script>

@@ -13,7 +13,7 @@ Three names = intentional historical layers — no "fix". New user-facing copy s
 
 ## External-facing docs
 
-`support.md`, `privacy-policy.md`, `EULA.md` in repo root back the App Store Support / Privacy / EULA URLs (hosted as public GitHub Gists; repo = source of truth). Update in the same commit when a change touches:
+`support.md`, `privacy-policy.md`, `EULA.md` in repo root are the source for the App Store Support / Privacy / EULA pages, published at `/support/`, `/privacy/`, and `/terms/` by `site/build.mjs`. Public GitHub Gists mirror them. Update the source in the same commit when a change touches:
 
 - Permissions (`Info.plist` `NS*UsageDescription`) → support + privacy
 - Network behavior, third-party services, data collected → privacy-policy
@@ -21,7 +21,11 @@ Three names = intentional historical layers — no "fix". New user-facing copy s
 - Min iOS / supported devices / new user-visible features → support
 - Contact email or developer name → all three (spell "Andrei Baluta" identically)
 
-After editing, remind the user to push the new content to the public Gist(s).
+After editing, update the matching public Gist mirror(s).
+
+### Marketing site
+
+`site/` is a zero-dependency static site: `node site/build.mjs` writes `site/dist/`; preview with `node site/tools/serve.mjs`. `.github/workflows/pages.yml` deploys on pushes to `main`. Home and 404 pages have English, German, Spanish, French, Italian, and Brazilian Portuguese versions; locale strings live in `site/src/i18n/`. `store-listing/` holds localized App Store drafts for the next version, not the submitted version.
 
 `docs/superpowers/plans/` and `docs/superpowers/specs/` are temporary implementation artifacts. Keep only active work there; delete a plan and its design spec once implementation is complete.
 
