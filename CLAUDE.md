@@ -49,18 +49,50 @@ bounded fix goes `--wait`.
 - Return Codex's output verbatim. The rescue subagent is a forwarder — don't have
   it read the repo, poll status, or summarize.
 
+## Parallel fan-out
+
+`scripts/codex-agent.sh` runs one bounded slice in an isolated git worktree
+(`.worktrees/<slice>`, branch `codex/<slice>`, output in `.codex-runs/`). Use it
+only when two or more slices would otherwise collide on edits; a single slice
+belongs in `/codex:rescue`, which works in the current checkout.
+
+```bash
+scripts/codex-agent.sh plus docs/superpowers/plans/010-unpaged-plus.md
+scripts/codex-agent.sh abs  docs/superpowers/plans/020-audiobookshelf.md --model gpt-6-sol --effort medium
+scripts/codex-agent.sh plus --cleanup
+```
+
+The script names the model and effort on every `codex exec`, so nothing is
+inherited implicitly. `.claude/settings.json` allowlists it for unattended runs.
+
 ## Model and effort
 
 Same policy as the `parta` repo:
 
-- Delegate with `gpt-5.6-luna` at `max` reasoning effort. This is the default.
-- Use `gpt-5.6-sol` at `medium` or `high` only after Luna fails one verification
-  cycle. Do not use `gpt-5.6-terra`.
+- Delegate with `gpt-6-luna` at `max` reasoning effort. This is the default.
+- Use `gpt-6-sol` at `medium` or `high` for harder tasks, or after Luna fails one
+  verification cycle. Do not use `gpt-6-terra`.
 - Always name the effort when you name the model. `codex exec` has no `--effort`
   flag; pass `-c model_reasoning_effort=<level>` and confirm the
-  `reasoning effort:` line in the run banner. This repo has no `.codex/config.toml`,
-  so an unspecified run inherits `gpt-5.6-sol` + `medium` from `~/.codex/config.toml`.
+  `reasoning effort:` line in the run banner. `~/.codex/config.toml` sets a single
+  global `model_reasoning_effort` that applies to whichever model a run selects,
+  so an unnamed effort silently inherits it. `.codex/config.toml` here
+  deliberately pins nothing; `scripts/codex-agent.sh` is the guard.
 - Do not enable the Codex review gate. It can put Claude and Codex in a loop.
+
+## If `codex` is not on PATH
+
+`~/.local/bin/codex` symlinks into the binary bundled with ChatGPT.app. App
+updates relocate it — it moved from `Contents/Resources/codex` to
+`Contents/Resources/codex-cli/bin/codex` — which leaves a dead symlink that
+looks like Codex was uninstalled. Repoint it rather than reinstalling:
+
+```bash
+ln -sfn /Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex ~/.local/bin/codex
+```
+
+The `codex@openai-codex` plugin spawns bare `codex` and treats `ENOENT` as
+missing, with no app-bundle fallback, so the symlink is load-bearing.
 
 ## Reading a dead thread
 

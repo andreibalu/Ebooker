@@ -22,3 +22,7 @@ screenshots/*.tsbuildinfo
 
 # Marketing site build output (site/build.mjs)
 site/dist/
+
+# Codex delegation: isolated worker worktrees and captured run output
+/.worktrees/
+/.codex-runs/
