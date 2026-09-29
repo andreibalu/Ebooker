@@ -35,6 +35,14 @@ struct AudiobookDetailView: View {
     @State private var showFreeRestoreConfirm = false
     @State private var catalogBook: LibriVoxBook?
 
+    private var isMarketingCapture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["UITEST_SEED_SCREENSHOTS"] == "1"
+        #else
+        false
+        #endif
+    }
+
     /// The "Match with iCloud backup" affordance only appears when sync is active (which itself
     /// requires an active iCloud subscription), this is a downloaded own book, and there's at least
     /// one cloud-only backup to match against. When the user isn't subscribed, `IcloudSyncGate` is
@@ -95,6 +103,7 @@ struct AudiobookDetailView: View {
     }
 
     var body: some View {
+        ScrollViewReader { scrollProxy in
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
@@ -103,17 +112,33 @@ struct AudiobookDetailView: View {
                     streamingDownloadSection
                 }
                 resumeAnchorRow
-                momentsSection
+                momentsSection.id("moments")
                 tracksDisclosureSection
                 if let catalogBook {
                     LibriVoxAlternativesSection(book: catalogBook, onOpenPlayer: openPlayer)
                 }
+                if isMarketingCapture && momentsExpanded {
+                    Color.clear.frame(height: 600)
+                }
             }
             .padding(20)
+        }
+        .onChange(of: momentsExpanded) { _, expanded in
+            if isMarketingCapture && expanded {
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    scrollProxy.scrollTo("moments", anchor: .top)
+                }
+            }
+        }
         }
         .background(Color.cream.ignoresSafeArea())
         .navigationTitle(audiobook.title)
         .navigationBarTitleDisplayMode(.inline)
+        #if DEBUG
+        .toolbarBackground(Color.cream, for: .navigationBar)
+        .toolbarBackground(isMarketingCapture ? .visible : .automatic, for: .navigationBar)
+        #endif
         .fullScreenCover(isPresented: $showCropSheet) {
             if let img = pendingCropImage {
                 CoverCropView(
@@ -688,6 +713,7 @@ struct AudiobookDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
             .overlay(alignment: .bottom) {
+                if !isMarketingCapture {
                 Text("Change cover")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.white)
@@ -695,6 +721,7 @@ struct AudiobookDetailView: View {
                     .padding(.vertical, 4)
                     .background(.ultraThinMaterial, in: Capsule())
                     .padding(8)
+                }
             }
         }
         .buttonStyle(.plain)

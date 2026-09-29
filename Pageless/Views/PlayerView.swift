@@ -200,12 +200,20 @@ struct PlayerView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("player.bookContext")
                 }
-            } else {
+            } else if !isMarketingCapture {
                 Text("File \(player.currentTrackIndex + 1)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    private var isMarketingCapture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["UITEST_SEED_SCREENSHOTS"] == "1"
+        #else
+        false
+        #endif
     }
 
     /// "Frankenstein · Part 1 of 2" for multi-file books; nil for single-file books, whose track

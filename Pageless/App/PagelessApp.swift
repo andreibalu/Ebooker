@@ -29,6 +29,11 @@ struct PagelessApp: App {
                 .environment(appDelegate.freeBookDownloader)
                 .preferredColorScheme(forceDarkMode ? .dark : nil)
                 .task {
+                    #if DEBUG
+                    if let pride = await ScreenshotSeeder.seedIfNeeded(modelContainer: appDelegate.modelContainer) {
+                        await appDelegate.audioPlayer.startPlaybackFromSavedProgress(for: pride, autoplay: false)
+                    }
+                    #endif
                     _ = await appDelegate.freeBookDownloader.restoreBackgroundSession(
                         modelContext: appDelegate.modelContainer.mainContext
                     )

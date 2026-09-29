@@ -78,6 +78,14 @@ struct BrowseLibriVoxView: View {
 
     private var hairlineColor: Color { Color.primary.opacity(0.18) }
 
+    private var isMarketingCapture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["UITEST_SEED_SCREENSHOTS"] == "1"
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         @Bindable var vm = viewModel
         ZStack {
@@ -90,7 +98,7 @@ struct BrowseLibriVoxView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
 
-                if !viewModel.filtersAvailable {
+                if !viewModel.filtersAvailable && !isMarketingCapture {
                     Text("Filters available when offline search is ready.")
                         .font(.system(size: FBType.body, design: .serif))
                         .italic()
@@ -317,7 +325,8 @@ struct BrowseLibriVoxView: View {
             .padding(.top, 8)
 
         // Offline preparation continues behind usable remote search and curated content.
-        } else if viewModel.isLoadingFullCatalog, case .syncing(let fetched) = viewModel.syncState {
+        } else if viewModel.isLoadingFullCatalog && !isMarketingCapture,
+                  case .syncing(let fetched) = viewModel.syncState {
             HStack(spacing: 8) {
                 FBSpinner(size: 12)
                 Text(viewModel.isFirstFullSync

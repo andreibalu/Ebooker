@@ -56,9 +56,17 @@ struct ABSBrowseView: View {
 
     private var hostLabel: String { account.summary?.host ?? "Not connected" }
 
+    private var isMarketingCapture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["UITEST_SEED_SCREENSHOTS"] == "1"
+        #else
+        false
+        #endif
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ABSEyebrow(text: "Audiobookshelf · \(hostLabel)")
+            ABSEyebrow(text: isMarketingCapture ? "Audiobookshelf" : "Audiobookshelf · \(hostLabel)")
             if viewModel.libraries.count > 1 {
                 Menu {
                     ForEach(viewModel.libraries, id: \.id) { library in
