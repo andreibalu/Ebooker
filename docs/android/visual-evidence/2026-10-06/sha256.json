@@ -1,0 +1,18 @@
+{
+  "ios-empty-light.png": "b536553626088e9979a6792f828725a24a62dbb1fb07a6b544eeccac1efcb928",
+  "android-empty-light.png": "f74ecfe345a0596212a551c150710cf08f8e008b20c2a8fbb7fdd8c6239e5d12",
+  "ios-empty-dark.png": "c32841a351fecb3838e189848718e5e461b01d0730e3975c3e63961fec3be091",
+  "android-empty-dark.png": "05630a7dbcdaaf14445565cfa8e2fb06142357ea705f3753ccf5924b17080990",
+  "ios-library-light.png": "92c109c70db5de5708cb2cb06aedd13918d4aa49c494e59ced59b498d617a324",
+  "android-library-light.png": "13512d6049f32285b58d236d76dcb607e74db7054aecf11a8406ce41cd11716a",
+  "ios-library-dark.png": "66160385a6d8b3bf3c01e254d48d50443b2df96ed632855236dffd4849115f61",
+  "android-library-dark.png": "94d6676a049492136616c3dc3d2bbea58b6d24bddbc93ca6062b1c011adc2838",
+  "ios-detail-light.png": "150083f52c2750cab27bf96c2f51c1fa463934ec0c9c2f0a711359b8dd86433c",
+  "android-detail-light.png": "7f150495b99dbc8ecf2f570049ed849b4b141bb45e047a42ac72587ca7bdad71",
+  "ios-detail-dark.png": "ce379fbb4118bd46bb7abbbfb852ddd8625350300280dc00f6679d17008e1eec",
+  "android-detail-dark.png": "f9b16ec1c979b2743ef4c7ba04fa932782a1a70cc94fc59603f1f7bb76dcbc5c",
+  "ios-review-light.png": "800a684b4eabc46c3f618bd81fd72955630de6c1dc6b83612e0164ab6f6c727c",
+  "android-review-light.png": "61a867bb54e9e41942849901128df5fb11bb34b97946249f7f850d50e205ce39",
+  "ios-review-dark.png": "990932510d580158bf6d172fc5e6882ac1223078b0ac8aeea6062cac0337fa0d",
+  "android-review-dark.png": "a30afa4a1c702929173709ff3db00d40851527e980bf072a8cc74ab8ebc00f4b"
+}

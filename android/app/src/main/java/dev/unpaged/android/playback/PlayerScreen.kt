@@ -1,0 +1,272 @@
+package dev.unpaged.android.playback
+
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import dev.unpaged.android.moments.MomentSaver
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.unpaged.android.library.GeneratedBookCover
+import dev.unpaged.android.library.BookProgress
+import dev.unpaged.android.library.trackDuration
+import kotlinx.coroutines.delay
+import dev.unpaged.android.moments.MomentEditSheet
+import dev.unpaged.android.library.LibraryMoment
+import dev.unpaged.android.equalizer.EqualizerSheet
+
+@Composable
+fun MiniPlayer(state: PlayerState, controller: PlayerController, onOpen: () -> Unit) {
+    val book = state.book ?: return
+    Surface(shadowElevation = 8.dp) {
+        Column(Modifier.clickable(onClick = onOpen).testTag("miniPlayer")) {
+            BookProgress(book.progress, 2)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                GeneratedBookCover(book.title, Modifier.size(48.dp), cornerRadius = 0)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(book.title, Modifier.testTag("miniPlayer.title"), fontSize = 15.sp, lineHeight = 18.sp,
+                        fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    PlaybackRules.miniSecondary(book, state.trackIndex)?.let {
+                        Text(it, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    } ?: if (state.loading) Text("Connecting to stream…", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary) else Unit
+                }
+                OutputRouteButton(32)
+                PlayPause(state, controller, 42, "miniPlayer.playPause")
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
+    val state by controller.state.collectAsStateWithLifecycle()
+    val book = state.book ?: return
+    var momentDraft by rememberSaveable(stateSaver = MomentSaver) { mutableStateOf<LibraryMoment?>(null) }
+    var showEqualizer by rememberSaveable { mutableStateOf(false) }
+    val equalizer by controller.equalizer.collectAsStateWithLifecycle()
+    var chapters by remember { mutableStateOf(false) }
+    var speedMenu by remember { mutableStateOf(false) }
+    var sleepMenu by remember { mutableStateOf(false) }
+    var markConfirmation by remember { mutableStateOf(false) }
+    var marked by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf(false) }
+    var scrub by remember { mutableFloatStateOf(state.positionMs.toFloat()) }
+    var scrubbing by remember { mutableStateOf(false) }
+    LaunchedEffect(state.positionMs, state.trackIndex) { if (!scrubbing) scrub = state.positionMs.toFloat() }
+    LaunchedEffect(marked) { if (marked) { delay(2000); marked = false } }
+    LaunchedEffect(saved) { if (saved) { delay(2000); saved = false } }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onSurface,
+        dragHandle = null, shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.testTag("player")) {
+            // Regular phones match iOS' 140pt cover; compact windows retain scrollable controls.
+            val compact = maxHeight < 650.dp
+            Column(Modifier.fillMaxSize().then(if (compact) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(bottom = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.padding(top = 4.dp, bottom = 10.dp).size(44.dp, 5.dp)
+                    .background(MaterialTheme.colorScheme.onSurface.copy(alpha = .22f), CircleShape))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutputRouteButton(32)
+                    Spacer(Modifier.weight(1f))
+                    if (state.chapters.size > 1) IconButton(onClick = { chapters = true }, modifier = Modifier.size(36.dp).testTag("player.chapters")) {
+                        Icon(Icons.AutoMirrored.Filled.FormatListBulleted, "Chapters", Modifier.size(22.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp).testTag("player.close")) {
+                        Icon(Icons.Default.KeyboardArrowDown, "Close player", Modifier.size(28.dp))
+                    }
+                }
+                Spacer(Modifier.height(if (compact) 8.dp else 22.dp))
+                GeneratedBookCover(book.title, Modifier.size(if (compact) 100.dp else 140.dp)
+                    .shadow(16.dp, RoundedCornerShape(22.dp)), cornerRadius = 22)
+                Spacer(Modifier.height(16.dp))
+                Text(PlaybackRules.title(book, state.trackIndex), Modifier.padding(horizontal = 28.dp).testTag("player.title"),
+                    fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2)
+                Spacer(Modifier.height(6.dp))
+                Text(book.author.ifBlank { "Audiobook" }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(6.dp))
+                val chapterLine = state.chapters.getOrNull(state.chapterIndex)?.title?.takeIf {
+                    state.chapters.size > 1 && it != PlaybackRules.title(book, state.trackIndex)
+                }
+                Text(if (state.loading) "Connecting to stream…" else chapterLine ?: "File ${state.trackIndex + 1}",
+                    Modifier.clickable(enabled = chapterLine != null) { chapters = true }, fontSize = 12.sp, lineHeight = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .6f))
+                Spacer(Modifier.height(if (compact) 6.dp else 30.dp))
+                Column(Modifier.padding(horizontal = 28.dp)) {
+                    Slider(value = scrub.coerceIn(0f, state.durationMs.toFloat().coerceAtLeast(1f)),
+                        onValueChange = { scrubbing = true; scrub = it }, onValueChangeFinished = { controller.seek(scrub.toLong()); scrubbing = false },
+                        valueRange = 0f..state.durationMs.toFloat().coerceAtLeast(1f), modifier = Modifier.fillMaxWidth().height(32.dp).testTag("player.slider"),
+                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.surface,
+                            activeTrackColor = MaterialTheme.colorScheme.onSurface, inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .15f)),
+                        thumb = { Box(Modifier.size(15.dp).shadow(3.dp, CircleShape).background(MaterialTheme.colorScheme.surface, CircleShape)) },
+                        track = { slider -> SliderDefaults.Track(slider, Modifier.height(5.dp), colors = SliderDefaults.colors(
+                            activeTrackColor = MaterialTheme.colorScheme.onSurface, inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .15f)),
+                            thumbTrackGapSize = 0.dp, drawStopIndicator = null) })
+                    Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                        Text(trackDuration(scrub.toLong()), Modifier.testTag("player.elapsed"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.weight(1f))
+                        Text("-${trackDuration((state.durationMs - scrub.toLong()).coerceAtLeast(0))}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 28.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(controller::previous, enabled = state.canPrevious, modifier = Modifier.size(36.dp).testTag("player.previous")) {
+                        Icon(Icons.Default.SkipPrevious, "Previous chapter", Modifier.size(28.dp))
+                    }
+                    SkipButton(false, controller.preferences.seconds("skipBackSeconds", 30)) { controller.skip(false) }
+                    PlayPause(state, controller, 72, "player.playPause")
+                    SkipButton(true, controller.preferences.seconds("skipForwardSeconds", 30)) { controller.skip(true) }
+                    IconButton(controller::next, enabled = state.canNext, modifier = Modifier.size(36.dp).testTag("player.next")) {
+                        Icon(Icons.Default.SkipNext, "Next chapter", Modifier.size(28.dp))
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Column(Modifier.padding(horizontal = 28.dp).padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Surface(shape = RoundedCornerShape(20.dp), shadowElevation = 2.dp, border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))) {
+                        Row(Modifier.fillMaxWidth().height(48.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.weight(1f)) {
+                                ActionSegment(Icons.Default.Speed, "${speedLabel(state.speed)}x", "player.speed", { speedMenu = true })
+                                DropdownMenu(speedMenu, { speedMenu = false }, modifier = Modifier.semantics { testTagsAsResourceId = true }) {
+                                    PlaybackRules.speeds.forEach { rate -> DropdownMenuItem(text = { Text("${speedLabel(rate)}×") },
+                                        onClick = { controller.speed(rate); speedMenu = false }, modifier = Modifier.testTag("player.speed.$rate")) }
+                                }
+                            }
+                            VerticalDivider(Modifier.height(22.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))
+                            Box(Modifier.width(74.dp)) { ActionSegment(Icons.Default.Tune, "EQ", "player.equalizer", { showEqualizer = true }) }
+                            VerticalDivider(Modifier.height(22.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))
+                            Box(Modifier.weight(1.4f)) {
+                                ActionSegment(Icons.Default.Bedtime, state.sleepRemainingMs?.let { trackDuration(it) } ?: "Sleep Timer", "player.sleep", { sleepMenu = true })
+                                DropdownMenu(sleepMenu, { sleepMenu = false }, modifier = Modifier.semantics { testTagsAsResourceId = true }) {
+                                    DropdownMenuItem(text = { Text("Off") }, onClick = { controller.sleep(null); sleepMenu = false })
+                                    PlaybackRules.sleepMinutes.forEach { minutes -> DropdownMenuItem(text = { Text("$minutes minutes") },
+                                        onClick = { controller.sleep(minutes); sleepMenu = false }) }
+                                }
+                            }
+                        }
+                    }
+                    ActionPill(if (marked) Icons.Default.Check else Icons.Default.Flag, if (marked) "Progress Marked!" else "Mark Progress Here",
+                        "player.markProgress") { markConfirmation = true }
+                    ActionPill(if (saved) Icons.Default.Check else Icons.Default.Bookmark, if (saved) "Saved!" else "Save Moment",
+                        "player.saveMoment") { momentDraft = controller.draftMoment() }
+                }
+            }
+        }
+    }
+    momentDraft?.let { draft -> MomentEditSheet(draft, onSave = { controller.saveMoment(it); momentDraft = null; saved = true }, onCancel = { momentDraft = null }) }
+    if (showEqualizer) EqualizerSheet(equalizer, controller::setEqualizer) { showEqualizer = false }
+    if (chapters) ChaptersSheet(state, controller) { chapters = false }
+    if (markConfirmation) AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { markConfirmation = false }, title = { Text("Mark Progress") },
+        text = { Text("This will update your progress marker to the current playback position.") },
+        confirmButton = { TextButton(onClick = { controller.markProgress(); marked = true; markConfirmation = false }, modifier = Modifier.testTag("player.confirmProgress")) { Text("Mark Progress") } },
+        dismissButton = { TextButton(onClick = { markConfirmation = false }) { Text("Cancel") } })
+}
+
+@Composable
+private fun PlayPause(state: PlayerState, controller: PlayerController, size: Int, tag: String) {
+    Surface(onClick = controller::toggle, modifier = Modifier.size(size.dp).testTag(tag), shape = CircleShape,
+        color = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.background) {
+        Box(contentAlignment = Alignment.Center) {
+            if (state.loading) CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.background, strokeWidth = 2.dp)
+            else Icon(if (state.playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                if (state.playing) "Pause playback" else "Play playback", Modifier.size(if (size > 50) 34.dp else 24.dp))
+        }
+    }
+}
+
+@Composable
+private fun SkipButton(forward: Boolean, seconds: Int, action: () -> Unit) {
+    IconButton(action, Modifier.size(40.dp).testTag(if (forward) "player.skipForward" else "player.skipBack")) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Replay,
+                if (forward) "Skip forward $seconds seconds" else "Skip backward $seconds seconds",
+                Modifier.size(32.dp).scale(if (forward) -1f else 1f, 1f))
+            // Replay has no baked-in numeral, so the chosen interval leaves its ring intact.
+            Box(Modifier.padding(top = 5.dp).size(19.dp, 16.dp), contentAlignment = Alignment.Center) {
+                Text(seconds.toString(), fontSize = 12.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActionSegment(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, tag: String, action: () -> Unit, enabled: Boolean = true) {
+    Row(Modifier.fillMaxSize().clickable(enabled = enabled, onClick = action).testTag(tag), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
+        Icon(icon, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .35f))
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .35f), maxLines = 1)
+    }
+}
+
+@Composable
+private fun ActionPill(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, tag: String, action: () -> Unit) {
+    Surface(onClick = action, modifier = Modifier.fillMaxWidth().height(44.dp).testTag(tag), shape = RoundedCornerShape(16.dp),
+        shadowElevation = 2.dp, border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+            Icon(icon, null, Modifier.size(16.dp)); Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+private fun speedLabel(speed: Float) = java.math.BigDecimal(speed.toString()).stripTrailingZeros().toPlainString()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChaptersSheet(state: PlayerState, controller: PlayerController, dismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(),
+        containerColor = MaterialTheme.colorScheme.surface, contentColor = MaterialTheme.colorScheme.onSurface) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).semantics { testTagsAsResourceId = true }.testTag("chapters")) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp)) {
+                Text("Chapters", Modifier.align(Alignment.Center), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Surface(onClick = dismiss, modifier = Modifier.align(Alignment.CenterEnd).testTag("chapters.done"), shape = CircleShape,
+                    border = BorderStroke(.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .15f))) {
+                    Text("Done", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            val list = rememberLazyListState(initialFirstVisibleItemIndex = state.chapterIndex)
+            LazyColumn(state = list) {
+                items(state.chapters, key = { it.index }) { chapter ->
+                    val current = chapter.index == state.chapterIndex
+                    Column(Modifier.fillMaxWidth().background(if (current) MaterialTheme.colorScheme.primary.copy(alpha = .12f) else androidx.compose.ui.graphics.Color.Transparent)
+                        .clickable { controller.chapter(chapter.index); dismiss() }.testTag("chapters.row.${chapter.index}")) {
+                        HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), thickness = .5.dp)
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Text("${chapter.index + 1}", Modifier.width(14.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(chapter.title, Modifier.weight(1f), fontSize = 15.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal)
+                            if (current) Icon(Icons.Default.GraphicEq, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                            Text(trackDuration(chapter.durationMs), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                item { HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), thickness = .5.dp) }
+            }
+        }
+    }
+}

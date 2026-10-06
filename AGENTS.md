@@ -1,5 +1,9 @@
 # AGENTS.md
 
+Android work lives under `android/`: read `android/AGENTS.md` and
+`docs/android/README.md` first. The iOS build/release instructions below apply
+to the existing iOS app, not the Android subtree.
+
 Canonical instructions for coding agents in this repo (Codex and Claude Code both read this file).
 Claude-Code-only notes — tool availability and Codex delegation — live in `CLAUDE.md`, which imports this file.
 

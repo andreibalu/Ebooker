@@ -1,0 +1,27 @@
+<resources>
+    <string name="unknown_author">Unknown author</string>
+    <string name="details">Details</string>
+    <string name="imported_files">Imported Files</string>
+    <string name="files">Files</string>
+    <string name="total_length">Total length</string>
+    <string name="short_hours_minutes">%1$dh %2$dm</string>
+    <string name="short_minutes">%1$dm</string>
+    <string name="app_name">Unpaged</string>
+    <string name="empty_library">Your Library Is Empty</string>
+    <string name="import_book">Import Audiobook</string>
+    <string name="preparing_tracks">Preparing tracks · %1$d of %2$d</string>
+    <string name="copying_audio">Keep Unpaged open while your audio files are copied.</string>
+    <string name="cancel">Cancel</string>
+    <string name="could_not_complete">Could not complete this step</string>
+    <string name="invalid_audio">Choose readable audiobook files with a valid audio track and duration. Try MP3, M4A, M4B, AAC, WAV, OGG, Opus or FLAC.</string>
+    <string name="duplicate_book">This audiobook is already in your library.</string>
+    <string name="title_required">Give the audiobook a title before adding it.</string>
+    <string name="read_failed">A selected file could not be read or copied. Check that it is available and that your device has free storage, then choose the files again.</string>
+    <string name="storage_failed">Your library could not be updated. Check your available storage and try again.</string>
+    <string name="load_failed">Your library could not be opened. Retry before importing or removing books.</string>
+    <string name="retry">Retry</string>
+    <string name="ok">OK</string>
+    <string name="title">Title</string>
+    <string name="author">Author</string>
+    <string name="add_to_library">Save</string>
+</resources>
