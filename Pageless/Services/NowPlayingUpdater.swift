@@ -139,6 +139,13 @@ struct NowPlayingUpdater {
         MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
     }
 
+    /// Removes the lock screen / Control Center entry once no book is loaded.
+    @MainActor
+    func clear() {
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
+    }
+
     @MainActor
     private func generatedArtwork(for title: String) -> UIImage? {
         if let cached = Self.generatedArtworkCache[title] {

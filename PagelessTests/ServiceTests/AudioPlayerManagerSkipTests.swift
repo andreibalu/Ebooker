@@ -46,6 +46,51 @@ struct AudioPlayerManagerSkipTests {
         #expect(player.isLoadingPlayback(for: book) == false)
     }
 
+    // MARK: - Unloading a deleted book
+
+    @Test func unloadIfCurrentForgetsOnlyTheLoadedBook() {
+        let player = AudioPlayerManager()
+        let loaded = makeBook(trackCount: 2)
+        let other = makeBook(trackCount: 1)
+        player.seedUnitTestPlaybackState(audiobook: loaded, track: loaded.sortedTracks[1], trackIndex: 1, currentTime: 90)
+
+        player.unloadIfCurrent(other)
+        #expect(player.currentAudiobook?.id == loaded.id)
+
+        player.unloadIfCurrent(loaded)
+        #expect(player.currentAudiobook == nil)
+        #expect(player.currentTrack == nil)
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.currentTime == 0)
+        #expect(player.chapters.isEmpty)
+        #expect(player.isPlaying == false)
+    }
+
+    @Test func unloadIfCurrentCancelsALoadStillInFlight() {
+        let player = AudioPlayerManager()
+        let book = makeBook(trackCount: 1)
+        player.seedUnitTestLoadingPlayback(bookID: book.id)
+
+        player.unloadIfCurrent(book)
+
+        #expect(player.isLoadingPlayback(for: book) == false)
+    }
+
+    @Test func unloadIfCurrentCancelsADownloadedBookStillPreparing() {
+        let player = AudioPlayerManager()
+        let playing = makeBook(trackCount: 1)
+        let preparing = makeBook(trackCount: 1)
+        // A downloaded book that is still preparing has a pending target but no loading ID,
+        // and the player still shows the previous book.
+        player.seedUnitTestPlaybackState(audiobook: playing, track: playing.sortedTracks[0], trackIndex: 0, currentTime: 10)
+        player.seedUnitTestPendingPlaybackTarget(PendingPlaybackTarget(bookID: preparing.id, trackIndex: 0, time: 0))
+
+        player.unloadIfCurrent(preparing)
+
+        #expect(player.pendingPlaybackTarget == nil)
+        #expect(player.currentAudiobook == nil)
+    }
+
     // MARK: - Single-track navigation
 
     @Test func canGoToNextTrackIsFalseForSingleTrackBook() {

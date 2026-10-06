@@ -265,6 +265,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         loadingPlaybackBookID = bookID
     }
 
+    func seedUnitTestPendingPlaybackTarget(_ target: PendingPlaybackTarget?) {
+        pendingPlaybackTarget = target
+    }
+
     func applyPlaybackDefaults(resumeBacktrack: Double, skipBack: Double, skipForward: Double) {
         resumeBacktrackSeconds = resumeBacktrack
         skipBackSeconds = skipBack
@@ -351,6 +355,28 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             invalidateCurrentLoad()
         }
         pauseCurrentItemWithoutInvalidatingLoad()
+    }
+
+    /// Stops and forgets `audiobook` if it is loaded, before its row is deleted. Otherwise the
+    /// mini player, Now Playing and the time observer keep reading a deleted SwiftData model.
+    func unloadIfCurrent(_ audiobook: Audiobook) {
+        // `currentAudiobook` still names the previous book while another one prepares, and
+        // `loadingPlaybackBookID` is set only for autoplaying streams, so check the pending target too.
+        guard currentAudiobook?.id == audiobook.id
+            || loadingPlaybackBookID == audiobook.id
+            || pendingPlaybackTarget?.bookID == audiobook.id else { return }
+        // Pausing first saves the position, flushes the reading session and reports ABS progress.
+        pause()
+        invalidateCurrentLoad()
+        setSleepTimer(seconds: nil)
+        player.replaceCurrentItem(with: nil)
+        currentAudiobook = nil
+        currentTrack = nil
+        currentTrackIndex = 0
+        currentTime = 0
+        duration = 1
+        chapters = []
+        nowPlaying.clear()
     }
 
     private func pauseCurrentItemWithoutInvalidatingLoad() {

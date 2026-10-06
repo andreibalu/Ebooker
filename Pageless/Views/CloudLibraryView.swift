@@ -81,6 +81,7 @@ final class CloudLibraryRestoreFlow {
 /// A row is only ever removed from iCloud by an explicit swipe-to-delete here.
 struct CloudLibraryView: View {
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var player: AudioPlayerManager
     @Environment(\.dismiss) private var dismiss
     @Query private var allBooks: [Audiobook]
 
@@ -381,6 +382,7 @@ struct CloudLibraryView: View {
 
     private func permanentlyDelete(_ book: Audiobook) {
         deleteCandidate = nil
+        player.unloadIfCurrent(book)
         do {
             try LibraryImportService.deleteAudiobook(book, deleteFiles: true, modelContext: modelContext)
         } catch {

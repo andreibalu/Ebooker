@@ -111,7 +111,10 @@ struct ContentView: View {
     @State private var playerDismissGeneration: UInt = 0
     @State private var isSettingsPresented = false
     @State private var isPlusHubPresented = false
-    @State private var downloadScrollRequest = 0
+    @State private var isDownloadScrollPending = false
+    /// Changing this rebuilds the navigation stack. The links push without a path, so a
+    /// rebuild is the only way to pop every pushed screen.
+    @State private var navigationStackID = 0
     @State private var selectedLibraryDownloadBook: LibriVoxBook?
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
     private let screenHeight = UIScreen.main.bounds.height
@@ -144,6 +147,7 @@ struct ContentView: View {
                         )
                     }
                 }
+                .id(navigationStackID)
 
                 if player.currentAudiobook != nil {
                     MiniPlayerBar(
@@ -234,6 +238,7 @@ struct ContentView: View {
         ) {
             if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
                 Button("Remove from Library", role: .destructive) {
+                    unloadDeleteCandidateFromPlayer()
                     if let book = viewModel.deleteCandidate {
                         viewModel.deleteAudiobookshelfBook(book, modelContext: modelContext)
                         viewModel.deleteCandidate = nil
@@ -241,6 +246,7 @@ struct ContentView: View {
                 }
             } else if viewModel.deleteCandidate?.isStreamingOnly == true {
                 Button("Remove from Library", role: .destructive) {
+                    unloadDeleteCandidateFromPlayer()
                     if let book = viewModel.deleteCandidate {
                         viewModel.deleteFreeBook(book, modelContext: modelContext)
                         viewModel.deleteCandidate = nil
@@ -248,6 +254,7 @@ struct ContentView: View {
                 }
             } else if viewModel.deleteCandidate?.isFreeBook == true {
                 Button("Remove Download", role: .destructive) {
+                    unloadDeleteCandidateFromPlayer()
                     if let book = viewModel.deleteCandidate {
                         viewModel.deleteFreeBook(book, modelContext: modelContext)
                         viewModel.deleteCandidate = nil
@@ -255,13 +262,16 @@ struct ContentView: View {
                 }
             } else if IcloudSyncGate.isEnabled() {
                 Button("Remove from this iPhone", role: .destructive) {
+                    unloadDeleteCandidateFromPlayer()
                     viewModel.softDeleteAudiobook(modelContext: modelContext)
                 }
             } else {
                 Button("Remove from App", role: .destructive) {
+                    unloadDeleteCandidateFromPlayer()
                     viewModel.deleteAudiobook(alsoDeleteFiles: false, modelContext: modelContext)
                 }
                 Button("Also Delete Files", role: .destructive) {
+                    unloadDeleteCandidateFromPlayer()
                     viewModel.deleteAudiobook(alsoDeleteFiles: true, modelContext: modelContext)
                 }
             }
@@ -369,8 +379,12 @@ struct ContentView: View {
             isPlayerVisible = false
             isSettingsPresented = false
             isPlusHubPresented = false
+            // The download Live Activity opens this link, often while the book's detail screen
+            // that started the download is still pushed on top of the library.
+            selectedLibraryDownloadBook = nil
+            navigationStackID &+= 1
             selectedTab = .allBooks
-            downloadScrollRequest &+= 1
+            isDownloadScrollPending = true
             router.consume(.downloads)
         }
     }
@@ -668,12 +682,12 @@ struct ContentView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 20)
             }
-            .onChange(of: downloadScrollRequest) { _, _ in
-                guard tab == .allBooks else { return }
-                Task { @MainActor in
-                    await Task.yield()
-                    proxy.scrollTo("library-downloads", anchor: .top)
-                }
+            // A task rather than onChange: the grid may be rebuilt by the same route that set the flag.
+            .task(id: isDownloadScrollPending) {
+                guard tab == .allBooks, isDownloadScrollPending else { return }
+                await Task.yield()
+                proxy.scrollTo("library-downloads", anchor: .top)
+                isDownloadScrollPending = false
             }
         }
     }
@@ -900,6 +914,11 @@ struct ContentView: View {
             sortRaw = allBooksSortRaw
         }
         return viewModel.sorted(base, by: sortRaw)
+    }
+
+    /// Deleting the loaded book must also unload it from the player first.
+    private func unloadDeleteCandidateFromPlayer() {
+        if let book = viewModel.deleteCandidate { player.unloadIfCurrent(book) }
     }
 
     private var deleteAlertTitle: String {
