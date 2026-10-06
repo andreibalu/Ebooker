@@ -46,3 +46,9 @@ onboarding and full moment editing are later slices. Payments, Plus/tips and App
 The [LibriVox Shelves slice](slice-3-librivox-shelves.md) adds cached catalog browsing,
 streaming addition, downloads and samples; its emulator/visual checks are deferred
 to the orchestrator. Playback, activity, onboarding and moment creation are separate slices. Payments, Plus/tips and Apple sync remain excluded.
+
+[Slice 4](slice-4-moments-equalizer.md) adds manual moment metadata/edit/delete,
+pinning and filters, and live per-book Media3 five-band EQ. SQLite v3 adds pin
+state without dropping data. Host checks and E2E-driver compilation are
+separate from emulator playback and screenshot qualification; this slice does
+not run the shared emulator.

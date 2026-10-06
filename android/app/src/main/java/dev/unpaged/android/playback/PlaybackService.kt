@@ -8,6 +8,10 @@ import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import android.content.Context
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dev.unpaged.android.MainActivity
@@ -19,7 +23,12 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         val controller = PlayerController.get(this)
-        engine = ExoPlayer.Builder(this)
+        val renderers = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
+                DefaultAudioSink.Builder(context).setEnableFloatOutput(false)
+                    .setAudioProcessors(arrayOf(controller.equalizerProcessor)).build()
+        }
+        engine = ExoPlayer.Builder(this, renderers)
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).build()
         val sessionPlayer = object : ForwardingPlayer(engine) {

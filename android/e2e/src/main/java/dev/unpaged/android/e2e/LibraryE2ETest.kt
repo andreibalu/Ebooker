@@ -381,9 +381,11 @@ class LibraryE2ETest {
         field("player.playPause").click()
         visible(By.desc("Play playback"))
         field("player.saveMoment").click()
+        field("moment.done").click()
         visible(By.text("Saved!"))
         visible(By.text("Save Moment"))
         field("player.saveMoment").click()
+        field("moment.done").click()
         visible(By.text("Saved!"))
         field("player.markProgress").click()
         visible(By.text("This will update your progress marker to the current playback position."))
@@ -452,6 +454,120 @@ class LibraryE2ETest {
         assertFalse(device.hasObject(By.text("Another")))
     }
 
+    @Test fun manualMomentMetadataEditFilterPlayAndDeletePersistAcrossRelaunch() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 2.wav", "E2E Chapter 1.wav")
+        tapDescription("Add favorite")
+        tapText("E2E The Listening Book")
+        field("book.play").click()
+        dismissNotificationPrompt()
+        waitForElapsed { it >= 2 }
+        field("player.playPause").click()
+        val momentTime = field("player.elapsed").text
+        field("player.saveMoment").click()
+        field("moment.name").setText("A turning point")
+        field("moment.note").setText("A memorable passage")
+        device.pressBack() // dismiss keyboard
+        scrollTo("moment.quote", scrollId = "moment.scroll")
+        field("moment.quote").setText("The story begins")
+        device.pressBack()
+        scrollTo("moment.addCategory", scrollId = "moment.scroll")
+        field("moment.addCategory").click(); tapText("Action")
+        scrollTo("moment.addMood", scrollId = "moment.scroll")
+        field("moment.addMood").click(); tapText("Dramatic")
+        scrollTo("moment.character", scrollId = "moment.scroll")
+        field("moment.character").setText("Alice")
+        field("moment.addCharacter").click()
+        device.pressBack()
+        screenshot("save-moment-light")
+        field("moment.done").click()
+        visible(By.text("Saved!"))
+        field("player.close").click()
+        relaunch()
+        tapText("E2E The Listening Book")
+        field("book.moments").click()
+        visible(By.text("A turning point")); visible(By.text("A memorable passage")); visible(By.text("Action"))
+        screenshot("moments-light")
+        field("moment.filter").click(); screenshot("moment-filters-light"); tapText("Dramatic"); tapText("Done")
+        visible(By.text("1 moment · filtered"))
+        field("moment.filter").click(); tapText("Clear All"); tapText("Done")
+        tapDescription("Pin moment")
+        visible(By.desc("Unpin moment"))
+        tapDescription("Edit moment")
+        scrollTo("moment.quote", scrollId = "moment.scroll")
+        assertEquals("The story begins", field("moment.quote").text)
+        scrollTo("moment.name", downward = false, scrollId = "moment.scroll")
+        field("moment.name").setText("Edited turning point")
+        field("moment.done").click()
+        relaunch(); tapText("E2E The Listening Book"); field("book.moments").click()
+        visible(By.text("Edited turning point")); visible(By.desc("Unpin moment"))
+        tapDescription("Play from this moment")
+        visible(By.res("player.title"))
+        val savedSeconds = momentTime.split(":").let { it[0].toInt() * 60 + it[1].toInt() }
+        waitForElapsed { it in savedSeconds..(savedSeconds + 2) }
+        field("player.playPause").click(); field("player.close").click()
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("Edited turning point")); screenshot("moments-dark")
+        field("moment.filter").click(); screenshot("moment-filters-dark"); tapText("Done")
+        tapDescription("Edit moment"); screenshot("edit-moment-dark"); tapText("Cancel")
+        val rowBounds = visible(By.res(java.util.regex.Pattern.compile("moment\\.row\\..*"))).visibleBounds
+        device.swipe(rowBounds.right - 20, rowBounds.centerY(), rowBounds.right - rowBounds.width() / 3, rowBounds.centerY(), 25)
+        tapText("Delete")
+        visible(By.text("No saved moments yet"))
+        relaunch(); tapText("E2E The Listening Book"); field("book.moments").click()
+        visible(By.text("No saved moments yet"))
+    }
+
+    @Test fun momentOffsetClampsAndCancelledOrBlankEditsDoNotSave() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 2.wav", "E2E Chapter 1.wav")
+        tapDescription("Settings"); expandSettings()
+        field("settings.picker.Save Moment Offset").click()
+        scrollTo("settings.option.momentBacktrackSeconds.30")
+        field("settings.option.momentBacktrackSeconds.30").click()
+        device.pressBack()
+        tapText("E2E The Listening Book"); field("book.play").click(); dismissNotificationPrompt()
+        waitForElapsed { it >= 2 }; field("player.playPause").click()
+        field("player.saveMoment").click()
+        field("moment.name").setText("   ")
+        assertFalse(visible(By.res("moment.done")).isEnabled)
+        tapText("Cancel")
+        field("player.saveMoment").click(); field("moment.name").setText("Offset moment"); field("moment.done").click()
+        visible(By.text("Saved!")); field("player.close").click()
+        relaunch(); tapText("E2E The Listening Book"); field("book.moments").click()
+        visible(By.text("1 moment")); visible(By.text("Offset moment")); visible(By.text("00:00"))
+    }
+
+    @Test fun equalizerPresetBoostAndPerBookIsolationPersistAfterRelaunch() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 2.wav", "E2E Chapter 1.wav")
+        tapDescription("Add favorite")
+        saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
+        tapText("E2E The Listening Book"); field("book.play").click(); dismissNotificationPrompt()
+        waitForElapsed { it >= 2 }; field("player.playPause").click()
+        field("player.equalizer").click()
+        screenshot("eq-light")
+        field("equalizer.enabled").click()
+        val boostBounds = visible(By.res("equalizer.preamp")).visibleBounds
+        device.click(boostBounds.centerX(), boostBounds.centerY())
+        visible(By.text("+6 dB"))
+        field("equalizer.preset.voiceBoost").click()
+        assertTrue(visible(By.res("equalizer.preset.voiceBoost")).isSelected)
+        field("equalizer.done").click(); field("player.close").click()
+        relaunch(); tapText("E2E The Listening Book"); field("book.play").click()
+        visible(By.res("player.title")); field("player.equalizer").click()
+        assertTrue(visible(By.res("equalizer.enabled")).isChecked)
+        visible(By.text("+6 dB"))
+        assertTrue(visible(By.res("equalizer.preset.voiceBoost")).isSelected)
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("Equalizer")); screenshot("eq-dark")
+        scrollTo("equalizer.reset", scrollId = "equalizer.scroll"); field("equalizer.reset").click()
+        scrollTo("equalizer.preset.flat", downward = false, scrollId = "equalizer.scroll")
+        assertTrue(visible(By.res("equalizer.preset.flat")).isSelected)
+        field("equalizer.done").click(); field("player.close").click(); device.pressBack()
+        tapText("E2E Another Book"); field("book.play").click()
+        visible(By.res("player.title")); field("player.equalizer").click()
+        assertFalse(visible(By.res("equalizer.enabled")).isChecked)
+        assertTrue(visible(By.res("equalizer.preset.flat")).isSelected)
+    }
+
     private fun dismissNotificationPrompt() {
         val deny = device.wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_deny_button")), 2000)
         deny?.click()
@@ -490,9 +606,9 @@ class LibraryE2ETest {
         assertTrue("Rendered background brightness $brightness, expected dark=$dark", if (dark) brightness < 70 else brightness > 160)
     }
 
-    private fun scrollTo(id: String, downward: Boolean = true) {
+    private fun scrollTo(id: String, downward: Boolean = true, scrollId: String = "settings.scroll") {
         repeat(8) {
-            val bounds = visible(By.res("settings.scroll")).visibleBounds
+            val bounds = visible(By.res(scrollId)).visibleBounds
             val target = device.findObject(By.res(id))?.visibleBounds
             if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return
             val top = bounds.top + bounds.height() / 5

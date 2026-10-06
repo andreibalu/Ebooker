@@ -14,6 +14,7 @@ parser.add_argument('--playback-only', action='store_true', help='Require the fo
 parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
 parity_references = {
+    'eq-light': '08-eq-light.png',
     'player-light': '06-player-light.png',
     'chapters-light': '07-chapters-light.png',
     'library-miniplayer-light': '11-library-miniplayer-light.png',
@@ -71,13 +72,13 @@ for case in cases:
     figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in ['ios', 'android'])
     note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
-for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark']:
+for case in ['moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark', 'save-moment-light', 'edit-moment-dark', 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark']:
     source = args.android_captures / f'{case}.png'
     if source.is_file():
         name = f'android-{case}.png'
         shutil.copyfile(source, args.output / name)
         manifest[name] = hashlib.sha256(source.read_bytes()).hexdigest()
-        sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2><p>No matching iOS dark playback reference was supplied. Compare with the light layout and Color+Theme.swift; this is not a verified dark screenshot pair.</p><figure><a href="{name}"><img src="{name}" alt="{case}" loading="lazy"></a></figure></section>')
+        sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2><p>No matching iOS reference was supplied for this state. Compare with the light layout and Color+Theme.swift; this is not a verified dark screenshot pair.</p><figure><a href="{name}"><img src="{name}" alt="{case}" loading="lazy"></a></figure></section>')
 (args.output / 'sha256.json').write_text(json.dumps(manifest, indent=2) + '\n')
 (args.output / 'index.html').write_text('''<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

@@ -45,7 +45,7 @@ data class LibraryMoment(
     val id: String, val bookId: String, val trackIndex: Int, val timeMs: Long,
     val label: String, val notes: String = "", val categoriesJson: String = "[]",
     val quoteLine: String? = null, val charactersJson: String = "[]", val mood: String? = null,
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long = System.currentTimeMillis(), val isPinned: Boolean = false,
 )
 
 data class PlaybackProgress(

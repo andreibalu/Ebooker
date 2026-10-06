@@ -18,11 +18,12 @@ interface LibraryStore {
     fun setProgressMarker(id: String, positionMs: Long)
     fun moments(bookId: String): List<LibraryMoment>
     fun saveMoment(moment: LibraryMoment)
+    fun updateEqualizer(id: String, json: String) { error("Equalizer persistence unsupported") }
     fun deleteMoment(id: String)
 }
 
-/** Schema v2 adds parity state without replacing any existing book or track. */
-class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, 2), LibraryStore {
+/** Schema v3 adds pin state; v2 adds parity state without replacing any existing book or track. */
+class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, 3), LibraryStore {
     private val audioRoot = java.io.File(context.filesDir, "audiobooks")
 
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
@@ -34,10 +35,16 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             stored_name TEXT NOT NULL, duration_ms INTEGER NOT NULL, fingerprint TEXT NOT NULL,
             PRIMARY KEY(book_id, position))""")
         migrateToV2(db)
+        migrateToV3(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2 && newVersion >= 2) migrateToV2(db)
+        if (oldVersion < 3 && newVersion >= 3) migrateToV3(db)
+    }
+
+    private fun migrateToV3(db: SQLiteDatabase) {
+        db.execSQL("ALTER TABLE moments ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
     }
 
     private fun migrateToV2(db: SQLiteDatabase) {
@@ -156,14 +163,14 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
         readableDatabase.query("moments", null, "book_id = ?", arrayOf(bookId), null, null, "created_at DESC, id ASC").use { r ->
             while (r.moveToNext()) add(LibraryMoment(r.text("id"), r.text("book_id"), r.long("track_index").toInt(),
                 r.long("time_ms"), r.text("label"), r.text("notes"), r.text("categories_json"), r.optional("quote_line"),
-                r.text("characters_json"), r.optional("mood"), r.long("created_at")))
+                r.text("characters_json"), r.optional("mood"), r.long("created_at"), r.bool("is_pinned")))
         }
     }
 
     override fun saveMoment(moment: LibraryMoment) {
         require(moment.trackIndex >= 0 && moment.timeMs >= 0)
         val values = ContentValues().apply {
-            put("id", moment.id); put("book_id", moment.bookId); put("track_index", moment.trackIndex)
+            put("is_pinned", moment.isPinned); put("id", moment.id); put("book_id", moment.bookId); put("track_index", moment.trackIndex)
             put("time_ms", moment.timeMs); put("label", moment.label); put("notes", moment.notes)
             put("categories_json", moment.categoriesJson); put("quote_line", moment.quoteLine)
             put("characters_json", moment.charactersJson); put("mood", moment.mood); put("created_at", moment.createdAt)
@@ -171,6 +178,10 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
         writableDatabase.transaction {
             if (update("moments", values, "id = ?", arrayOf(moment.id)) == 0) insertOrThrow("moments", null, values)
         }
+    }
+
+    override fun updateEqualizer(id: String, json: String) {
+        writableDatabase.update("books", ContentValues().apply { put("equalizer_json", json) }, "id = ?", arrayOf(id))
     }
 
     override fun deleteMoment(id: String) { writableDatabase.delete("moments", "id = ?", arrayOf(id)) }

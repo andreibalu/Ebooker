@@ -8,7 +8,9 @@ chapters, speed, sleep, progress and manual moment saves are in
 [slice 2](../docs/android/slice-2-playback.md). Shelves browses a separately cached
 LibriVox catalog with collections, search/filters, samples, streaming addition and
 session-owned downloads ([slice 3](../docs/android/slice-3-librivox-shelves.md)).
-Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
+Manual moment editing/filtering/pinning and per-book five-band Media3 EQ are in
+[slice 4](../docs/android/slice-4-moments-equalizer.md), with additive SQLite v3
+and compile-only E2E journeys. Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
 for the migration and next-slice API contract. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
 remains the product/architecture decision index.
 

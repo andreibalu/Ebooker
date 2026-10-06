@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.UUID
+import dev.unpaged.android.equalizer.*
 
 /** Shared with the service: state and commands always operate on the session's sole engine. */
 data class PlayerState(
@@ -41,6 +42,19 @@ class PlayerController internal constructor(private val context: Application) {
     companion object {
         fun get(context: Context): PlayerController = (context.applicationContext as UnpagedApplication).player
     }
+    val equalizerProcessor = EqualizerAudioProcessor()
+    private val mutableEqualizer = MutableStateFlow(EqualizerConfiguration())
+    val equalizer = mutableEqualizer.asStateFlow()
+    fun setEqualizer(value: EqualizerConfiguration) {
+        val book = state.value.book ?: return
+        val config = value.normalized()
+        mutableEqualizer.value = config
+        equalizerProcessor.configuration = config
+        val json = config.json()
+        mutableState.value = state.value.copy(book = book.copy(equalizerJson = json))
+        writes.trySend { store.updateEqualizer(book.id, json) }
+    }
+
     val preferences = UnpagedPreferences(context)
     private val store = SQLiteLibraryStore(context)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -159,6 +173,9 @@ class PlayerController internal constructor(private val context: Application) {
         markers.clear()
         preservingSkipTarget = null
         rules.load()
+        val eq = EqualizerConfiguration.decode(book.equalizerJson)
+        mutableEqualizer.value = eq
+        equalizerProcessor.configuration = eq
         val artwork = GeneratedArtwork.png(book.title)
         val items = book.tracks.mapIndexed { index, file ->
             val uri = if (file.storedName.isNotEmpty()) android.net.Uri.fromFile(File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
@@ -247,11 +264,17 @@ class PlayerController internal constructor(private val context: Application) {
         writes.trySend { store.setProgressMarker(book.id, overall) }
         persist(true)
     }
-    fun saveMoment() {
-        val s = state.value; val book = s.book ?: return
+    fun draftMoment(): LibraryMoment? {
+        update()
+        val s = state.value; val book = s.book ?: return null
         val time = PlaybackRules.momentTime(s.positionMs, preferences.seconds("momentBacktrackSeconds", 0))
-        val moment = LibraryMoment(UUID.randomUUID().toString(), book.id, s.trackIndex, time, "Saved Moment")
-        writes.trySend { store.saveMoment(moment) }
+        return LibraryMoment(UUID.randomUUID().toString(), book.id, s.trackIndex, time, "Saved Moment")
+    }
+    fun saveMoment(moment: LibraryMoment) { writes.trySend { store.saveMoment(moment) } }
+    fun playMoment(book: LibraryBook, moment: LibraryMoment) {
+        connect(); loadJob?.cancel(); pending = null
+        val action = { load(book, moment.trackIndex, moment.timeMs) }
+        if (player == null) { pending = action; mutableState.value = state.value.copy(loading = true) } else action()
     }
     fun removed(id: String) {
         if (state.value.book?.id != id) return

@@ -236,3 +236,15 @@ Earlier E2E counts and visual reports above remain historical slice-1 evidence.
 The report generator now accepts `--cases shelves-light shelves-dark` for focused
 03/23 comparisons. Layout and live audio/download behavior remain unverified until
 that run; no visual parity pass is claimed from host tests or assembly.
+
+## Slice 4 — moments and equalizer, runtime checks deferred
+
+[Implementation and handoff](slice-4-moments-equalizer.md) records manual moment
+metadata, edit/delete/pin/filter controls and the per-book PCM16 EQ processor.
+Assembly, strict app lint, 70 host tests and the 21-journey E2E driver compile
+are checked. Three new journeys cover moments and per-book EQ persistence, with
+light/dark captures specified. This slice runs no E2E and creates no Android
+captures because the orchestrator owns the shared emulator. The supplied
+`08-eq-light.png` was visually inspected; `--cases eq-light` adds the matching
+report pair after execution. Historical runtime results above do not qualify
+these new features.
