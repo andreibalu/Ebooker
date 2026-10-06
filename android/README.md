@@ -1,23 +1,25 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`. Local audiobook import,
-metadata review, schema-v2 persistence, Favorites/Library/Shelves pager, per-tab
-sort menus, favorite hearts, detail disclosures and persisted listening/appearance
-settings are implemented. Media3 local/remote playback, full player, mini player,
-chapters, speed, sleep, progress and manual moment saves are in
-[slice 2](../docs/android/slice-2-playback.md). Shelves browses a separately cached
-LibriVox catalog with collections, search/filters, samples, streaming addition and
-session-owned downloads ([slice 3](../docs/android/slice-3-librivox-shelves.md)).
-Manual moment editing/filtering/pinning and per-book five-band Media3 EQ are in
-[slice 4](../docs/android/slice-4-moments-equalizer.md), with additive SQLite v3
-and compile-only E2E journeys. Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
-Reading sessions (additive schema v3), Favorites activity/stats and seven-page
-onboarding are implemented in [slice 5](../docs/android/slice-5-reading-onboarding.md);
-onboarding uses notification permission, manual moments and local-library pages
-in place of Apple-only features. Slice 5 compiles E2E journeys; emulator/capture
-validation is deferred. Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
-for the migration and next-slice API contract. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
-remains the product/architecture decision index.
+Native Kotlin/Compose application under `android/app/`, built in five merged slices:
+
+- [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
+  import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
+  favorite hearts, detail disclosures and persisted listening/appearance settings.
+- [Slice 2](../docs/android/slice-2-playback.md): Media3 local/remote playback,
+  full and mini player, chapters, speed, sleep, progress and manual moment saves.
+- [Slice 3](../docs/android/slice-3-librivox-shelves.md): a separately cached
+  LibriVox catalog with collections, search/filters, samples, streaming addition
+  and session-owned downloads.
+- [Slice 4](../docs/android/slice-4-moments-equalizer.md): manual moment
+  editing/filtering/pinning and per-book five-band Media3 EQ.
+- [Slice 5](../docs/android/slice-5-reading-onboarding.md): reading sessions,
+  Favorites activity/stats and seven-page onboarding, using notification
+  permission, manual moments and local-library pages in place of Apple-only features.
+
+SQLite is at schema v3 via additive, tested migrations. Audiobookshelf, AI,
+Android Auto, payments and cloud sync are absent. The
+[Android map](https://github.com/andreibalu/Ebooker/issues/49) remains the
+product/architecture decision index.
 
 ## Build and lint
 

@@ -31,30 +31,26 @@ broader architecture decisions by assumption.
 ## Current stage
 
 The 2026-10-06 shared parity brief authorizes the native mirror build in slices.
-[Slice 1](slice-1-shell-library-settings.md) adds the shell, local library/card/
-detail parity, persistent settings and additive schema v2 on top of the existing
-import foundation. Its architecture decisions are recorded there for subsequent
-slices. No GitHub issue/PR state was changed during this work.
+Each slice records its architecture decisions; all five are merged on one branch:
 
-[E2E and visual checks](e2e-visual-validation-2026-10-06.md) distinguish current
-emulator coverage from remaining product/visual and device qualification.
-[Slice 2](slice-2-playback.md) wires Media3 service playback, full/mini player,
-chapter navigation, durable progress and manual moment creation. APK, lint,
-host tests and E2E-driver compilation are checked in its isolated worktree;
-shared-emulator runtime/capture validation follows merge. Shelves, activity,
-onboarding and full moment editing are later slices. Payments, Plus/tips and Apple sync remain excluded.
-The [LibriVox Shelves slice](slice-3-librivox-shelves.md) adds cached catalog browsing,
-streaming addition, downloads and samples; its emulator/visual checks are deferred
-to the orchestrator. Playback, activity, onboarding and moment creation are separate slices. Payments, Plus/tips and Apple sync remain excluded.
+1. [Shell, library and settings](slice-1-shell-library-settings.md): app shell,
+   local library/card/detail parity, persistent settings and schema v2.
+2. [Playback](slice-2-playback.md): Media3 service playback, full/mini player,
+   chapter navigation, durable progress and manual moment creation.
+3. [LibriVox Shelves](slice-3-librivox-shelves.md): cached catalog browsing,
+   streaming addition, downloads and samples.
+4. [Moments and equalizer](slice-4-moments-equalizer.md): moment metadata/edit/
+   delete, pinning, filters and live per-book five-band EQ.
+5. [Reading activity and onboarding](slice-5-reading-onboarding.md): reading
+   sessions, Favorites stats and once-per-install onboarding/reset.
 
-The merged shell/playback/Shelves [E2E fix run](e2e-merged-fix-2026-10-06.md)
-records runtime diagnostics, driver synchronization and visual-review evidence.
-[Slice 4](slice-4-moments-equalizer.md) adds manual moment metadata/edit/delete,
-pinning and filters, and live per-book Media3 five-band EQ. SQLite v3 adds pin
-state without dropping data. Host checks and E2E-driver compilation are
-separate from emulator playback and screenshot qualification; this slice does
-not run the shared emulator.
-[Slice 5](slice-5-reading-onboarding.md) adds additive schema v3 reading activity,
-Favorites stats and once-per-install onboarding/reset. Android replacements are
-notifications, manual moments and private local storage; E2E journeys compile
-without using the shared emulator. Runtime and exact visual parity remain pending.
+SQLite schema v3 combines slice 4's moment pin column and slice 5's
+`reading_sessions` table in one additive migration. Android replacements are
+notifications, manual moments and private local storage. Payments, Plus/tips,
+Apple Intelligence and Apple sync remain excluded; Audiobookshelf and Android
+Auto are not implemented yet.
+
+[E2E and visual checks](e2e-visual-validation-2026-10-06.md) and the
+[merged E2E fix run](e2e-merged-fix-2026-10-06.md) record emulator coverage,
+driver synchronization and visual-review evidence. Physical-device
+qualification remains pending.
