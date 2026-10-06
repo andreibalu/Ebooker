@@ -26,3 +26,9 @@ site/dist/
 # Codex delegation: isolated worker worktrees and captured run output
 /.worktrees/
 /.codex-runs/
+
+# Isolated mobile e2e tooling and generated evidence
+/e2e/node_modules/
+/e2e/.e2e/
+/e2e/.agent-device/
+/e2e/.env*
