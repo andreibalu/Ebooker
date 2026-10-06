@@ -19,8 +19,8 @@ data class EqualizerConfiguration(
         .put("preset", c.preset.name).put("preampDB", c.preampDB)
         .put("bandGainsDB", JSONArray(c.bandGainsDB)).toString() }
     companion object {
-        val frequencies = listOf(60.0, 250.0, 1000.0, 4000.0, 14000.0)
-        val labels = listOf("60", "250", "1k", "4k", "14k")
+        val frequencies = listOf(60.0, 230.0, 910.0, 3600.0, 14000.0)
+        val labels = listOf("60", "230", "910", "3.6k", "14k")
         private fun finite(value: Double) = value.takeIf { it.isFinite() } ?: 0.0
         fun decode(json: String?): EqualizerConfiguration = runCatching {
             val o = JSONObject(json ?: return EqualizerConfiguration())
