@@ -121,3 +121,91 @@ provide separate repository and SQLite evidence, not handset certification.
 | --- | --- |
 | ![iOS library](visual-evidence/2026-10-06/ios-library-light.png) | ![Android library](visual-evidence/2026-10-06/android-library-light.png) |
 | ![iOS import dark](visual-evidence/2026-10-06/ios-review-dark.png) | ![Android import dark](visual-evidence/2026-10-06/android-review-dark.png) |
+
+## Slice 1 parity update — 2026-10-06
+
+The earlier sections describe the historical local-import baseline. This update
+supersedes its absent Favorites/settings/detail state. The [slice contract](slice-1-shell-library-settings.md)
+records schema v2, the iOS-compatible preference keys and callback boundaries.
+
+Commands run from `android/` with process-local JDK21/Android SDK exports:
+
+```sh
+./gradlew --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
+ANDROID_SERIAL=emulator-5580 E2E_EVIDENCE_DIR=/private/tmp/unpaged-slice1-e2e-complete ./tools/run-e2e.sh
+```
+
+The guarded runner executes the three production tasks above plus
+`:e2e:connectedDebugAndroidTest`, passing `e2eApproved=true`. No emulator was
+booted/killed and no other AVD was changed. No `:e2e:lint` or device/playback
+qualification is claimed.
+
+Initial compile/lint failures were corrected (explicit SQL argument types,
+obsolete resources and SharedPreferences KTX writes). First full E2E iteration:
+9/10 pass; the sort test accidentally selected duplicate PCM audio. Second:
+9/10 pass; the selected-radio UI Automator flag was unavailable even though the
+capture showed the Dark selection and rendered dark theme. That assertion was
+replaced by a screenshot background-brightness check. Third: 11/11 pass, 20/20
+host tests and zero app lint issues. The final rerun adds the reference's medium
+Settings detent, expansion gesture and separate medium/full/scroll captures.
+
+Earlier full run: **11 E2E tests, 0 failures/errors/skips**, **20 host tests,
+0 failures/errors/skips**, **0 app lint issues**, BUILD SUCCESSFUL in 5m39s.
+Evidence: `/private/tmp/unpaged-slice1-e2e-release-check` (JUnit/HTML/logcat/
+22 captures). A focused visual refresh added an empty-moments disclosure
+assertion and a 400ms capture settle after accessibility idle. Its first pass
+failed on clicking Tracks while the collapsed Moments row was still moving;
+an explicit wait for the empty text to disappear corrected it. The refreshed
+journey then passed 1/1 in 1m39s. The final matched refresh retains System as
+the appearance selection while changing the emulator's theme for the dark
+Settings reference. That refresh initially found Settings back at medium
+height after the OS theme change; the driver now re-expands and scrolls the
+sheet before capturing. A further intermittent Tracks click required the same
+geometry settle after the Moments collapse.
+
+Final complete run with these synchronization fixes: **11/11 E2E tests passed**,
+**20/20 host tests passed**, zero failures/errors/skips and **0 app lint issues**;
+BUILD SUCCESSFUL in **5m48s**. Evidence:
+`/private/tmp/unpaged-slice1-e2e-complete` (JUnit, HTML, logcat and 23 captures).
+[Reviewed visual report](visual-evidence/2026-10-06-slice1/index.html) contains
+14 pairs, 28 PNGs and a verified SHA256 manifest.
+
+Production APK SHA256 remains
+`2167edcaf0cb99c29f70a254817f6e70832d60fb8fe134c3dfeb4b04f0bfae83`
+across the full run and test-driver-only screenshot refreshes.
+
+The supplied `26-detail-dark.png` and `21-library-dark.png` have identical
+SHA256 `6c1868b613357e8569d1b996b2bd80fdd04464c78bfec414a5f5ce3ce369f53d`:
+both are Library captures. The report explicitly marks the dark-detail pair
+as lacking a valid iOS detail reference. Android dark detail is captured and
+reviewed against the light layout and source theme, but that screenshot
+comparison cannot be qualified from the supplied image.
+
+New black-box coverage includes favorite add/remove through the heart and real
+force-stop, title/author sorting and retained order, horizontal tab swipe,
+On Resume/moment offset/both skips and appearance persisted through relaunch,
+Open To changing the next launch, rendered light/dark backgrounds, detail Play/
+progress/disclosures and ordered tracks, long-press deletion, empty-library
+Browse Shelves routing and legal URLs visible in the system browser.
+
+Host tests: 14 existing file/import/recovery tests, 4 real SQLite tests including
+v1→v2 migration with a preserved owned audio file and measured storage, and 2
+preference/sorting tests. Repository APIs are exercised against SQLite; moments
+create/edit/delete, reopen, foreign-key cascade and high-water monotonicity are
+checked independently from the current-position display used by iOS.
+
+The report uses the supplied `ios-reference-1.4.1` PNGs and real Android picker
+imports with matching book titles/authors, 2×5-minute and 1×5-minute WAVs, and
+persisted favorite state. Android has 0 moments because creation UI is deferred;
+iOS has 2. The mini-player reference is paired with unloaded Android detail to
+show the intended boundary. Reading activity, cover replacement, network
+Shelves, Player/mini player and onboarding are later slices. Plus/purchases,
+Sources and Reset Onboarding are intentionally absent in these settings.
+
+Roboto/Android serif, Material icons/blur/shadows and system bars differ from
+Apple typography/symbols/materials. This is a reviewed layout/behavior pass,
+not a pixel-identical full-app claim. The iOS Remove from App (retain owned
+files) action is absent; Android offers only Also Delete Files. iOS legal URLs
+are mirrored as navigation destinations; Android release/legal applicability
+remains unresolved. Populated moment rendering, nonzero playback/Continue,
+last-played badges, real playback and physical devices are not E2E-qualified.

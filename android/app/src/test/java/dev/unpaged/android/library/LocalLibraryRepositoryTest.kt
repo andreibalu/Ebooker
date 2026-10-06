@@ -186,6 +186,11 @@ class LocalLibraryRepositoryTest {
         var failInsert = false
         var failDelete = false
         var failRead = false
+        override fun toggleFavorite(id: String) { val i = rows.indexOfFirst { it.id == id }; rows[i] = rows[i].copy(isFavorite = !rows[i].isFavorite) }
+        override fun updatePlaybackProgress(id: String, progress: PlaybackProgress) = Unit
+        override fun moments(bookId: String): List<LibraryMoment> = emptyList()
+        override fun saveMoment(moment: LibraryMoment) = Unit
+        override fun deleteMoment(id: String) = Unit
         override fun books(): List<LibraryBook> {
             if (failRead) throw IOException()
             return rows.toList()

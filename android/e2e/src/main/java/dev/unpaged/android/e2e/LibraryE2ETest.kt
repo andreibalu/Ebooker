@@ -45,6 +45,7 @@ class LibraryE2ETest {
         device.executeShellCommand("pm clear $app")
         device.executeShellCommand("cmd uimode night no")
         launch()
+        field("tab.Library").click()
     }
 
     @Test fun libraryUsesIosHeaderAndEmptyState() {
@@ -54,6 +55,13 @@ class LibraryE2ETest {
         device.executeShellCommand("cmd uimode night yes")
         visible(By.text("My Library"))
         screenshot("empty-dark")
+        tapText("Browse Shelves")
+        field("shelves.placeholder")
+        screenshot("shelves-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("shelves.placeholder")
+        screenshot("shelves-light")
+        field("tab.Library").click()
     }
 
     @Test fun realPickerImportMetadataOrderingAndProcessRelaunch() {
@@ -73,6 +81,7 @@ class LibraryE2ETest {
         device.setOrientationNatural()
         device.executeShellCommand("am force-stop $app")
         launch()
+        field("tab.Library").click()
         tapText("E2E The Listening Book")
         visible(By.text("Fixture Author"))
         field("book.tracks").click()
@@ -118,12 +127,13 @@ class LibraryE2ETest {
 
     @Test fun removalRequiresConfirmationAndPreservesProviderOriginal() {
         saveBook("Removal Fixture", "Fixture Author", "Another.wav")
-        tapText("Removal Fixture")
-        tapText("Remove from library")
+        text("Removal Fixture").longClick()
+        tapText("Delete")
         tapText("Cancel")
         visible(By.text("Fixture Author"))
-        tapText("Remove from library")
-        tapText("Remove")
+        text("Removal Fixture").longClick()
+        tapText("Delete")
+        tapText("Also Delete Files")
         visible(By.text("Your Library Is Empty"))
         relaunch()
         visible(By.text("Your Library Is Empty"))
@@ -134,8 +144,16 @@ class LibraryE2ETest {
 
     @Test fun matchingIosFixturesCaptureLibraryDetailAndReviewInBothThemes() {
         saveBook("E2E The Listening Book", "Fixture Author", "Chapter 2.wav", "Chapter 1.wav")
+        tapDescription("Add favorite")
         saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
         screenshot("library-light")
+        field("tab.Favorites").click()
+        visible(By.text("E2E The Listening Book"))
+        screenshot("favorites-light")
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("E2E The Listening Book"))
+        screenshot("favorites-dark")
+        field("tab.Library").click()
         device.executeShellCommand("cmd uimode night yes")
         visible(By.text("E2E Another Book"))
         screenshot("library-dark")
@@ -145,8 +163,37 @@ class LibraryE2ETest {
         device.executeShellCommand("cmd uimode night no")
         visible(By.text("Fixture Author"))
         screenshot("detail-light")
+        visible(By.text("Play"))
+        visible(By.text("0% · 10m remaining"))
+        visible(By.text("0 moments"))
+        field("book.moments").click()
+        visible(By.text("No saved moments yet"))
+        screenshot("detail-moments-empty-light")
+        field("book.moments").click()
+        assertTrue(device.wait(Until.gone(By.text("No saved moments yet")), 15_000))
+        settleLayout()
+        field("book.tracks").click()
+        visible(By.text("Chapter 1"))
+        screenshot("detail-expanded-light")
         device.pressBack()
         visible(By.text("My Library"))
+        tapDescription("Settings")
+        visible(By.text("Listening preferences."))
+        screenshot("settings-light")
+        expandSettings()
+        screenshot("settings2-light")
+        scrollTo("settings.appearance.Dark")
+        screenshot("settings3-light")
+        device.executeShellCommand("cmd uimode night yes")
+        settleLayout()
+        visible(By.text("Settings"))
+        expandSettings()
+        scrollTo("settings.appearance.System")
+        screenshot("settings-dark")
+        device.executeShellCommand("cmd uimode night no")
+        settleLayout()
+        visible(By.text("Settings"))
+        tapText("Done")
         pick("E2E Import.wav")
         visible(By.desc("Title"))
         visible(By.desc("Author"))
@@ -168,6 +215,145 @@ class LibraryE2ETest {
         tapText("Cancel")
     }
 
+    @Test fun favoriteToggleSurvivesForceStopAndCanBeRemoved() {
+        field("tab.Favorites").click()
+        visible(By.text("No Favorites Yet"))
+        screenshot("empty-favorites-light")
+        saveBook("Favorite Fixture", "Author", "Another.wav")
+        tapDescription("Add favorite")
+        field("tab.Favorites").click()
+        visible(By.text("Favorite Fixture"))
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        visible(By.text("Favorite Fixture"))
+        tapDescription("Remove favorite")
+        visible(By.text("No Favorites Yet"))
+        relaunch()
+        field("tab.Favorites").click()
+        visible(By.text("No Favorites Yet"))
+    }
+
+    @Test fun sortOrderAndMenuSelectionPersistIndependently() {
+        saveBook("Alpha Fixture", "Zulu Author", "Another.wav")
+        saveBook("Zulu Fixture", "Alpha Author", "Chapter 10.wav")
+        assertTrue(visible(By.text("Zulu Fixture")).visibleBounds.left < visible(By.text("Alpha Fixture")).visibleBounds.left)
+        field("tab.Library").click()
+        tapText("Title")
+        assertTrue(visible(By.text("Alpha Fixture")).visibleBounds.left < visible(By.text("Zulu Fixture")).visibleBounds.left)
+        relaunch()
+        assertTrue(visible(By.text("Alpha Fixture")).visibleBounds.left < visible(By.text("Zulu Fixture")).visibleBounds.left)
+        field("tab.Library").click()
+        visible(By.text("Recently Played"))
+        tapText("Author")
+        assertTrue(visible(By.text("Zulu Fixture")).visibleBounds.left < visible(By.text("Alpha Fixture")).visibleBounds.left)
+        // Switching by horizontal swipe uses the same tab state as the picker.
+        device.swipe(80, 500, 900, 500, 30)
+        visible(By.text("No Favorites Yet"))
+    }
+
+    @Test fun settingsIntervalsAppearanceAndLaunchDestinationPersist() {
+        tapDescription("Settings")
+        expandSettings()
+        visible(By.text("Settings"))
+        field("settings.picker.On Resume").click()
+        field("settings.option.resumeBacktrackSeconds.15").click()
+        field("settings.picker.Save Moment Offset").click()
+        scrollTo("settings.option.momentBacktrackSeconds.30")
+        field("settings.option.momentBacktrackSeconds.30").click()
+        field("settings.picker.Skip Backward").click()
+        scrollTo("settings.option.skipBackSeconds.45")
+        field("settings.option.skipBackSeconds.45").click()
+        scrollTo("settings.picker.Skip Forward")
+        field("settings.picker.Skip Forward").click()
+        scrollTo("settings.option.skipForwardSeconds.15")
+        field("settings.option.skipForwardSeconds.15").click()
+        scrollTo("settings.appearance.Dark")
+        field("settings.appearance.Dark").click()
+        assertTheme(dark = true)
+        screenshot("settings-preferences-dark")
+        tapText("Done")
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        visible(By.text("No Favorites Yet"))
+        assertTheme(dark = true)
+        screenshot("appearance-persisted-dark")
+        tapDescription("Settings")
+        expandSettings()
+        visible(By.text("Resume 15 seconds earlier"))
+        visible(By.text("30 seconds earlier"))
+        visible(By.text("45 seconds"))
+        scrollTo("settings.picker.Skip Forward")
+        visible(By.text("15 seconds"))
+        scrollTo("settings.appearance.Light")
+        field("settings.appearance.Light").click()
+        assertTheme(dark = false)
+        screenshot("appearance-light-overrides-system")
+        scrollTo("settings.home.Shelves", downward = false)
+        field("settings.home.Shelves").click()
+        tapText("Done")
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        device.waitForIdle()
+        assertFalse(device.hasObject(By.text("No Favorites Yet")))
+        field("tab.Shelves")
+        tapDescription("Settings")
+        expandSettings()
+        field("settings.home.Library").click()
+        tapText("Done")
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        visible(By.text("No Favorites Yet"))
+    }
+
+    @Test fun legalLinksOpenTheirIosDestinationsInTheSystemBrowser() {
+        tapDescription("Settings")
+        expandSettings()
+        scrollTo("settings.legal.Privacy Policy")
+        field("settings.legal.Privacy Policy").click()
+        visible(By.pkg("org.chromium.webview_shell"))
+        visible(By.textContains("gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262"))
+        device.pressBack()
+        visible(By.text("Settings"))
+        scrollTo("settings.legal.Terms of Use")
+        field("settings.legal.Terms of Use").click()
+        visible(By.pkg("org.chromium.webview_shell"))
+        visible(By.textContains("apple.com/legal/internet-services/itunes/dev/stdeula"))
+        device.pressBack()
+        visible(By.text("Settings"))
+        tapText("Done")
+        visible(By.text("My Library"))
+    }
+
+    private fun expandSettings() {
+        val header = visible(By.text("Settings")).visibleBounds
+        device.swipe(header.centerX(), header.centerY(), header.centerX(), 150, 30)
+        settleLayout()
+        assertTrue("Settings should expand above the screen midpoint", visible(By.text("Settings")).visibleBounds.top < device.displayHeight / 3)
+    }
+
+    private fun assertTheme(dark: Boolean) {
+        device.waitForIdle()
+        val capture = File(captureDirectory(), "theme-check.png")
+        assertTrue(device.takeScreenshot(capture))
+        val bitmap = android.graphics.BitmapFactory.decodeFile(capture.absolutePath)
+        val pixel = bitmap.getPixel(8, bitmap.height / 2)
+        val brightness = (android.graphics.Color.red(pixel) + android.graphics.Color.green(pixel) + android.graphics.Color.blue(pixel)) / 3
+        bitmap.recycle()
+        assertTrue("Rendered background brightness $brightness, expected dark=$dark", if (dark) brightness < 70 else brightness > 160)
+    }
+
+    private fun scrollTo(id: String, downward: Boolean = true) {
+        repeat(8) {
+            val bounds = visible(By.res("settings.scroll")).visibleBounds
+            val target = device.findObject(By.res(id))?.visibleBounds
+            if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return
+            val top = bounds.top + bounds.height() / 5
+            val bottom = bounds.bottom - bounds.height() / 5
+            device.swipe(bounds.centerX(), if (downward) bottom else top, bounds.centerX(), if (downward) top else bottom, 30)
+        }
+        field(id)
+    }
+
     private fun saveBook(title: String, author: String, vararg files: String) {
         pick(*files)
         field("import.title").setText(title)
@@ -177,7 +363,7 @@ class LibraryE2ETest {
         visible(By.text(title))
     }
 
-    private fun relaunch() { device.executeShellCommand("am force-stop $app"); launch() }
+    private fun relaunch() { device.executeShellCommand("am force-stop $app"); launch(); field("tab.Library").click() }
 
     private fun pick(vararg names: String) {
         openPicker(*names)
@@ -241,8 +427,15 @@ class LibraryE2ETest {
         assertEquals("Capture copy failed", "", device.executeShellCommand("test -s $destination/${file.name} || echo missing").trim())
     }
 
-    private fun screenshot(name: String) {
+    private fun settleLayout() {
         device.waitForIdle()
+        // Compose geometry can settle after accessibility idle, even with animator scale 0.
+        android.os.SystemClock.sleep(400)
+        device.waitForIdle()
+    }
+
+    private fun screenshot(name: String) {
+        settleLayout()
         val file = File(captureDirectory(), "$name.png")
         assertTrue(device.takeScreenshot(file))
         persistCapture(file)

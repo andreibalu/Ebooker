@@ -3,11 +3,16 @@ package dev.unpaged.android.library
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.platform.testTag
+import dev.unpaged.android.UnpagedTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,9 +44,9 @@ object CoverPalette {
 }
 
 @Composable
-internal fun GeneratedBookCover(title: String, modifier: Modifier = Modifier) {
+internal fun GeneratedBookCover(title: String, modifier: Modifier = Modifier, cornerRadius: Int = 16) {
     val foreground = CoverPalette.foreground(title)
-    BoxWithConstraints(modifier.clip(RoundedCornerShape(16.dp)).background(CoverPalette.background(title))
+    BoxWithConstraints(modifier.clip(RoundedCornerShape(cornerRadius.dp)).background(CoverPalette.background(title))
         .semantics { contentDescription = "Cover for $title" }) {
         val side = minOf(maxWidth, maxHeight)
         val inset = side * 0.1f
@@ -75,53 +80,100 @@ internal fun GeneratedBookCover(title: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun LibraryHeader(count: Int, canImport: Boolean, onImport: () -> Unit) {
+internal fun LibraryHeader(count: Int, canImport: Boolean, onImport: () -> Unit, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Surface(Modifier.size(48.dp), shape = CircleShape, color = MaterialTheme.colorScheme.onSurface) {
             Box(contentAlignment = Alignment.Center) {
-                Text(count.toString(), fontSize = 17.sp, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.background)
+                Text(count.toString(), fontSize = 17.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.background)
             }
         }
-        Text(stringResource(R.string.your_library), Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-        Surface(shape = RoundedCornerShape(10.dp), shadowElevation = 3.dp) {
-            TextButton(onClick = onImport, enabled = canImport, modifier = Modifier.size(48.dp)
-                .semantics { contentDescription = "Import Audiobook" }, contentPadding = PaddingValues(0.dp)) {
-                Text("+", fontSize = 28.sp, color = MaterialTheme.colorScheme.onSurface)
-            }
-        }
-    }
-    // Current implemented destination; Favorites/Shelves will arrive with their functional slices.
-    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(stringResource(R.string.library), Modifier.padding(top = 12.dp, bottom = 8.dp),
-            fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        HorizontalDivider(Modifier.fillMaxWidth(.333f), thickness = 2.dp, color = MaterialTheme.colorScheme.onSurface)
-        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f))
+        Text("My Library", Modifier.weight(1f), fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
+        HeaderButton("Settings", onSettings) { Icon(Icons.Default.Tune, null, tint = MaterialTheme.colorScheme.onSurface) }
+        HeaderButton("Import Audiobook", onImport, canImport) { Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.onSurface) }
     }
 }
 
 @Composable
-internal fun LibraryBookCard(book: LibraryBook, onOpen: () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clickable(onClick = onOpen), shape = RoundedCornerShape(28.dp),
-        shadowElevation = 3.dp) {
+private fun HeaderButton(description: String, onClick: () -> Unit, enabled: Boolean = true, content: @Composable () -> Unit) {
+    Surface(shape = RoundedCornerShape(10.dp), shadowElevation = UnpagedTheme.cardShadow) {
+        IconButton(onClick, enabled = enabled, modifier = Modifier.size(36.dp).semantics { contentDescription = description }) { content() }
+    }
+}
+
+@Composable
+internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove: () -> Unit, onOpen: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Surface(Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = { menu = true }).testTag("book.card.${book.id}"),
+        shape = UnpagedTheme.cardShape, shadowElevation = UnpagedTheme.cardShadow) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GeneratedBookCover(book.title, Modifier.fillMaxWidth().height(185.dp))
+            Box {
+                GeneratedBookCover(book.title, Modifier.fillMaxWidth().height(185.dp))
+                book.lastPlayedAt?.let {
+                    Surface(Modifier.align(Alignment.TopEnd).padding(10.dp), shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = .6f)) {
+                        Text(relativePlayedAt(it), Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                Surface(Modifier.align(Alignment.BottomEnd).padding(10.dp), shape = CircleShape,
+                    color = Color.White.copy(alpha = .32f)) {
+                    IconButton(onClick = onFavorite, modifier = Modifier.size(36.dp).testTag("book.favorite.${book.id}")
+                        .semantics { contentDescription = if (book.isFavorite) "Remove favorite" else "Add favorite" }) {
+                        Icon(if (book.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null,
+                            Modifier.size(18.dp), tint = if (book.isFavorite) UnpagedTheme.favorite else Color.White)
+                    }
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(book.title, Modifier.heightIn(min = 38.dp), fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 12.sp, lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(shortDuration(book.durationMs), fontSize = 11.sp, lineHeight = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Schedule, null, Modifier.size(10.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${shortDuration(book.durationMs)} · ${book.storageBytes / (1024 * 1024)} MB", fontSize = 11.sp, lineHeight = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            Box {
+                DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onRemove() },
+                        leadingIcon = { Icon(Icons.Default.DeleteOutline, null) })
+                }
+                BookProgress(book.progress, 4)
             }
         }
     }
 }
 
 @Composable
-internal fun EmptyLibrary(canImport: Boolean, onImport: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+internal fun BookProgress(progress: Float, height: Int = 5) {
+    Box(Modifier.fillMaxWidth().height(height.dp).clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))) {
+        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight().clip(CircleShape).background(MaterialTheme.colorScheme.onSurface.copy(alpha = .5f)))
+    }
+}
+
+internal fun relativePlayedAt(timestamp: Long, now: Long = System.currentTimeMillis()): String {
+    val minutes = ((now - timestamp).coerceAtLeast(0) / 60_000)
+    return when { minutes < 1 -> "Just now"; minutes < 60 -> "$minutes min. ago"; minutes < 1440 -> "${minutes / 60} hr. ago"; else -> "${minutes / 1440} ${if (minutes / 1440 == 1L) "day" else "days"} ago" }
+}
+
+@Composable
+internal fun EmptyFavorites() {
+    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Icon(Icons.Default.FavoriteBorder, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp))
+        Text("No Favorites Yet", fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        Text("Tap the heart on any book to save it here.", fontSize = 15.sp, lineHeight = 18.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+internal fun EmptyLibrary(canImport: Boolean, onImport: () -> Unit, onShelves: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically)) {
         val ink = MaterialTheme.colorScheme.onSurfaceVariant
         Canvas(Modifier.size(48.dp)) {
             val w = size.width
@@ -137,19 +189,21 @@ internal fun EmptyLibrary(canImport: Boolean, onImport: () -> Unit) {
             }
             drawPath(leaning, ink, style = stroke)
         }
-        Text(stringResource(R.string.empty_library), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-        Text(stringResource(R.string.empty_library_hint), fontSize = 15.sp,
+        Text(stringResource(R.string.empty_library), fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text("Import an audiobook from Files, or browse thousands of free public-domain classics.", fontSize = 15.sp, lineHeight = 18.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(onClick = onImport, enabled = canImport, shape = CircleShape,
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface,
                 contentColor = MaterialTheme.colorScheme.background)) { Text(stringResource(R.string.import_book)) }
+        TextButton(onClick = onShelves) { Text("Browse Shelves", color = MaterialTheme.colorScheme.onSurface) }
     }
 }
 
 @Composable
 internal fun shortDuration(milliseconds: Long): String {
     val minutes = milliseconds / 60_000
-    return if (minutes >= 60) stringResource(R.string.short_hours_minutes, minutes / 60, minutes % 60)
+    return if (minutes >= 60 && minutes % 60 == 0L) "${minutes / 60}h"
+        else if (minutes >= 60) stringResource(R.string.short_hours_minutes, minutes / 60, minutes % 60)
         else stringResource(R.string.short_minutes, minutes)
 }
 

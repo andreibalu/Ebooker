@@ -24,6 +24,11 @@ class LocalLibraryRepository(
     }
 
     fun books(): List<LibraryBook> = store.books()
+    fun toggleFavorite(id: String) = store.toggleFavorite(id)
+    fun updatePlaybackProgress(id: String, progress: PlaybackProgress) = store.updatePlaybackProgress(id, progress)
+    fun moments(bookId: String): List<LibraryMoment> = store.moments(bookId)
+    fun saveMoment(moment: LibraryMoment) = store.saveMoment(moment)
+    fun deleteMoment(id: String) = store.deleteMoment(id)
 
     fun prepare(documents: List<ImportDocument>, checkCancelled: () -> Unit = {},
                 progress: (Int, Int) -> Unit = { _, _ -> }): PendingImport {
@@ -85,7 +90,8 @@ class LocalLibraryRepository(
         val destination = ownedFolder(root, pending.id)
         if (!source.isDirectory || destination.exists() || !source.renameTo(destination))
             throw ImportProblem(ImportProblem.Reason.STORAGE)
-        val book = LibraryBook(pending.id, title.trim(), author.trim(), pending.tracks)
+        val book = LibraryBook(pending.id, title.trim(), author.trim(), pending.tracks,
+            storageBytes = destination.walkTopDown().filter { it.isFile }.sumOf { it.length() })
         try { store.insert(book) } catch (error: Throwable) {
             // Keep the preview retryable after an index failure; startup cleans abandoned copies.
             if (!destination.renameTo(source)) destination.deleteRecursively()

@@ -14,6 +14,7 @@ data class LibraryTrack(
     val storedName: String,
     val durationMs: Long,
     val fingerprint: String,
+    val remoteUrl: String? = null,
 )
 
 data class LibraryBook(
@@ -21,9 +22,38 @@ data class LibraryBook(
     val title: String,
     val author: String,
     val tracks: List<LibraryTrack>,
+    val isFavorite: Boolean = false,
+    val lastPlayedAt: Long? = null,
+    val currentTrackIndex: Int = 0,
+    val currentPositionMs: Long = 0,
+    val highWaterMarkMs: Long = 0,
+    val playbackSpeed: Double = 1.0,
+    val isFinished: Boolean = false,
+    val isFreeBook: Boolean = false,
+    val catalogId: String? = null,
+    val isDownloaded: Boolean = true,
+    val storageBytes: Long = 0,
+    val equalizerJson: String? = null,
+    val dateAdded: Long = System.currentTimeMillis(),
 ) {
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
+    val globalPositionMs: Long get() = tracks.take(currentTrackIndex).sumOf { it.durationMs } + currentPositionMs
+    val progress: Float get() = if (durationMs > 0) (globalPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
 }
+
+data class LibraryMoment(
+    val id: String, val bookId: String, val trackIndex: Int, val timeMs: Long,
+    val label: String, val notes: String = "", val categoriesJson: String = "[]",
+    val quoteLine: String? = null, val charactersJson: String = "[]", val mood: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+)
+
+data class PlaybackProgress(
+    val trackIndex: Int, val positionMs: Long, val highWaterMarkMs: Long,
+    val speed: Double = 1.0, val finished: Boolean = false,
+    val playedAt: Long = System.currentTimeMillis(),
+)
+
 
 data class PendingImport(
     val id: String,

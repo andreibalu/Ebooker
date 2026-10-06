@@ -1,9 +1,12 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`. The current slice adds
-local audiobook import, an editable metadata review, a persistent library and
-ordered track details. Playback is the next slice; network sources, AI, payments
-and sync are not implemented. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
+Native Kotlin/Compose application under `android/app/`. Local audiobook import,
+metadata review, schema-v2 persistence, Favorites/Library/Shelves pager, per-tab
+sort menus, favorite hearts, detail disclosures and persisted listening/appearance
+settings are implemented. Shelves is a placeholder. Playback controls expose
+callbacks but remain disabled until the Media3 slice; network sources, AI,
+payments and sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
+for the migration and next-slice API contract. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
 remains the product/architecture decision index.
 
 ## Build and lint
@@ -97,7 +100,7 @@ types; selected extensions, actual audio tracks and positive durations are
 validated before review. Codec/container support still depends on Android's
 media stack and needs device fixtures. Import is foreground work: keep Unpaged
 open during the copy. Review/edit title and author, then **Save**.
-Tap a book to inspect its ordered files; **Remove from library** confirms removal
+Tap a book to inspect its ordered files; long-press a card → **Delete** confirms removal
 of the app's copies, preserving the selected originals. Embedded chapters and
 cover artwork extraction are not included in this slice.
 
@@ -106,7 +109,7 @@ fingerprints, duplicate multiplicity, cancelled/failed copies, commit failure,
 removal and restart cleanup. Robolectric tests exercise SQLite reopen, track
 ordering, cascade removal and atomic rollback. Robolectric downloads its API28
 framework fixture on the first test run; these are host tests, not device tests.
-Additional pinned dependencies: Lifecycle 2.9.4, coroutines 1.10.2, JUnit 4.13.2,
+Additional pinned dependencies: Material Icons Extended 1.7.8, Lifecycle 2.9.4, coroutines 1.10.2, JUnit 4.13.2,
 Robolectric 4.16. See [slice details](../docs/android/local-library.md).
 
 

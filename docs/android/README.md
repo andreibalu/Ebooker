@@ -30,14 +30,13 @@ broader architecture decisions by assumption.
 
 ## Current stage
 
-Foundation (#57) is implemented; its draft PR #58 is still open. Local import
-and persistent library (#59) are implemented in draft PR #60, stacked on #58.
-[E2E and visual checks](e2e-visual-validation-2026-10-06.md) cover this current
-slice. These screens establish a baseline; full iOS parity is not a milestone
-claimed at this stage. Playback is not implemented.
+The 2026-10-06 shared parity brief authorizes the native mirror build in slices.
+[Slice 1](slice-1-shell-library-settings.md) adds the shell, local library/card/
+detail parity, persistent settings and additive schema v2 on top of the existing
+import foundation. Its architecture decisions are recorded there for subsequent
+slices. No GitHub issue/PR state was changed during this work.
 
-The mirror feature contract (#50), repository-boundary decision (#51), broader
-architecture (#54), AI policy (#55) and beta/release gates (#56) remain open.
-Resolve the feature contract and architecture before expanding into larger
-playback/service slices; do not treat the bounded execution exceptions as
-implicit answers to those decisions.
+[E2E and visual checks](e2e-visual-validation-2026-10-06.md) distinguish current
+emulator coverage from remaining product/visual and device qualification.
+Playback remains unwired; Shelves, activity, onboarding and moment creation
+are later slices. Payments, Plus/tips and Apple sync remain excluded.

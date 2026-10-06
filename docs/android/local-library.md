@@ -14,7 +14,8 @@ immediately to private staging, avoiding long-lived provider grants. The review
 shows tracks in natural filename order and editable title/author suggestions
 from album/title/artist metadata. A book appears only after all files are ready
 and the private index commits. The detail screen lists ordered files and their
-durations; it does not expose a pretend play control.
+durations. Slice 1 now renders the iOS Play/Continue layout with disabled
+callbacks pending the Media3 playback slice; see [the current contract](slice-1-shell-library-settings.md).
 
 Natural ordering compares numeric runs without integer overflow, preserving
 picker order for equivalent names (`02` / `2`). It is deterministic, but full
@@ -33,10 +34,9 @@ picker → owned staging → metadata/fingerprints → editable review
 ```
 
 `LocalLibraryRepository` owns filesystem transactions and duplicate checks;
-`LibraryStore` isolates the version-1 SQLite index. SQLite is used through the
-platform helper without adding a schema compiler/plugin in this bounded slice.
-It can be replaced behind this interface if the broader architecture selects
-Room. `LibraryViewModel` serializes operations, performs IO off the main thread,
+`LibraryStore` isolates the SQLite index, now at version 2 with an additive,
+Robolectric-tested upgrade. The parity brief keeps this interface and platform
+helper in the single app module; no Room migration is planned for these slices. `LibraryViewModel` serializes operations, performs IO off the main thread,
 retains state through rotation and hands Compose lifecycle-aware state updates.
 
 A copy, metadata or duplicate error removes the whole staged selection. User
@@ -67,9 +67,8 @@ and a trigger-induced transaction rollback.
 Runtime qualification remains required: actual document-picker flow, local and
 cloud providers, revoked access, slow/unknown-size streams, low-space copies,
 rotation/process death, corrupt audio, long/VBR MP3 and M4A/M4B, large font,
-TalkBack and light/dark screenshots. No Android emulator or handset validation
-is claimed. Covers and embedded chapters are future parity work; playback is
-the next bounded slice. This is not a public Android release.
+TalkBack and light/dark screenshots. The dedicated API35 emulator is covered in [the E2E evidence](e2e-visual-validation-2026-10-06.md); handset qualification remains pending. Covers and embedded chapters are future parity work; playback is
+the next slice. This is not a public Android release.
 
 Implementation references checked 2026-10-06: [Storage Access Framework](https://developer.android.com/training/data-storage/shared/documents-files),
 [MediaMetadataRetriever](https://developer.android.com/reference/android/media/MediaMetadataRetriever),

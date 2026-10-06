@@ -21,6 +21,7 @@ import java.io.File
 data class LibraryUiState(
     val loading: Boolean = true,
     val books: List<LibraryBook> = emptyList(),
+    val moments: Map<String, List<LibraryMoment>> = emptyMap(),
     val pending: PendingImport? = null,
     val busy: Boolean = false,
     val preparing: Boolean = false,
@@ -47,7 +48,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         job = viewModelScope.launch {
             try {
                 val books = withContext(Dispatchers.IO) { repository.load() }
-                mutableState.update { it.copy(books = books, loading = false) }
+                val moments = withContext(Dispatchers.IO) { books.associate { it.id to repository.moments(it.id) } }
+                mutableState.update { it.copy(books = books, moments = moments, loading = false) }
             } catch (error: CancellationException) { throw error }
             catch (_: Exception) { mutableState.update { it.copy(loading = false, error = LibraryFailure.LOAD) } }
         }
@@ -103,6 +105,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun toggleFavorite(book: LibraryBook) {
+        if (job?.isActive == true) return
+        operation {
+            withContext(Dispatchers.IO) { repository.toggleFavorite(book.id) }
+            refreshBooks()
+        }
+    }
+
     fun remove(book: LibraryBook) {
         if (job?.isActive == true) return
         operation {
@@ -125,7 +135,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     private suspend fun refreshBooks() {
         val books = withContext(Dispatchers.IO) { repository.books() }
-        mutableState.update { it.copy(books = books) }
+        val moments = withContext(Dispatchers.IO) { books.associate { it.id to repository.moments(it.id) } }
+        mutableState.update { it.copy(books = books, moments = moments) }
     }
 
     private fun fail(error: Exception, fallback: LibraryFailure) {
