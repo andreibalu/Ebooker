@@ -6,7 +6,18 @@ nonisolated enum ABSCredentialStoreError: Error {
 }
 
 nonisolated struct ABSKeychainCredentialStore: ABSCredentialStoring {
-    private let service = "andreibaludev.Pageless.audiobookshelf"
+    private let service = ABSKeychainCredentialStore.serviceName
+
+    static var serviceName: String {
+        #if DEBUG
+        // E2E fixture runs keep their own login, so a test server never replaces a real one and
+        // `-e2e-reset-fixture` can forget it without touching the user's connection.
+        if ProcessInfo.processInfo.arguments.contains("-e2e-fixture") {
+            return "andreibaludev.Pageless.audiobookshelf.e2e"
+        }
+        #endif
+        return "andreibaludev.Pageless.audiobookshelf"
+    }
     private let account = "connection"
 
     func load() throws -> ABSConnection? {

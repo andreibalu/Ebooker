@@ -1,6 +1,6 @@
 import { expect, type Screen } from 'e2e';
 import { createAgentDeviceClient } from 'agent-device';
-import type { Device } from '@e2e-dev/mobile';
+import { afterEach, type Device } from '@e2e-dev/mobile';
 import { test, tapVisibleCenter } from './native-actions.js';
 import { NATIVE_WORKER_SESSION } from '../session.js';
 import { bundle, resetStoreKitLedger } from '../support/simulator.js';
@@ -9,6 +9,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 // Real purchases against the local StoreKit configuration (Products.storekit), through the real
 // system payment sheet. Every test starts from an empty ledger: storekitd keeps transactions in
 // memory across launches, so without the reset a Plus trial from one test leaks into the next.
+// Clear it after each test as well, so a test run on its own leaves no Plus trial for other files.
+afterEach(() => resetStoreKitLedger());
+
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
 
 /**

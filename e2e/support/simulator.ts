@@ -96,3 +96,30 @@ export function resetStoreKitLedger(options: { failPurchases?: boolean } = {}): 
   });
   terminate(bundle);
 }
+
+/** Opens a URL on the simulator, as tapping a link or a notification would. */
+export function openURL(url: string): void {
+  simctl('openurl', udid(), url);
+}
+
+/**
+ * Writes a Boolean into the app's own defaults, as an App Intent running out of process does.
+ * It names the container's plist by path. `defaults write <bundle id>` would write the
+ * simulator-wide domain instead, where the app reads the key but can never remove it.
+ */
+export function writeAppBool(key: string, value: boolean): void {
+  const plist = join(appDataPath(), 'Library', 'Preferences', `${bundle}.plist`);
+  simctl('spawn', udid(), 'defaults', 'write', plist, key, '-bool', value ? 'YES' : 'NO');
+}
+
+/** True when the app's container defaults hold `key`, or the simulator-wide domain does. */
+export function appDefaultExists(key: string): boolean {
+  const plist = join(appDataPath(), 'Library', 'Preferences', `${bundle}.plist`);
+  for (const domain of [plist, bundle]) {
+    try {
+      simctl('spawn', udid(), 'defaults', 'read', domain, key);
+      return true;
+    } catch { /* not in this domain */ }
+  }
+  return false;
+}

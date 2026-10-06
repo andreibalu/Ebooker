@@ -20,8 +20,11 @@ enum E2EFixtures {
             if FileManager.default.fileExists(atPath: savedState.path) {
                 try FileManager.default.removeItem(at: savedState)
             }
-            // Onboarding writes these; a reset run must see the shipping defaults again.
-            for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds"] {
+            // A reset run starts with no Audiobookshelf server; the fixture login is separate.
+            try? ABSKeychainCredentialStore().clear()
+            // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
+            for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
+                        "absSelectedLibraryID"] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
@@ -117,7 +120,15 @@ enum E2EFixtures {
          "German", 7200, ["Short Stories"]),
     ]
 
+    /// The file the DEBUG import button hands to the import pipeline. `-e2e-import-file <name>`
+    /// picks a file the test copied into the fixture directory (for example a chaptered M4B);
+    /// otherwise a generated 123-second WAV.
     static func importSource() throws -> URL {
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "-e2e-import-file"), arguments.indices.contains(index + 1) {
+            let name = (arguments[index + 1] as NSString).lastPathComponent
+            return try storeDirectoryWithoutReset().appendingPathComponent(name)
+        }
         let url = try storeDirectoryWithoutReset().appendingPathComponent("E2E Import.wav")
         try silenceWAV(seconds: 123).write(to: url)
         return url

@@ -98,3 +98,15 @@ export async function tapVisibleCenter(target: Locator): Promise<void> {
   if (!box || box.width <= 0 || box.height <= 0) throw new Error('Visible native control has no actionable bounds');
   await target.tap({ position: { x: box.width / 2, y: box.height / 2 } });
 }
+
+/**
+ * Long-presses near the top edge of `target`. The mini player overlays the bottom of the last
+ * library row, and the locator long-press refuses a target whose center it covers.
+ */
+export async function longPressVisibleTop(target: Locator): Promise<void> {
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  if (!box || box.width <= 0 || box.height <= 0) throw new Error('Visible native control has no actionable bounds');
+  const client = createAgentDeviceClient({ session: NATIVE_WORKER_SESSION });
+  await client.interactions.longPress({ x: box.x + box.width / 2, y: box.y + Math.min(40, box.height / 4), durationMs: 1_000 });
+}

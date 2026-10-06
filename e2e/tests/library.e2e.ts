@@ -2,7 +2,7 @@ import { expect, type Screen } from 'e2e';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { test, tapVisibleCenter } from './native-actions.js';
-import { appDataPath, bundle, terminate, waitUntilRunning } from '../support/simulator.js';
+import { appDataPath, bundle, terminate, waitUntilRunning, writeAppBool, appDefaultExists } from '../support/simulator.js';
 
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
 const listeningFolder = () => join(appDataPath(), 'Library', 'Application Support', 'Audiobooks', 'E2E-Listening-Book');
@@ -100,4 +100,42 @@ test('"Remove from App" drops the book but keeps its audio files; "Also Delete F
   await screen.getByRole('button', 'Also Delete Files').tap();
   await expect(screen.getByTestId('book.card.E2E-Listening-Book')).toBeHidden();
   expect(existsSync(listeningFolder())).toBe(false);
+});
+
+test('removing every book shows the empty Library and Favorites, and Browse Shelves opens Shelves', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await screen.getByTestId('libraryTab').tap();
+  for (const folder of ['E2E-Listening-Book', 'E2E-Another-Book']) {
+    await screen.getByTestId(`book.card.${folder}`).longPress();
+    await screen.getByRole('button', 'Delete').tap();
+    await screen.getByRole('button', 'Remove from App').tap();
+    await expect(screen.getByTestId(`book.card.${folder}`)).toBeHidden();
+  }
+  await expect(screen.getByText('Your Library Is Empty').first()).toBeVisible();
+  await expect(screen.getByRole('button', 'Import Audiobook')).toBeVisible();
+  await screen.getByTestId('favoritesTab').tap();
+  await expect(screen.getByText('No Favorites Yet').first()).toBeVisible();
+  await screen.getByTestId('libraryTab').tap();
+  await screen.getByRole('button', 'Browse Shelves').tap();
+  await expect(screen.getByText('Offline — showing saved books.').first()).toBeVisible();
+});
+
+test('the Play Latest Book shortcut plays the most recently played book when the app comes forward', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await screen.getByTestId('libraryTab').tap();
+  await screen.getByTestId('book.card.E2E-Another-Book').tap();
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await expect(screen.getByTestId('miniPlayer.playPause')).toBeHidden();
+  await device.home();
+  // PlayLatestBookIntent runs outside the app and leaves only this flag behind.
+  writeAppBool('intent.playLatestBook', true);
+  await device.openApp(bundle, { launchArguments: fixture });
+  await expect(screen.getByTestId('miniPlayer.title')).toHaveText('E2E Another Book', { timeout: 15_000 });
+  await expect(screen.getByTestId('miniPlayer.playPause')).toHaveAccessibleName('Pause playback');
+  // The app consumes the flag, so the next launch does not start playback again.
+  expect(appDefaultExists('intent.playLatestBook')).toBe(false);
 });
