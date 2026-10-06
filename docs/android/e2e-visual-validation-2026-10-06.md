@@ -257,3 +257,16 @@ captures because the orchestrator owns the shared emulator. The supplied
 `08-eq-light.png` was visually inspected; `--cases eq-light` adds the matching
 report pair after execution. Historical runtime results above do not qualify
 these new features.
+## Slice 5 — Reading activity and onboarding, compile only
+
+[Implementation and handoff](slice-5-reading-onboarding.md) adds two UI Automator
+journeys and debug-only reading-session fixtures. First launch, My books, live
+preferences, completion, real force-stop persistence and Settings reset are
+asserted through visible controls. Imported fixture books plus today's 42 minutes
+exercise the Favorites activity card and full stats screen. Light/dark captures
+are specified; `make-visual-report.py --cases onboarding-light activity-dark`
+pairs 00-launch / 22-favorites-dark. Additional captures remain source-derived.
+
+No emulator/E2E execution or screenshot comparison is claimed in this slice.
+Earlier evidence directories/counts are historical; the emulator owner must
+execute and visually review this work after integration.

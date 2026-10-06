@@ -20,6 +20,8 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import dev.unpaged.android.activity.*
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -50,6 +52,12 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     val context = androidx.compose.ui.platform.LocalContext.current
     val player = remember { PlayerController.get(context) }
     val playback by player.state.collectAsStateWithLifecycle()
+    val activityStore = remember { SQLiteLibraryStore(context) }
+    DisposableEffect(activityStore) { onDispose { activityStore.close() } }
+    var sessions by remember { mutableStateOf<List<ReadingSession>>(emptyList()) }
+    LaunchedEffect(playback.revision) { sessions = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { activityStore.readingSessions() } }
+    val stats = ReadingStats(sessions, state.books.count { it.isFinished })
+    var showStats by rememberSaveable { mutableStateOf(false) }
     var fullPlayer by rememberSaveable { mutableStateOf(false) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     val playBook: (LibraryBook, Int?) -> Unit = { book, track ->
@@ -73,7 +81,9 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     preferenceRevision(preferences)
     var settings by rememberSaveable { mutableStateOf(false) }
     val tabs = if (preferences.shelvesFirst()) listOf("Favorites", "Shelves", "Library") else listOf("Favorites", "Library", "Shelves")
-    val pager = rememberPagerState(initialPage = if (preferences.shelvesFirst()) 1 else 0, pageCount = { 3 })
+    val landing = remember { preferences.text("onboardingLanding", "") }
+    val pager = rememberPagerState(initialPage = if (landing.isNotEmpty()) tabs.indexOf(landing).coerceAtLeast(0) else if (preferences.shelvesFirst()) 1 else 0, pageCount = { 3 })
+    LaunchedEffect(Unit) { if (landing.isNotEmpty()) preferences.setText("onboardingLanding", "") }
     val scope = rememberCoroutineScope()
     var sortMenu by remember { mutableStateOf(false) }
     val tab = tabs[pager.currentPage]
@@ -136,11 +146,12 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
                     when {
                         pageTab == "Shelves" -> ShelvesScreen(onLibraryChanged = model::refreshCatalogBooks, onViewLibrary = { id -> selectedId = id; scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } })
-                        pageTab == "Favorites" && books.isEmpty() -> EmptyFavorites()
-                        books.isEmpty() -> EmptyLibrary(canImport, onImport) { scope.launch { pager.animateScrollToPage(tabs.indexOf("Shelves")) } }
+                        pageTab == "Favorites" && books.isEmpty() && sessions.isEmpty() -> EmptyFavorites()
+                        books.isEmpty() && pageTab != "Favorites" -> EmptyLibrary(canImport, onImport) { scope.launch { pager.animateScrollToPage(tabs.indexOf("Shelves")) } }
                         else -> LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(20.dp, 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = if (pageTab == "Favorites" && sessions.isNotEmpty()) 16.dp else 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            if (pageTab == "Favorites" && sessions.isNotEmpty()) item(span = { GridItemSpan(2) }) { ActivityCard(stats) { showStats = true } }
                             items(books, key = { it.id }) { book -> LibraryBookCard(book, { model.toggleFavorite(book) }, { removeId = book.id }, playing = playback.book?.id == book.id && playback.playing) { selectedId = book.id } }
                         }
                     }
@@ -148,6 +159,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
             }
         }
     }
+    if (showStats) ReadingStatsScreen(stats) { showStats = false }
     if (fullPlayer && playback.book != null) FullPlayer(player) { fullPlayer = false }
     playback.error?.let { message -> AlertDialog(onDismissRequest = player::dismissError,
         title = { Text("Playback unavailable") }, text = { Text(message) },

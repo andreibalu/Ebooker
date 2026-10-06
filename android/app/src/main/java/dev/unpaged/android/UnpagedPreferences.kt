@@ -17,6 +17,8 @@ class UnpagedPreferences(context: Context) {
     fun seconds(key: String, default: Int) = storage.getInt(key, default)
     fun collectionsHidden() = storage.getBoolean("librivoxCollectionsHidden", false)
     fun setCollectionsHidden(value: Boolean) { storage.edit { putBoolean("librivoxCollectionsHidden", value) } }
+    fun onboardingComplete() = storage.getBoolean("onboardingComplete", storage.getInt("onboardingPhase", 0) == 3)
+    fun setOnboardingComplete(value: Boolean) { storage.edit { putBoolean("onboardingComplete", value) } }
     fun shelvesFirst() = storage.getBoolean("startOnFreeBooks", false)
     fun setText(key: String, value: String) { storage.edit { putString(key, value) } }
     fun setSeconds(key: String, value: Int) { storage.edit { putInt(key, value) } }

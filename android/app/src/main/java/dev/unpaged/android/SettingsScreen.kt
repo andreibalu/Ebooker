@@ -104,6 +104,7 @@ fun SettingsScreen(preferences: UnpagedPreferences, onDone: () -> Unit) {
                     SectionHeader("APP", "Appearance & tour.")
                     Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            TextButton(onClick = { onDone(); preferences.setOnboardingComplete(false) }, modifier = Modifier.testTag("settings.resetOnboarding")) { Text("Reset Onboarding", color = MaterialTheme.colorScheme.onSurface) }
                             SettingLabel("Appearance", "Follow your phone, or always use light or dark")
                             Segments(listOf("System", "Light", "Dark"), preferences.text("appAppearance", "system").replaceFirstChar { it.uppercase() }, "appearance") {
                                 preferences.setText("appAppearance", it.lowercase())

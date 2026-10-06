@@ -15,6 +15,8 @@ parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. 
 args = parser.parse_args()
 parity_references = {
     'eq-light': '08-eq-light.png',
+    'onboarding-light': '00-launch.png',
+    'activity-dark': '22-favorites-dark.png',
     'player-light': '06-player-light.png',
     'chapters-light': '07-chapters-light.png',
     'library-miniplayer-light': '11-library-miniplayer-light.png',
@@ -76,7 +78,8 @@ for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
              'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',
-             'save-moment-light', 'edit-moment-dark']:
+             'save-moment-light', 'edit-moment-dark',
+             'onboarding-dark', 'activity-light', 'stats-light', 'stats-dark']:
     source = args.android_captures / f'{case}.png'
     if source.is_file():
         name = f'android-{case}.png'

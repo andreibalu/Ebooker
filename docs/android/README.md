@@ -54,3 +54,7 @@ pinning and filters, and live per-book Media3 five-band EQ. SQLite v3 adds pin
 state without dropping data. Host checks and E2E-driver compilation are
 separate from emulator playback and screenshot qualification; this slice does
 not run the shared emulator.
+[Slice 5](slice-5-reading-onboarding.md) adds additive schema v3 reading activity,
+Favorites stats and once-per-install onboarding/reset. Android replacements are
+notifications, manual moments and private local storage; E2E journeys compile
+without using the shared emulator. Runtime and exact visual parity remain pending.

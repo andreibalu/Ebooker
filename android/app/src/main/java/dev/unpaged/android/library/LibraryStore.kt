@@ -8,6 +8,8 @@ import android.database.sqlite.SQLiteOpenHelper
 import androidx.core.database.sqlite.transaction
 
 interface LibraryStore {
+    fun readingSessions(): List<dev.unpaged.android.activity.ReadingSession> = emptyList()
+    fun saveReadingSession(session: dev.unpaged.android.activity.ReadingSession) { error("Activity unsupported") }
     fun books(): List<LibraryBook>
     fun insert(book: LibraryBook)
     fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) { error("Download promotion unsupported") }
@@ -22,7 +24,7 @@ interface LibraryStore {
     fun deleteMoment(id: String)
 }
 
-/** Schema v3 adds pin state; v2 adds parity state without replacing any existing book or track. */
+/** Additive schema: v2 library parity, v3 moment pins + historical reading sessions. Never rebuild user tables. */
 class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, 3), LibraryStore {
     private val audioRoot = java.io.File(context.filesDir, "audiobooks")
 
@@ -45,6 +47,27 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
 
     private fun migrateToV3(db: SQLiteDatabase) {
         db.execSQL("ALTER TABLE moments ADD COLUMN is_pinned INTEGER NOT NULL DEFAULT 0")
+        // No foreign key: historical activity must outlive its book.
+        db.execSQL("""CREATE TABLE reading_sessions (id TEXT PRIMARY KEY, day_key TEXT NOT NULL,
+            hour INTEGER NOT NULL CHECK(hour BETWEEN 0 AND 23), minutes INTEGER NOT NULL CHECK(minutes > 0),
+            book_id TEXT NOT NULL, book_title TEXT NOT NULL, book_author TEXT NOT NULL,
+            is_free_book INTEGER NOT NULL, created_at INTEGER NOT NULL)""")
+        db.execSQL("CREATE INDEX reading_sessions_day ON reading_sessions(day_key, hour)")
+    }
+    override fun readingSessions(): List<dev.unpaged.android.activity.ReadingSession> = buildList {
+        readableDatabase.query("reading_sessions", null, null, null, null, null, "day_key ASC, created_at ASC, id ASC").use { r ->
+            while (r.moveToNext()) add(dev.unpaged.android.activity.ReadingSession(r.text("id"),
+                java.time.LocalDate.parse(r.text("day_key")), r.long("hour").toInt(), r.long("minutes").toInt(),
+                r.text("book_id"), r.text("book_title"), r.text("book_author"), r.bool("is_free_book"), r.long("created_at")))
+        }
+    }
+    override fun saveReadingSession(session: dev.unpaged.android.activity.ReadingSession) {
+        require(session.hour in 0..23 && session.minutes > 0)
+        writableDatabase.insertOrThrow("reading_sessions", null, ContentValues().apply {
+            put("id", session.id); put("day_key", session.day.toString()); put("hour", session.hour)
+            put("minutes", session.minutes); put("book_id", session.bookId); put("book_title", session.bookTitle)
+            put("book_author", session.bookAuthor); put("is_free_book", session.isFreeBook); put("created_at", session.createdAt)
+        })
     }
 
     private fun migrateToV2(db: SQLiteDatabase) {

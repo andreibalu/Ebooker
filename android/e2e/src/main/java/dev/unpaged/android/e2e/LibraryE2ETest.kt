@@ -53,7 +53,86 @@ class LibraryE2ETest {
         settleLayout()
         device.executeShellCommand("cmd uimode night no")
         launchFixture()
+        completeOnboarding()
         field("tab.Library").click()
+    }
+
+    private fun completeOnboarding() {
+        if (device.wait(Until.hasObject(By.res("onboarding")), 2000)) {
+            field("onboarding.choice.My books").click()
+            field("onboarding.page.6").click()
+            field("onboarding.finish").click()
+            field("tab.Library")
+        }
+    }
+
+    @Test fun onboardingFirstLaunchPersistsAndResetShowsWelcomeAgain() {
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("pm clear $app")
+        launch()
+        field("onboarding.choice.My books")
+        screenshot("onboarding-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("onboarding.choice.My books")
+        screenshot("onboarding-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("onboarding.choice.My books").click()
+        field("onboarding.page.2").click()
+        field("onboarding.skipForwardSeconds.45").click()
+        field("onboarding.page.3").click()
+        visible(By.text("Imagine your year."))
+        field("onboarding.page.4").click()
+        visible(By.text("Timestamps are saved on your phone. Automatic naming and AI recaps are not available."))
+        field("onboarding.page.5").click()
+        visible(By.text("Cloud sync is not available. Uninstalling Unpaged removes its local library and activity."))
+        field("onboarding.page.6").click()
+        visible(By.text("Skip forward: 45s"))
+        field("onboarding.finish").click()
+        visible(By.text("Your Library Is Empty"))
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        assertFalse(device.hasObject(By.res("onboarding")))
+        tapDescription("Settings")
+        scrollTo("settings.resetOnboarding")
+        field("settings.resetOnboarding").click()
+        field("onboarding.choice.My books")
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        field("onboarding.choice.My books")
+    }
+
+    @Test fun seededActivityOpensStatsAndPersistsAcrossRelaunch() {
+        saveBook("E2E The Listening Book", "Fixture Author", "Chapter 1.wav", "Chapter 2.wav")
+        tapDescription("Add favorite")
+        saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.activity.ReadingFixtureActivity --ez e2e-reading-fixture true --ez reference true")
+        field("tab.Favorites").click()
+        visible(By.text("ACTIVITY")); visible(By.text("42m"))
+        screenshot("activity-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("activity.card")
+        screenshot("activity-dark")
+        field("activity.card").click()
+        field("reading.stats")
+        visible(By.text("Page by page."))
+        screenshot("stats-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("reading.stats")
+        screenshot("stats-light")
+        val statsScroll = UiScrollable(UiSelector().resourceId("reading.stats.scroll").scrollable(true))
+        for (section in listOf("your_best_day", "you_read_most_in_the", "the_book_you_stayed_with", "on_a_roll", "the_shape_of_it", "public_domain,_private_joy")) {
+            assertTrue("Missing stats section $section", statsScroll.scrollIntoView(UiSelector().resourceId("stats.eyebrow.$section")))
+        }
+        screenshot("stats-sections-light")
+        assertTrue(statsScroll.scrollIntoView(UiSelector().text("Back to Library")))
+        tapText("Back to Library")
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        field("tab.Favorites").click()
+        visible(By.text("42m"))
+        field("activity.card").click()
+        field("reading.stats")
     }
 
     @Test fun libraryUsesIosHeaderAndEmptyState() {
