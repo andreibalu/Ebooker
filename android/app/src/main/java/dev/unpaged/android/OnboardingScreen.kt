@@ -9,6 +9,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -24,6 +27,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -68,20 +73,25 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                     LaunchedEffect(pager.currentPage == page, reduced) {
                         if (reduced) reveal.snapTo(1f) else if (pager.currentPage == page) reveal.animateTo(1f, tween(620)) else reveal.snapTo(0f)
                     }
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                    Column(Modifier.fillMaxHeight().widthIn(max = 402.dp).fillMaxWidth().alpha(reveal.value).padding(horizontal = 26.dp).padding(top = 24.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Box(Modifier.fillMaxSize().drawBehind {
+                        if (page == 0) drawRect(Brush.radialGradient(
+                            listOf(ActivityAmber.copy(alpha = .12f), androidx.compose.ui.graphics.Color.Transparent),
+                            center = Offset(size.width / 2, size.height * .14f), radius = 340.dp.toPx()))
+                    }, contentAlignment = Alignment.TopCenter) {
+                    Column(Modifier.fillMaxHeight().widthIn(max = 402.dp).fillMaxWidth().alpha(reveal.value).padding(horizontal = 26.dp).padding(top = if (page == 0) 8.dp else 24.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(if (page == 0) 0.dp else 16.dp)) {
                         when(page) {
                             0 -> {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Box(Modifier.size(26.dp).background(ActivityAmber, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) { Text("▤", color = androidx.compose.ui.graphics.Color.White) }
                                     Text("Unpaged", fontSize = 22.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Spacer(Modifier.height(6.dp))
+                                Spacer(Modifier.height(22.dp))
                                 OnboardingHeading("Welcome", "How do you want\nto start?", "Pick one — this sets your home tab. You can change it later.")
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(24.dp))
                                 ChoiceCard("Shelves", "Thousands of free public-domain audiobooks, ready to play.", "No import needed", true) { preferences.setShelvesFirst(true); jump(1) }
+                                Spacer(Modifier.height(14.dp))
                                 ChoiceCard("My books", "Bring audiobooks you already own. Import from Files.", "Your own library", false) { preferences.setShelvesFirst(false); jump(1) }
-                                Text("Scroll to continue\n⌄", Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .4f))
+                                Text("Scroll to continue\n⌄", Modifier.align(Alignment.CenterHorizontally).padding(top = 26.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .4f))
                             }
                             1 -> {
                                 OnboardingHeading("Permissions", "Playback, beyond\nthe app.", "Allow notifications for audiobook controls. You can continue without them.")
@@ -139,7 +149,7 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                                         Text("${when(key) { "resumeBacktrackSeconds" -> "On resume"; "skipBackSeconds" -> "Skip back"; "skipForwardSeconds" -> "Skip forward"; else -> "Save moment offset" }}: ${preferences.seconds(key, default)}s")
                                     }
                                 } }
-                                Button(onClick = { preferences.setText("onboardingLanding", if (preferences.shelvesFirst()) "Shelves" else "Library"); preferences.setOnboardingComplete(true) }, Modifier.fillMaxWidth().testTag("onboarding.finish"), colors = ButtonDefaults.buttonColors(containerColor = ActivityAmber)) { Text("Open Library") }
+                                Button(onClick = { preferences.setText("onboardingLanding", if (preferences.shelvesFirst()) "Shelves" else "Library"); preferences.setOnboardingComplete(true) }, Modifier.fillMaxWidth().height(52.dp).testTag("onboarding.finish"), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = ActivityAmber, contentColor = androidx.compose.ui.graphics.Color.White)) { Text("Open Library", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
                                 Text("Takes you straight to your books.", fontSize = 12.sp)
                             }
                         }
@@ -147,10 +157,19 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                     }
                 }
                 }
-                Column(Modifier.align(Alignment.CenterEnd).padding(end = 3.dp)) {
-                    listOf("Start", "Permissions", "Playback", "Your year", "Moments", "Local library", "Done").forEachIndexed { index, label ->
-                        Box(Modifier.width(28.dp).height(23.dp).clickable { jump(index) }.testTag("onboarding.page.$index").semantics { this.contentDescription = label }, contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(if (pager.currentPage == index) 8.dp else 6.dp).background(if (pager.currentPage == index) ActivityAmber else MaterialTheme.colorScheme.onSurface.copy(alpha = .25f), CircleShape))
+                // Match the iOS rail's 23dp pitch without Compose expanding adjacent
+                // hit regions to 48dp and routing a dot tap to its neighbour.
+                val viewConfiguration = LocalViewConfiguration.current
+                CompositionLocalProvider(LocalViewConfiguration provides object : androidx.compose.ui.platform.ViewConfiguration by viewConfiguration {
+                    override val minimumTouchTargetSize = DpSize(44.dp, 23.dp)
+                }) {
+                    Column(Modifier.align(Alignment.CenterEnd).padding(end = 9.dp)) {
+                        listOf("Start", "Permissions", "Playback", "Your year", "Moments", "Local library", "Done").forEachIndexed { index, label ->
+                            Box(Modifier.width(44.dp).height(23.dp).clickable { jump(index) }.testTag("onboarding.page.$index").semantics { this.contentDescription = label }, contentAlignment = Alignment.CenterEnd) {
+                                Box(Modifier.size(14.dp), contentAlignment = Alignment.Center) {
+                                    Box(Modifier.size(if (pager.currentPage == index) 8.dp else 6.dp).background(if (pager.currentPage == index) ActivityAmber else MaterialTheme.colorScheme.onSurface.copy(alpha = .25f), CircleShape))
+                                }
+                            }
                         }
                     }
                 }
@@ -160,9 +179,11 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
 }
 @Composable
 private fun OnboardingHeading(eyebrow: String, title: String, subtitle: String) {
-    Text(eyebrow.uppercase(java.util.Locale.ENGLISH), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, color = ActivityAmber)
-    Text(title, fontSize = 31.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, letterSpacing = (-.8).sp)
-    Text(subtitle, fontSize = 15.5.sp, lineHeight = 23.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Text(eyebrow.uppercase(java.util.Locale.ENGLISH), fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp, color = ActivityAmber)
+        Text(title, fontSize = 31.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, letterSpacing = (-.8).sp)
+        Text(subtitle, fontSize = 15.5.sp, lineHeight = 23.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 @Composable
 private fun ChoiceCard(title: String, description: String, badge: String, shelves: Boolean, onClick: () -> Unit) {
@@ -174,7 +195,7 @@ private fun ChoiceCard(title: String, description: String, badge: String, shelve
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(title, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Text(description, fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(badge, Modifier.background(ActivityAmber.copy(alpha = .12f), CircleShape).padding(horizontal = 9.dp, vertical = 3.dp), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = ActivityAmber)
+                Text(badge, Modifier.background(ActivityAmber.copy(alpha = .12f), CircleShape).padding(horizontal = 9.dp, vertical = 3.dp), fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, color = ActivityAmber)
             }
         }
     }

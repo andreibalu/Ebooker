@@ -242,7 +242,7 @@ that run; no visual parity pass is claimed from host tests or assembly.
 The [merged E2E fix run](e2e-merged-fix-2026-10-06.md) supersedes the deferred
 execution notes above: **18/18 E2E**, **54/54 host tests**, **0 app lint issues**.
 Evidence: `/private/tmp/unpaged-e2efix-full-verified`. All 35 captures were
-reviewed; the [regenerated report](visual-evidence/2026-10-06-merged-e2efix/index.html)
+reviewed; the [regenerated report](visual-evidence/2026-10-06-merged-all/index.html)
 includes playback, Shelves, shell/settings and unpaired states with explicit
 reference limitations. This is emulator journey coverage, not full pixel parity
 or physical-device/live-network qualification.
@@ -270,3 +270,32 @@ pairs 00-launch / 22-favorites-dark. Additional captures remain source-derived.
 No emulator/E2E execution or screenshot comparison is claimed in this slice.
 Earlier evidence directories/counts are historical; the emulator owner must
 execute and visually review this work after integration.
+
+## Merged slices 1–5 — full runtime validation
+
+One complete guarded run on `emulator-5580` with all five slices merged:
+**23/23 E2E**, **75/75 host tests**, **0 app lint issues**, 62 captures
+(evidence `/private/tmp/unpaged-all-e2e6`). The
+[regenerated report](visual-evidence/2026-10-06-merged-all/index.html) replaces the
+slices 1–3 report and adds the moments, EQ, onboarding (all seven pages, light and
+dark), activity and stats captures.
+
+The first merged run failed 23/23. The onboarding gate leaves the app on its home
+tab, so the driver's extra tab tap opened the sort menu over every screen.
+`selectTab` now taps only unselected tabs. Further fixes from the run:
+
+- App: the moment filter, moment editor and EQ sheets open fully expanded with
+  navigation-bar padding, which brings the filter sheet's Clear All row into reach.
+  The onboarding finish button now uses iOS's white text and 16dp corners. The EQ
+  switch thumb is white, matching iOS, instead of Material purple. Onboarding page
+  spacing and the dot-rail hit targets match iOS more closely.
+- Driver: Material filter chips report *checked*, not *selected*. Post-click state
+  checks wait for recomposition. EQ scrolling swipes along the edge so it doesn't
+  drag the band sliders. Stats scrolling uses the driver's own swipes because
+  `UiScrollable` stops early on the animated list.
+
+I reviewed the onboarding, activity, stats, moments, edit-moment and EQ captures
+against the iOS references and source. Remaining differences are platform fonts
+and icons, plus the iOS Plus button, which Android excludes on purpose. This is
+still emulator coverage only: physical-device and live-network qualification
+remain pending.

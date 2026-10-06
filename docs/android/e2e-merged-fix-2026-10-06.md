@@ -81,12 +81,12 @@ Host tests/lint were up-to-date in the last run; their current XML reports were
 read back separately. E2E ran all 18 tests in one invocation.
 
 All 35 final captures were inspected against the supplied iOS screenshots and
-related SwiftUI/theme source. The [regenerated report](visual-evidence/2026-10-06-merged-e2efix/index.html)
+related SwiftUI/theme source. The [regenerated report](visual-evidence/2026-10-06-merged-all/index.html)
 contains 17 pairs and 13 unpaired galleries (47 PNGs); every SHA256 was verified.
 Generated with:
 
 ```sh
-python3 android/tools/make-visual-report.py /private/tmp/unpaged-e2efix-full-verified/screenshots docs/android/visual-evidence/ios-reference-1.4.1 docs/android/visual-evidence/2026-10-06-merged-e2efix
+python3 android/tools/make-visual-report.py /private/tmp/unpaged-e2efix-full-verified/screenshots docs/android/visual-evidence/ios-reference-1.4.1 docs/android/visual-evidence/2026-10-06-merged-all
 ```
 
 ## Limits

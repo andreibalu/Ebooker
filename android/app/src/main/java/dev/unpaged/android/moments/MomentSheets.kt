@@ -30,7 +30,7 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (Li
     var characters by rememberSaveable(moment.id) { mutableStateOf<List<String>>(ArrayList(moment.characters)) }
     var mood by rememberSaveable(moment.id) { mutableStateOf(moment.mood) }
     var character by rememberSaveable { mutableStateOf("") }
-    ModalBottomSheet(onDismissRequest = onCancel, containerColor = MaterialTheme.colorScheme.background,
+    ModalBottomSheet(onDismissRequest = onCancel, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moment.editor")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onCancel) { Text("Cancel") }
@@ -40,7 +40,7 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (Li
                     categoriesJson = JSONArray(categories).toString(), charactersJson = JSONArray(characters).toString(), mood = mood))
             }) { Text("Done") }
         }
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("moment.scroll").padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("moment.scroll").navigationBarsPadding().padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             MomentSection("Name") { TextField(name, { name = it }, Modifier.fillMaxWidth().testTag("moment.name"), colors = momentFieldColors(), placeholder = { Text("Moment name") }, singleLine = true) }
             MomentSection("Note") { TextField(note, { note = it }, Modifier.fillMaxWidth().testTag("moment.note"), colors = momentFieldColors(), placeholder = { Text("Add a note (optional)") }, minLines = 4, maxLines = 8) }
             MomentSection("Quote") { TextField(quote, { quote = it }, Modifier.fillMaxWidth().testTag("moment.quote"), colors = momentFieldColors(), placeholder = { Text("Add a quote (optional)") }, minLines = 2, maxLines = 6, textStyle = LocalTextStyle.current.copy(fontStyle = FontStyle.Italic, fontSize = 14.sp)) }
@@ -88,12 +88,14 @@ private fun TagMenu(title: String, options: List<Pair<String, String>>, tag: Str
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MomentFilterSheet(moments: List<LibraryMoment>, filters: MomentFilters, change: (MomentFilters) -> Unit, dismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.background,
+    // Fully expanded so the trailing Clear All row is reachable above the navigation bar.
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moment.filters")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Filter Moments", Modifier.weight(1f)); TextButton(onClick = dismiss) { Text("Done") }
         }
-        Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.verticalScroll(rememberScrollState()).testTag("moment.filterScroll").navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val categories = moments.flatMap { it.categories }.distinct().sortedBy { it.name }
             if (categories.isNotEmpty()) MomentSection("Categories") { categories.forEach { option -> FilterOption(option.title, option.name in filters.categories) { change(filters.copy(categories = filters.categories.toggle(option.name))) } } }
             val characters = moments.flatMap { it.characters }.distinctBy { it.lowercase(Locale.ROOT) }.sorted()

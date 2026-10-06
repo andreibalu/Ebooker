@@ -54,7 +54,7 @@ class LibraryE2ETest {
         device.executeShellCommand("cmd uimode night no")
         launchFixture()
         completeOnboarding()
-        field("tab.Library").click()
+        selectLibraryTab()
     }
 
     private fun completeOnboarding() {
@@ -77,16 +77,24 @@ class LibraryE2ETest {
         screenshot("onboarding-dark")
         device.executeShellCommand("cmd uimode night no")
         field("onboarding.choice.My books").click()
+        field("onboarding.page.1").click()
+        field("onboarding.notifications")
+        captureOnboardingPage("permissions")
         field("onboarding.page.2").click()
         field("onboarding.skipForwardSeconds.45").click()
+        captureOnboardingPage("playback")
         field("onboarding.page.3").click()
         visible(By.text("Imagine your year."))
+        captureOnboardingPage("year")
         field("onboarding.page.4").click()
         visible(By.text("Timestamps are saved on your phone. Automatic naming and AI recaps are not available."))
+        captureOnboardingPage("moments")
         field("onboarding.page.5").click()
         visible(By.text("Cloud sync is not available. Uninstalling Unpaged removes its local library and activity."))
+        captureOnboardingPage("storage")
         field("onboarding.page.6").click()
         visible(By.text("Skip forward: 45s"))
+        captureOnboardingPage("done")
         field("onboarding.finish").click()
         visible(By.text("Your Library Is Empty"))
         device.executeShellCommand("am force-stop $app")
@@ -107,7 +115,7 @@ class LibraryE2ETest {
         saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
         device.executeShellCommand("am force-stop $app")
         device.executeShellCommand("am start -W -n $app/dev.unpaged.android.activity.ReadingFixtureActivity --ez e2e-reading-fixture true --ez reference true")
-        field("tab.Favorites").click()
+        selectTab("Favorites")
         visible(By.text("ACTIVITY")); visible(By.text("42m"))
         screenshot("activity-light")
         device.executeShellCommand("cmd uimode night yes")
@@ -120,16 +128,16 @@ class LibraryE2ETest {
         device.executeShellCommand("cmd uimode night no")
         field("reading.stats")
         screenshot("stats-light")
-        val statsScroll = UiScrollable(UiSelector().resourceId("reading.stats.scroll").scrollable(true))
         for (section in listOf("your_best_day", "you_read_most_in_the", "the_book_you_stayed_with", "on_a_roll", "the_shape_of_it", "public_domain,_private_joy")) {
-            assertTrue("Missing stats section $section", statsScroll.scrollIntoView(UiSelector().resourceId("stats.eyebrow.$section")))
+            // UiScrollable stops early on the animated LazyColumn; step with the driver's own swipes.
+            scrollTo("stats.eyebrow.$section", scrollId = "reading.stats.scroll")
         }
         screenshot("stats-sections-light")
-        assertTrue(statsScroll.scrollIntoView(UiSelector().text("Back to Library")))
-        tapText("Back to Library")
+        scrollTo("reading.stats.backToLibrary", scrollId = "reading.stats.scroll")
+        field("reading.stats.backToLibrary").click()
         device.executeShellCommand("am force-stop $app")
         launch()
-        field("tab.Favorites").click()
+        selectTab("Favorites")
         visible(By.text("42m"))
         field("activity.card").click()
         field("reading.stats")
@@ -166,7 +174,7 @@ class LibraryE2ETest {
         device.setOrientationNatural()
         device.executeShellCommand("am force-stop $app")
         launch()
-        field("tab.Library").click()
+        selectLibraryTab()
         tapText("E2E The Listening Book")
         visible(By.text("Fixture Author"))
         field("book.tracks").click()
@@ -552,10 +560,10 @@ class LibraryE2ETest {
         field("player.saveMoment").click()
         field("moment.name").setText("A turning point")
         field("moment.note").setText("A memorable passage")
-        device.pressBack() // dismiss keyboard
+        dismissKeyboard() // setText may update the field without opening an IME
         scrollTo("moment.quote", scrollId = "moment.scroll")
         field("moment.quote").setText("The story begins")
-        device.pressBack()
+        dismissKeyboard()
         scrollTo("moment.addCategory", scrollId = "moment.scroll")
         field("moment.addCategory").click(); tapText("Action")
         scrollTo("moment.addMood", scrollId = "moment.scroll")
@@ -563,7 +571,7 @@ class LibraryE2ETest {
         scrollTo("moment.character", scrollId = "moment.scroll")
         field("moment.character").setText("Alice")
         field("moment.addCharacter").click()
-        device.pressBack()
+        dismissKeyboard()
         screenshot("save-moment-light")
         field("moment.done").click()
         visible(By.text("Saved!"))
@@ -575,7 +583,9 @@ class LibraryE2ETest {
         screenshot("moments-light")
         field("moment.filter").click(); screenshot("moment-filters-light"); tapText("Dramatic"); tapText("Done")
         visible(By.text("1 moment · filtered"))
-        field("moment.filter").click(); tapText("Clear All"); tapText("Done")
+        field("moment.filter").click()
+        scrollTo("moment.clearFilters", scrollId = "moment.filterScroll")
+        field("moment.clearFilters").click(); tapText("Done")
         tapDescription("Pin moment")
         visible(By.desc("Unpin moment"))
         tapDescription("Edit moment")
@@ -614,7 +624,8 @@ class LibraryE2ETest {
         waitForElapsed { it >= 2 }; field("player.playPause").click()
         field("player.saveMoment").click()
         field("moment.name").setText("   ")
-        assertFalse(visible(By.res("moment.done")).isEnabled)
+        // setText returns before recomposition; wait for the blank-name state to disable Done.
+        assertTrue(visible(By.res("moment.done")).wait(Until.enabled(false), 5_000))
         tapText("Cancel")
         field("player.saveMoment").click(); field("moment.name").setText("Offset moment"); field("moment.done").click()
         visible(By.text("Saved!")); field("player.close").click()
@@ -634,24 +645,27 @@ class LibraryE2ETest {
         val boostBounds = visible(By.res("equalizer.preamp")).visibleBounds
         device.click(boostBounds.centerX(), boostBounds.centerY())
         visible(By.text("+6 dB"))
+        scrollTo("equalizer.preset.voiceBoost", scrollId = "equalizer.scroll", edgeSwipe = true)
         field("equalizer.preset.voiceBoost").click()
-        assertTrue(visible(By.res("equalizer.preset.voiceBoost")).isSelected)
+        assertTrue(visible(By.res("equalizer.preset.voiceBoost")).wait(Until.checked(true), 5_000))
         field("equalizer.done").click(); field("player.close").click()
         relaunch(); tapText("E2E The Listening Book"); field("book.play").click()
         visible(By.res("player.title")); field("player.equalizer").click()
-        assertTrue(visible(By.res("equalizer.enabled")).isChecked)
+        assertTrue(visible(By.res("equalizer.enabled")).wait(Until.checked(true), 5_000))
         visible(By.text("+6 dB"))
-        assertTrue(visible(By.res("equalizer.preset.voiceBoost")).isSelected)
+        scrollTo("equalizer.preset.voiceBoost", scrollId = "equalizer.scroll", edgeSwipe = true)
+        assertTrue(visible(By.res("equalizer.preset.voiceBoost")).wait(Until.checked(true), 5_000))
         device.executeShellCommand("cmd uimode night yes")
         visible(By.text("Equalizer")); screenshot("eq-dark")
-        scrollTo("equalizer.reset", scrollId = "equalizer.scroll"); field("equalizer.reset").click()
-        scrollTo("equalizer.preset.flat", downward = false, scrollId = "equalizer.scroll")
-        assertTrue(visible(By.res("equalizer.preset.flat")).isSelected)
+        scrollTo("equalizer.reset", scrollId = "equalizer.scroll", edgeSwipe = true); field("equalizer.reset").click()
+        scrollTo("equalizer.preset.flat", downward = false, scrollId = "equalizer.scroll", edgeSwipe = true)
+        assertTrue(visible(By.res("equalizer.preset.flat")).wait(Until.checked(true), 5_000))
         field("equalizer.done").click(); field("player.close").click(); device.pressBack()
         tapText("E2E Another Book"); field("book.play").click()
         visible(By.res("player.title")); field("player.equalizer").click()
-        assertFalse(visible(By.res("equalizer.enabled")).isChecked)
-        assertTrue(visible(By.res("equalizer.preset.flat")).isSelected)
+        assertTrue(visible(By.res("equalizer.enabled")).wait(Until.checked(false), 5_000))
+        scrollTo("equalizer.preset.flat", scrollId = "equalizer.scroll", edgeSwipe = true)
+        assertTrue(visible(By.res("equalizer.preset.flat")).wait(Until.checked(true), 5_000))
     }
 
     private fun dismissNotificationPrompt() {
@@ -692,14 +706,16 @@ class LibraryE2ETest {
         assertTrue("Rendered background brightness $brightness, expected dark=$dark", if (dark) brightness < 70 else brightness > 160)
     }
 
-    private fun scrollTo(id: String, downward: Boolean = true, scrollId: String = "settings.scroll") {
+    // edgeSwipe keeps the gesture off content that consumes vertical drags (EQ band sliders).
+    private fun scrollTo(id: String, downward: Boolean = true, scrollId: String = "settings.scroll", edgeSwipe: Boolean = false) {
         repeat(8) {
             val bounds = visible(By.res(scrollId)).visibleBounds
             val target = device.findObject(By.res(id))?.visibleBounds
             if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return
             val top = bounds.top + bounds.height() / 5
             val bottom = bounds.bottom - bounds.height() / 5
-            device.swipe(bounds.centerX(), if (downward) bottom else top, bounds.centerX(), if (downward) top else bottom, 30)
+            val x = if (edgeSwipe) bounds.left + 30 else bounds.centerX()
+            device.swipe(x, if (downward) bottom else top, x, if (downward) top else bottom, 30)
         }
         field(id)
     }
@@ -713,7 +729,35 @@ class LibraryE2ETest {
         visible(By.text(title))
     }
 
-    private fun relaunch() { device.executeShellCommand("am force-stop $app"); launch(); field("tab.Library").click() }
+    private fun relaunch() { device.executeShellCommand("am force-stop $app"); launch(); selectLibraryTab() }
+
+    private fun selectLibraryTab() {
+        selectTab("Library")
+        visible(By.text("My Library"))
+    }
+
+    private fun captureOnboardingPage(page: String) {
+        screenshot("onboarding-$page-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("onboarding")
+        screenshot("onboarding-$page-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("onboarding")
+    }
+
+    private fun dismissKeyboard() {
+        settleLayout()
+        if (device.hasObject(By.pkg(java.util.regex.Pattern.compile(".*inputmethod.*")))) {
+            device.pressBack()
+            settleLayout()
+        }
+    }
+
+    private fun selectTab(label: String) {
+        val tab = visible(By.res("tab.$label"))
+        if (!tab.isSelected) field("tab.$label").click()
+        settleLayout()
+    }
 
     private fun pick(vararg names: String) {
         openPicker(*names)

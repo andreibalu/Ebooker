@@ -23,6 +23,8 @@ import kotlin.math.sin
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -205,7 +207,7 @@ fun ReadingStatsScreen(stats: ReadingStats, onBack: () -> Unit) {
     BackHandler(onBack = onBack)
     val scroll = androidx.compose.foundation.lazy.rememberLazyListState()
     val showTitle by remember { derivedStateOf { scroll.firstVisibleItemIndex > 0 || scroll.firstVisibleItemScrollOffset > 180 } }
-    Surface(Modifier.fillMaxSize().testTag("reading.stats"), color = MaterialTheme.colorScheme.background) {
+    Surface(Modifier.fillMaxSize().semantics { testTagsAsResourceId = true }.testTag("reading.stats"), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.safeDrawingPadding()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack) { Text("‹ Library", color = MaterialTheme.colorScheme.onSurface) }
@@ -230,7 +232,7 @@ fun ReadingStatsScreen(stats: ReadingStats, onBack: () -> Unit) {
                     Canvas(Modifier.size(150.dp)) { drawCircle(ActivityAmber.copy(alpha = .12f), style = Stroke(12.dp.toPx())); drawArc(ActivityAmber, -90f, 360f * stats.freePercent / 100, false, style = Stroke(12.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)) }
                     Text("${stats.freePercent}%", fontFamily = FontFamily.Serif, fontSize = 36.sp)
                 }; Text("${activityDuration(stats.freeMinutes)} of your listening was from free, public-domain recordings.") } }
-                item { Reveal { Text("The unread copy of every great\nbook is still a great book.", fontFamily = FontFamily.Serif, fontSize = 28.sp); TextButton(onClick = onBack) { Text("Back to Library") } } }
+                item { Reveal { Text("The unread copy of every great\nbook is still a great book.", fontFamily = FontFamily.Serif, fontSize = 28.sp); TextButton(onClick = onBack, Modifier.testTag("reading.stats.backToLibrary")) { Text("Back to Library") } } }
             }
         }
     }

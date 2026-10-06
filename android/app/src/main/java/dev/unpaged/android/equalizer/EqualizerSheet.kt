@@ -23,18 +23,18 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EqualizerSheet(config: EqualizerConfiguration, update: (EqualizerConfiguration) -> Unit, dismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = dismiss, containerColor = MaterialTheme.colorScheme.background,
+    ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("equalizer")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.width(60.dp))
             Text("Equalizer", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             TextButton(onClick = dismiss, modifier = Modifier.testTag("equalizer.done")) { Text("Done") }
         }
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("equalizer.scroll").padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("equalizer.scroll").navigationBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             EqCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { EqTitle("Equalizer"); EqSubtitle("Adjust tone and boost quiet books") }
-                    Switch(config.isEnabled, { update(config.copy(isEnabled = it)) }, Modifier.testTag("equalizer.enabled"), colors = SwitchDefaults.colors(checkedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f)))
+                    Switch(config.isEnabled, { update(config.copy(isEnabled = it)) }, Modifier.testTag("equalizer.enabled"), colors = SwitchDefaults.colors(checkedThumbColor = androidx.compose.ui.graphics.Color.White, checkedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f), uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant, uncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f), uncheckedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f)))
                 }
             }
             EqCard {
@@ -50,6 +50,7 @@ fun EqualizerSheet(config: EqualizerConfiguration, update: (EqualizerConfigurati
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     EqualizerPreset.entries.forEach { preset ->
                         FilterChip(selected = config.preset == preset, onClick = { update(config.apply(preset)) }, enabled = config.isEnabled,
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .1f), selectedLabelColor = MaterialTheme.colorScheme.onSurface),
                             label = { Text(preset.title, fontSize = 14.sp) }, shape = RoundedCornerShape(14.dp),
                             modifier = Modifier.testTag("equalizer.preset.${preset.name}"))
                     }
@@ -88,4 +89,13 @@ private fun EqCard(enabled: Boolean = true, content: @Composable ColumnScope.() 
 }
 @Composable private fun EqTitle(text: String) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
 @Composable private fun EqSubtitle(text: String) { Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-@Composable private fun eqSliderColors() = SliderDefaults.colors(activeTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f), thumbColor = MaterialTheme.colorScheme.surface)
+@Composable private fun eqSliderColors() = SliderDefaults.colors(
+    activeTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
+    inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
+    activeTickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
+    inactiveTickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
+    thumbColor = MaterialTheme.colorScheme.surface,
+    disabledActiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f),
+    disabledInactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f),
+    disabledActiveTickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f),
+    disabledInactiveTickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))

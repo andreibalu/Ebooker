@@ -34,6 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -112,7 +115,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                             Box(Modifier.weight(1f)) {
                                 Column(Modifier.fillMaxWidth().clickable {
                                     if (pager.currentPage == index) sortMenu = true else scope.launch { pager.animateScrollToPage(index) }
-                                }.testTag("tab.$label"), horizontalAlignment = Alignment.CenterHorizontally) {
+                                }.testTag("tab.$label").semantics { role = Role.Tab; this.selected = tab == label }, horizontalAlignment = Alignment.CenterHorizontally) {
                                     Row(Modifier.padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text(label, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = if (tab == label) FontWeight.SemiBold else FontWeight.Normal,
                                             color = if (tab == label) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant)

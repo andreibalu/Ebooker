@@ -16,6 +16,7 @@ args = parser.parse_args()
 parity_references = {
     'eq-light': '08-eq-light.png',
     'onboarding-light': '00-launch.png',
+    'activity-light': '01-favorites-light.png',
     'activity-dark': '22-favorites-dark.png',
     'player-light': '06-player-light.png',
     'chapters-light': '07-chapters-light.png',
@@ -79,7 +80,8 @@ for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
              'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',
              'save-moment-light', 'edit-moment-dark',
-             'onboarding-dark', 'activity-light', 'stats-light', 'stats-dark']:
+             'onboarding-dark', 'stats-light', 'stats-dark', 'stats-sections-light',
+             *[f'onboarding-{page}-{theme}' for page in ['permissions', 'playback', 'year', 'moments', 'storage', 'done'] for theme in ['light', 'dark']]]:
     source = args.android_captures / f'{case}.png'
     if source.is_file():
         name = f'android-{case}.png'

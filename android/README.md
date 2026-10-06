@@ -131,13 +131,13 @@ Robolectric 4.16. See [slice details](../docs/android/local-library.md).
 
 `e2e/` is a separate `com.android.test` driver process using UI Automator. This
 lets it force-stop the production app and verify persistence through relaunch.
-Release builds have no fixture hooks. Debug builds have a catalog-only fixture entry
-point for Shelves. Local-library fixtures are generated real PCM WAV files and a
+Release builds have no fixture hooks. Debug builds have explicit Shelves catalog and reading-session fixture entry
+points. Onboarding is completed through visible controls, including in test setup. Local-library fixtures are generated real PCM WAV files and a
 corrupt MP3, selected through Android's actual Storage Access Framework UI.
 Assertions use visible app/picker controls, never database or repository calls.
 The Shelves driver uses bundled debug metadata and forced saved-only browsing.
 Merged slice runtime checks are recorded in
-[the E2E fix run](../docs/android/e2e-merged-fix-2026-10-06.md).
+[the E2E validation log](../docs/android/e2e-visual-validation-2026-10-06.md).
 
 Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
 Boot it and specify its serial explicitly, with no other Android devices attached:
