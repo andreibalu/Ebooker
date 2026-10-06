@@ -179,6 +179,10 @@ final class CoffeeTipStore: ObservableObject {
             @unknown default:
                 purchaseState = Self.state(for: .failed)
             }
+        } catch StoreKitError.userCancelled {
+            // StoreKit reports some cancellations by throwing rather than returning
+            // `.userCancelled`; both mean the person backed out.
+            purchaseState = Self.state(for: .userCancelled)
         } catch {
             purchaseState = Self.state(for: .failed)
         }

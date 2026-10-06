@@ -13,8 +13,6 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
     case inactiveAPIKey
     /// The device has no network path at all (distinct from a server that doesn't answer).
     case offline
-    /// App Transport Security refused a plain-http address outside the local network.
-    case insecureConnection
     /// Something answered, but not an Audiobookshelf server (e.g. 404 on `/login`).
     case notAudiobookshelfServer
 }
@@ -320,14 +318,17 @@ actor AudiobookshelfClient {
 
     /// Parses what a person types into the server field. A bare host gets `https://`, except
     /// hosts that can only be on the local network (localhost, `.local`, private IPv4), which get
-    /// `http://` because that is how a home server is almost always reached.
+    /// `http://` because that is how a home server is almost always reached. A Tailscale MagicDNS
+    /// name with an explicit port (`nas.tailnet.ts.net:13378`) also gets `http://`: that is the
+    /// server's own plain listener, while the bare name usually fronts `tailscale serve` HTTPS.
     nonisolated static func serverURL(from input: String) throws -> URL {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !text.contains(" ") else { throw AudiobookshelfError.invalidServerURL }
         if !text.lowercased().hasPrefix("http://") && !text.lowercased().hasPrefix("https://") {
             guard !text.contains("://") else { throw AudiobookshelfError.invalidServerURL }
             let host = text.split(separator: "/").first.map(String.init) ?? text
-            text = (isLocalNetworkHost(host) ? "http://" : "https://") + text
+            let isTailnetWithPort = host.contains(":") && isTailnetHost(host.split(separator: ":")[0].lowercased())
+            text = (isLocalNetworkHost(host) || isTailnetWithPort ? "http://" : "https://") + text
         }
         while text.hasSuffix("/") && text.count > "https://".count { text.removeLast() }
         guard let url = URL(string: text) else { throw AudiobookshelfError.invalidServerURL }
@@ -337,8 +338,41 @@ actor AudiobookshelfClient {
     nonisolated static func isLocalNetworkHost(_ hostAndPort: String) -> Bool {
         let host = (hostAndPort.split(separator: ":").first.map(String.init) ?? hostAndPort).lowercased()
         if host == "localhost" || host.hasSuffix(".local") || !host.contains(".") { return true }
-        let octets = host.split(separator: ".").compactMap { Int($0) }
-        guard octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
+        return isPrivateIPv4(host)
+    }
+
+    /// True when plain http to `url` should trigger the "not using HTTPS" warning before any
+    /// credential is sent. Plain http is allowed everywhere (ATS `NSAllowsArbitraryLoads`); it is
+    /// silent only for hosts that are reachable solely over a LAN or a private VPN overlay.
+    nonisolated static func needsInsecureConnectionWarning(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "http", let host = url.host(percentEncoded: false) else { return false }
+        return !isPrivateNetworkHost(host)
+    }
+
+    /// Hosts whose traffic stays on the user's own network or a private overlay (Tailscale), so
+    /// plain http there is the normal self-hosting setup rather than an exposure to the internet.
+    /// Takes a bare host (no port); IPv6 literals may be bracketed or not.
+    nonisolated static func isPrivateNetworkHost(_ rawHost: String) -> Bool {
+        var host = rawHost.lowercased()
+        if host.hasPrefix("[") && host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
+        if host.hasSuffix(".") { host.removeLast() }
+        guard !host.isEmpty else { return false }
+        if host.contains(":") { return isPrivateIPv6(host) }
+        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") { return true }
+        if isTailnetHost(host) { return true }
+        if host.allSatisfy({ $0.isNumber || $0 == "." }) { return isPrivateIPv4(host) }
+        return !host.contains(".")   // unqualified name, resolved by the LAN/VPN search domain
+    }
+
+    nonisolated private static func isTailnetHost(_ host: String) -> Bool {
+        host.hasSuffix(".ts.net")
+    }
+
+    /// RFC 1918, loopback, link-local and the 100.64.0.0/10 CGNAT range Tailscale assigns from.
+    nonisolated private static func isPrivateIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        let octets = parts.compactMap { Int($0) }
+        guard parts.count == 4, octets.count == 4, octets.allSatisfy({ (0...255).contains($0) }) else { return false }
         switch (octets[0], octets[1]) {
         case (10, _), (127, _), (192, 168), (169, 254): return true
         case (172, let b) where (16...31).contains(b): return true
@@ -347,12 +381,19 @@ actor AudiobookshelfClient {
         }
     }
 
+    /// Loopback, link-local (fe80::/10), unique-local (fc00::/7, incl. Tailscale's fd7a:115c:a1e0::/48).
+    nonisolated private static func isPrivateIPv6(_ host: String) -> Bool {
+        let address = host.split(separator: "%").first.map(String.init) ?? host   // drop zone id
+        if address == "::1" { return true }
+        guard let first = address.split(separator: ":", omittingEmptySubsequences: false).first,
+              !first.isEmpty, let word = UInt16(first, radix: 16) else { return false }
+        return word & 0xFE00 == 0xFC00 || word & 0xFFC0 == 0xFE80
+    }
+
     nonisolated private static func mapped(_ error: URLError) -> AudiobookshelfError {
         switch error.code {
         case .notConnectedToInternet, .dataNotAllowed, .internationalRoamingOff:
             return .offline
-        case .appTransportSecurityRequiresSecureConnection:
-            return .insecureConnection
         case .badURL, .unsupportedURL:
             return .invalidServerURL
         default:

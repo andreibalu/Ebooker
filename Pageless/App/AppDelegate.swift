@@ -114,10 +114,23 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             in: .userDomainMask
         ).first!
         try? FileManager.default.createDirectory(at: supportURL, withIntermediateDirectories: true)
-        let syncedStoreURL = supportURL.appendingPathComponent("default.store")
-        let localStoreURL = supportURL.appendingPathComponent("librivox-catalog.store")
+        #if DEBUG
+        let storeDirectory: URL
+        if E2EFixtures.enabled {
+            do { storeDirectory = try E2EFixtures.storeDirectory(in: supportURL) }
+            catch { fatalError("Could not prepare E2E stores: \(error)") }
+        } else { storeDirectory = supportURL }
+        #else
+        let storeDirectory = supportURL
+        #endif
+        let syncedStoreURL = storeDirectory.appendingPathComponent("default.store")
+        let localStoreURL = storeDirectory.appendingPathComponent("librivox-catalog.store")
 
+        #if DEBUG
+        let syncEnabled = !E2EFixtures.enabled && IcloudSyncGate.isEnabled()
+        #else
         let syncEnabled = IcloudSyncGate.isEnabled()
+        #endif
         let syncedConfiguration = ModelConfiguration(
             "synced",
             schema: syncedSchema,
@@ -145,9 +158,26 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         self.audioPlayer = AudioPlayerManager()
         self.freeBookDownloader = FreeBookDownloadService()
+        #if DEBUG
+        if E2EFixtures.enabled {
+            // Resetting the fixture database must also discard jobs referencing its old IDs.
+            self.libriVoxDownloadCoordinator = LibriVoxBackgroundDownloadCoordinator(
+                modelContext: modelContainer.mainContext,
+                store: LibriVoxDownloadManifestStore(
+                    rootURL: storeDirectory.appendingPathComponent("DownloadJobs", isDirectory: true)
+                ),
+                fileManager: .default
+            )
+        } else {
+            self.libriVoxDownloadCoordinator = LibriVoxBackgroundDownloadCoordinator(
+                modelContext: modelContainer.mainContext
+            )
+        }
+        #else
         self.libriVoxDownloadCoordinator = LibriVoxBackgroundDownloadCoordinator(
             modelContext: modelContainer.mainContext
         )
+        #endif
         self.libriVoxDownloadRuntime = LibriVoxDownloadRuntime(
             coordinator: libriVoxDownloadCoordinator,
             activityController: DownloadLiveActivityController(),
@@ -156,6 +186,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         super.init()
         AppDelegate.shared = self
 
+        #if DEBUG
+        if E2EFixtures.enabled {
+            do { try E2EFixtures.seedIfNeeded(modelContainer.mainContext) }
+            catch { fatalError("Could not seed E2E fixtures: \(error)") }
+        }
+        #endif
         FingerprintBackfillService.runIfNeeded(modelContainer: modelContainer)
         OrphanDetectionService.runIfNeeded(modelContainer: modelContainer)
 

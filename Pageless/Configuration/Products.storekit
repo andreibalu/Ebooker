@@ -103,8 +103,8 @@
           "groupNumber" : 2,
           "internalID" : "F2A3B4C5-D6E7-489A-8BCD-EF0123456789",
           "introductoryOffer" : {
-            "numberOfPeriods" : 1,
-            "paymentMode" : "freeTrial",
+            "internalID" : "AD4F341D-C1BC-4CFF-A668-2BE006B6DA7E",
+            "paymentMode" : "free",
             "subscriptionPeriod" : "P1W"
           },
           "localizations" : [
@@ -132,8 +132,8 @@
           "groupNumber" : 2,
           "internalID" : "A3B4C5D6-E7F8-49AB-8CDE-F0123456789A",
           "introductoryOffer" : {
-            "numberOfPeriods" : 1,
-            "paymentMode" : "freeTrial",
+            "internalID" : "D62A1042-01EB-4F37-9C6D-5FEC4743D931",
+            "paymentMode" : "free",
             "subscriptionPeriod" : "P1W"
           },
           "localizations" : [

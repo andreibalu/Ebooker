@@ -7,7 +7,7 @@ import Foundation
 
 // MARK: - Genre model
 
-struct LibriVoxAPIGenre: Decodable {
+nonisolated struct LibriVoxAPIGenre: Decodable, Sendable {
     let id: String
     let name: String
 
@@ -36,7 +36,7 @@ struct LibriVoxAPIGenre: Decodable {
 /// matches nothing, or an HTML maintenance page on server hiccups — and the strict decoders
 /// below would otherwise surface that confusing message. `URLError` is intentionally NOT
 /// wrapped here so the view model's offline classification still works.
-enum LibriVoxAPIError: LocalizedError {
+nonisolated enum LibriVoxAPIError: LocalizedError {
     case serverUnavailable(status: Int)
     case unreadableResponse
 
@@ -52,7 +52,7 @@ enum LibriVoxAPIError: LocalizedError {
 
 // MARK: - Response envelopes
 
-private struct CatalogResponse: Decodable {
+private nonisolated struct CatalogResponse: Decodable {
     let books: [LibriVoxAPIBook]?
 }
 
@@ -62,13 +62,13 @@ private struct TracksResponse: Decodable {
 
 /// LibriVox returns this shape (with HTTP 200) when a query matches nothing, e.g.
 /// `{"error": "Audiobooks could not be found"}`. Treated as an empty result, not a failure.
-private struct LibriVoxErrorEnvelope: Decodable {
+private nonisolated struct LibriVoxErrorEnvelope: Decodable {
     let error: String
 }
 
 // MARK: - API models
 
-struct LibriVoxAPIBook: Decodable {
+nonisolated struct LibriVoxAPIBook: Decodable, Sendable {
     let id: String
     let title: String
     let description: String
@@ -148,7 +148,7 @@ struct LibriVoxAPIBook: Decodable {
     }
 }
 
-struct LibriVoxAPIAuthor: Decodable {
+nonisolated struct LibriVoxAPIAuthor: Decodable, Sendable {
     let firstName: String?
     let lastName: String?
 
@@ -215,8 +215,20 @@ struct LibriVoxAPITrack: Decodable {
 
 // MARK: - Client
 
-enum LibriVoxAPIClient {
-    private static let baseURL = "https://librivox.org/api/feed"
+nonisolated enum LibriVoxAPIClient {
+    private static let baseURL: String = {
+        #if DEBUG
+        // E2E runs point the client at a local fake feed so downloads, retries and
+        // catalog shapes are deterministic. Only honored alongside the fixture store.
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-e2e-fixture"),
+           let index = arguments.firstIndex(of: "-e2e-librivox-feed"),
+           arguments.indices.contains(index + 1) {
+            return arguments[index + 1]
+        }
+        #endif
+        return "https://librivox.org/api/feed"
+    }()
 
     private static let catalogFields: [URLQueryItem] = [
         // The feed silently omits `genres` from responses unless extended=1 is set,
@@ -247,26 +259,32 @@ enum LibriVoxAPIClient {
         return try await fetchBooks(queryItems: items)
     }
 
-    /// Fetches books newly cataloged since the timestamp, paginating until exhausted.
-    static func fetchCatalogSince(timestamp: Date) async throws -> [LibriVoxAPIBook] {
+    /// Fetches one page of books cataloged since the timestamp. The incremental sync
+    /// pages through these itself so each page is committed as it arrives.
+    static func fetchCatalogSincePage(timestamp: Date, offset: Int) async throws -> [LibriVoxAPIBook] {
         let unix = Int(timestamp.timeIntervalSince1970)
-        var allBooks: [LibriVoxAPIBook] = []
-        var offset = 0
-        while true {
-            var items: [URLQueryItem] = [
-                URLQueryItem(name: "format", value: "json"),
-                URLQueryItem(name: "limit", value: "50"),
-                URLQueryItem(name: "offset", value: "\(offset)"),
-                URLQueryItem(name: "since", value: "\(unix)"),
-            ]
-            items.append(contentsOf: catalogFields)
-            let page = try await fetchBooks(queryItems: items)
-            guard !page.isEmpty else { break }
-            allBooks.append(contentsOf: page)
-            if page.count < 50 { break }
-            offset += page.count
-        }
-        return allBooks
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "limit", value: "50"),
+            URLQueryItem(name: "offset", value: "\(offset)"),
+            URLQueryItem(name: "since", value: "\(unix)"),
+        ]
+        items.append(contentsOf: catalogFields)
+        return try await fetchBooks(queryItems: items)
+    }
+
+    /// Browses one LibriVox genre through the feed's `genre` parameter. The feed rejects
+    /// `genre` combined with `title`/`author` (HTTP 500), and has no language or length
+    /// parameter, so callers narrow those dimensions locally.
+    static func browseGenre(_ genre: String, limit: Int = 100) async throws -> [LibriVoxAPIBook] {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "genre", value: genre),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "0"),
+        ]
+        items.append(contentsOf: catalogFields)
+        return try await fetchBooks(queryItems: items)
     }
 
     /// Searches LibriVox's feed by title and author concurrently. The feed exposes
@@ -359,6 +377,7 @@ enum LibriVoxAPIClient {
     }
 
     /// Fetches all tracks for a LibriVox project ID.
+    @MainActor
     static func fetchTracks(projectID: String) async throws -> [LibriVoxAPITrack] {
         var components = URLComponents(string: "\(baseURL)/audiotracks")!
         components.queryItems = [
@@ -373,21 +392,50 @@ enum LibriVoxAPIClient {
 
     // MARK: - Private
 
+    /// `@concurrent` so the JSON decode of a catalog page never runs on the main actor.
+    @concurrent
     private static func fetchBooks(queryItems: [URLQueryItem]) async throws -> [LibriVoxAPIBook] {
-        var components = URLComponents(string: "\(baseURL)/audiobooks")!
-        components.queryItems = queryItems
-        guard let url = components.url else { throw URLError(.badURL) }
-        let data = try await fetchData(from: url)
+        guard let url = audiobooksURL(queryItems: queryItems) else { throw URLError(.badURL) }
+        let data = try await fetchData(from: url, allowsMissingBooks: true)
         return try decode(data) { (r: CatalogResponse) in r.books }
+    }
+
+    /// `URLComponents.queryItems` leaves `&`, `=` and `+` unescaped inside values, which
+    /// splits genre names like "Action & Adventure" (and searches containing `&`) into
+    /// bogus parameters. Encode every name and value strictly instead.
+    static func audiobooksURL(queryItems: [URLQueryItem]) -> URL? {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=+?#")
+        var components = URLComponents(string: "\(baseURL)/audiobooks")
+        components?.percentEncodedQueryItems = queryItems.map { item in
+            URLQueryItem(
+                name: item.name.addingPercentEncoding(withAllowedCharacters: allowed) ?? item.name,
+                value: item.value?.addingPercentEncoding(withAllowedCharacters: allowed)
+            )
+        }
+        return components?.url
     }
 
     /// Performs the request and validates the HTTP status. `URLError`s (offline, timeout,
     /// DNS) propagate untouched so callers can classify connectivity problems; any non-2xx
-    /// status becomes a friendly `LibriVoxAPIError.serverUnavailable`.
-    private static func fetchData(from url: URL) async throws -> Data {
+    /// status becomes a friendly `LibriVoxAPIError.serverUnavailable`, except the
+    /// catalog's exact HTTP 404 no-match sentinel.
+    private static func fetchData(from url: URL, allowsMissingBooks: Bool = false) async throws -> Data {
         let (data, response) = try await URLSession.shared.data(from: url)
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw LibriVoxAPIError.serverUnavailable(status: http.statusCode)
+        guard let http = response as? HTTPURLResponse else { return data }
+        return try validatedResponseData(data, statusCode: http.statusCode,
+                                         allowsMissingBooks: allowsMissingBooks)
+    }
+
+    static func validatedResponseData(_ data: Data, statusCode: Int,
+                                      allowsMissingBooks: Bool = false) throws -> Data {
+        if statusCode == 404, allowsMissingBooks,
+           let envelope = try? JSONDecoder().decode(LibriVoxErrorEnvelope.self, from: data),
+           envelope.error == "Audiobooks could not be found" {
+            return Data(#"{"books":[]}"#.utf8)
+        }
+        guard (200..<300).contains(statusCode) else {
+            throw LibriVoxAPIError.serverUnavailable(status: statusCode)
         }
         return data
     }
@@ -417,12 +465,17 @@ enum LibriVoxAPIClient {
 @MainActor
 protocol LibriVoxRemoteSearching {
     func search(query: String) async throws -> [LibriVoxAPIBook]
+    func browse(genre: String) async throws -> [LibriVoxAPIBook]
     func fetchBook(id: String) async throws -> LibriVoxAPIBook?
 }
 
 struct LiveLibriVoxRemoteSearch: LibriVoxRemoteSearching {
     func search(query: String) async throws -> [LibriVoxAPIBook] {
         try await LibriVoxAPIClient.searchBooks(query: query)
+    }
+
+    func browse(genre: String) async throws -> [LibriVoxAPIBook] {
+        try await LibriVoxAPIClient.browseGenre(genre)
     }
 
     func fetchBook(id: String) async throws -> LibriVoxAPIBook? {

@@ -42,6 +42,19 @@ final class ABSConnectViewModel {
     var mode: Mode = .signIn
     private(set) var isConnecting = false
     private(set) var error: FieldError?
+    /// Set when the address is plain http to a public host: the sheet must ask before any
+    /// credential is sent. Cleared by `confirmInsecureServer()` / `cancelInsecureServer()`.
+    private(set) var insecureServerWarning: InsecureServerWarning?
+    /// The plain-http address the person agreed to; editing the server field invalidates it.
+    private var acknowledgedInsecureURL: URL?
+
+    struct InsecureServerWarning: Equatable {
+        let host: String
+        var message: String { ABSConnectViewModel.insecureServerMessage }
+    }
+
+    static let insecureServerTitle = "This server isn't using HTTPS"
+    static let insecureServerMessage = "Your password and listening activity will be sent unencrypted. Only continue if you trust the network between this iPhone and the server."
 
     init(serverText: String = "") {
         self.serverText = serverText
@@ -98,6 +111,13 @@ final class ABSConnectViewModel {
             error = FieldError(field: .server, message: "You're offline. Connect to Wi‑Fi or cellular and try again.")
             return false
         }
+        // Warn once per server: skip it for the address already accepted in this sheet, and for
+        // the server that is already connected (the person agreed when they first connected).
+        if AudiobookshelfClient.needsInsecureConnectionWarning(url),
+           url != acknowledgedInsecureURL, url != account.summary?.baseURL {
+            insecureServerWarning = InsecureServerWarning(host: Self.displayHost(url))
+            return false
+        }
 
         isConnecting = true
         defer { isConnecting = false }
@@ -120,6 +140,17 @@ final class ABSConnectViewModel {
         }
     }
 
+    /// The person chose Continue on the plain-http warning; the caller submits again.
+    func confirmInsecureServer() {
+        guard insecureServerWarning != nil else { return }
+        insecureServerWarning = nil
+        acknowledgedInsecureURL = try? AudiobookshelfClient.serverURL(from: serverText)
+    }
+
+    func cancelInsecureServer() {
+        insecureServerWarning = nil
+    }
+
     static let invalidAddressMessage = "That doesn't look like a server address. Try something like https://abs.example.com."
 
     static func fieldError(for error: Error, mode: Mode, host: String) -> FieldError {
@@ -127,11 +158,9 @@ final class ABSConnectViewModel {
         case .invalidServerURL?:
             return FieldError(field: .server, message: invalidAddressMessage)
         case .unreachableServer?:
-            return FieldError(field: .server, message: "Can't reach \(host). Check the address, and that the server is running and reachable from this iPhone.")
+            return FieldError(field: .server, message: unreachableMessage(host: host))
         case .offline?:
             return FieldError(field: .server, message: "You're offline. Connect to Wi‑Fi or cellular and try again.")
-        case .insecureConnection?:
-            return FieldError(field: .server, message: "Plain http:// only works for servers on your local network. Use your server's https:// address.")
         case .notAudiobookshelfServer?:
             return FieldError(field: .server, message: "\(host) answered, but it isn't an Audiobookshelf server. Check the address.")
         case .inactiveAPIKey?:
@@ -145,6 +174,19 @@ final class ABSConnectViewModel {
         default:
             return FieldError(field: .server, message: "\(host) sent a reply Unpaged couldn't read. Check that it's an Audiobookshelf server.")
         }
+    }
+
+    /// Names the likely cause for a VPN address (Tailscale switched off is the common one).
+    static func unreachableMessage(host: String) -> String {
+        let bareHost = host.hasPrefix("[") ? host : String(host.split(separator: ":").first ?? Substring(host))
+        let lower = bareHost.lowercased()
+        let isTailnet = lower.hasSuffix(".ts.net")
+            || (lower.hasPrefix("100.") && lower.split(separator: ".").count == 4
+                && (64...127).contains(Int(lower.split(separator: ".")[1]) ?? 0))
+        if isTailnet {
+            return "Can't reach \(host). Make sure Tailscale is on and connected on this iPhone, and that the server is running."
+        }
+        return "Can't reach \(host). Check the address, that the server is running, and that this iPhone is on the same network or VPN."
     }
 
     static func displayHost(_ url: URL) -> String {
@@ -253,7 +295,7 @@ final class ABSBrowseViewModel {
     static func phase(for error: Error) -> Phase {
         switch error as? AudiobookshelfError {
         case .offline?: return .offline
-        case .unreachableServer?, .insecureConnection?: return .unreachable
+        case .unreachableServer?: return .unreachable
         case .notConnected?, .badCredentials?, .expiredToken?, .inactiveAPIKey?: return .signedOut
         case .serverError(let status)? where status >= 500: return .unreachable
         default: return .failed("The server sent something Unpaged couldn't read.")

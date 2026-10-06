@@ -9,7 +9,7 @@
 //
 //  Requirement A — identical on every device/iOS version: a fixed 402pt content column (centered on
 //  wider screens), fixed point sizes throughout, a `.dynamicTypeSize(.large)` clamp so accessibility
-//  text sizing never reflows layout, and the app's own light/dark theme via `preferredColorScheme`.
+//  text sizing never reflows layout, and the app's own light/dark theme (applied at the window by `AppAppearance`).
 //
 
 import AVFoundation
@@ -20,7 +20,6 @@ struct OnboardingFlowView: View {
     let onFinish: (LibraryTab) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("forceDarkMode") private var forceDarkMode = false
 
     // Live bindings to the same preferences the Settings screen exposes.
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
@@ -50,55 +49,56 @@ struct OnboardingFlowView: View {
     }
 
     var body: some View {
-        ScrollView(.vertical) {
-            LazyVStack(spacing: 0) {
-                scene(0) {
-                    OBChoiceScene(isActive: isActive(0), reduceMotion: reduceMotion,
-                                  choice: $choice, onPicked: { jump(to: 1) })
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    scene(0) {
+                        OBChoiceScene(isActive: isActive(0), reduceMotion: reduceMotion,
+                                      choice: $choice, onPicked: { jump(to: 1, using: proxy) })
+                    }
+                    scene(1) {
+                        OBPermissionsScene(isActive: isActive(1), reduceMotion: reduceMotion,
+                                           micGranted: $micGranted,
+                                           speechGranted: $speechGranted,
+                                           onAllGranted: { advancePastPermissions(using: proxy) })
+                    }
+                    scene(2) {
+                        OBPlaybackScene(isActive: isActive(2), reduceMotion: reduceMotion,
+                                        resume: $resumeBacktrackSeconds,
+                                        skipBack: $skipBackSeconds,
+                                        skipForward: $skipForwardSeconds,
+                                        moment: $momentBacktrackSeconds)
+                    }
+                    scene(3) {
+                        OBStatsScene(isActive: isActive(3), reduceMotion: reduceMotion)
+                    }
+                    scene(4) {
+                        OBIntelligenceScene(isActive: isActive(4), reduceMotion: reduceMotion)
+                    }
+                    scene(5) {
+                        OBCloudScene(isActive: isActive(5), reduceMotion: reduceMotion)
+                    }
+                    scene(6) {
+                        OBDoneScene(isActive: isActive(6), reduceMotion: reduceMotion,
+                                    choice: choice,
+                                    micGranted: micGranted,
+                                    speechGranted: speechGranted,
+                                    resume: resumeBacktrackSeconds,
+                                    skipBack: skipBackSeconds,
+                                    skipForward: skipForwardSeconds,
+                                    moment: momentBacktrackSeconds,
+                                    onOpen: finish)
+                    }
                 }
-                scene(1) {
-                    OBPermissionsScene(isActive: isActive(1), reduceMotion: reduceMotion,
-                                       micGranted: $micGranted,
-                                       speechGranted: $speechGranted,
-                                       onAllGranted: advancePastPermissions)
-                }
-                scene(2) {
-                    OBPlaybackScene(isActive: isActive(2), reduceMotion: reduceMotion,
-                                    resume: $resumeBacktrackSeconds,
-                                    skipBack: $skipBackSeconds,
-                                    skipForward: $skipForwardSeconds,
-                                    moment: $momentBacktrackSeconds)
-                }
-                scene(3) {
-                    OBStatsScene(isActive: isActive(3), reduceMotion: reduceMotion)
-                }
-                scene(4) {
-                    OBIntelligenceScene(isActive: isActive(4), reduceMotion: reduceMotion)
-                }
-                scene(5) {
-                    OBCloudScene(isActive: isActive(5), reduceMotion: reduceMotion)
-                }
-                scene(6) {
-                    OBDoneScene(isActive: isActive(6), reduceMotion: reduceMotion,
-                                choice: choice,
-                                micGranted: micGranted,
-                                speechGranted: speechGranted,
-                                resume: resumeBacktrackSeconds,
-                                skipBack: skipBackSeconds,
-                                skipForward: skipForwardSeconds,
-                                moment: momentBacktrackSeconds,
-                                onOpen: finish)
-                }
+                .scrollTargetLayout()
             }
-            .scrollTargetLayout()
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $activeID, anchor: .center)
+            .scrollIndicators(.hidden)
+            .background(Color.cream.ignoresSafeArea())
+            .overlay(alignment: .trailing) { progressRail(using: proxy) }
+            .dynamicTypeSize(.large)
         }
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $activeID, anchor: .center)
-        .scrollIndicators(.hidden)
-        .background(Color.cream.ignoresSafeArea())
-        .overlay(alignment: .trailing) { progressRail }
-        .dynamicTypeSize(.large)
-        .preferredColorScheme(forceDarkMode ? .dark : nil)
     }
 
     private func scene<Content: View>(_ index: Int, @ViewBuilder content: () -> Content) -> some View {
@@ -109,12 +109,12 @@ struct OnboardingFlowView: View {
 
     // MARK: - Progress rail
 
-    private var progressRail: some View {
-        VStack(spacing: 9) {
+    private func progressRail(using proxy: ScrollViewProxy) -> some View {
+        VStack(spacing: 1) {
             ForEach(0..<sceneCount, id: \.self) { i in
                 let on = isActive(i)
                 Button {
-                    jump(to: i)
+                    jump(to: i, using: proxy)
                 } label: {
                     Circle()
                         .fill(on ? OB.accent : OB.fill(0.25))
@@ -126,10 +126,13 @@ struct OnboardingFlowView: View {
                                 .opacity(on ? 1 : 0)
                         )
                         .frame(width: 14, height: 14)
+                        // Wider targets preserve the original 23pt dot spacing and position.
+                        .frame(width: 44, height: 22, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(Self.sceneLabels[i])
+                .accessibilityIdentifier("onboarding.page.\(i)")
                 .animation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection, value: on)
             }
         }
@@ -138,20 +141,24 @@ struct OnboardingFlowView: View {
 
     // MARK: - Navigation
 
-    private func jump(to index: Int) {
+    private func jump(to index: Int, using proxy: ScrollViewProxy) {
+        // The proxy moves the page; a programmatic scrollTo does not write the position
+        // binding back, so set it too, or the reveals, auto-advance and rail stay on the old page.
         guard !reduceMotion else {
+            proxy.scrollTo(index, anchor: .center)
             activeID = index
             return
         }
         withAnimation(Animation.timingCurve(0.77, 0, 0.175, 1, duration: 0.45)) {
+            proxy.scrollTo(index, anchor: .center)
             activeID = index
         }
     }
 
     /// Auto-advance after both permissions land — but only if the user is still on the scene.
-    private func advancePastPermissions() {
+    private func advancePastPermissions(using proxy: ScrollViewProxy) {
         guard (activeID ?? 0) == 1 else { return }
-        jump(to: 2)
+        jump(to: 2, using: proxy)
     }
 
     private func finish() {

@@ -47,7 +47,7 @@ struct PlusPlanCopyTests {
 
         for productID in PlusProductID.all {
             let offer = try #require(offerByProductID[productID], "\(productID) has no intro offer")
-            #expect(offer["paymentMode"] as? String == "freeTrial")
+            #expect(offer["paymentMode"] as? String == "free")
             #expect(offer["subscriptionPeriod"] as? String == "P1W")
         }
     }

@@ -32,7 +32,7 @@ struct SettingsView: View {
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
     @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
-    @AppStorage("forceDarkMode") private var forceDarkMode = false
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system
 
     /// Identifies which inline playback picker (if any) is currently expanded, so only one
     /// option tray is open at a time.
@@ -57,6 +57,16 @@ struct SettingsView: View {
                             onDismissSheet: { dismiss() },
                             onShowPlusCard: showPlusCard
                         )
+                    case .plus:
+                        PlusHubScreen(
+                            backLabel: "Settings",
+                            onDismissSheet: { dismiss() },
+                            onAISettings: { navigationPath.append(.ai) },
+                            onICloudSettings: { navigationPath.append(.icloud) },
+                            onCloudLibrary: { navigationPath.append(.cloudLibrary) }
+                        )
+                    case .cloudLibrary:
+                        CloudLibraryView()
                     case .coffee:
                         BuyMeACoffeeView(onDismissSheet: { dismiss() })
                     case .audiobookshelf:
@@ -80,11 +90,11 @@ struct SettingsView: View {
 
             ScrollView {
                 LazyVStack(spacing: 22) {
-                    unlockSection
-                    supportSection
                     sourcesSection
                     playbackSection
                     appSection
+                    plusSection
+                    supportSection
                     aboutSection
                     #if DEBUG
                     developerSection
@@ -102,43 +112,81 @@ struct SettingsView: View {
             await plusEntitlement.loadProduct()
             await coffeeTip.loadProduct()
         }
-        .alert(
-            "Unpaged Plus",
-            isPresented: Binding(
-                get: { plusEntitlement.purchaseError != nil || plusEntitlement.restoreError != nil },
-                set: {
-                    if !$0 {
-                        plusEntitlement.purchaseError = nil
-                        plusEntitlement.restoreError = nil
-                    }
-                }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                plusEntitlement.purchaseError = nil
-                plusEntitlement.restoreError = nil
-            }
-        } message: {
-            Text(plusEntitlement.purchaseError ?? plusEntitlement.restoreError ?? "")
-        }
+        .plusPurchaseErrorAlert(store: plusEntitlement)
     }
 
+    /// "View Unpaged Plus" from the AI / iCloud pages: show the Plus hub inside Settings.
     private func showPlusCard() {
-        navigationPath.removeAll()
+        navigationPath = [.plus]
     }
 
     // MARK: - Unpaged Plus
 
-    private var unlockSection: some View {
+    /// A plain entry into the Plus hub (the main entry point is the library header's Plus button)
+    /// plus the Plus features' own settings pages.
+    private var plusSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsSectionHeader(eyebrow: "Membership", title: "Go further with Plus.")
-            UnpagedPlusCard(
-                store: plusEntitlement,
-                includesAI: !hideAIEntirely,
-                onAISettings: { navigationPath.append(.ai) },
-                onICloudSettings: { navigationPath.append(.icloud) }
-            )
+            SettingsSectionHeader(eyebrow: "Plus", title: "Membership & features.")
+
+            SettingsCard {
+                VStack(spacing: 0) {
+                    navigationRow(
+                        title: "Unpaged Plus",
+                        caption: plusEntitlement.isPlus ? "Active" : "Plans, status and restore",
+                        symbol: "sparkles",
+                        destination: .plus,
+                        identifier: "settings.plus"
+                    )
+                    if !hideAIEntirely {
+                        SettingsHairline().padding(.leading, 50)
+                        navigationRow(
+                            title: "Apple Intelligence",
+                            caption: "Choose which local AI features to use",
+                            symbol: "wand.and.sparkles",
+                            destination: .ai,
+                            identifier: "settings.ai"
+                        )
+                    }
+                    SettingsHairline().padding(.leading, 50)
+                    navigationRow(
+                        title: "iCloud Sync",
+                        caption: "Manage your library sync settings",
+                        symbol: "icloud",
+                        destination: .icloud,
+                        identifier: "settings.icloud"
+                    )
+                }
+            }
         }
+    }
+
+    private func navigationRow(
+        title: String,
+        caption: String,
+        symbol: String,
+        destination: SettingsDestination,
+        identifier: String
+    ) -> some View {
+        NavigationLink(value: destination) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color.amber)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                SettingsRowLabel(title: title, caption: caption)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(SettingsDesign.tertiaryLabel)
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
     }
 
     private var supportSection: some View {
@@ -302,10 +350,14 @@ struct SettingsView: View {
 
     private var appSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SettingsSectionHeader(eyebrow: "App", title: "Tour & appearance.")
+            SettingsSectionHeader(eyebrow: "App", title: "Appearance & tour.")
 
             SettingsCard {
                 VStack(spacing: 0) {
+                    AppearanceRow(appearance: $appearance)
+
+                    SettingsHairline()
+
                     actionRow(
                         title: "Reset Onboarding",
                         caption: "Show the welcome walkthrough again",
@@ -325,20 +377,6 @@ struct SettingsView: View {
                     } message: {
                         Text("The onboarding walkthrough will start again from the beginning.")
                     }
-
-                    SettingsHairline()
-
-                    HStack(spacing: 12) {
-                        SettingsRowLabel(
-                            title: "Dark Mode",
-                            caption: "Switch the entire app to a darker palette"
-                        )
-                        Spacer(minLength: 8)
-                        Toggle("", isOn: $forceDarkMode)
-                            .labelsHidden()
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
                 }
             }
         }
@@ -458,6 +496,8 @@ enum SettingsDestination: Hashable {
     case icloud
     case coffee
     case audiobookshelf
+    case plus
+    case cloudLibrary
 }
 
 // MARK: - Inline expanding option picker (replaces the pushed option list)
@@ -509,6 +549,8 @@ private struct SettingsInlinePicker<Option: Identifiable & RawRepresentable>: Vi
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.picker.\(title)")
+            .accessibilityValue(currentTitle)
 
             if isExpanded {
                 VStack(spacing: 2) {
@@ -621,6 +663,62 @@ private struct HomeTabRow: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("settings.home.\(title)")
+    }
+}
+
+// MARK: - Appearance selector
+
+/// System / Light / Dark, styled like `HomeTabRow`. Stored under `AppAppearance.storageKey` and
+/// applied at the window by `PagelessApp`, so every option works whatever the phone is set to.
+private struct AppearanceRow: View {
+    @Binding var appearance: AppAppearance
+    @Namespace private var pill
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsRowLabel(
+                title: "Appearance",
+                caption: "Follow your iPhone, or always use light or dark"
+            )
+
+            HStack(spacing: 4) {
+                ForEach(AppAppearance.allCases) { option in
+                    segment(option)
+                }
+            }
+            .padding(4)
+            .background {
+                Capsule()
+                    .fill(Color.amber)
+                    .matchedGeometryEffect(id: appearance, in: pill, isSource: false)
+            }
+            .background(SettingsDesign.chipFill, in: Capsule())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+    }
+
+    private func segment(_ option: AppAppearance) -> some View {
+        let isOn = appearance == option
+        return Button {
+            withAnimation(.snappy(duration: 0.22, extraBounce: 0.04)) { appearance = option }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: option.symbolName)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(option.title)
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundStyle(isOn ? .white : SettingsDesign.secondaryLabel)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 9)
+            .matchedGeometryEffect(id: option, in: pill, isSource: true)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("settings.appearance.\(option.rawValue)")
+        .accessibilityAddTraits(isOn ? .isSelected : [])
     }
 }
 

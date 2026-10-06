@@ -110,7 +110,7 @@ struct ContentView: View {
     @State private var playerTeardownTask: Task<Void, Never>?
     @State private var playerDismissGeneration: UInt = 0
     @State private var isSettingsPresented = false
-    @State private var isCloudLibraryPresented = false
+    @State private var isPlusHubPresented = false
     @State private var downloadScrollRequest = 0
     @State private var selectedLibraryDownloadBook: LibriVoxBook?
     private let gridColumns = [GridItem(.adaptive(minimum: 160, maximum: 260), spacing: 16)]
@@ -207,10 +207,8 @@ struct ContentView: View {
                 selectedTab = .freeBooks
             }
         }
-        .sheet(isPresented: $isCloudLibraryPresented) {
-            NavigationStack {
-                CloudLibraryView()
-            }
+        .sheet(isPresented: $isPlusHubPresented) {
+            PlusHubView()
             .environmentObject(player)
             .environmentObject(plusEntitlementStore)
             .environment(onboarding)
@@ -297,7 +295,14 @@ struct ContentView: View {
         )) {
             TextField("Book title", text: $viewModel.renameTitleInput)
             Button("Save") {
+                let book = viewModel.renameCandidate
+                let previousTitle = book?.title
                 viewModel.commitRename()
+                do { try modelContext.save() }
+                catch {
+                    if let previousTitle { book?.title = previousTitle }
+                    viewModel.presentAlert(title: "Could Not Rename Audiobook", message: error.localizedDescription)
+                }
             }
             Button("Cancel", role: .cancel) {
                 viewModel.renameCandidate = nil
@@ -363,7 +368,7 @@ struct ContentView: View {
             playerDismissGeneration &+= 1
             isPlayerVisible = false
             isSettingsPresented = false
-            isCloudLibraryPresented = false
+            isPlusHubPresented = false
             selectedTab = .allBooks
             downloadScrollRequest &+= 1
             router.consume(.downloads)
@@ -392,15 +397,17 @@ struct ContentView: View {
             Spacer()
 
             HStack(spacing: 6) {
-                // iCloud Library — only for users whose sync store is active this launch.
-                // Opens the full backed-up library.
-                if IcloudSyncGate.isEnabled() {
-                    Button {
-                        isCloudLibraryPresented = true
-                    } label: {
-                        toolbarIconButton(systemName: "icloud")
-                    }
+                // Unpaged Plus hub — always shown. It is the purchase entry point (keeps the iCloud
+                // Sync purchase reachable without iCloud sign-in, Apple 3.1.1) and, for users whose
+                // sync is on, holds the iCloud Library.
+                Button {
+                    isPlusHubPresented = true
+                } label: {
+                    toolbarIconButton(systemName: "sparkles")
+                        .foregroundStyle(Color.amber)
                 }
+                .accessibilityLabel("Unpaged Plus")
+                .accessibilityIdentifier("plusButton")
 
                 Button {
                     isSettingsPresented = true
@@ -410,10 +417,25 @@ struct ContentView: View {
                 .accessibilityIdentifier("settingsButton")
 
                 Button {
+                    #if DEBUG
+                    if E2EFixtures.enabled,
+                       ProcessInfo.processInfo.arguments.contains("-e2e-import") {
+                        do {
+                            viewModel.handleImportSelection(.success([try E2EFixtures.importSource()]),
+                                                            modelContext: modelContext)
+                        } catch {
+                            viewModel.handleImportSelection(.failure(error), modelContext: modelContext)
+                        }
+                    } else {
+                        isImporterPresented = true
+                    }
+                    #else
                     isImporterPresented = true
+                    #endif
                 } label: {
                     toolbarIconButton(systemName: "plus")
                 }
+                .accessibilityIdentifier("importButton")
             }
         }
     }
@@ -442,7 +464,7 @@ struct ContentView: View {
     /// Settings → Audiobookshelf → "Open in Shelves": close Settings and show the server's shelf.
     private func openAudiobookshelfShelves() {
         isSettingsPresented = false
-        isCloudLibraryPresented = false
+        isPlusHubPresented = false
         if absAccount.isConnected {
             storedShelvesSourceID = BookSourceRegistry.audiobookshelfID
         }
@@ -559,6 +581,7 @@ struct ContentView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .accessibilityIdentifier(tab == .favorites ? "favoritesTab" : "libraryTab")
     }
 
     private func tabColumn(title: String, isSelected: Bool, showsChevron: Bool) -> some View {
@@ -674,6 +697,7 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("readingActivity")
         }
     }
 
@@ -691,6 +715,7 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("book.card.\(audiobook.folderName)")
         .contextMenu {
             Button("Resume", systemImage: "play.fill") {
                 if audiobook.isStreamingOnly {
@@ -705,7 +730,13 @@ struct ContentView: View {
             }
 
             Button(audiobook.isFavorite ? "Unfavorite" : "Favorite", systemImage: audiobook.isFavorite ? "heart.slash" : "heart") {
+                let previous = audiobook.isFavorite
                 audiobook.isFavorite.toggle()
+                do { try modelContext.save() }
+                catch {
+                    audiobook.isFavorite = previous
+                    viewModel.presentAlert(title: "Could Not Save Favorite", message: error.localizedDescription)
+                }
             }
 
             if !audiobook.isFreeBook {

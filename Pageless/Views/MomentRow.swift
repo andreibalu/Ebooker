@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 import UIKit
 
@@ -12,6 +13,7 @@ struct MomentRow: View {
     let openPlayer: () -> Void
     let onDelete: () -> Void
 
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
     @State private var isEditing = false
     @State private var editNameInput = ""
@@ -105,6 +107,7 @@ struct MomentRow: View {
                     moment.quoteLine = (trimmedQuote?.isEmpty ?? true) ? nil : trimmedQuote
                     moment.characters = editCharacters
                     moment.mood = editMood
+                    try? modelContext.save()
                     isEditing = false
                 },
                 onCancel: { isEditing = false }
@@ -141,6 +144,7 @@ struct MomentRow: View {
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 moment.isPinned.toggle()
+                try? modelContext.save()
             } label: {
                 Image(systemName: moment.isPinned ? "pin.fill" : "flag.fill")
                     .font(.caption.weight(.medium))

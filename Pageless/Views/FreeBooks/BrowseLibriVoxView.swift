@@ -62,7 +62,6 @@ struct BrowseLibriVoxView: View {
     let viewModel: BrowseLibriVoxViewModel
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.scenePhase) private var scenePhase
     @Environment(LibriVoxDownloadManager.self) private var downloadManager
 
     @AppStorage("freeBooksCollectionsHidden") private var collectionsHiddenStored = false
@@ -90,16 +89,6 @@ struct BrowseLibriVoxView: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
 
-                if !viewModel.filtersAvailable {
-                    Text("Filters available when offline search is ready.")
-                        .font(.system(size: FBType.body, design: .serif))
-                        .italic()
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 5)
-                }
-
                 statusLine
 
                 contentArea
@@ -119,10 +108,10 @@ struct BrowseLibriVoxView: View {
             collectionsHidden = collectionsHiddenStored
             viewModel.triggerSyncIfNeeded(modelContext: modelContext)
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active {
-                viewModel.triggerSyncIfNeeded(modelContext: modelContext)
-            }
+        // Background/foreground pause-and-resume is handled by the view model itself (it
+        // must work while another tab is showing); here only reconnects resume a pass.
+        .onChange(of: NetworkMonitor.shared.isConnected) { _, connected in
+            if connected { viewModel.networkBecameAvailable() }
         }
     }
 
@@ -260,8 +249,6 @@ struct BrowseLibriVoxView: View {
 
             Spacer()
         }
-        .disabled(!viewModel.filtersAvailable)
-        .opacity(viewModel.filtersAvailable ? 1 : 0.45)
     }
 
     private func filterLabel(_ text: String, isSelected: Bool) -> some View {
@@ -311,6 +298,24 @@ struct BrowseLibriVoxView: View {
                     .font(.system(size: FBType.body, design: .serif))
                     .italic()
                     .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+
+        // Results from an incomplete catalog say so (and outrank the sync banner, which
+        // would otherwise hide that the list is partial).
+        } else if isSearching, viewModel.isShowingPartialResults {
+            HStack(spacing: 8) {
+                Image(systemName: viewModel.searchSource == .savedFallback ? "wifi.slash" : "tray.full")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.amber)
+                Text(partialResultsMessage)
+                    .font(.system(size: FBType.body, design: .serif))
+                    .italic()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
             }
             .padding(.horizontal, 20)
@@ -383,6 +388,19 @@ struct BrowseLibriVoxView: View {
             .padding(.horizontal, 20)
             .padding(.top, 8)
         }
+    }
+
+    private var partialResultsMessage: String {
+        let saved = LibriVoxCatalogSync.syncedBookCount
+        let scope = saved > 0
+            ? "from \(saved.formatted()) books saved so far"
+            : "from books saved so far"
+        if viewModel.searchSource == .savedFallback {
+            return "Offline — partial results \(scope)."
+        }
+        return viewModel.isLoadingFullCatalog
+            ? "Partial results \(scope) — the full catalog is still downloading."
+            : "Partial results \(scope)."
     }
 
     private var retryButton: some View {

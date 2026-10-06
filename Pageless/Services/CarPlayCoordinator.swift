@@ -4,6 +4,7 @@
 //
 
 import CarPlay
+import Combine
 import OSLog
 import SwiftData
 import UIKit
@@ -38,11 +39,14 @@ final class CarPlayCoordinator: NSObject {
     private var voiceTemplate: CPVoiceControlTemplate?
 
     private var momentButtonConfirmed = false
+    private var chaptersSubscription: AnyCancellable?
     private var progressButtonConfirmed = false
 
     private lazy var nowPlayingTemplate: CPNowPlayingTemplate = {
         let template = CPNowPlayingTemplate.shared
         template.updateNowPlayingButtons(makeNowPlayingButtons())
+        template.upNextTitle = "Chapters"
+        template.add(self)
         return template
     }()
 
@@ -65,6 +69,12 @@ final class CarPlayCoordinator: NSObject {
             self.refreshLibraryTemplates()
         }
         applyPlaybackDefaultsFromStorage()
+        // The Now Playing "Chapters" button follows the playing book's chapter list.
+        chaptersSubscription = audioPlayer.$chapters
+            .receive(on: RunLoop.main)
+            .sink { [weak self] chapters in
+                self?.nowPlayingTemplate.isUpNextButtonEnabled = chapters.count > 1
+            }
         let root = makeRootTemplate()
         interfaceController.setRootTemplate(root, animated: true) { [weak self] success, error in
             if let error {
@@ -79,6 +89,33 @@ final class CarPlayCoordinator: NSObject {
 
     func disconnect() {
         interfaceController = nil
+        chaptersSubscription = nil
+    }
+
+    // MARK: - Chapters
+
+    private func presentChapterList() {
+        guard let interfaceController else { return }
+        let chapters = audioPlayer.chapters
+        let currentIndex = audioPlayer.currentChapterIndex
+        let items: [CPListItem] = chapters.map { chapter in
+            let item = CPListItem(text: chapter.title, detailText: TimeFormatter.clockString(seconds: chapter.duration))
+            item.isPlaying = chapter.index == currentIndex
+            item.handler = { [weak self] _, completion in
+                Task { @MainActor in
+                    guard let self else { completion(); return }
+                    self.audioPlayer.playChapter(chapter)
+                    completion()
+                    self.interfaceController?.popTemplate(animated: true) { _, _ in }
+                }
+            }
+            return item
+        }
+        let template = CPListTemplate(
+            title: "Chapters",
+            sections: [CPListSection(items: items, header: nil, sectionIndexTitle: nil)]
+        )
+        interfaceController.pushTemplate(template, animated: true) { _, _ in }
     }
 
     // MARK: - Templates
@@ -748,6 +785,16 @@ extension CarPlayCoordinator: CPTabBarTemplateDelegate {
         Task { @MainActor in
             self.refreshLibraryTemplates()
             self.refreshFreeBooksTemplate()
+        }
+    }
+}
+
+// MARK: - CPNowPlayingTemplateObserver
+
+extension CarPlayCoordinator: CPNowPlayingTemplateObserver {
+    nonisolated func nowPlayingTemplateUpNextButtonTapped(_ nowPlayingTemplate: CPNowPlayingTemplate) {
+        Task { @MainActor in
+            self.presentChapterList()
         }
     }
 }

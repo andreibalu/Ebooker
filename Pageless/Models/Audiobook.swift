@@ -238,8 +238,15 @@ final class Audiobook: Identifiable {
         self._tracks = tracks
     }
 
+    /// Play order. Ties on `orderIndex` (possible in merged iCloud records) break on file name and
+    /// then id, so every caller — player, track list, CarPlay — sees the same order every time
+    /// instead of whatever order the relationship faulted in.
     var sortedTracks: [AudioTrack] {
-        tracks.sorted { $0.orderIndex < $1.orderIndex }
+        tracks.sorted { lhs, rhs in
+            if lhs.orderIndex != rhs.orderIndex { return lhs.orderIndex < rhs.orderIndex }
+            if lhs.originalFileName != rhs.originalFileName { return lhs.originalFileName < rhs.originalFileName }
+            return lhs.id.uuidString < rhs.id.uuidString
+        }
     }
 
     var listenedDuration: Double {

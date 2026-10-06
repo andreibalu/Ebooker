@@ -4,6 +4,32 @@ import Testing
 
 @MainActor
 struct LibriVoxSearchAndSyncTests {
+    @Test func catalogNoMatch404NormalizesToEmptyBooks() throws {
+        let body = Data(#"{"error":"Audiobooks could not be found"}"#.utf8)
+        let result = try LibriVoxAPIClient.validatedResponseData(
+            body, statusCode: 404, allowsMissingBooks: true
+        )
+        let payload = try #require(JSONSerialization.jsonObject(with: result) as? [String: [String]])
+        #expect(payload["books"] == [])
+    }
+
+    @Test func unrelatedHTTPFailuresRemainFailures() {
+        let knownBody = Data(#"{"error":"Audiobooks could not be found"}"#.utf8)
+        let unknownBody = Data(#"{"error":"Endpoint not found"}"#.utf8)
+        for (body, status, allowsMissingBooks) in [
+            (knownBody, 500, true),
+            (unknownBody, 404, true),
+            (Data("<html>Not found</html>".utf8), 404, true),
+            (knownBody, 404, false)
+        ] {
+            #expect(throws: LibriVoxAPIError.self) {
+                try LibriVoxAPIClient.validatedResponseData(
+                    body, statusCode: status, allowsMissingBooks: allowsMissingBooks
+                )
+            }
+        }
+    }
+
     @Test func remoteSearchMergeDeduplicatesAndRanksTitleBeforeAuthor() {
         let title = makeBook(id: "1", title: "Treasure Island", author: "Robert Louis Stevenson")
         let author = makeBook(id: "2", title: "Kidnapped", author: "Treasure Writer")

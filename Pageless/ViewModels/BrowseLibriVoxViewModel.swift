@@ -6,8 +6,9 @@
 import Foundation
 import Observation
 import SwiftData
+import UIKit
 
-enum DurationFilter: String, CaseIterable, Identifiable {
+nonisolated enum DurationFilter: String, CaseIterable, Identifiable, Sendable {
     case short     = "< 1 hr"
     case medium    = "1–3 hrs"
     case long      = "3–6 hrs"
@@ -29,17 +30,33 @@ enum DurationFilter: String, CaseIterable, Identifiable {
 @Observable
 final class BrowseLibriVoxViewModel {
     enum SearchSource: Equatable {
+        /// Live LibriVox results merged with matching cached books (catalog incomplete).
         case librivox
+        /// The complete local catalog.
         case local
+        /// Offline: only books cached so far.
         case savedFallback
+        /// Online, but the filter can't be asked of the feed (language/length only) or the
+        /// feed failed — the cached subset, which is partial while the sync runs.
+        case partialCache
     }
 
-    enum SyncState {
+    enum SyncState: Equatable {
         case idle
         case syncing(fetched: Int)
+        /// Stopped between pages because the app went to the background; resumes from the
+        /// persisted cursor on return.
+        case paused(saved: Int)
         case done
         case failed(String, isOffline: Bool)
     }
+
+    /// Runs one sync pass. Injectable so tests can count and control passes.
+    typealias SyncRunner = @MainActor (
+        _ store: LibriVoxCatalogStore,
+        _ pauseFlag: LibriVoxSyncPauseFlag,
+        _ onProgress: @escaping @MainActor @Sendable (LibriVoxSyncProgress) -> Void
+    ) async throws -> LibriVoxSyncOutcome
 
     var searchQuery: String = ""
     var searchResults: [LibriVoxBook] = []
@@ -53,17 +70,36 @@ final class BrowseLibriVoxViewModel {
 
     private let remoteSearch: any LibriVoxRemoteSearching
     private let isLocalSearchReadyProvider: () -> Bool
+    private let isSyncDueProvider: () -> Bool
+    private let isConnectedProvider: () -> Bool
+    private let syncRunner: SyncRunner
 
     init(
         remoteSearch: (any LibriVoxRemoteSearching)? = nil,
-        isLocalSearchReady: (() -> Bool)? = nil
+        isLocalSearchReady: (() -> Bool)? = nil,
+        isSyncDue: (() -> Bool)? = nil,
+        isConnected: (() -> Bool)? = nil,
+        syncRunner: SyncRunner? = nil
     ) {
         self.remoteSearch = remoteSearch ?? LiveLibriVoxRemoteSearch()
         self.isLocalSearchReadyProvider = isLocalSearchReady ?? { LibriVoxCatalogSync.isLocalSearchReady }
+        self.isSyncDueProvider = isSyncDue ?? { LibriVoxCatalogSync.isSyncDue }
+        self.isConnectedProvider = isConnected ?? { NetworkMonitor.shared.isConnected }
+        self.syncRunner = syncRunner ?? { store, pauseFlag, onProgress in
+            try await LibriVoxCatalogSync.syncIfNeeded(
+                store: store, pauseFlag: pauseFlag, onProgress: onProgress
+            )
+        }
     }
 
     var isLocalSearchReady: Bool { isLocalSearchReadyProvider() }
-    var filtersAvailable: Bool { isLocalSearchReady }
+
+    /// True when the shown results come from an incomplete catalog — the browse screen
+    /// says so instead of disabling search or filters.
+    var isShowingPartialResults: Bool {
+        guard !isLocalSearchReady else { return false }
+        return searchSource == .partialCache || searchSource == .savedFallback
+    }
 
     /// The featured chart with today's pick removed so the hero and the numbered
     /// list never show the same book twice.
@@ -88,8 +124,8 @@ final class BrowseLibriVoxViewModel {
     }
 
     /// Static fallbacks so the filter menus are never empty — shown until synced rows
-    /// carry real genre/language data (rows cached before the genres API field was added
-    /// only backfill on a refresh or reset). Names match LibriVox genre strings.
+    /// carry real genre/language data. Names match LibriVox genre strings (verified
+    /// against the feed's `genre` parameter).
     static let fallbackGenres: [String] = [
         "General Fiction", "Historical Fiction", "Science Fiction", "Fantastic Fiction",
         "Detective Fiction", "Romance", "Short Stories", "Poetry", "Children's Fiction",
@@ -102,15 +138,31 @@ final class BrowseLibriVoxViewModel {
         "English", "German", "French", "Spanish", "Italian", "Dutch", "Portuguese", "Russian"
     ]
 
-    /// What the filter menus show: catalog-derived lists when available, static fallbacks
-    /// otherwise. Genres capped to the most common 40 — the full taxonomy is 100+ entries,
-    /// too long for a usable Menu.
+    /// What the filter menus show. Catalog-derived lists once the catalog is complete;
+    /// while it is still downloading, the static list plus anything already seen, so a
+    /// partial cache never shrinks the menus. Genres capped to the 40 most common.
     var genreOptions: [String] {
-        availableGenres.isEmpty ? Self.fallbackGenres : Array(availableGenres.prefix(40))
+        guard !isLocalSearchReady else {
+            return availableGenres.isEmpty ? Self.fallbackGenres : Array(availableGenres.prefix(40))
+        }
+        return Self.merged(Self.fallbackGenres, availableGenres, cap: 40)
     }
 
     var languageOptions: [String] {
-        availableLanguages.isEmpty ? Self.fallbackLanguages : availableLanguages
+        guard !isLocalSearchReady else {
+            return availableLanguages.isEmpty ? Self.fallbackLanguages : availableLanguages
+        }
+        return Self.merged(Self.fallbackLanguages, availableLanguages, cap: nil)
+    }
+
+    private static func merged(_ base: [String], _ extra: [String], cap: Int?) -> [String] {
+        var seen = Set(base)
+        var result = base
+        for value in extra where seen.insert(value).inserted {
+            if let cap, result.count >= cap { break }
+            result.append(value)
+        }
+        return result
     }
 
     // MARK: - Sample playback URL cache
@@ -133,8 +185,12 @@ final class BrowseLibriVoxViewModel {
     }
 
     private var searchTask: Task<Void, Never>?
+    private var searchGeneration = 0
     private var syncTask: Task<Void, Never>?
     private var statusTask: Task<Void, Never>?
+    private var catalogPresentationTask: Task<Void, Never>?
+    private var lastCatalogPresentationRefresh: Date = .distantPast
+
     /// Non-blocking background preparation/update indicator.
     var isLoadingFullCatalog: Bool {
         if case .syncing = syncState { return true }
@@ -181,6 +237,32 @@ final class BrowseLibriVoxViewModel {
         return nil
     }
 
+    // MARK: - Background store
+
+    private var store: LibriVoxCatalogStore?
+    private weak var storeContainer: ModelContainer?
+
+    /// The background `@ModelActor` for `modelContext`'s container. Every catalog-sized
+    /// fetch or write goes through it so the main actor only resolves displayed rows.
+    func catalogStore(for modelContext: ModelContext) async -> LibriVoxCatalogStore {
+        let container = modelContext.container
+        if let store, storeContainer === container { return store }
+        let made = await LibriVoxCatalogStore.make(container: container)
+        if let store, storeContainer === container { return store }
+        store = made
+        storeContainer = container
+        return made
+    }
+
+    /// Resolves ids on the main context, preserving order.
+    private func books(withIDs ids: [String], modelContext: ModelContext) -> [LibriVoxBook] {
+        guard !ids.isEmpty else { return [] }
+        let predicate = #Predicate<LibriVoxBook> { ids.contains($0.id) }
+        guard let rows = try? modelContext.fetch(FetchDescriptor(predicate: predicate)) else { return [] }
+        let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }
+    }
+
     // MARK: - Search
 
     func catalogBook(id: String, modelContext: ModelContext) -> LibriVoxBook? {
@@ -193,6 +275,8 @@ final class BrowseLibriVoxViewModel {
 
     func onQueryChanged(_ query: String, modelContext: ModelContext) {
         searchTask?.cancel()
+        // Invalidate old results immediately, including during the debounce delay.
+        searchGeneration += 1
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || hasActiveFilters else {
             searchResults = []
@@ -213,121 +297,89 @@ final class BrowseLibriVoxViewModel {
         onQueryChanged(searchQuery, modelContext: modelContext)
     }
 
-    @MainActor
+    /// Search and filters are always available. With the complete catalog everything is
+    /// local. While the catalog is still downloading, text and genre go to the live feed
+    /// (its `title`/`author`/`genre` parameters), are narrowed by the remaining filters,
+    /// and are merged with matching cached books; language/length-only browsing and
+    /// offline use filter the cached subset and are flagged as partial.
     func performSearch(query: String, modelContext: ModelContext) async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || (filtersAvailable && hasActiveFilters) else {
+        guard !trimmed.isEmpty || hasActiveFilters else {
             searchResults = []
             searchSource = nil
             return
         }
 
+        searchGeneration += 1
+        let generation = searchGeneration
         searchFailureMessage = nil
+        let filters = LibriVoxCatalogQuery(
+            text: trimmed,
+            language: selectedLanguage,
+            genre: selectedGenre,
+            duration: selectedDuration
+        )
+        let store = await catalogStore(for: modelContext)
+
         if isLocalSearchReady {
             isSearchingLibriVox = false
-            performLocalSearch(query: trimmed, modelContext: modelContext, source: .local)
+            await showCachedResults(filters, store: store, modelContext: modelContext,
+                                    source: .local, generation: generation)
             return
         }
 
-        guard !trimmed.isEmpty else {
-            searchResults = []
-            searchSource = nil
+        guard filters.hasText || filters.genre != nil else {
+            isSearchingLibriVox = false
+            await showCachedResults(filters, store: store, modelContext: modelContext,
+                                    source: .partialCache, generation: generation)
             return
         }
 
         isSearchingLibriVox = true
-        defer { isSearchingLibriVox = false }
+        defer { if generation == searchGeneration { isSearchingLibriVox = false } }
         do {
-            let apiBooks = try await remoteSearch.search(query: trimmed)
-            try Task.checkCancellation()
-            try LibriVoxCatalogSync.seed(apiBooks, into: modelContext)
-            try Task.checkCancellation()
-
-            let ids = apiBooks.map(\.id)
-            let predicate = #Predicate<LibriVoxBook> { ids.contains($0.id) }
-            let stored = try modelContext.fetch(FetchDescriptor(predicate: predicate))
-            let byID = Dictionary(stored.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-            searchResults = ids.compactMap { byID[$0] }
-            searchSource = .librivox
-        } catch is CancellationError {
-            return
-        } catch {
-            if isNetworkUnavailable(error) {
-                performLocalSearch(query: trimmed, modelContext: modelContext, source: .savedFallback)
+            let apiBooks: [LibriVoxAPIBook]
+            if filters.hasText {
+                apiBooks = try await remoteSearch.search(query: trimmed)
             } else {
-                searchResults = []
+                apiBooks = try await remoteSearch.browse(genre: filters.genre ?? "")
+            }
+            try Task.checkCancellation()
+            let remote = apiBooks.filter { filters.matches($0) }
+            try await store.upsert(remote)
+            let cachedIDs = try await store.search(filters)
+            try Task.checkCancellation()
+            guard generation == searchGeneration else { return }
+
+            var ids = remote.map(\.id)
+            var seen = Set(ids)
+            for id in cachedIDs where seen.insert(id).inserted { ids.append(id) }
+            searchResults = books(withIDs: ids, modelContext: modelContext)
+            searchSource = .librivox
+        } catch {
+            if error is CancellationError || Task.isCancelled || generation != searchGeneration { return }
+            let offline = isNetworkUnavailable(error)
+            await showCachedResults(filters, store: store, modelContext: modelContext,
+                                    source: offline ? .savedFallback : .partialCache,
+                                    generation: generation)
+            if !offline, searchResults.isEmpty, generation == searchGeneration {
                 searchSource = nil
                 searchFailureMessage = error.localizedDescription
             }
         }
     }
 
-    private func performLocalSearch(
-        query trimmed: String,
+    private func showCachedResults(
+        _ filters: LibriVoxCatalogQuery,
+        store: LibriVoxCatalogStore,
         modelContext: ModelContext,
-        source: SearchSource
-    ) {
-        let lang = selectedLanguage
-        do {
-            var raw: [LibriVoxBook]
-            let hasText = !trimmed.isEmpty
-
-            if hasText, let lang {
-                // Text + language — both pushed to DB predicate
-                let predicate = #Predicate<LibriVoxBook> { book in
-                    (book.title.localizedStandardContains(trimmed) ||
-                     book.authorDisplay.localizedStandardContains(trimmed) ||
-                     book.bookDescription.localizedStandardContains(trimmed)) &&
-                    book.language == lang
-                }
-                var d = FetchDescriptor(predicate: predicate)
-                d.fetchLimit = 200
-                raw = try modelContext.fetch(d)
-            } else if hasText {
-                // Text only
-                let predicate = #Predicate<LibriVoxBook> { book in
-                    book.title.localizedStandardContains(trimmed) ||
-                    book.authorDisplay.localizedStandardContains(trimmed) ||
-                    book.bookDescription.localizedStandardContains(trimmed)
-                }
-                var d = FetchDescriptor(predicate: predicate)
-                d.fetchLimit = 150
-                raw = try modelContext.fetch(d)
-            } else {
-                // Filter-only browse. Language pushes to the DB predicate; genre (stored as
-                // a JSON string) and duration buckets can't, so fetch the whole (language-
-                // scoped) catalog and filter in memory — same cost as the filter-list
-                // computation, and a capped pre-filter fetch would miss most matches.
-                let d: FetchDescriptor<LibriVoxBook>
-                if let lang {
-                    d = FetchDescriptor(predicate: #Predicate { $0.language == lang })
-                } else {
-                    d = FetchDescriptor<LibriVoxBook>()
-                }
-                raw = try modelContext.fetch(d)
-            }
-
-            // In-memory: genre (stored as JSON string, not queryable via DB predicate)
-            if let genre = selectedGenre {
-                raw = raw.filter { $0.genres.contains(genre) }
-            }
-            // In-memory: duration bucket
-            if let dur = selectedDuration {
-                raw = raw.filter { dur.matches(seconds: $0.totalTimeSecs) }
-            }
-
-            // Sort
-            if hasText {
-                let q = trimmed.lowercased()
-                searchResults = raw.sorted { rankScore($0, query: q) < rankScore($1, query: q) }
-            } else {
-                searchResults = Array(raw.sorted { $0.title < $1.title }.prefix(500))
-            }
-            searchSource = source
-        } catch {
-            searchResults = []
-            searchSource = nil
-        }
+        source: SearchSource,
+        generation: Int
+    ) async {
+        let ids = (try? await store.search(filters)) ?? []
+        guard generation == searchGeneration, !Task.isCancelled else { return }
+        searchResults = books(withIDs: ids, modelContext: modelContext)
+        searchSource = source
     }
 
     func refreshBookIfStale(
@@ -344,38 +396,20 @@ final class BrowseLibriVoxViewModel {
         }
     }
 
-    private func rankScore(_ book: LibriVoxBook, query: String) -> Int {
-        let t = book.title.lowercased()
-        let a = book.authorDisplay.lowercased()
-        if t.hasPrefix(query) { return 0 }
-        if t.contains(query) { return 1 }
-        if a.contains(query) { return 2 }
-        return 3
-    }
-
     // MARK: - Filters
 
     /// Catalog size the filter lists were last computed from — recompute when the data
-    /// grows (sync progress, refresh) but skip the 20k-row fetch on every tab visit.
+    /// grows (sync progress, refresh) but skip the aggregation on every tab visit.
     private var filtersComputedForCount: Int = -1
 
-    @MainActor
     func loadAvailableFilters(modelContext: ModelContext) async {
         let count = (try? modelContext.fetchCount(FetchDescriptor<LibriVoxBook>())) ?? 0
         guard count > 0, count != filtersComputedForCount else { return }
-        guard let books = try? modelContext.fetch(FetchDescriptor<LibriVoxBook>()) else { return }
+        let store = await catalogStore(for: modelContext)
+        guard let options = try? await store.filterOptions() else { return }
         filtersComputedForCount = count
-
-        var langs = Array(Set(books.map(\.language).filter { !$0.isEmpty })).sorted()
-        if let idx = langs.firstIndex(of: "English") {
-            langs.remove(at: idx)
-            langs.insert("English", at: 0)
-        }
-        availableLanguages = langs
-
-        var counts: [String: Int] = [:]
-        for g in books.flatMap(\.genres) { counts[g, default: 0] += 1 }
-        availableGenres = counts.sorted { $0.value > $1.value }.map(\.key)
+        availableLanguages = options.languages
+        availableGenres = options.genres
     }
 
     // MARK: - Featured Books
@@ -499,35 +533,54 @@ final class BrowseLibriVoxViewModel {
     @MainActor
     func loadFeaturedBooks(modelContext: ModelContext) async {
         guard featuredBooks.isEmpty else { return }
-        let shuffled = Self.featuredTitles.shuffled()
-        var found: [LibriVoxBook] = []
-        var seenIds = Set<String>()
-        for title in shuffled {
-            if found.count >= Self.featuredBooksTarget { break }
-            let t = title
-            let predicate = #Predicate<LibriVoxBook> { book in
-                book.title.localizedStandardContains(t)
-            }
-            var descriptor = FetchDescriptor(predicate: predicate)
-            descriptor.fetchLimit = 1
-            if let book = try? modelContext.fetch(descriptor).first,
-               seenIds.insert(book.id).inserted {
-                found.append(book)
-            }
-        }
-        featuredBooks = found
+        // Title scans over the 20k-row catalog run on the background store; only the
+        // handful of winners are resolved on the main context.
+        let store = await catalogStore(for: modelContext)
+        guard let ids = try? await store.firstIDs(matchingTitles: Self.featuredTitles.shuffled(),
+                                                  limit: Self.featuredBooksTarget),
+              featuredBooks.isEmpty else { return }
+        featuredBooks = books(withIDs: ids, modelContext: modelContext)
     }
 
     // MARK: - Sync
 
-    @MainActor
+    /// Passes started since launch — lets tests prove foreground/visit churn never
+    /// starts a duplicate.
+    private(set) var syncRunsStarted = 0
+    var isSyncInFlight: Bool { syncTask != nil }
+
+    private var pauseFlag: LibriVoxSyncPauseFlag?
+    private var resumeAfterPause = false
+    private(set) var isAppInBackground = false
+    private var syncContext: ModelContext?
+    private var lifecycleObservers: [NSObjectProtocol] = []
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+    /// Books written by the most recent pass, for the "N new books added" note.
+    private var lastRunProcessed = 0
+
     func triggerSyncIfNeeded(modelContext: ModelContext) {
+        #if DEBUG
+        if E2EFixtures.enabled {
+            Task { [weak self] in
+                await self?.loadFeaturedBooks(modelContext: modelContext)
+                self?.loadTodaysPick(modelContext: modelContext)
+                await self?.loadAvailableFilters(modelContext: modelContext)
+                if !NetworkMonitor.shared.isConnected {
+                    self?.syncState = .failed("You're offline.", isOffline: true)
+                }
+            }
+            return
+        }
+        #endif
+        syncContext = modelContext
+        observeAppLifecycleIfNeeded()
+        guard !isAppInBackground else { return }
         guard syncTask == nil else {
             // A sync is already in flight; just make sure the curated classics are populated.
             if featuredBooks.isEmpty { preloadFeaturedClassics(modelContext: modelContext) }
             return
         }
-        guard LibriVoxCatalogSync.isSyncDue else {
+        guard isSyncDueProvider() else {
             Task { [weak self] in
                 if self?.featuredBooks.isEmpty == true {
                     await self?.loadFeaturedBooks(modelContext: modelContext)
@@ -537,42 +590,71 @@ final class BrowseLibriVoxViewModel {
             }
             return
         }
-
-        syncTask = Task(priority: .utility) { [weak self] in
-            // Curated content arrives first on a fresh install. Remote search remains usable
-            // throughout; the full local index is a background optimization.
-            if self?.isLocalSearchReady == false {
+        guard isConnectedProvider() else {
+            // Network gating: don't start a pass that can only fail. Cached classics and
+            // the partial catalog stay browsable; reconnecting or Retry resumes the cursor.
+            Task { [weak self] in
                 await self?.performPreload(modelContext: modelContext)
+                self?.loadTodaysPick(modelContext: modelContext)
+                await self?.loadAvailableFilters(modelContext: modelContext)
+                self?.syncState = .failed("No internet connection", isOffline: true)
             }
-            await self?.performSync(modelContext: modelContext)
+            return
         }
+        startSync(modelContext: modelContext)
     }
 
-    @MainActor
     func forceRefresh(modelContext: ModelContext) {
+        syncContext = modelContext
+        observeAppLifecycleIfNeeded()
         availableLanguages = []
         availableGenres = []
         filtersComputedForCount = -1
-        syncTask = Task { [weak self] in
-            // If we still have no classics (retry from an offline/error state), grab them first
-            // so the tab shows content quickly before the full re-sync runs.
-            if self?.featuredBooks.isEmpty == true {
+        guard syncTask == nil else { return }
+        startSync(modelContext: modelContext)
+    }
+
+    private func startSync(modelContext: ModelContext) {
+        let flag = LibriVoxSyncPauseFlag()
+        pauseFlag = flag
+        resumeAfterPause = false
+        lastCatalogPresentationRefresh = .distantPast
+        syncRunsStarted += 1
+        syncTask = Task(priority: .utility) { [weak self] in
+            // Curated content arrives first on a fresh install (or after an offline retry).
+            // Remote search remains usable throughout; the full index is an optimization.
+            if self?.isLocalSearchReady == false || self?.featuredBooks.isEmpty == true {
                 await self?.performPreload(modelContext: modelContext)
             }
-            await self?.performSync(modelContext: modelContext)
+            await self?.performSync(modelContext: modelContext, pauseFlag: flag)
+            self?.syncDidFinish()
         }
     }
 
-    @MainActor
-    private func performSync(modelContext: ModelContext) async {
+    private func performSync(modelContext: ModelContext, pauseFlag: LibriVoxSyncPauseFlag) async {
+        if pauseFlag.isRaised {
+            syncState = .paused(saved: LibriVoxCatalogSync.syncedBookCount)
+            return
+        }
         let wasReady = isLocalSearchReady
         isFirstFullSync = !wasReady
-        var lastProgress = 0
-        syncState = .syncing(fetched: 0)
+        lastRunProcessed = 0
+        syncState = .syncing(fetched: wasReady ? 0 : LibriVoxCatalogSync.syncedBookCount)
         do {
-            try await LibriVoxCatalogSync.syncIfNeeded(modelContext: modelContext) { [weak self] fetched in
-                lastProgress = fetched
-                self?.syncState = .syncing(fetched: fetched)
+            let store = await catalogStore(for: modelContext)
+            let firstFull = isFirstFullSync
+            let outcome = try await syncRunner(store, pauseFlag) { [weak self] progress in
+                guard let self else { return }
+                self.lastRunProcessed = progress.processedThisRun
+                // Only publish while still syncing: a late page must not overwrite `.paused`.
+                if case .syncing = self.syncState {
+                    self.syncState = .syncing(fetched: firstFull ? progress.savedCount : progress.processedThisRun)
+                }
+                self.refreshCatalogPresentationAfterPage(modelContext: modelContext)
+            }
+            if outcome == .paused {
+                syncState = .paused(saved: LibriVoxCatalogSync.syncedBookCount)
+                return
             }
             syncState = .done
             await loadAvailableFilters(modelContext: modelContext)
@@ -580,21 +662,126 @@ final class BrowseLibriVoxViewModel {
             loadTodaysPick(modelContext: modelContext)
             if !wasReady && isLocalSearchReady {
                 showTemporaryUpdateMessage("Offline search ready")
-            } else if lastProgress > 0 {
-                showTemporaryUpdateMessage("\(lastProgress.formatted()) new book\(lastProgress == 1 ? "" : "s") added")
+            } else if lastRunProcessed > 0 {
+                showTemporaryUpdateMessage("\(lastRunProcessed.formatted()) new book\(lastRunProcessed == 1 ? "" : "s") added")
             }
+            // Seamless hand-off: re-run the active search against the now-complete catalog.
             let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedQuery.isEmpty || hasActiveFilters {
                 await performSearch(query: searchQuery, modelContext: modelContext)
             }
         } catch {
+            if pauseFlag.isRaised || Task.isCancelled || error is CancellationError
+                || (error as? URLError)?.code == .cancelled {
+                syncState = .paused(saved: LibriVoxCatalogSync.syncedBookCount)
+                return
+            }
             let offline = isNetworkUnavailable(error)
             let message = offline
                 ? "No internet connection"
                 : error.localizedDescription
             syncState = .failed(message, isOffline: offline)
         }
+    }
+
+    private func syncDidFinish() {
         syncTask = nil
+        pauseFlag = nil
+        endBackgroundTaskIfNeeded()
+        if resumeAfterPause, !isAppInBackground, let context = syncContext {
+            resumeAfterPause = false
+            triggerSyncIfNeeded(modelContext: context)
+        }
+    }
+
+    /// Language/length-only filters use the growing cache because the feed cannot query
+    /// those dimensions. Refresh that visible subset and the menus as pages arrive,
+    /// without issuing another remote request or scanning the whole catalog per page.
+    private func refreshCatalogPresentationAfterPage(modelContext: ModelContext) {
+        guard !isAppInBackground, catalogPresentationTask == nil,
+              Date().timeIntervalSince(lastCatalogPresentationRefresh) >= 2 else { return }
+        lastCatalogPresentationRefresh = .now
+        catalogPresentationTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.catalogPresentationTask = nil }
+            await self.loadAvailableFilters(modelContext: modelContext)
+            guard self.searchSource == .partialCache || self.searchSource == .savedFallback else { return }
+            let generation = self.searchGeneration
+            let filters = LibriVoxCatalogQuery(
+                text: self.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines),
+                language: self.selectedLanguage, genre: self.selectedGenre,
+                duration: self.selectedDuration
+            )
+            guard filters.hasText || self.hasActiveFilters else { return }
+            let source = self.searchSource ?? .partialCache
+            let store = await self.catalogStore(for: modelContext)
+            await self.showCachedResults(filters, store: store, modelContext: modelContext,
+                                         source: source, generation: generation)
+        }
+    }
+
+    // MARK: - App lifecycle
+
+    /// Observed here rather than through the view's `scenePhase`, because the sync keeps
+    /// running while another tab is on screen.
+    private func observeAppLifecycleIfNeeded() {
+        guard lifecycleObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        lifecycleObservers = [
+            center.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.appDidEnterBackground() }
+            },
+            center.addObserver(
+                forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.appWillEnterForeground() }
+            },
+        ]
+    }
+
+    /// Asks the in-flight pass to stop after the page it is on. A short background task
+    /// keeps the process alive until that page is saved; if iOS expires it first, the
+    /// pass is cancelled outright (the cursor still points at the last committed page).
+    func appDidEnterBackground() {
+        isAppInBackground = true
+        resumeAfterPause = false
+        guard let task = syncTask, let flag = pauseFlag else { return }
+        flag.raise()
+        guard backgroundTaskID == .invalid else { return }
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "LibriVox catalog page") { [weak self] in
+            MainActor.assumeIsolated {
+                task.cancel()
+                self?.endBackgroundTaskIfNeeded()
+            }
+        }
+    }
+
+    /// Resumes from the persisted cursor. Never starts a second pass: if the paused one is
+    /// still winding down, it restarts once that finishes.
+    func appWillEnterForeground() {
+        isAppInBackground = false
+        guard let context = syncContext else { return }
+        if syncTask != nil {
+            resumeAfterPause = pauseFlag?.isRaised == true
+            return
+        }
+        triggerSyncIfNeeded(modelContext: context)
+    }
+
+    /// Connectivity came back: resume a pass that stopped for lack of network.
+    func networkBecameAvailable() {
+        guard let context = syncContext, syncTask == nil else { return }
+        if case .failed = syncState {
+            triggerSyncIfNeeded(modelContext: context)
+        }
+    }
+
+    private func endBackgroundTaskIfNeeded() {
+        guard backgroundTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskID)
+        backgroundTaskID = .invalid
     }
 
     private func showTemporaryUpdateMessage(_ message: String) {

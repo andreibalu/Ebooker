@@ -3,7 +3,8 @@
 //  Pageless
 //
 //  "Bring your own shelf." — connect an Audiobookshelf server with a username/password or an
-//  API key. Errors render inline under the field they concern; never as alerts.
+//  API key. Errors render inline under the field they concern; never as alerts. The one alert is
+//  the plain-http-to-a-public-host confirmation, shown before any credential leaves the device.
 //
 
 import SwiftUI
@@ -101,6 +102,24 @@ struct ABSConnectView: View {
             }
             .animation(reduceMotion ? nil : AppMotion.stateChange, value: viewModel.mode)
             .animation(reduceMotion ? nil : AppMotion.stateChange, value: viewModel.error)
+            .alert(
+                ABSConnectViewModel.insecureServerTitle,
+                isPresented: Binding(
+                    get: { viewModel.insecureServerWarning != nil },
+                    set: { if !$0 { viewModel.cancelInsecureServer() } }
+                ),
+                presenting: viewModel.insecureServerWarning
+            ) { _ in
+                Button("Continue") {
+                    viewModel.confirmInsecureServer()
+                    Task { await submit() }
+                }
+                .accessibilityIdentifier("abs.connect.insecure.continue")
+                Button("Cancel", role: .cancel) { viewModel.cancelInsecureServer() }
+                    .accessibilityIdentifier("abs.connect.insecure.cancel")
+            } message: { warning in
+                Text("\(warning.host) uses plain http://. \(warning.message)")
+            }
         }
     }
 

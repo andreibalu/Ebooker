@@ -117,6 +117,47 @@ enum AudiobookshelfLibraryService {
         }
     }
 
+    // MARK: - Chapters
+
+    /// Maps the server's book-global chapters onto Unpaged's (track, time-in-track) positions so a
+    /// single-file book (or a chapter that starts mid-file) gets real chapter navigation. Returns
+    /// an empty list when the server has fewer than two usable chapters; the player then falls
+    /// back to one chapter per file.
+    static func playbackChapters(from chapters: [ABSChapter], trackDurations: [Double]) -> [PlaybackChapter] {
+        let durations = trackDurations.map { $0.isFinite && $0 > 0 ? $0 : 0 }
+        let total = durations.reduce(0, +)
+        let usable = chapters
+            .filter { $0.start.isFinite && $0.start >= 0 && (total <= 0 || $0.start < total - 0.5) }
+            .sorted { $0.start < $1.start }
+        var deduped: [ABSChapter] = []
+        for chapter in usable {
+            if let last = deduped.last, chapter.start - last.start < 0.5 { continue }
+            deduped.append(chapter)
+        }
+        guard deduped.count >= 2, !durations.isEmpty else { return [] }
+
+        return deduped.enumerated().map { offset, chapter in
+            let globalStart = offset == 0 ? 0 : chapter.start
+            var position = position(forGlobalTime: globalStart, trackDurations: durations)
+            // A chapter that starts a few frames before a file boundary belongs to the next file;
+            // otherwise a jump would play a sliver of the previous file and then auto-advance.
+            if position.trackIndex + 1 < durations.count,
+               durations[position.trackIndex] - position.timeInTrack < 0.5 {
+                position = (position.trackIndex + 1, 0)
+            }
+            let nextStart = offset + 1 < deduped.count ? deduped[offset + 1].start : nil
+            let globalEnd = nextStart ?? (chapter.end.isFinite && chapter.end > globalStart ? chapter.end : total)
+            let title = chapter.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return PlaybackChapter(
+                index: offset,
+                title: title.isEmpty ? "Chapter \(offset + 1)" : title,
+                trackIndex: position.trackIndex,
+                start: position.timeInTrack,
+                duration: max(globalEnd - globalStart, 0)
+            )
+        }
+    }
+
     // MARK: - Position mapping
 
     static func globalTime(trackIndex: Int, timeInTrack: Double, trackDurations: [Double]) -> Double {

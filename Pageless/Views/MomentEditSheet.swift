@@ -75,6 +75,7 @@ struct MomentEditSheet: View {
 
                 Section("Name") {
                     TextField("Moment name", text: $nameInput)
+                        .accessibilityIdentifier("moment.name")
                 }
 
                 Section {
@@ -84,6 +85,7 @@ struct MomentEditSheet: View {
                         axis: .vertical
                     )
                     .lineLimit(4...8)
+                    .accessibilityIdentifier("moment.note")
                 } header: {
                     HStack {
                         Text("Note")
@@ -106,6 +108,7 @@ struct MomentEditSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: onSave)
+                        .accessibilityIdentifier("moment.done")
                         .disabled(nameInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 ToolbarItem(placement: .cancellationAction) {

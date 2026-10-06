@@ -54,6 +54,7 @@ struct EqualizerSheet: View {
                 get: { equalizer.isEnabled },
                 set: { equalizer.setEnabled($0) }
             ))
+            .accessibilityIdentifier("equalizer.enabled")
             .labelsHidden()
             .tint(Color.primary.opacity(0.7))
         }
@@ -144,6 +145,8 @@ struct EqualizerSheet: View {
                                 .shadow(color: .black.opacity(0.04), radius: 3, y: 1)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("equalizer.preset.\(preset.rawValue)")
+                        .accessibilityAddTraits(preset == equalizer.preset ? .isSelected : [])
                     }
                 }
                 .padding(.horizontal, 2)

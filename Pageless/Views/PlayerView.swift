@@ -27,6 +27,7 @@ struct PlayerView: View {
     @State private var isScrubbing = false
     @State private var showProgressConfirmation = false
     @State private var showEqualizer = false
+    @State private var showChapters = false
 
     private var useSmartSave: Bool {
         plusEntitlement.isPlus
@@ -61,6 +62,9 @@ struct PlayerView: View {
         .simultaneousGesture(dismissDragGesture)
         .sheet(isPresented: $showEqualizer) {
             EqualizerSheet()
+        }
+        .sheet(isPresented: $showChapters) {
+            ChapterListSheet()
         }
         .sheet(isPresented: Binding(
             get: { viewModel.pendingMomentTime != nil },
@@ -123,10 +127,25 @@ struct PlayerView: View {
 
                 Spacer()
 
+                if player.chapters.count > 1 {
+                    Button {
+                        showChapters = true
+                    } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Chapters")
+                    .accessibilityIdentifier("player.chapters")
+                }
+
                 Button {
                     if let onDismiss { onDismiss() } else { dismiss() }
                 } label: {
                     Image(systemName: "chevron.down")
+                        .accessibilityLabel("Close player")
                         .font(.system(size: 17, weight: .semibold))
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
@@ -176,6 +195,7 @@ struct PlayerView: View {
             Text(player.currentTrack?.displayTitle ?? "Choose something to play")
                 .font(.title3.weight(.semibold))
                 .multilineTextAlignment(.center)
+                .accessibilityIdentifier("player.title")
 
             Text(player.currentAudiobook?.displayAuthor ?? "Audiobook")
                 .font(.subheadline)
@@ -200,12 +220,42 @@ struct PlayerView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("player.bookContext")
                 }
+                if let chapterLine = embeddedChapterLine {
+                    chapterLineText(chapterLine)
+                }
+            } else if let chapterLine = embeddedChapterLine {
+                chapterLineText(chapterLine)
             } else {
                 Text("File \(player.currentTrackIndex + 1)")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
         }
+    }
+
+    /// The playing chapter's title when it differs from the track line — i.e. a chapter inside a
+    /// file (single-file m4b, Audiobookshelf server chapters). Nil for one-file-per-chapter books.
+    private var embeddedChapterLine: String? {
+        guard player.chapters.count > 1, let chapter = player.currentChapter else { return nil }
+        let title = chapter.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != player.currentTrack?.displayTitle else { return nil }
+        return title
+    }
+
+    private func chapterLineText(_ title: String) -> some View {
+        Button {
+            showChapters = true
+        } label: {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Chapter: \(title)")
+        .accessibilityHint("Shows all chapters")
+        .accessibilityIdentifier("player.currentChapter")
     }
 
     /// "Frankenstein · Part 1 of 2" for multi-file books; nil for single-file books, whose track
@@ -247,19 +297,22 @@ struct PlayerView: View {
     private var controlsSection: some View {
         HStack(spacing: 28) {
             Button {
-                player.previousTrack()
+                player.previousChapter()
             } label: {
                 Image(systemName: "backward.end.fill")
                     .font(.title2)
                     .foregroundStyle(.primary)
             }
-            .disabled(!player.canGoToPreviousTrack)
-            .opacity(player.canGoToPreviousTrack ? 1 : 0.3)
+            .accessibilityLabel("Previous chapter")
+            .accessibilityIdentifier("player.previous")
+            .disabled(!player.canGoToPreviousChapter)
+            .opacity(player.canGoToPreviousChapter ? 1 : 0.3)
 
             Button {
                 player.skipBackward()
             } label: {
                 Image(systemName: skipBackIconName)
+                    .accessibilityLabel("Skip backward")
                     .font(.title)
                     .foregroundStyle(.primary)
             }
@@ -287,24 +340,29 @@ struct PlayerView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("player.playPause")
+            .accessibilityLabel(player.isPlaying ? "Pause playback" : "Play playback")
 
             Button {
                 player.skipForward()
             } label: {
                 Image(systemName: skipForwardIconName)
+                    .accessibilityLabel("Skip forward")
                     .font(.title)
                     .foregroundStyle(.primary)
             }
 
             Button {
-                player.nextTrack()
+                player.nextChapter()
             } label: {
                 Image(systemName: "forward.end.fill")
                     .font(.title2)
                     .foregroundStyle(.primary)
             }
-            .disabled(!player.canGoToNextTrack)
-            .opacity(player.canGoToNextTrack ? 1 : 0.3)
+            .accessibilityLabel("Next chapter")
+            .accessibilityIdentifier("player.next")
+            .disabled(!player.canGoToNextChapter)
+            .opacity(player.canGoToNextChapter ? 1 : 0.3)
         }
         .buttonStyle(.plain)
     }
@@ -324,6 +382,7 @@ struct PlayerView: View {
                     filled: viewModel.progressMarked
                 )
             }
+            .accessibilityIdentifier("player.markProgress")
             .disabled(player.currentAudiobook == nil)
             .confirmationDialog(
                 "Mark Progress",
@@ -356,6 +415,7 @@ struct PlayerView: View {
                     )
                 }
             }
+            .accessibilityIdentifier("player.saveMoment")
             .disabled(player.currentAudiobook == nil || viewModel.isProcessingSmartSave)
         }
     }
@@ -382,6 +442,7 @@ struct PlayerView: View {
                     expands: true
                 )
             }
+            .accessibilityIdentifier("player.speed")
             .frame(maxWidth: .infinity)
 
             segmentDivider
@@ -397,6 +458,7 @@ struct PlayerView: View {
                 )
             }
             .disabled(player.currentAudiobook == nil)
+            .accessibilityIdentifier("player.equalizer")
             .frame(width: 74)
 
             segmentDivider
@@ -424,6 +486,7 @@ struct PlayerView: View {
                     )
                 }
             }
+            .accessibilityIdentifier("player.sleep")
             .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 4)
@@ -660,7 +723,32 @@ private struct ScrubSlider: View {
                 )
             }
             .frame(height: 44)
+            // The drag gesture is invisible to VoiceOver; expose the scrubber as one adjustable
+            // element so swipe up/down seeks in fixed steps through the same commit path.
+            .accessibilityElement()
+            .accessibilityLabel("Playback position")
+            .accessibilityValue(accessibilityPosition)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: adjust(by: accessibilityStep)
+                case .decrement: adjust(by: -accessibilityStep)
+                @unknown default: break
+                }
+            }
+            .accessibilityIdentifier("player.scrubber")
         }
+    }
+
+    private let accessibilityStep: Double = 15
+
+    private var accessibilityPosition: String {
+        "\(TimeFormatter.clockString(seconds: value)) of \(TimeFormatter.clockString(seconds: range.upperBound))"
+    }
+
+    private func adjust(by delta: Double) {
+        onEditingChanged(true)
+        value = min(max(value + delta, range.lowerBound), range.upperBound)
+        onEditingChanged(false)
     }
 
     private var scrubRateLabel: String {

@@ -2,10 +2,16 @@ import Foundation
 
 final class MockABSURLProtocol: URLProtocol {
     static var handler: ((URLRequest) -> (Int, Data))?
+    /// When set, every request fails with this error instead of reaching `handler`.
+    static var error: URLError?
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+        if let error = Self.error {
+            client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
         guard let handler = Self.handler else { fatalError("Missing ABS URLProtocol handler") }
         let (status, data) = handler(request)
         let response = HTTPURLResponse(url: request.url!, statusCode: status,

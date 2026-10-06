@@ -202,7 +202,9 @@ struct ABSViewModelLogicTests {
         let inactive = VM.fieldError(for: AudiobookshelfError.inactiveAPIKey, mode: .apiKey, host: "h")
         #expect(inactive.field == .apiKey)
         #expect(inactive.message.contains("Settings → API Keys"))
-        #expect(VM.fieldError(for: AudiobookshelfError.insecureConnection, mode: .signIn, host: "h").field == .server)
+        #expect(VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "nas.tail1234.ts.net:13378").message.contains("Tailscale"))
+        #expect(VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "100.101.1.2").message.contains("Tailscale"))
+        #expect(!VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "abs.example.com").message.contains("Tailscale"))
         #expect(VM.fieldError(for: AudiobookshelfError.notAudiobookshelfServer, mode: .signIn, host: "h").field == .server)
     }
 

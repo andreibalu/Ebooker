@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: September 28, 2026_
+_Last updated: October 6, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) with LibriVox/Internet Archive (free-book browsing, streaming, and downloads), and — only if you connect one — with your own Audiobookshelf server. Unpaged never receives your name, email, or payment details.
 
@@ -83,7 +83,7 @@ Network requests are made only:
 - Through Apple's Speech framework when CarPlay voice search runs or AI transcription uses the legacy fallback; Unpaged requires processing to stay on-device
 - To Apple, once per language, when iOS downloads its on-device speech-recognition model the first time AI transcription runs (no audio or content is sent)
 
-All requests use HTTPS, except that an Audiobookshelf server on your local network may be reached over plain HTTP if that is the address you enter. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the app.
+All requests use HTTPS, except that an Audiobookshelf server may be reached over plain HTTP if that is the address you enter (common for servers on a home network or a VPN such as Tailscale). If you enter a plain HTTP address for a server on the public internet, Unpaged warns you before signing in that your login and listening activity would be sent unencrypted. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the app.
 
 ## Children
 

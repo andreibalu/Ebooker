@@ -14,7 +14,12 @@ struct PagelessApp: App {
     @StateObject private var coffeeTipStore = CoffeeTipStore()
     @State private var onboardingManager = OnboardingManager()
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("forceDarkMode") private var forceDarkMode = false
+    @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system
+
+    init() {
+        // Must run before the @AppStorage above is first read in `body`.
+        AppAppearance.migrateLegacyPreference()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -27,7 +32,7 @@ struct PagelessApp: App {
                 .environmentObject(coffeeTipStore)
                 .environment(onboardingManager)
                 .environment(appDelegate.freeBookDownloader)
-                .preferredColorScheme(forceDarkMode ? .dark : nil)
+                .appAppearance(appearance)
                 .task {
                     _ = await appDelegate.freeBookDownloader.restoreBackgroundSession(
                         modelContext: appDelegate.modelContainer.mainContext

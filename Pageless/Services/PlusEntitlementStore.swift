@@ -199,6 +199,9 @@ final class PlusEntitlementStore: ObservableObject {
             @unknown default:
                 break
             }
+        } catch StoreKitError.userCancelled {
+            // StoreKit reports some cancellations by throwing rather than returning
+            // `.userCancelled`; cancelling is a choice, not an error to alert about.
         } catch {
             purchaseError = error.localizedDescription
         }
@@ -209,6 +212,8 @@ final class PlusEntitlementStore: ObservableObject {
         do {
             try await AppStore.sync()
             await refreshEntitlements()
+        } catch StoreKitError.userCancelled {
+            // Dismissing the App Store sign-in prompt is not a restore failure.
         } catch {
             restoreError = error.localizedDescription
         }

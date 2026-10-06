@@ -12,20 +12,26 @@ struct AudiobookTrackRow: View {
 
     @EnvironmentObject private var player: AudioPlayerManager
 
+    /// The player addresses tracks by position in `sortedTracks`, not by the stored `orderIndex`
+    /// (which can have gaps or duplicates in rows from older builds or merged iCloud records).
+    private var trackPosition: Int {
+        audiobook.sortedTracks.firstIndex { $0.id == track.id } ?? track.orderIndex
+    }
+
     var body: some View {
         Button {
             if audiobook.isStreamingOnly {
                 openPlayer()
             }
             Task {
-                await player.playTrack(at: track.orderIndex, in: audiobook)
+                await player.playTrack(at: trackPosition, in: audiobook)
                 if !audiobook.isStreamingOnly {
                     openPlayer()
                 }
             }
         } label: {
             HStack(alignment: .center, spacing: 14) {
-                Text("\(track.orderIndex + 1)")
+                Text("\(trackPosition + 1)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .frame(width: 24)
@@ -43,7 +49,7 @@ struct AudiobookTrackRow: View {
 
                 Spacer()
 
-                if player.currentAudiobook?.id == audiobook.id, player.currentTrackIndex == track.orderIndex {
+                if player.currentAudiobook?.id == audiobook.id, player.currentTrackIndex == trackPosition {
                     Image(systemName: "waveform")
                         .foregroundStyle(.primary)
                         .font(.subheadline)

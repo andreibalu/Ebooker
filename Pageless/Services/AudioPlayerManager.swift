@@ -75,6 +75,20 @@ struct AudioPlayerLoadPreparation {
     /// Turns a stored, token-less Audiobookshelf track URL into a playable one. Resolved here, at
     /// play time, so no credential is ever persisted and a JWT refresh never breaks an older book.
     var resolveAudiobookshelfURL: @MainActor (URL) async throws -> URL = { url in url }
+    /// Chapter markers embedded in a track's file (m4b/m4a chapter track, MP3 `CHAP`). Runs after
+    /// the item commits, so it never delays playback.
+    var loadChapterMarkers: @MainActor (AVAsset) async -> [ChapterMarker] = { _ in [] }
+    /// Server-side chapters of an Audiobookshelf item (book-global times).
+    var loadAudiobookshelfChapters: @MainActor (String) async throws -> [ABSChapter] = { _ in [] }
+}
+
+/// Target of a track load that has been requested but not committed yet. Chapter and track
+/// navigation steps from here, so two quick taps on "next" advance twice instead of
+/// re-requesting the same target from a position the player hasn't left yet.
+struct PendingPlaybackTarget: Equatable {
+    let bookID: UUID
+    let trackIndex: Int
+    let time: Double
 }
 
 @MainActor
@@ -91,6 +105,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     @Published private(set) var loadingPlaybackBookID: UUID?
     @Published var sleepTimerEndsAt: Date?
     @Published var playerErrorMessage: String?
+    /// Chapters of the current book: embedded/server chapters when the files carry them,
+    /// otherwise one per track.
+    @Published private(set) var chapters: [PlaybackChapter] = []
 
     private let player = AVPlayer()
     private var timeObserverToken: Any?
@@ -117,6 +134,18 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// One silent re-resolve per load when an Audiobookshelf stream fails (e.g. its token aged out
     /// mid-listen); a second failure surfaces the error.
     private var audiobookshelfRecoveryLoadToken: UInt64?
+
+    /// Requested-but-uncommitted track load; see `PendingPlaybackTarget`.
+    private(set) var pendingPlaybackTarget: PendingPlaybackTarget?
+    /// Target of an in-flight seek. While set, periodic time callbacks still report the pre-seek
+    /// position (or 0 for a fresh item), so they must not overwrite `currentTime` — doing so
+    /// flickered the chapter highlight, made a second chapter tap step from the old chapter, and
+    /// could persist (and recover a failed stream at) position 0.
+    private var pendingSeek: (time: Double, issuedAt: Date)?
+    /// Embedded chapter markers per track file, cached for the session.
+    private var chapterMarkersByTrackKey: [String: [ChapterMarker]] = [:]
+    /// Audiobookshelf server chapters per item, cached for the session.
+    private var audiobookshelfChaptersByItemID: [String: [ABSChapter]] = [:]
 
     let persistence = PlaybackPersistence()
     private let nowPlaying = NowPlayingUpdater()
@@ -149,6 +178,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 prepareSeek: { _, _ in true },
                 resolveAudiobookshelfURL: { url in
                     try await ABSAccount.shared.client.playbackURL(forStoredURL: url)
+                },
+                loadChapterMarkers: { asset in
+                    await EmbeddedChapterReader.markers(from: asset)
+                },
+                loadAudiobookshelfChapters: { itemID in
+                    try await ABSAccount.shared.client.item(id: itemID).media.chapters ?? []
                 }
             )
         }
@@ -217,6 +252,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         currentTrackIndex = trackIndex
         self.currentTime = currentTime
         self.duration = duration
+        rebuildChapters()
+    }
+
+    /// Seeds embedded chapter markers for a track, as if they had been read from its file.
+    func seedUnitTestChapterMarkers(_ markers: [ChapterMarker], for track: AudioTrack) {
+        chapterMarkersByTrackKey[Self.chapterCacheKey(for: track)] = markers
+        rebuildChapters()
     }
 
     func seedUnitTestLoadingPlayback(bookID: UUID?) {
@@ -302,7 +344,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func pause() {
-        invalidateCurrentLoad()
+        // Only an uncommitted load is abandoned. Invalidating a committed item also cancelled its
+        // in-flight seek, so pausing while a stream was still buffering a chapter jump (or the
+        // resume position) left the item at 0 and the next play started from the wrong place.
+        if isLoadingItem || pendingPlaybackTarget != nil {
+            invalidateCurrentLoad()
+        }
         pauseCurrentItemWithoutInvalidatingLoad()
     }
 
@@ -326,14 +373,166 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         seekGeneration &+= 1
         let seekToken = seekGeneration
         let loadToken = loadGeneration.current
+        // Reflect the target right away: the chapter highlight, the scrubber and any follow-up
+        // navigation (a second "next chapter" tap) must step from where the user asked to be.
+        currentTime = boundedTime
+        pendingSeek = (boundedTime, Date())
         player.seek(to: target) { [weak self] finished in
-            guard let self, finished else { return }
+            guard let self else { return }
             Task { @MainActor in
                 guard self.isCurrentLoad(loadToken), self.seekGeneration == seekToken else { return }
+                self.pendingSeek = nil
+                guard finished else { return }
                 self.currentTime = boundedTime
                 self.persistPlayback(force: true)
                 self.updateNowPlayingInfo()
             }
+        }
+    }
+
+    // MARK: - Chapters
+
+    /// Index into `chapters` of the chapter at the current (or requested) position.
+    var currentChapterIndex: Int? {
+        let position = navigationPosition
+        return PlaybackChapterList.chapterIndex(in: chapters, trackIndex: position.trackIndex, time: position.time)
+    }
+
+    var currentChapter: PlaybackChapter? {
+        currentChapterIndex.flatMap { chapters.indices.contains($0) ? chapters[$0] : nil }
+    }
+
+    var canGoToNextChapter: Bool {
+        guard let index = currentChapterIndex else { return false }
+        return index + 1 < chapters.count
+    }
+
+    var canGoToPreviousChapter: Bool {
+        guard chapters.count > 1, let index = currentChapterIndex else { return false }
+        return index > 0 || navigationPosition.time - chapters[index].start > Self.chapterRestartThreshold
+    }
+
+    func nextChapter() {
+        guard let index = currentChapterIndex, chapters.indices.contains(index + 1) else { return }
+        jump(to: chapters[index + 1])
+    }
+
+    /// Restarts the current chapter when more than a few seconds in, otherwise goes back one.
+    func previousChapter() {
+        guard let index = currentChapterIndex, chapters.indices.contains(index) else { return }
+        let current = chapters[index]
+        let position = navigationPosition
+        let intoChapter = position.trackIndex == current.trackIndex
+            ? position.time - current.start
+            : Self.chapterRestartThreshold + 1
+        if intoChapter > Self.chapterRestartThreshold || index == 0 {
+            jump(to: current)
+        } else {
+            jump(to: chapters[index - 1])
+        }
+    }
+
+    /// Chapter-list tap: jump to the chapter and play.
+    func playChapter(_ chapter: PlaybackChapter) {
+        jump(to: chapter, startPlaying: true)
+    }
+
+    private static let chapterRestartThreshold: Double = 5
+
+    private func jump(to chapter: PlaybackChapter, startPlaying: Bool = false) {
+        navigate(toTrack: chapter.trackIndex, time: chapter.start, startPlaying: startPlaying)
+    }
+
+    /// Where navigation steps from: the pending load target for this book if one is in flight,
+    /// otherwise the committed position.
+    private var navigationPosition: (trackIndex: Int, time: Double) {
+        if let target = pendingPlaybackTarget, target.bookID == currentAudiobook?.id {
+            return (target.trackIndex, target.time)
+        }
+        return (currentTrackIndex, currentTime)
+    }
+
+    /// Seeks inside the committed item when the target is in it; otherwise loads the target track.
+    /// Track loads always autoplay (as track navigation always has); in-item seeks keep the
+    /// play/pause state unless `startPlaying`.
+    private func navigate(toTrack trackIndex: Int, time: Double, startPlaying: Bool = false) {
+        guard let audiobook = currentAudiobook,
+              audiobook.sortedTracks.indices.contains(trackIndex) else { return }
+        if pendingPlaybackTarget == nil, trackIndex == currentTrackIndex, player.currentItem != nil {
+            seek(to: time)
+            if startPlaying, !isPlaying { play() }
+            return
+        }
+        // Record the target synchronously so a second tap before the load task runs steps from it.
+        let target = PendingPlaybackTarget(bookID: audiobook.id, trackIndex: trackIndex, time: time)
+        pendingPlaybackTarget = target
+        Task { [weak self] in
+            // Pause or a newer chapter request can cancel this before its task starts.
+            guard let self, self.pendingPlaybackTarget == target else { return }
+            await self.load(audiobook: audiobook, trackIndex: trackIndex, time: time, autoplay: true)
+        }
+    }
+
+    private static func chapterCacheKey(for track: AudioTrack) -> String {
+        "\(track.id.uuidString)|\(track.storedFileName)|\(track.remoteURLString ?? "")"
+    }
+
+    /// Recomputes `chapters` for the current book from the server chapters (Audiobookshelf), the
+    /// embedded markers read so far, or one chapter per track.
+    private func rebuildChapters() {
+        guard let audiobook = currentAudiobook else {
+            if !chapters.isEmpty { chapters = [] }
+            return
+        }
+        let tracks = audiobook.sortedTracks
+        var rebuilt: [PlaybackChapter] = []
+        if let itemID = audiobook.absItemID, let serverChapters = audiobookshelfChaptersByItemID[itemID] {
+            rebuilt = AudiobookshelfLibraryService.playbackChapters(
+                from: serverChapters,
+                trackDurations: tracks.map(\.duration)
+            )
+        }
+        if rebuilt.isEmpty {
+            var markers: [Int: [ChapterMarker]] = [:]
+            for (index, track) in tracks.enumerated() {
+                if let found = chapterMarkersByTrackKey[Self.chapterCacheKey(for: track)] {
+                    markers[index] = found
+                }
+            }
+            rebuilt = PlaybackChapterList.build(
+                trackTitles: tracks.map(\.displayTitle),
+                trackDurations: tracks.map(\.duration),
+                markersByTrack: markers
+            )
+        }
+        if rebuilt != chapters { chapters = rebuilt }
+    }
+
+    /// Reads chapters for the committed item off the playback path, then rebuilds the list if the
+    /// same book is still current.
+    private func loadChapters(for audiobook: Audiobook, track: AudioTrack, asset: AVAsset) {
+        let bookID = audiobook.id
+        if let itemID = audiobook.absItemID, audiobookshelfChaptersByItemID[itemID] == nil {
+            Task { [weak self] in
+                guard let self,
+                      let serverChapters = try? await self.loadPreparation.loadAudiobookshelfChapters(itemID)
+                else { return }
+                self.audiobookshelfChaptersByItemID[itemID] = serverChapters
+                if self.currentAudiobook?.id == bookID { self.rebuildChapters() }
+            }
+        }
+        // LibriVox sections are one file per chapter and never carry chapter atoms; skip the probe
+        // so streaming a free book doesn't spend extra requests on it.
+        guard !audiobook.isFreeBook else { return }
+        let key = Self.chapterCacheKey(for: track)
+        guard chapterMarkersByTrackKey[key] == nil else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            let markers = await self.loadPreparation.loadChapterMarkers(asset)
+            // A stream that failed to load reads as "no chapters"; let the next load retry it.
+            guard !markers.isEmpty || audiobook.isDownloaded else { return }
+            self.chapterMarkersByTrackKey[key] = markers
+            if self.currentAudiobook?.id == bookID { self.rebuildChapters() }
         }
     }
 
@@ -353,34 +552,31 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     var canGoToNextTrack: Bool {
         guard let audiobook = currentAudiobook else { return false }
-        return currentTrackIndex + 1 < audiobook.sortedTracks.count
+        return navigationPosition.trackIndex + 1 < audiobook.sortedTracks.count
     }
 
     var canGoToPreviousTrack: Bool {
         guard let audiobook = currentAudiobook, audiobook.sortedTracks.count > 1 else { return false }
-        return currentTrackIndex > 0 || currentTime > 5
+        let position = navigationPosition
+        return position.trackIndex > 0 || position.time > 5
     }
 
     func nextTrack() {
-        guard let audiobook = currentAudiobook, canGoToNextTrack else {
+        guard currentAudiobook != nil, canGoToNextTrack else {
             markCurrentBookFinished()
             return
         }
-        Task {
-            await load(audiobook: audiobook, trackIndex: currentTrackIndex + 1, time: 0, autoplay: true)
-        }
+        navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
     }
 
     func previousTrack() {
-        guard let audiobook = currentAudiobook else { return }
-        if currentTime > 5 {
-            seek(to: 0)
+        guard currentAudiobook != nil else { return }
+        let position = navigationPosition
+        if position.time > 5 {
+            navigate(toTrack: position.trackIndex, time: 0)
             return
         }
-        let targetIndex = max(currentTrackIndex - 1, 0)
-        Task {
-            await load(audiobook: audiobook, trackIndex: targetIndex, time: 0, autoplay: true)
-        }
+        navigate(toTrack: max(position.trackIndex - 1, 0), time: 0)
     }
 
     func setPlaybackRate(_ newRate: Double) {
@@ -395,10 +591,20 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func setSleepTimer(seconds: Double?) {
         sleepTimerTask?.cancel()
-        guard let seconds else {
+        guard var seconds else {
             sleepTimerEndsAt = nil
             return
         }
+        #if DEBUG
+        // E2E runs compress every sleep-timer choice so expiry is observable in seconds.
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-e2e-fixture"),
+           let index = arguments.firstIndex(of: "-e2e-sleep-timer-seconds"),
+           arguments.indices.contains(index + 1),
+           let override = Double(arguments[index + 1]) {
+            seconds = override
+        }
+        #endif
         let endDate = Date().addingTimeInterval(seconds)
         sleepTimerEndsAt = endDate
         sleepTimerTask = Task {
@@ -443,6 +649,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
 
         let loadToken = beginLoad()
+        pendingPlaybackTarget = PendingPlaybackTarget(bookID: audiobook.id, trackIndex: trackIndex, time: time)
         audiobookshelfRecoveryLoadToken = isAudiobookshelfRecovery ? loadToken : nil
         persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
         let showsStreamLoading = !audiobook.isDownloaded && autoplay
@@ -513,6 +720,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 equalizer.bind(to: audiobook)
             }
 
+            pendingPlaybackTarget = nil
             currentAudiobook = audiobook
             currentTrack = track
             currentTrackIndex = trackIndex
@@ -527,6 +735,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 track.duration = loadedDuration.seconds
             }
             persistence.lastPersistedTime = startTime
+            rebuildChapters()
+            loadChapters(for: audiobook, track: track, asset: asset)
 
             let audiobookID = audiobook.id
             currentItemStatusObservation = item.observe(\.status, options: [.new]) { [weak self] item, _ in
@@ -556,10 +766,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             seekGeneration &+= 1
             let committedSeekToken = seekGeneration
             if shouldSeek {
+                pendingSeek = (startTime, Date())
                 player.seek(to: target) { [weak self] finished in
-                    guard let self, finished else { return }
+                    guard let self else { return }
                     Task { @MainActor in
                         guard self.isCurrentLoad(loadToken), self.seekGeneration == committedSeekToken else { return }
+                        self.pendingSeek = nil
+                        guard finished else { return }
                         self.currentTime = startTime
                         self.persistPlayback(force: true)
                         self.updateNowPlayingInfo()
@@ -581,6 +794,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         } catch {
             guard isCurrentLoad(loadToken) else { return }
             isLoadingItem = false
+            pendingPlaybackTarget = nil
             clearLoadingPlayback(for: audiobook.id)
             playerErrorMessage = "Unpaged could not open this audio file."
         }
@@ -588,6 +802,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func beginLoad() -> UInt64 {
         seekGeneration &+= 1
+        pendingSeek = nil
         player.currentItem?.cancelPendingSeeks()
         currentItemStatusObservation?.invalidate()
         currentItemStatusObservation = nil
@@ -597,6 +812,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private func invalidateCurrentLoad() {
         loadGeneration.invalidate()
         seekGeneration &+= 1
+        pendingSeek = nil
+        pendingPlaybackTarget = nil
         player.currentItem?.cancelPendingSeeks()
         currentItemStatusObservation?.invalidate()
         currentItemStatusObservation = nil
@@ -612,6 +829,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard isCurrentLoad(loadToken) else { return }
         isLoadingItem = false
         loadingPlaybackBookID = nil
+        pendingPlaybackTarget = nil
         playerErrorMessage = message
     }
 
@@ -626,7 +844,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         timeObserverToken = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
             Task { @MainActor in
-                self.currentTime = max(time.seconds, 0)
+                self.applyObservedTime(time.seconds)
 
                 if let itemDuration = self.player.currentItem?.duration.seconds, itemDuration.isFinite, itemDuration > 0 {
                     self.duration = itemDuration
@@ -647,6 +865,20 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 self.updateNowPlayingInfo()
             }
         }
+    }
+
+    /// Applies a periodic time callback. While a seek is in flight AVPlayer still reports the
+    /// pre-seek position, so the reading is ignored until it reaches the target or the seek
+    /// completes (a stale seek is given up on after a while so time can never freeze).
+    func applyObservedTime(_ seconds: Double, now: Date = Date()) {
+        let observed = seconds.isFinite ? max(seconds, 0) : 0
+        if let seek = pendingSeek {
+            let landed = abs(observed - seek.time) < 1.5
+            let expired = now.timeIntervalSince(seek.issuedAt) > 15
+            guard landed || expired else { return }
+            pendingSeek = nil
+        }
+        currentTime = observed
     }
 
     private func observeTrackEnd() {

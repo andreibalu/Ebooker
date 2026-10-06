@@ -311,6 +311,68 @@ struct AudiobookshelfClientTests {
         }
     }
 
+    @Test func privateNetworkHostClassification() {
+        let privateHosts = ["localhost", "nas.local", "nas", "NAS.LOCAL.", "10.0.0.2", "127.0.0.1", "172.16.0.1",
+                            "172.31.255.255", "192.168.1.20", "169.254.3.4", "100.64.0.1", "100.127.255.254",
+                            "nas.tail1234.ts.net", "NAS.Tail1234.TS.NET", "::1", "[::1]", "fe80::1", "fe80::1%en0",
+                            "fd7a:115c:a1e0::1", "fc00::5"]
+        for host in privateHosts {
+            #expect(AudiobookshelfClient.isPrivateNetworkHost(host), "\(host)")
+        }
+        let publicHosts = ["abs.example.com", "8.8.8.8", "172.32.0.1", "100.128.0.1", "100.63.255.255",
+                           "192.169.0.1", "ts.net.example.com", "notts.net", "2001:db8::1", "1.2.3", "300.1.1.1", ""]
+        for host in publicHosts {
+            #expect(!AudiobookshelfClient.isPrivateNetworkHost(host), "\(host)")
+        }
+    }
+
+    @Test func onlyPlainHttpToPublicHostsNeedsAWarning() throws {
+        func warns(_ text: String) throws -> Bool {
+            AudiobookshelfClient.needsInsecureConnectionWarning(try AudiobookshelfClient.serverURL(from: text))
+        }
+        #expect(try warns("http://abs.example.com"))
+        #expect(try warns("http://203.0.113.9:13378"))
+        #expect(try !warns("https://abs.example.com"))
+        #expect(try !warns("http://192.168.1.20:13378"))
+        #expect(try !warns("http://nas.tail1234.ts.net:13378"))
+        #expect(try !warns("http://100.101.102.103:13378"))
+        #expect(try !warns("http://[fd7a:115c:a1e0::1]:13378"))
+        #expect(try !warns("http://nas:13378"))
+    }
+
+    @Test func tailnetAddressWithPortDefaultsToHttp() throws {
+        #expect(try AudiobookshelfClient.serverURL(from: "nas.tail1234.ts.net:13378").scheme == "http")
+        #expect(try AudiobookshelfClient.serverURL(from: "nas.tail1234.ts.net").scheme == "https")
+        #expect(try AudiobookshelfClient.serverURL(from: "100.101.102.103:13378").scheme == "http")
+    }
+
+    /// ATS used to refuse http to non-local hosts; the client must now send the request and
+    /// store the http base URL like any other.
+    @Test func plainHttpPublicServerIsNotRejected() async throws {
+        let store = MockABSCredentialStore()
+        let httpBase = URL(string: "http://abs.example.test:13378")!
+        MockABSURLProtocol.handler = { request in
+            #expect(request.url?.scheme == "http")
+            #expect(request.url?.path == "/login")
+            return (200, Self.json(#"{"user":{"accessToken":"access","refreshToken":"refresh"}}"#))
+        }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: store)
+        try await client.login(serverURL: httpBase, username: "reader", password: "secret")
+        #expect(try store.load()?.baseURL == httpBase)
+        let stored = try await client.storedStreamURL(for: ABSAudioTrack(index: 1, startOffset: 0, duration: 1,
+            title: "t", contentUrl: "/api/items/i/file/1", mimeType: "audio/mpeg"))
+        #expect(stored.absoluteString == "http://abs.example.test:13378/api/items/i/file/1")
+    }
+
+    @Test func atsRefusalIsNoLongerASpecialCase() async throws {
+        MockABSURLProtocol.error = URLError(.cannotFindHost)
+        defer { MockABSURLProtocol.error = nil }
+        let client = AudiobookshelfClient(session: MockABSURLProtocol.session(), credentials: MockABSCredentialStore())
+        await #expect(throws: AudiobookshelfError.unreachableServer) {
+            try await client.login(serverURL: URL(string: "http://nas.tail1234.ts.net:13378")!, username: "a", password: "b")
+        }
+    }
+
     // MARK: - Expanded item shape (ABS 2.36)
 
     @Test func expandedItemReadsTracksAndTagTitles() throws {

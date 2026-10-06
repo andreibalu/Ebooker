@@ -269,7 +269,7 @@ struct TotalTimeSection: View {
             }
             .padding(.top, 8)
 
-            Text("listening across \(Text("\(stats.totalSessions) sessions").fontWeight(.semibold).foregroundColor(.primary)) and \(Text("\(stats.activityByDay.count) days").fontWeight(.semibold).foregroundColor(.primary)). That's about \(Text(fmtHoursMins(avgPerDay)).fontWeight(.semibold).foregroundColor(.primary)) every day you've had the app.")
+            Text("listening across \(Text("\(stats.totalSessions) \(stats.totalSessions == 1 ? "session" : "sessions")").fontWeight(.semibold).foregroundColor(.primary)) and \(Text("\(stats.activityByDay.count) \(stats.activityByDay.count == 1 ? "day" : "days")").fontWeight(.semibold).foregroundColor(.primary)). That's about \(Text(fmtHoursMins(avgPerDay)).fontWeight(.semibold).foregroundColor(.primary)) every day you've had the app.")
                 .font(.system(size: 15))
                 .foregroundStyle(.secondary)
                 .lineSpacing(2)

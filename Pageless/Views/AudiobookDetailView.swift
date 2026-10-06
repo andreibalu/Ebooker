@@ -120,6 +120,8 @@ struct AudiobookDetailView: View {
                     uiImage: img,
                     onConfirm: { cropped in
                         audiobook.coverArtData = cropped.jpegData(compressionQuality: 0.85)
+                        // Autosave alone loses the cover if the app is killed right after.
+                        try? modelContext.save()
                         showCropSheet = false
                         pendingCropImage = nil
                     },
@@ -310,6 +312,7 @@ struct AudiobookDetailView: View {
                         .foregroundStyle(Color.cream)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("book.play")
                     .padding(.top, 2)
                 }
             }
@@ -371,6 +374,7 @@ struct AudiobookDetailView: View {
                             ForEach(saved) { moment in
                                 MomentRow(audiobook: audiobook, moment: moment, openPlayer: openPlayer) {
                                     modelContext.delete(moment)
+                                    try? modelContext.save()
                                 }
                             }
                         }
@@ -510,6 +514,8 @@ struct AudiobookDetailView: View {
                             .font(.title3)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Play saved progress")
+                    .accessibilityIdentifier("book.playProgress")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -590,7 +596,8 @@ struct AudiobookDetailView: View {
                         }
                     }
                     ForEach(Array(viewModel.filterCharacters).sorted(), id: \.self) { char in
-                        filterChip(text: char) {
+                        // Filter keys are lower-cased for matching; show the name as the cast list spells it.
+                        filterChip(text: audiobook.castList.first { $0.lowercased() == char } ?? char) {
                             viewModel.filterCharacters.remove(char)
                         }
                     }
@@ -707,6 +714,7 @@ struct AudiobookDetailView: View {
             if audiobook.coverArtData != nil {
                 Button(role: .destructive) {
                     audiobook.coverArtData = nil
+                    try? modelContext.save()
                 } label: {
                     Label("Remove cover", systemImage: "trash")
                 }

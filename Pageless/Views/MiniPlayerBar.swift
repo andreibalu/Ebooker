@@ -46,6 +46,7 @@ struct MiniPlayerBar: View {
                     Text(player.currentAudiobook?.title ?? "Nothing playing")
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
+                        .accessibilityIdentifier("miniPlayer.title")
 
                     if let secondary = miniSecondaryLine {
                         Text(secondary)
@@ -89,6 +90,8 @@ struct MiniPlayerBar: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(player.isPlaying || player.isPreparingPlayback ? "Pause playback" : "Play playback")
+                .accessibilityIdentifier("miniPlayer.playPause")
                 .padding(.trailing, 2)
             }
             .padding(.horizontal, 16)
@@ -103,6 +106,9 @@ struct MiniPlayerBar: View {
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: openPlayer)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("miniPlayer")
+        .accessibilityAction(named: "Open player", openPlayer)
         .simultaneousGesture(
             DragGesture(minimumDistance: 10)
                 .onChanged { value in

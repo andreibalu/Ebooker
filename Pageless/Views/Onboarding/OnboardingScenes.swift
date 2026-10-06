@@ -245,6 +245,7 @@ struct OBChoiceScene: View {
             .scaleEffect(reduceMotion ? 1 : (selected ? 1.025 : 1))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("onboarding.choice.\(id == .free ? "shelves" : "own")")
     }
 }
 
@@ -296,10 +297,12 @@ struct OBPermissionsScene: View {
                 VStack(spacing: 14) {
                     OBPermissionCard(icon: "mic.fill", title: "Microphone",
                                      desc: "So Unpaged can hear you when you use voice features.",
+                                     identifier: "onboarding.permission.microphone",
                                      granted: micGranted, onAllow: allowMicrophone)
                         .obReveal(active: isActive, delay: 0.08)
                     OBPermissionCard(icon: "waveform", title: "Speech Recognition",
                                      desc: "Turns what you say into text — recognized on device.",
+                                     identifier: "onboarding.permission.speech",
                                      granted: speechGranted, onAllow: allowSpeech)
                         .obReveal(active: isActive, delay: 0.16)
                 }
@@ -405,6 +408,7 @@ private struct OBPermissionCard: View {
     let icon: String
     let title: String
     let desc: String
+    let identifier: String
     let granted: Bool
     let onAllow: () -> Void
 
@@ -457,6 +461,8 @@ private struct OBPermissionCard: View {
             }
             .buttonStyle(OBPressButtonStyle())
             .disabled(granted)
+            .accessibilityLabel(granted ? "\(title) allowed" : "Allow \(title)")
+            .accessibilityIdentifier(identifier)
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -501,8 +507,10 @@ struct OBPlaybackScene: View {
                               caption: "How far the back and forward buttons jump.",
                               delay: 0.16) {
                         VStack(spacing: 10) {
-                            OBChipRow(value: $skipBack, leadingSymbol: "gobackward.30", reduceMotion: reduceMotion)
-                            OBChipRow(value: $skipForward, leadingSymbol: "goforward.30", reduceMotion: reduceMotion)
+                            OBChipRow(value: $skipBack, label: "Skip back", identifier: "onboarding.skipBack",
+                                      leadingSymbol: "gobackward.30", reduceMotion: reduceMotion)
+                            OBChipRow(value: $skipForward, label: "Skip forward", identifier: "onboarding.skipForward",
+                                      leadingSymbol: "goforward.30", reduceMotion: reduceMotion)
                         }
                     }
 
@@ -570,6 +578,7 @@ private struct OBResumeSlider: View {
     var body: some View {
         VStack(spacing: 15) {
             obSerif(resumeShort(options[liveIndex]), size: 40, color: OB.accent)
+                .accessibilityHidden(true)
 
             GeometryReader { geo in
                 let w = geo.size.width
@@ -617,6 +626,17 @@ private struct OBResumeSlider: View {
                 )
             }
             .frame(height: thumbSize)
+            .accessibilityElement()
+            .accessibilityLabel("Rewind on resume")
+            .accessibilityValue(resumeShort(options[index]))
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: step(by: 1)
+                case .decrement: step(by: -1)
+                @unknown default: break
+                }
+            }
+            .accessibilityIdentifier("onboarding.resume")
 
             // Stop labels, aligned under each dot
             HStack(spacing: 0) {
@@ -627,8 +647,15 @@ private struct OBResumeSlider: View {
                         .frame(maxWidth: .infinity)
                 }
             }
+            .accessibilityHidden(true)
         }
         .onAppear { haptics.prepare() }
+    }
+
+    /// VoiceOver swipe up/down moves one stop.
+    private func step(by delta: Int) {
+        dragIndex = max(0, min(options.count - 1, index + delta))
+        commit()
     }
 
     /// Nearest stop to a touch x within the track span.
@@ -670,6 +697,8 @@ private struct OBResumeSlider: View {
 /// Three equal chips (15s / 30s / 45s) led by a skip glyph.
 private struct OBChipRow: View {
     @Binding var value: Double
+    let label: String
+    let identifier: String
     let leadingSymbol: String
     let reduceMotion: Bool
     private let options = SkipIntervalOption.allCases
@@ -680,6 +709,7 @@ private struct OBChipRow: View {
                 .font(.system(size: 20))
                 .foregroundStyle(OB.secondary)
                 .frame(width: 30)
+                .accessibilityHidden(true)
             ForEach(options) { option in
                 let on = option.rawValue == value
                 Button {
@@ -701,6 +731,10 @@ private struct OBChipRow: View {
                         .offset(y: reduceMotion ? 0 : (on ? -1 : 0))
                 }
                 .buttonStyle(.plain)
+                // Both rows show the same chips; the row name tells VoiceOver which one this is.
+                .accessibilityLabel("\(label) \(option.title)")
+                .accessibilityAddTraits(on ? .isSelected : [])
+                .accessibilityIdentifier("\(identifier).\(Int(option.rawValue))")
             }
         }
     }
@@ -716,7 +750,7 @@ private struct OBStepper: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            stepButton("minus", disabled: index <= 0) {
+            stepButton("minus", label: "Earlier moment offset", disabled: index <= 0) {
                 set(index - 1)
             }
             Text(momentStepperLabel(options[index]))
@@ -726,7 +760,8 @@ private struct OBStepper: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 10)
                 .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(OB.accentSoft))
-            stepButton("plus", disabled: index >= options.count - 1) {
+                .accessibilityIdentifier("onboarding.momentOffset")
+            stepButton("plus", label: "Later moment offset", disabled: index >= options.count - 1) {
                 set(index + 1)
             }
         }
@@ -741,7 +776,7 @@ private struct OBStepper: View {
         }
     }
 
-    private func stepButton(_ symbol: String, disabled: Bool, action: @escaping () -> Void) -> some View {
+    private func stepButton(_ symbol: String, label: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: 18, weight: .regular))
@@ -751,6 +786,7 @@ private struct OBStepper: View {
         }
         .buttonStyle(.plain)
         .disabled(disabled)
+        .accessibilityLabel(label)
     }
 }
 
@@ -1268,6 +1304,8 @@ struct OBDoneScene: View {
                     Spacer()
                     Text(rows[i].1).font(.system(size: 13.5, weight: .semibold)).foregroundStyle(OB.label)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("onboarding.summary.\(i)")
                 .padding(.vertical, 11)
                 if i < rows.count - 1 {
                     Rectangle().fill(OB.separator).frame(height: 0.5)

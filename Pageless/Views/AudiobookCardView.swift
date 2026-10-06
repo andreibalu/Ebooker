@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 
 struct AudiobookCardView: View {
@@ -11,7 +12,9 @@ struct AudiobookCardView: View {
     let isLoadingPlayback: Bool
     let downloadEntry: LibriVoxDownloadManager.Entry?
 
+    @Environment(\.modelContext) private var modelContext
     @State private var folderSizeMB: Int?
+    @State private var favoriteSaveError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -64,7 +67,13 @@ struct AudiobookCardView: View {
                         Spacer()
                         Button {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                let previous = audiobook.isFavorite
                                 audiobook.isFavorite.toggle()
+                                do { try modelContext.save() }
+                                catch {
+                                    audiobook.isFavorite = previous
+                                    favoriteSaveError = error.localizedDescription
+                                }
                             }
                         } label: {
                             Image(systemName: audiobook.isFavorite ? "heart.fill" : "heart")
@@ -74,6 +83,8 @@ struct AudiobookCardView: View {
                                 .background(.ultraThinMaterial, in: Circle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(audiobook.isFavorite ? "Remove favorite" : "Add favorite")
+                        .accessibilityIdentifier("book.favorite.\(audiobook.folderName)")
                         .padding(10)
                     }
                 }
@@ -144,6 +155,14 @@ struct AudiobookCardView: View {
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.07), radius: 12, x: 0, y: 4)
+        .alert("Could Not Save Favorite", isPresented: Binding(
+            get: { favoriteSaveError != nil },
+            set: { if !$0 { favoriteSaveError = nil } }
+        )) {
+            Button("OK", role: .cancel) { favoriteSaveError = nil }
+        } message: {
+            Text(favoriteSaveError ?? "")
+        }
         .onAppear {
             folderSizeMB = LibraryImportService.folderSizeMB(for: audiobook)
         }

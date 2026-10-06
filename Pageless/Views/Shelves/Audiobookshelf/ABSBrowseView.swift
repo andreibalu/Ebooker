@@ -114,7 +114,7 @@ struct ABSBrowseView: View {
             stateContainer(ABSStateView(
                 eyebrow: "Server unavailable",
                 title: "Can't reach \(hostLabel).",
-                message: "Check that your server is running and reachable from this iPhone.",
+                message: "Check that your server is running and reachable from this iPhone. If you reach it over a VPN like Tailscale, make sure it's switched on.",
                 actionTitle: "Retry", actionIdentifier: "abs.browse.retry",
                 action: { Task { await reload() } }
             ))
