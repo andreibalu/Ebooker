@@ -1,5 +1,8 @@
 # Local library validation — 2026-10-06
 
+This records the original host-only check. Later emulator E2E and visual
+verification are documented in [the follow-up](e2e-visual-validation-2026-10-06.md).
+
 Implementation ticket [#59](https://github.com/andreibalu/Ebooker/issues/59).
 Branch `feat/android-local-library`, based on foundation `321f27d`.
 Worktree: `/private/tmp/unpaged-android-local-library`. Only `android/**` and

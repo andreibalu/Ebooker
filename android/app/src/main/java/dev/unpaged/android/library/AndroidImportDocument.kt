@@ -41,6 +41,7 @@ class AndroidAudioMetadataReader : AudioMetadataReader {
                 )
             } finally { reader.release() }
         } catch (error: ImportProblem) { throw error }
+        catch (_: IOException) { throw ImportProblem(ImportProblem.Reason.INVALID_AUDIO) }
         catch (_: RuntimeException) { throw ImportProblem(ImportProblem.Reason.INVALID_AUDIO) }
     }
 }

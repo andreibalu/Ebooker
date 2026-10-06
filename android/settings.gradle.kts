@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "UnpagedAndroid"
-include(":app")
+include(":app", ":e2e")

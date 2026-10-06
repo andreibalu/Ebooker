@@ -3,43 +3,29 @@ package dev.unpaged.android.library
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.unpaged.android.R
@@ -51,103 +37,44 @@ fun LibraryScreen(model: LibraryViewModel = viewModel()) {
     var removeId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = state.books.firstOrNull { it.id == selectedId }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), model::prepare)
+    val onImport = { picker.launch(arrayOf("*/*")) }
+    val canImport = !state.loading && !state.busy && state.error != LibraryFailure.LOAD
     BackHandler(enabled = selectedId != null && state.pending == null) { selectedId = null }
 
-    Scaffold { insets ->
+    Scaffold(Modifier.semantics { testTagsAsResourceId = true }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets)) {
-            Column(Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
-                Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge,
-                    fontFamily = FontFamily.Serif)
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(stringResource(if (selected == null) R.string.your_library else R.string.book_details),
-                        style = MaterialTheme.typography.titleMedium)
-                    if (selected == null) TextButton(enabled = !state.loading && !state.busy && state.error != LibraryFailure.LOAD,
-                        onClick = { picker.launch(arrayOf("*/*")) }) { Text(stringResource(R.string.import_book)) }
-                    else TextButton(onClick = { selectedId = null }) { Text(stringResource(R.string.back)) }
-                }
-                HorizontalDivider()
+            if (selected == null) LibraryHeader(state.books.size, canImport, onImport)
+            else Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { selectedId = null }) { Text(stringResource(R.string.back)) }
+                Text(selected.title, Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
             when {
-                state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+                state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.preparing -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     CircularProgressIndicator()
                     Text(stringResource(R.string.preparing_tracks, state.completed, state.total))
                     Text(stringResource(R.string.copying_audio))
                     TextButton(onClick = model::cancelPreparation) { Text(stringResource(R.string.cancel)) }
                 }
-                selected != null -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 24.dp),
+                selected != null -> BookDetails(selected, state.busy) { removeId = selected.id }
+                state.books.isEmpty() -> EmptyLibrary(canImport, onImport)
+                else -> LazyVerticalGrid(GridCells.Adaptive(160.dp), Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(20.dp, 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    item {
-                        Text(selected.title, fontFamily = FontFamily.Serif, style = MaterialTheme.typography.headlineMedium)
-                        if (selected.author.isNotBlank()) Text(selected.author, style = MaterialTheme.typography.bodyLarge)
-                        Text(bookSummary(selected), style = MaterialTheme.typography.bodyMedium)
-                        Spacer(Modifier.height(12.dp))
-                        Text(stringResource(R.string.playback_next), style = MaterialTheme.typography.bodyMedium)
-                    }
-                    items(selected.tracks.withIndex().toList(), key = { it.index }) { (index, track) ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Text("${index + 1}", color = MaterialTheme.colorScheme.primary)
-                            Column(Modifier.weight(1f)) {
-                                Text(track.title, fontFamily = FontFamily.Serif, style = MaterialTheme.typography.titleMedium)
-                                Text(durationLabel(track.durationMs), style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-                    item {
-                        TextButton(enabled = !state.busy, onClick = { removeId = selected.id }) {
-                            Text(stringResource(R.string.remove_book), color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                }
-                state.books.isEmpty() -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Text(stringResource(R.string.empty_library), fontFamily = FontFamily.Serif,
-                        style = MaterialTheme.typography.headlineMedium)
-                    Text(stringResource(R.string.empty_library_hint))
-                    Button(enabled = !state.busy && state.error != LibraryFailure.LOAD,
-                        onClick = { picker.launch(arrayOf("*/*")) }) { Text(stringResource(R.string.choose_audio)) }
-                }
-                else -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    items(state.books, key = { it.id }) { book ->
-                        Row(Modifier.fillMaxWidth().clickable { selectedId = book.id }.padding(horizontal = 24.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically) {
-                            Surface(Modifier.size(56.dp, 76.dp), shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(book.title.take(1), fontFamily = FontFamily.Serif,
-                                        style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.primary)
-                                }
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(book.title, fontFamily = FontFamily.Serif, style = MaterialTheme.typography.titleLarge,
-                                    maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                if (book.author.isNotBlank()) Text(book.author, style = MaterialTheme.typography.bodyMedium)
-                                Text(bookSummary(book), style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    items(state.books, key = { it.id }) { book -> LibraryBookCard(book) { selectedId = book.id } }
                 }
             }
         }
     }
-
-    state.pending?.let { pending ->
-        ImportReview(pending, state.busy, model::save, model::discard)
-    }
+    state.pending?.let { ImportReview(it, state.busy, model::save, model::discard) }
     state.books.firstOrNull { it.id == removeId }?.let { book ->
         AlertDialog(onDismissRequest = { if (!state.busy) removeId = null },
-            title = { Text(stringResource(R.string.remove_title)) },
-            text = { Text(stringResource(R.string.remove_hint, book.title)) },
+            title = { Text(stringResource(R.string.remove_title)) }, text = { Text(stringResource(R.string.remove_hint, book.title)) },
             confirmButton = { TextButton(enabled = !state.busy, onClick = {
                 model.remove(book); removeId = null; selectedId = null
             }) { Text(stringResource(R.string.remove)) } },
-            dismissButton = { TextButton(enabled = !state.busy, onClick = { removeId = null }) {
-                Text(stringResource(R.string.cancel))
-            } })
+            dismissButton = { TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } })
     }
     state.error?.let { error ->
         AlertDialog(onDismissRequest = { if (error != LibraryFailure.LOAD) model.dismissError() },
@@ -159,44 +86,114 @@ fun LibraryScreen(model: LibraryViewModel = viewModel()) {
                 LibraryFailure.READ -> R.string.read_failed
                 LibraryFailure.STORAGE -> R.string.storage_failed
                 LibraryFailure.LOAD -> R.string.load_failed
-            })) },
-            confirmButton = { TextButton(onClick = {
+            })) }, confirmButton = { TextButton(onClick = {
                 if (error == LibraryFailure.LOAD) model.reload() else model.dismissError()
             }) { Text(stringResource(if (error == LibraryFailure.LOAD) R.string.retry else R.string.ok)) } })
     }
 }
 
 @Composable
+private fun BookDetails(book: LibraryBook, busy: Boolean, remove: () -> Unit) {
+    var expanded by rememberSaveable(book.id) { mutableStateOf(false) }
+    LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        item {
+            Surface(shape = RoundedCornerShape(28.dp), shadowElevation = 3.dp) {
+                Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    GeneratedBookCover(book.title, Modifier.size(130.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(book.title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(shortDuration(book.durationMs), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.playback_next), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        item {
+            Surface(shape = RoundedCornerShape(28.dp), shadowElevation = 4.dp) {
+                TextButton(onClick = { expanded = !expanded }, modifier = Modifier.fillMaxWidth().testTag("book.tracks")) {
+                    Text(pluralStringResource(R.plurals.book_summary, book.tracks.size, book.tracks.size,
+                        shortDuration(book.durationMs)), Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (expanded) items(book.tracks.withIndex().toList(), key = { it.index }) { (index, track) ->
+            Surface(shape = RoundedCornerShape(16.dp)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("${index + 1}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(track.title, Modifier.weight(1f))
+                    Text(trackDuration(track.durationMs), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                }
+            }
+        }
+        item { TextButton(enabled = !busy, onClick = remove) {
+            Text(stringResource(R.string.remove_book), color = MaterialTheme.colorScheme.error)
+        } }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun ImportReview(pending: PendingImport, busy: Boolean, save: (String, String) -> Unit, discard: () -> Unit) {
     var title by rememberSaveable(pending.id) { mutableStateOf(pending.suggestedTitle) }
     var author by rememberSaveable(pending.id) { mutableStateOf(pending.suggestedAuthor) }
-    AlertDialog(onDismissRequest = { if (!busy) discard() },
-        title = { Text(stringResource(R.string.import_book), fontFamily = FontFamily.Serif) },
-        text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                item { Text(pluralStringResource(R.plurals.import_review_hint, pending.tracks.size, pending.tracks.size)) }
-                item { OutlinedTextField(title, { title = it }, enabled = !busy,
-                    label = { Text(stringResource(R.string.title)) }, singleLine = true) }
-                item { OutlinedTextField(author, { author = it }, enabled = !busy,
-                    label = { Text(stringResource(R.string.author)) }, singleLine = true) }
-                items(pending.tracks.withIndex().toList(), key = { it.index }) { (index, track) ->
-                    Text("${index + 1}. ${track.title}", style = MaterialTheme.typography.bodySmall)
+    val currentBusy by rememberUpdatedState(busy)
+    val titleLabel = stringResource(R.string.title)
+    val authorLabel = stringResource(R.string.author)
+    ModalBottomSheet(onDismissRequest = { if (!busy) discard() }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true,
+            confirmValueChange = { value -> !currentBusy || value != SheetValue.Hidden }),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        containerColor = if (isSystemInDarkTheme()) Color(0xFF1C1C1E) else Color(0xFFF2F2F7)) {
+        Column(Modifier.fillMaxHeight(.92f).imePadding().semantics { testTagsAsResourceId = true }) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(enabled = !busy, onClick = discard, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Text(stringResource(R.string.cancel)) }
+                Text(stringResource(R.string.import_book), Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                TextButton(enabled = !busy && title.isNotBlank(), onClick = { save(title, author) }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) {
+                    Text(stringResource(R.string.add_to_library), fontSize = 13.sp)
                 }
             }
-        },
-        confirmButton = { TextButton(enabled = !busy && title.isNotBlank(), onClick = { save(title, author) }) {
-            Text(stringResource(R.string.add_to_library))
-        } },
-        dismissButton = { TextButton(enabled = !busy, onClick = discard) { Text(stringResource(R.string.cancel)) } })
+            LazyColumn(Modifier.fillMaxWidth(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                item { Text(stringResource(R.string.details), Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+                item {
+                    Surface(shape = RoundedCornerShape(14.dp)) {
+                        Column {
+                            val fieldColors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
+                                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent)
+                            TextField(title, { title = it }, Modifier.fillMaxWidth().testTag("import.title").semantics { contentDescription = titleLabel }, enabled = !busy,
+                                placeholder = { Text(stringResource(R.string.title)) }, singleLine = true, colors = fieldColors)
+                            HorizontalDivider(Modifier.padding(start = 16.dp))
+                            TextField(author, { author = it }, Modifier.fillMaxWidth().testTag("import.author").semantics { contentDescription = authorLabel }, enabled = !busy,
+                                placeholder = { Text(stringResource(R.string.author)) }, singleLine = true, colors = fieldColors)
+                            HorizontalDivider(Modifier.padding(start = 16.dp))
+                            ReviewValue(stringResource(R.string.files), pending.tracks.size.toString())
+                            HorizontalDivider(Modifier.padding(start = 16.dp))
+                            ReviewValue(stringResource(R.string.total_length), shortDuration(pending.tracks.sumOf { it.durationMs }))
+                        }
+                    }
+                }
+                item { Text(stringResource(R.string.imported_files), Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
+                items(pending.tracks.withIndex().toList(), key = { it.index }) { (_, track) ->
+                    Surface(shape = RoundedCornerShape(14.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text(track.title)
+                                Text(track.originalName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                            }
+                            Text(trackDuration(track.durationMs), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
-private fun bookSummary(book: LibraryBook): String = pluralStringResource(R.plurals.book_summary, book.tracks.size,
-    book.tracks.size, durationLabel(book.durationMs))
-
-@Composable
-private fun durationLabel(milliseconds: Long): String {
-    val seconds = milliseconds / 1000
-    return if (seconds >= 3600) stringResource(R.string.hours_minutes, seconds / 3600, (seconds % 3600) / 60)
-        else stringResource(R.string.minutes_seconds, seconds / 60, seconds % 60)
+private fun ReviewValue(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label); Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }

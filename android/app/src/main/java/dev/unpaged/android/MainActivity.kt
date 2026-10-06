@@ -23,11 +23,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun UnpagedApp() {
     val colors = if (isSystemInDarkTheme()) {
-        darkColorScheme(primary = Color(0xFFE4B775), background = Color(0xFF171613),
-            surface = Color(0xFF171613), surfaceVariant = Color(0xFF302B23))
+        darkColorScheme(onSurface = Color.White, onBackground = Color.White, primary = Color(0xFFE59A19), background = Color(0xFF1C1C1F),
+            surface = Color(0xFF2B2B30), surfaceVariant = Color(0xFF2B2B30), onSurfaceVariant = Color(0xFFAAAAAE))
     } else {
-        lightColorScheme(primary = Color(0xFF80531A), background = Color(0xFFFFFBF5),
-            surface = Color(0xFFFFFBF5), surfaceVariant = Color(0xFFF1E7D8))
+        lightColorScheme(onSurface = Color.Black, onBackground = Color.Black, primary = Color(0xFFCC8632), background = Color(0xFFF7F4ED),
+            surface = Color(0xFFFFFCF7), surfaceVariant = Color(0xFFEAE7DF), onSurfaceVariant = Color(0xFF6C6C70))
     }
     MaterialTheme(colorScheme = colors) { LibraryScreen() }
 }
