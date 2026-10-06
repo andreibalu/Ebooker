@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Unpaged</string>
+    <string name="your_library">Your library</string>
+    <string name="empty_library">No books yet</string>
+</resources>
