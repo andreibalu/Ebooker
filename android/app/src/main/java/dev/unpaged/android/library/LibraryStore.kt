@@ -10,6 +10,7 @@ import androidx.core.database.sqlite.transaction
 interface LibraryStore {
     fun books(): List<LibraryBook>
     fun insert(book: LibraryBook)
+    fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) { error("Download promotion unsupported") }
     fun delete(id: String)
     fun toggleFavorite(id: String)
     fun updatePlaybackProgress(id: String, progress: PlaybackProgress)
@@ -103,6 +104,21 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             book.tracks.forEachIndexed { index, track ->
                 db.insertOrThrow("tracks", null, ContentValues().apply {
                     put("book_id", book.id); put("position", index); put("title", track.title)
+                    put("original_name", track.originalName); put("stored_name", track.storedName)
+                    put("duration_ms", track.durationMs); put("fingerprint", track.fingerprint); put("remote_url", track.remoteUrl)
+                })
+            }
+        }
+    }
+
+    override fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) {
+        writableDatabase.transaction {
+            check(update("books", ContentValues().apply { put("is_downloaded", true); put("storage_bytes", bytes) },
+                "id = ?", arrayOf(id)) == 1) { "Book was removed during download" }
+            delete("tracks", "book_id = ?", arrayOf(id))
+            tracks.forEachIndexed { index, track ->
+                insertOrThrow("tracks", null, ContentValues().apply {
+                    put("book_id", id); put("position", index); put("title", track.title)
                     put("original_name", track.originalName); put("stored_name", track.storedName)
                     put("duration_ms", track.durationMs); put("fingerprint", track.fingerprint); put("remote_url", track.remoteUrl)
                 })

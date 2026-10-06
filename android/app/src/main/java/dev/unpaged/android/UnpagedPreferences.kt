@@ -15,6 +15,8 @@ class UnpagedPreferences(context: Context) {
     private val storage = context.getSharedPreferences("unpaged", Context.MODE_PRIVATE)
     fun text(key: String, default: String) = storage.getString(key, default) ?: default
     fun seconds(key: String, default: Int) = storage.getInt(key, default)
+    fun collectionsHidden() = storage.getBoolean("librivoxCollectionsHidden", false)
+    fun setCollectionsHidden(value: Boolean) { storage.edit { putBoolean("librivoxCollectionsHidden", value) } }
     fun shelvesFirst() = storage.getBoolean("startOnFreeBooks", false)
     fun setText(key: String, value: String) { storage.edit { putString(key, value) } }
     fun setSeconds(key: String, value: Int) { storage.edit { putInt(key, value) } }

@@ -7,6 +7,7 @@ import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.UiSelector
+import androidx.test.uiautomator.UiScrollable
 import androidx.test.uiautomator.Until
 import java.io.File
 import org.junit.Assert.*
@@ -44,7 +45,7 @@ class LibraryE2ETest {
             device.executeShellCommand("settings put global $setting 0")
         device.executeShellCommand("pm clear $app")
         device.executeShellCommand("cmd uimode night no")
-        launch()
+        launchFixture()
         field("tab.Library").click()
     }
 
@@ -56,11 +57,9 @@ class LibraryE2ETest {
         visible(By.text("My Library"))
         screenshot("empty-dark")
         tapText("Browse Shelves")
-        field("shelves.placeholder")
-        screenshot("shelves-dark")
+        field("shelves.screen")
         device.executeShellCommand("cmd uimode night no")
-        field("shelves.placeholder")
-        screenshot("shelves-light")
+        field("shelves.screen")
         field("tab.Library").click()
     }
 
@@ -404,6 +403,121 @@ class LibraryE2ETest {
         val target = device.findObject(UiSelector().description(value).enabled(true))
         assertTrue("Missing description: $value", target.waitForExists(15_000))
         target.click()
+    }
+
+    private fun launchFixture() {
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true")
+        visible(By.pkg(app).depth(0))
+    }
+
+    @Test fun shelvesFixtureRendersHeroCollectionsAndClassics() {
+        saveBook("E2E The Listening Book", "Fixture Author", "Chapter 1.wav", "Chapter 2.wav")
+        tapDescription("Add favorite")
+        saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
+        field("tab.Shelves").click()
+        field("shelves.hero")
+        visible(By.text("TODAY'S PICK · 16H"))
+        visible(By.text("Tale of Two Cities"))
+        visible(By.text("Offline — showing saved books."))
+        visible(By.text("Collections"))
+        visible(By.text("Popular Classics"))
+        field("shelves.book.133")
+        screenshot("shelves-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("shelves.hero")
+        screenshot("shelves-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("shelves.hero").click()
+        field("shelves.detail")
+        visible(By.text("About"))
+        visible(By.text("London, Paris and the Revolution."))
+        screenshot("shelves-detail-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("shelves.detail")
+        screenshot("shelves-detail-dark")
+    }
+
+    @Test fun shelvesSearchFiltersAndCollection() {
+        field("tab.Shelves").click()
+        field("shelves.search").setText("Jane")
+        field("shelves.book.133")
+        field("shelves.filter.LANGUAGE").click()
+        tapText("German")
+        visible(By.text("Nothing on this shelf."))
+        field("shelves.search").setText("")
+        field("shelves.book.1203")
+        field("shelves.filter.LENGTH").click()
+        tapText("< 1 hr")
+        visible(By.text("Nothing on this shelf."))
+        field("shelves.filter.LENGTH").click()
+        tapText("All length")
+        field("shelves.book.1203")
+        field("shelves.filter.LANGUAGE").click()
+        tapText("All language")
+        field("shelves.filter.GENRE").click()
+        tapText("Romance")
+        field("shelves.book.133")
+        field("shelves.filter.GENRE").click()
+        tapText("All genre")
+        field("shelves.hero")
+        field("shelves.collection.gothic-horror").click()
+        field("shelves.collection")
+        visible(By.text("Vampires, monsters & haunted minds"))
+        field("shelves.book.271")
+        screenshot("shelves-collection-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("shelves.collection")
+        screenshot("shelves-collection-dark")
+    }
+
+    @Test fun shelvesOfflineActionsDescriptionsAlternativesAndCollapsePersist() {
+        field("tab.Shelves").click()
+        assertFalse(field("shelves.sample.133").isEnabled)
+        field("shelves.retry").click()
+        visible(By.text("Offline — showing saved books."))
+        tapDescription("Toggle collections")
+        settleLayout()
+        assertFalse(device.hasObject(By.res("shelves.collection.ancient-wisdom")))
+        relaunch()
+        field("tab.Shelves").click()
+        field("shelves.hero")
+        assertFalse(device.hasObject(By.res("shelves.collection.ancient-wisdom")))
+        tapDescription("Toggle collections")
+        field("shelves.collection.ancient-wisdom")
+        field("shelves.hero").click()
+        assertFalse(field("shelves.sample.detail").isEnabled)
+        tapText("Show more")
+        visible(By.text("Show less"))
+        field("shelves.download").click()
+        visible(By.text("You're offline. Connect to download this book."))
+        tapText("OK")
+        device.pressBack()
+        field("shelves.search").setText("Pride and Prejudice")
+        field("shelves.book.253").click()
+        UiScrollable(UiSelector().resourceId("shelves.detail")).scrollIntoView(UiSelector().text("Other Recordings"))
+        visible(By.text("Other Recordings"))
+        field("shelves.book.2531").click()
+        visible(By.text("A second full-cast recording."))
+    }
+
+    @Test fun shelvesAddStreamingIdentitySurvivesRelaunch() {
+        field("tab.Shelves").click()
+        field("shelves.hero").click()
+        field("shelves.add").click()
+        visible(By.text("Added to Your Library"))
+        tapText("View in Library")
+        visible(By.text("Streaming"))
+        device.pressBack()
+        field("tab.Library").click()
+        visible(By.text("Tale of Two Cities"))
+        relaunch()
+        visible(By.text("Tale of Two Cities"))
+        field("tab.Shelves").click()
+        field("shelves.hero").click()
+        visible(By.text("Added to Your Library"))
+        assertFalse(device.hasObject(By.res("shelves.add")))
+        tapText("View in Library")
+        visible(By.text("Streaming"))
     }
 
     private fun launch() {

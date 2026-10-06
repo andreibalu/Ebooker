@@ -38,5 +38,6 @@ slices. No GitHub issue/PR state was changed during this work.
 
 [E2E and visual checks](e2e-visual-validation-2026-10-06.md) distinguish current
 emulator coverage from remaining product/visual and device qualification.
-Playback remains unwired; Shelves, activity, onboarding and moment creation
-are later slices. Payments, Plus/tips and Apple sync remain excluded.
+The [LibriVox Shelves slice](slice-3-librivox-shelves.md) adds cached catalog browsing,
+streaming addition, downloads and samples; its emulator/visual checks are deferred
+to the orchestrator. Playback, activity, onboarding and moment creation are separate slices. Payments, Plus/tips and Apple sync remain excluded.
