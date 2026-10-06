@@ -46,3 +46,8 @@ onboarding and full moment editing are later slices. Payments, Plus/tips and App
 The [LibriVox Shelves slice](slice-3-librivox-shelves.md) adds cached catalog browsing,
 streaming addition, downloads and samples; its emulator/visual checks are deferred
 to the orchestrator. Playback, activity, onboarding and moment creation are separate slices. Payments, Plus/tips and Apple sync remain excluded.
+
+[Slice 5](slice-5-reading-onboarding.md) adds additive schema v3 reading activity,
+Favorites stats and once-per-install onboarding/reset. Android replacements are
+notifications, manual moments and private local storage; E2E journeys compile
+without using the shared emulator. Runtime and exact visual parity remain pending.

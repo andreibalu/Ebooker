@@ -19,5 +19,8 @@ open class MainActivity : ComponentActivity() {
 private fun UnpagedApp() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val preferences = androidx.compose.runtime.remember { UnpagedPreferences(context) }
-    UnpagedTheme(preferences) { LibraryScreen(preferences = preferences) }
+    preferenceRevision(preferences)
+    UnpagedTheme(preferences) {
+        if (preferences.onboardingComplete()) LibraryScreen(preferences = preferences) else OnboardingScreen(preferences)
+    }
 }

@@ -8,7 +8,11 @@ chapters, speed, sleep, progress and manual moment saves are in
 [slice 2](../docs/android/slice-2-playback.md). Shelves browses a separately cached
 LibriVox catalog with collections, search/filters, samples, streaming addition and
 session-owned downloads ([slice 3](../docs/android/slice-3-librivox-shelves.md)).
-Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
+Reading sessions (additive schema v3), Favorites activity/stats and seven-page
+onboarding are implemented in [slice 5](../docs/android/slice-5-reading-onboarding.md);
+onboarding uses notification permission, manual moments and local-library pages
+in place of Apple-only features. Slice 5 compiles E2E journeys; emulator/capture
+validation is deferred. Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
 for the migration and next-slice API contract. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
 remains the product/architecture decision index.
 

@@ -47,6 +47,7 @@ class PlayerController internal constructor(private val context: Application) {
     private val writes = Channel<() -> Unit>(Channel.UNLIMITED)
     private val mutableState = MutableStateFlow(PlayerState())
     val state = mutableState.asStateFlow()
+    private val activity = dev.unpaged.android.activity.ReadingSessionRecorder({ session -> writes.trySend { store.saveReadingSession(session) } })
     private val resume = ResumePolicy()
     private val rules = PlaybackPersistenceRules(SystemClock::elapsedRealtime)
     private var player: Player? = null
@@ -84,6 +85,7 @@ class PlayerController internal constructor(private val context: Application) {
         ticker = scope.launch {
             while (isActive) {
                 delay(1000)
+                if (engine.isPlaying) state.value.book?.let { activity.tick(it) }
                 rules.tick(engine.isPlaying)
                 if (rules.expireSleep()) engine.pause()
                 update()
@@ -93,7 +95,7 @@ class PlayerController internal constructor(private val context: Application) {
         pending?.also { pending = null; it() }
     }
     fun detach() {
-        update(); persist(true); ticker?.cancel(); player?.removeListener(listener)
+        activity.end(); update(); persist(true); ticker?.cancel(); player?.removeListener(listener)
         player = null
         connection?.let(MediaController::releaseFuture); connection = null
         mutableState.value = PlayerState(revision = state.value.revision + 1)
@@ -102,6 +104,9 @@ class PlayerController internal constructor(private val context: Application) {
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             if (replacing) return
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
+                (events.contains(Player.EVENT_IS_PLAYING_CHANGED) && !player.isPlaying)) activity.flush()
+            if (player.playbackState == Player.STATE_ENDED) activity.end()
             update()
             if (events.contains(Player.EVENT_IS_PLAYING_CHANGED) || events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)
                 || events.contains(Player.EVENT_PLAYBACK_STATE_CHANGED) || events.contains(Player.EVENT_PLAYBACK_PARAMETERS_CHANGED)
@@ -155,6 +160,7 @@ class PlayerController internal constructor(private val context: Application) {
     private fun load(book: LibraryBook, track: Int, position: Long) {
         val engine = player ?: return
         if (book.tracks.isEmpty()) return
+        activity.end()
         persist(true)
         markers.clear()
         preservingSkipTarget = null
@@ -204,7 +210,7 @@ class PlayerController internal constructor(private val context: Application) {
         writes.trySend { store.updatePlaybackProgress(book.id, progress) }
         rules.didPersist(progress)
     }
-    fun background() { update(); persist(true) }
+    fun background() { activity.flush(); update(); persist(true) }
     fun toggle() { player?.let { if (it.playWhenReady) it.pause() else { if (it.playbackState == Player.STATE_IDLE) it.prepare(); it.play() } } }
     fun seek(position: Long, penalize: Boolean = true) {
         if (state.value.durationMs <= 0) return
@@ -255,6 +261,7 @@ class PlayerController internal constructor(private val context: Application) {
     }
     fun removed(id: String) {
         if (state.value.book?.id != id) return
+        activity.end()
         loadJob?.cancel(); pending = null
         replacing = true; player?.stop(); player?.clearMediaItems(); replacing = false
         mutableState.value = PlayerState(revision = state.value.revision + 1)

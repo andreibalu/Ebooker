@@ -236,3 +236,17 @@ Earlier E2E counts and visual reports above remain historical slice-1 evidence.
 The report generator now accepts `--cases shelves-light shelves-dark` for focused
 03/23 comparisons. Layout and live audio/download behavior remain unverified until
 that run; no visual parity pass is claimed from host tests or assembly.
+
+## Slice 5 — Reading activity and onboarding, compile only
+
+[Implementation and handoff](slice-5-reading-onboarding.md) adds two UI Automator
+journeys and debug-only reading-session fixtures. First launch, My books, live
+preferences, completion, real force-stop persistence and Settings reset are
+asserted through visible controls. Imported fixture books plus today's 42 minutes
+exercise the Favorites activity card and full stats screen. Light/dark captures
+are specified; `make-visual-report.py --cases onboarding-light activity-dark`
+pairs 00-launch / 22-favorites-dark. Additional captures remain source-derived.
+
+No emulator/E2E execution or screenshot comparison is claimed in this slice.
+Earlier evidence directories/counts are historical; the emulator owner must
+execute and visually review this work after integration.

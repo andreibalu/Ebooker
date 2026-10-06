@@ -14,6 +14,8 @@ parser.add_argument('--playback-only', action='store_true', help='Require the fo
 parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
 parity_references = {
+    'onboarding-light': '00-launch.png',
+    'activity-dark': '22-favorites-dark.png',
     'player-light': '06-player-light.png',
     'chapters-light': '07-chapters-light.png',
     'library-miniplayer-light': '11-library-miniplayer-light.png',
@@ -71,7 +73,7 @@ for case in cases:
     figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in ['ios', 'android'])
     note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
-for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark']:
+for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark', 'onboarding-dark', 'activity-light', 'stats-light', 'stats-dark']:
     source = args.android_captures / f'{case}.png'
     if source.is_file():
         name = f'android-{case}.png'
