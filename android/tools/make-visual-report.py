@@ -11,6 +11,7 @@ parser.add_argument('android_captures', type=Path)
 parser.add_argument('ios_captures', type=Path)
 parser.add_argument('output', type=Path)
 parser.add_argument('--playback-only', action='store_true', help='Require the four playback light captures; include dark captures as source-derived galleries')
+parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
 parity_references = {
     'player-light': '06-player-light.png',
@@ -33,9 +34,14 @@ parity_references = {
 }
 if (args.ios_captures / '02-library-light.png').is_file():
     playback_cases = ['player-light', 'chapters-light', 'detail-miniplayer-light', 'library-miniplayer-light']
-    cases = playback_cases if args.playback_only else [case for case in parity_references
-        if case not in playback_cases or (args.android_captures / f'{case}.png').is_file()
-        or case == 'detail-miniplayer-light']
+    if args.cases:
+        if any(case not in parity_references for case in args.cases):
+            parser.error('Unknown case; choose from ' + ', '.join(parity_references))
+        cases = args.cases
+    else:
+        cases = playback_cases if args.playback_only else [case for case in parity_references
+            if case not in playback_cases or (args.android_captures / f'{case}.png').is_file()
+            or case == 'detail-miniplayer-light']
     sources = [(platform, case, root / (parity_references[case] if platform == 'ios' else ('detail-light.png' if case == 'detail-miniplayer-light' and not (root / f'{case}.png').is_file() and not args.playback_only else f'{case}.png')))
                for case in cases for platform, root in [('ios', args.ios_captures), ('android', args.android_captures)]]
 else:
@@ -78,7 +84,7 @@ for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-
 <title>Unpaged Android / iOS visual review</title>
 <style>body{margin:40px auto;max-width:900px;padding:0 20px;background:#eeeae3;color:#252322;font:16px system-ui}h1{font-size:28px}p{line-height:1.6}section{margin:48px 0}.pair{display:flex;gap:24px;align-items:flex-start}figure{margin:0;flex:1;min-width:0}figcaption{text-transform:uppercase;font-size:12px;letter-spacing:2px;padding-bottom:12px}img{display:block;width:100%;height:auto;border-radius:12px}a{color:inherit}@media(max-width:600px){body{margin:24px auto;padding:0 12px}.pair{gap:12px}}</style>
 <h1>Unpaged — Android / iOS visual review</h1>
-<p>Actual emulator and simulator captures at equal display width. PNG bytes are unchanged; click to inspect full resolution. Matching fixture titles, authors and durations are used. System chrome, fonts and missing Android features remain visible. Plus, purchases and Apple sync stay excluded. Playback captures come from real imported tracks and live Media3 state. Older capture sets can still show the pre-playback detail fallback. New playback visual journeys save two manual moments. EQ is disabled. Settings references include excluded rows, so section positions differ. Runtime captures need a human review after the orchestrator runs E2E.</p>
+<p>Actual emulator and simulator captures at equal display width. PNG bytes are unchanged; click to inspect full resolution. Matching fixture titles, authors and durations are used. System chrome, fonts and missing Android features remain visible. Plus, purchases and Apple sync stay excluded. Playback captures come from real imported tracks and live Media3 state; Shelves uses the debug fixture catalog, which fixes hero and chart order. Settings references include excluded rows, so section positions differ.</p>
 <p>This is a human comparison artifact, not an automated pixel-diff pass. See the adjacent validation document for provenance, fixes and outstanding parity gaps.</p>
 ''' + '\n'.join(sections) + '</html>\n')
 print(args.output / 'index.html')

@@ -55,6 +55,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    /** Catalog writes refresh visible rows without rerunning import/file recovery. */
+    fun refreshCatalogBooks() {
+        viewModelScope.launch { job?.join(); refreshBooks() }
+    }
+
     fun prepare(uris: List<Uri>) {
         if (uris.isEmpty() || job?.isActive == true || state.value.pending != null) return
         mutableState.update { it.copy(busy = true, preparing = true, completed = 0, total = uris.size, error = null) }

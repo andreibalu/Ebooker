@@ -3,12 +3,12 @@
 Native Kotlin/Compose application under `android/app/`. Local audiobook import,
 metadata review, schema-v2 persistence, Favorites/Library/Shelves pager, per-tab
 sort menus, favorite hearts, detail disclosures and persisted listening/appearance
-settings are implemented. Shelves is a placeholder. Media3 local/remote playback,
-full player, mini player, chapters, speed, sleep, progress and manual moment saves
-are implemented in [slice 2](../docs/android/slice-2-playback.md); its E2E driver
-is compiled but runtime/capture verification is deferred to the orchestrator.
-Network catalog sources, AI,
-payments and sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
+settings are implemented. Media3 local/remote playback, full player, mini player,
+chapters, speed, sleep, progress and manual moment saves are in
+[slice 2](../docs/android/slice-2-playback.md). Shelves browses a separately cached
+LibriVox catalog with collections, search/filters, samples, streaming addition and
+session-owned downloads ([slice 3](../docs/android/slice-3-librivox-shelves.md)).
+Audiobookshelf, AI, payments and cloud sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
 for the migration and next-slice API contract. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
 remains the product/architecture decision index.
 
@@ -87,8 +87,9 @@ are scaffolding choices. Minimum phone support, final application identity,
 release UI and broader feature architecture remain unresolved Wayfinder
 decisions. SDK level alone never establishes local-AI availability.
 
-Playback declares INTERNET and foreground media-playback permissions. API33+
-notification permission is optional and denial never blocks playback. Local imports use the system document
+Playback declares INTERNET and foreground media-playback permissions; ACCESS_NETWORK_STATE
+supports LibriVox offline detection. API33+ notification permission is optional and
+denial never blocks playback. Local imports use the system document
 picker and copy audio into private storage; source files are never deleted.
 The private SQLite index and owned audio are excluded from backup; uninstalling
 Unpaged removes these copies. Import progress survives rotation, but process
@@ -121,9 +122,12 @@ Robolectric 4.16. See [slice details](../docs/android/local-library.md).
 
 `e2e/` is a separate `com.android.test` driver process using UI Automator. This
 lets it force-stop the production app and verify persistence through relaunch.
-The production app has no fixture hooks: generated real PCM WAV files and a
-corrupt MP3 are selected through Android's actual Storage Access Framework UI.
+Release builds have no fixture hooks. Debug builds have a catalog-only fixture entry
+point for Shelves. Local-library fixtures are generated real PCM WAV files and a
+corrupt MP3, selected through Android's actual Storage Access Framework UI.
 Assertions use visible app/picker controls, never database or repository calls.
+The Shelves driver uses bundled debug metadata and forced saved-only browsing.
+Slice 3 compiles these journeys but does not run them while Playback owns the emulator.
 
 Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
 Boot it and specify its serial explicitly, with no other Android devices attached:

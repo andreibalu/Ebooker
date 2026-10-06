@@ -221,3 +221,18 @@ captures or visual parity pass are claimed. The report generator now accepts
 `--playback-only` for the four light reference pairs and a clearly unpaired
 source-derived dark gallery. The orchestrator must execute/review these after
 merging, retaining the guarded runner and the actual picker imports.
+## Slice 3 — compiled Shelves journeys, execution deferred
+
+[LibriVox Shelves](slice-3-librivox-shelves.md) replaces the placeholder. Four new
+journeys cover browse/detail/collections/search/filters, offline gates and alternatives,
+streaming addition and force-stop persistence, plus collection-collapse persistence.
+Debug-only bundled catalog data is seeded through an explicit debug activity;
+real user-library imports continue through the system picker. Light/dark browse,
+catalog detail and collection captures are specified in the driver.
+
+No E2E execution or new Android screenshots were performed in this slice: Playback
+owns the single shared emulator, and the orchestrator runs the suite after merging.
+Earlier E2E counts and visual reports above remain historical slice-1 evidence.
+The report generator now accepts `--cases shelves-light shelves-dark` for focused
+03/23 comparisons. Layout and live audio/download behavior remain unverified until
+that run; no visual parity pass is claimed from host tests or assembly.

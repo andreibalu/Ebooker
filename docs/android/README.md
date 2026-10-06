@@ -43,3 +43,6 @@ chapter navigation, durable progress and manual moment creation. APK, lint,
 host tests and E2E-driver compilation are checked in its isolated worktree;
 shared-emulator runtime/capture validation follows merge. Shelves, activity,
 onboarding and full moment editing are later slices. Payments, Plus/tips and Apple sync remain excluded.
+The [LibriVox Shelves slice](slice-3-librivox-shelves.md) adds cached catalog browsing,
+streaming addition, downloads and samples; its emulator/visual checks are deferred
+to the orchestrator. Playback, activity, onboarding and moment creation are separate slices. Payments, Plus/tips and Apple sync remain excluded.
