@@ -16,6 +16,37 @@ class SQLiteLibraryStoreTest {
         try { block(store) } finally { store.close() }
     }
 
+    @Test fun discoveredStreamingDurationUpdatesOnlyItsTrackAndSurvivesReopen() {
+        val context = RuntimeEnvironment.getApplication()
+        context.deleteDatabase("library.db")
+        val track = LibraryTrack("Stream", "", "", 0, "", "https://example.com/audio")
+        withStore(context) { store ->
+            store.insert(LibraryBook("stream", "Book", "Author", listOf(track, track), isDownloaded = false))
+            store.updateTrackDuration("stream", 1, 300000)
+        }
+        withStore(context) { store ->
+            assertEquals(listOf(0L, 300000L), store.books().single().tracks.map { it.durationMs })
+            assertEquals("https://example.com/audio", store.books().single().tracks[1].remoteUrl)
+        }
+    }
+
+    @Test fun explicitProgressMarkCanMoveBackwardAndSurvivesReopen() {
+        val context = RuntimeEnvironment.getApplication()
+        context.deleteDatabase("library.db")
+        withStore(context) { store ->
+            store.insert(LibraryBook("book", "Book", "Author", listOf(LibraryTrack("Track", "1", "1", 300000, "a"))))
+            store.updatePlaybackProgress("book", PlaybackProgress(0, 120000, 120000))
+            store.setProgressMarker("book", 30000)
+            store.updatePlaybackProgress("book", PlaybackProgress(0, 30000, 30000))
+        }
+        withStore(context) { store ->
+            assertEquals(30000L, store.books().single().highWaterMarkMs)
+            assertEquals(30000L, store.books().single().currentPositionMs)
+            store.updatePlaybackProgress("book", PlaybackProgress(0, 20000, 20000))
+            assertEquals(30000L, store.books().single().highWaterMarkMs)
+        }
+    }
+
     @Test fun booksAndTrackOrderPersistAcrossReopenAndDeleteCascades() {
         val context = RuntimeEnvironment.getApplication()
         context.deleteDatabase("library.db")

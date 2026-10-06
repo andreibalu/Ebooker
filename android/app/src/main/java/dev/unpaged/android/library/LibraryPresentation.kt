@@ -54,7 +54,7 @@ internal fun GeneratedBookCover(title: String, modifier: Modifier = Modifier, co
             fontFamily = FontFamily.Serif, fontWeight = FontWeight.Medium,
             fontSize = (side.value * 0.121f).sp, lineHeight = (side.value * 0.142f).sp,
             color = foreground, maxLines = 4, overflow = TextOverflow.Ellipsis)
-        Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = inset)
+        if (side >= 60.dp) Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = inset)
             .padding(bottom = side * 0.05f)) {
             Canvas(Modifier.size(side * 0.095f)) {
                 val w = size.width
@@ -102,17 +102,21 @@ private fun HeaderButton(description: String, onClick: () -> Unit, enabled: Bool
 }
 
 @Composable
-internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove: () -> Unit, onOpen: () -> Unit) {
+internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove: () -> Unit, playing: Boolean = false, onOpen: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Surface(Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = { menu = true }).testTag("book.card.${book.id}"),
         shape = UnpagedTheme.cardShape, shadowElevation = UnpagedTheme.cardShadow) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box {
                 GeneratedBookCover(book.title, Modifier.fillMaxWidth().height(185.dp))
-                book.lastPlayedAt?.let {
+                if (playing || book.lastPlayedAt != null) {
                     Surface(Modifier.align(Alignment.TopEnd).padding(10.dp), shape = CircleShape,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = .6f)) {
-                        Text(relativePlayedAt(it), Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            if (playing) Icon(Icons.Default.GraphicEq, null, Modifier.size(14.dp))
+                            Text(if (playing) "Playing" else relativePlayedAt(book.lastPlayedAt ?: 0), fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }
                     }
                 }
                 Surface(Modifier.align(Alignment.BottomEnd).padding(10.dp), shape = CircleShape,
@@ -209,7 +213,7 @@ internal fun shortDuration(milliseconds: Long): String {
 }
 
 internal fun trackDuration(milliseconds: Long): String {
-    val seconds = milliseconds / 1000
+    val seconds = (milliseconds.coerceIn(0, 1_000_000_000L) + 500) / 1000
     return if (seconds >= 3600) String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
         else String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
 }

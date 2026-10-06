@@ -324,6 +324,155 @@ class LibraryE2ETest {
         visible(By.text("My Library"))
     }
 
+    @Test fun playbackAdvancesSkipsChaptersChangesSpeedAndPersistsAfterRealForceStop() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 2.wav", "E2E Chapter 1.wav")
+        tapText("E2E The Listening Book")
+        field("book.play").click()
+        dismissNotificationPrompt()
+        visible(By.res("player.title").text("E2E Chapter 1"))
+        waitForElapsed { it >= 2 }
+        field("player.close").click()
+        visible(By.res("miniPlayer.title").text("E2E The Listening Book"))
+        field("miniPlayer.playPause").click()
+        visible(By.desc("Play playback"))
+        val savedPosition = field("book.position").text
+        assertFalse(savedPosition == "at 00:00")
+        relaunch()
+        tapText("E2E The Listening Book")
+        visible(By.text("Continue"))
+        assertEquals(savedPosition, field("book.position").text)
+        // On Resume is once per launch and clamps the short persisted position to 0.
+        field("book.play").click()
+        visible(By.res("player.title").text("E2E Chapter 1"))
+        waitForElapsed { it in 0..5 }
+        field("player.playPause").click()
+        visible(By.desc("Play playback"))
+        val beforeSkip = elapsedSeconds()
+        field("player.skipForward").click()
+        waitForElapsed { it == beforeSkip + 30 }
+        field("player.speed").click()
+        field("player.speed.1.5").click()
+        visible(By.text("1.5x"))
+        field("player.chapters").click()
+        visible(By.text("Chapters"))
+        field("chapters.row.1").click()
+        visible(By.res("player.title").text("E2E Chapter 2"))
+        waitForElapsed { it in 0..5 }
+        visible(By.desc("Pause playback"))
+        assertFalse(field("player.next").isEnabled)
+        field("player.close").click()
+        field("miniPlayer.playPause").click()
+        relaunch()
+        tapText("E2E The Listening Book")
+        visible(By.text("Continue"))
+        field("book.play").click()
+        visible(By.res("player.title").text("E2E Chapter 2"))
+        visible(By.text("1.5x"))
+    }
+
+    @Test fun playerProgressMomentSleepAndLightDarkVisualFixtures() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 2.wav", "E2E Chapter 1.wav")
+        tapDescription("Add favorite")
+        saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
+        tapText("E2E The Listening Book")
+        field("book.play").click()
+        dismissNotificationPrompt()
+        visible(By.res("player.title").text("E2E Chapter 1"))
+        waitForElapsed { it >= 2 }
+        field("player.playPause").click()
+        visible(By.desc("Play playback"))
+        field("player.saveMoment").click()
+        visible(By.text("Saved!"))
+        visible(By.text("Save Moment"))
+        field("player.saveMoment").click()
+        visible(By.text("Saved!"))
+        field("player.markProgress").click()
+        visible(By.text("This will update your progress marker to the current playback position."))
+        field("player.confirmProgress").click()
+        visible(By.text("Progress Marked!"))
+        field("player.sleep").click()
+        tapText("5 minutes")
+        assertTrue(device.wait(Until.gone(By.text("Sleep Timer")), 15000))
+        field("player.sleep").click()
+        tapText("Off")
+        visible(By.text("Sleep Timer"))
+        visible(By.text("Save Moment"))
+        visible(By.text("Mark Progress Here"))
+        // Resume for the reference's playing transport state.
+        field("player.playPause").click()
+        visible(By.desc("Pause playback"))
+        screenshot("player-light")
+        field("player.chapters").click()
+        screenshot("chapters-light")
+        field("chapters.done").click()
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.res("player.title"))
+        screenshot("player-dark")
+        field("player.chapters").click()
+        screenshot("chapters-dark")
+        field("chapters.done").click()
+        field("player.close").click()
+        screenshot("detail-miniplayer-dark")
+        device.executeShellCommand("cmd uimode night no")
+        visible(By.res("miniPlayer.title"))
+        screenshot("detail-miniplayer-light")
+        visible(By.text("2 moments"))
+        device.pressBack()
+        visible(By.text("Playing"))
+        screenshot("library-miniplayer-light")
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("Playing"))
+        screenshot("library-miniplayer-dark")
+        field("miniPlayer.playPause").click()
+        assertTrue(device.wait(Until.gone(By.text("Playing")), 15000))
+        // Mini player also persists over root tab navigation.
+        field("tab.Favorites").click()
+        visible(By.res("miniPlayer.title"))
+        field("tab.Shelves").click()
+        visible(By.res("miniPlayer.title"))
+        field("miniPlayer").click()
+        visible(By.res("player.title"))
+        field("player.close").click()
+        relaunch()
+        tapText("E2E The Listening Book")
+        visible(By.text("2 moments"))
+    }
+
+    @Test fun singleTrackPlayerUsesBookTitleAndDisablesChapterNavigation() {
+        saveBook("E2E Another Book", "Another Fixture Author", "Another.wav")
+        tapText("E2E Another Book")
+        field("book.play").click()
+        dismissNotificationPrompt()
+        visible(By.res("player.title").text("E2E Another Book"))
+        waitForElapsed { it >= 2 }
+        assertFalse(field("player.previous").isEnabled)
+        assertFalse(field("player.next").isEnabled)
+        assertFalse(device.hasObject(By.res("player.chapters")))
+        field("player.close").click()
+        visible(By.res("miniPlayer.title").text("E2E Another Book"))
+        assertFalse(device.hasObject(By.text("Another")))
+    }
+
+    private fun dismissNotificationPrompt() {
+        val deny = device.wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_deny_button")), 2000)
+        deny?.click()
+        visible(By.res("player.title"))
+    }
+
+    private fun elapsedSeconds(): Int {
+        val parts = field("player.elapsed").text.split(":").map { it.toInt() }
+        return parts.fold(0) { value, part -> value * 60 + part }
+    }
+
+    private fun waitForElapsed(predicate: (Int) -> Boolean) {
+        val deadline = android.os.SystemClock.elapsedRealtime() + 15000
+        while (android.os.SystemClock.elapsedRealtime() < deadline) {
+            if (predicate(elapsedSeconds())) return
+            android.os.SystemClock.sleep(250)
+        }
+        fail("Playback position did not reach the expected visible time")
+    }
+
     private fun expandSettings() {
         val header = visible(By.text("Settings")).visibleBounds
         device.swipe(header.centerX(), header.centerY(), header.centerX(), 150, 30)

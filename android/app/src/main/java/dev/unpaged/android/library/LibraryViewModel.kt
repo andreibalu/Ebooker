@@ -121,6 +121,10 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun refreshPlayback() {
+        viewModelScope.launch { refreshBooks() }
+    }
+
     fun dismissError() { mutableState.update { it.copy(error = null) } }
 
     private fun operation(block: suspend () -> Unit) {

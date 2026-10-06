@@ -7,6 +7,7 @@ from pathlib import Path
 root = Path(sys.argv[1])
 root.mkdir(parents=True, exist_ok=True)
 for name, seconds in [('Chapter 1.wav', 300), ('Chapter 2.wav', 300),
+                      ('E2E Chapter 1.wav', 300), ('E2E Chapter 2.wav', 300),
                       ('Chapter 10.wav', 60), ('Another.wav', 300), ('E2E Import.wav', 123)]:
     with wave.open(str(root / name), 'wb') as audio:
         audio.setnchannels(1)

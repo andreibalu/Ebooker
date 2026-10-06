@@ -209,3 +209,15 @@ files) action is absent; Android offers only Also Delete Files. iOS legal URLs
 are mirrored as navigation destinations; Android release/legal applicability
 remains unresolved. Populated moment rendering, nonzero playback/Continue,
 last-played badges, real playback and physical devices are not E2E-qualified.
+
+
+## Slice 2 playback handoff — 2026-10-06
+
+[Playback implementation and validation boundaries](slice-2-playback.md) adds
+Media3 playback, full/mini player, chapters and three black-box journeys.
+This worktree **does not run the E2E suite** because another slice shares the
+emulator. Driver compilation is separate from runtime evidence. No new emulator
+captures or visual parity pass are claimed. The report generator now accepts
+`--playback-only` for the four light reference pairs and a clearly unpaired
+source-derived dark gallery. The orchestrator must execute/review these after
+merging, retaining the guarded runner and the actual picker imports.
