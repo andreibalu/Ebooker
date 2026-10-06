@@ -49,3 +49,8 @@ to the orchestrator. Playback, activity, onboarding and moment creation are sepa
 
 The merged shell/playback/Shelves [E2E fix run](e2e-merged-fix-2026-10-06.md)
 records runtime diagnostics, driver synchronization and visual-review evidence.
+[Slice 4](slice-4-moments-equalizer.md) adds manual moment metadata/edit/delete,
+pinning and filters, and live per-book Media3 five-band EQ. SQLite v3 adds pin
+state without dropping data. Host checks and E2E-driver compilation are
+separate from emulator playback and screenshot qualification; this slice does
+not run the shared emulator.

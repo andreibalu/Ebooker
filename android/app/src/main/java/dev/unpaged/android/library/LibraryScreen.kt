@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.unpaged.android.R
 import dev.unpaged.android.playback.*
+import dev.unpaged.android.moments.MomentList
 
 @Composable
 fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = viewModel()) {
@@ -129,7 +130,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     Text(stringResource(R.string.copying_audio))
                     TextButton(onClick = model::cancelPreparation) { Text(stringResource(R.string.cancel)) }
                 }
-                selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) })
+                selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) }, onMoment = { player.playMoment(selected, it); fullPlayer = true }, onSaveMoment = model::saveMoment, onDeleteMoment = model::deleteMoment)
                 else -> HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
                     val pageTab = tabs[page]
                     val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
@@ -205,7 +206,8 @@ fun DetailTopBar(book: LibraryBook, onBack: () -> Unit, onPlayer: (() -> Unit)? 
 /** Playback slice supplies these callbacks; unavailable controls retain the reference layout. */
 @Composable
 fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
-    onPlay: (() -> Unit)? = null, onTrack: ((Int) -> Unit)? = null) {
+    onPlay: (() -> Unit)? = null, onTrack: ((Int) -> Unit)? = null,
+    onMoment: (LibraryMoment) -> Unit = {}, onSaveMoment: (LibraryMoment) -> Unit = {}, onDeleteMoment: (String) -> Unit = {}) {
     var tracksExpanded by rememberSaveable(book.id) { mutableStateOf(false) }
     var momentsExpanded by rememberSaveable(book.id) { mutableStateOf(false) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -242,16 +244,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
         item {
             Surface(shape = UnpagedTheme.disclosureShape, shadowElevation = UnpagedTheme.cardShadow) {
                 Column {
-                    DisclosureRow("${moments.size} moments", "book.moments", Icons.Default.Bookmark, momentsExpanded) { momentsExpanded = !momentsExpanded }
-                    if (momentsExpanded) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (moments.isEmpty()) Text("No saved moments yet", fontSize = 13.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        moments.forEach { moment ->
-                            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                                Text(moment.label, fontSize = 15.sp)
-                                Text("${trackDuration(moment.timeMs)} · ${moment.notes}", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
+                    MomentList(book.id, moments, momentsExpanded, { momentsExpanded = !momentsExpanded }, onMoment, onSaveMoment, onDeleteMoment)
                 }
             }
         }

@@ -112,7 +112,7 @@ class SQLiteLibraryStoreTest {
             assertTrue(book.dateAdded > 0); assertNull(book.tracks.first().remoteUrl)
             assertTrue(store.moments(id).isEmpty())
         }
-        withStore(context) { assertEquals(2, it.readableDatabase.version); assertEquals(2, it.books().single().tracks.size) }
+        withStore(context) { assertEquals(3, it.readableDatabase.version); assertEquals(2, it.books().single().tracks.size) }
         folder.deleteRecursively()
     }
 

@@ -14,6 +14,7 @@ parser.add_argument('--playback-only', action='store_true', help='Require the fo
 parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
 parity_references = {
+    'eq-light': '08-eq-light.png',
     'player-light': '06-player-light.png',
     'chapters-light': '07-chapters-light.png',
     'library-miniplayer-light': '11-library-miniplayer-light.png',
@@ -73,7 +74,9 @@ for case in cases:
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
 for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
-             'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light']:
+             'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
+             'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',
+             'save-moment-light', 'edit-moment-dark']:
     source = args.android_captures / f'{case}.png'
     if source.is_file():
         name = f'android-{case}.png'

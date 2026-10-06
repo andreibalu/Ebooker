@@ -16,6 +16,8 @@ import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import dev.unpaged.android.moments.MomentSaver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -33,6 +35,9 @@ import dev.unpaged.android.library.GeneratedBookCover
 import dev.unpaged.android.library.BookProgress
 import dev.unpaged.android.library.trackDuration
 import kotlinx.coroutines.delay
+import dev.unpaged.android.moments.MomentEditSheet
+import dev.unpaged.android.library.LibraryMoment
+import dev.unpaged.android.equalizer.EqualizerSheet
 
 @Composable
 fun MiniPlayer(state: PlayerState, controller: PlayerController, onOpen: () -> Unit) {
@@ -63,6 +68,9 @@ fun MiniPlayer(state: PlayerState, controller: PlayerController, onOpen: () -> U
 fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
     val state by controller.state.collectAsStateWithLifecycle()
     val book = state.book ?: return
+    var momentDraft by rememberSaveable(stateSaver = MomentSaver) { mutableStateOf<LibraryMoment?>(null) }
+    var showEqualizer by rememberSaveable { mutableStateOf(false) }
+    val equalizer by controller.equalizer.collectAsStateWithLifecycle()
     var chapters by remember { mutableStateOf(false) }
     var speedMenu by remember { mutableStateOf(false) }
     var sleepMenu by remember { mutableStateOf(false) }
@@ -151,7 +159,7 @@ fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
                                 }
                             }
                             VerticalDivider(Modifier.height(22.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))
-                            Box(Modifier.width(74.dp)) { ActionSegment(Icons.Default.Tune, "EQ", "player.equalizer", {}, enabled = false) }
+                            Box(Modifier.width(74.dp)) { ActionSegment(Icons.Default.Tune, "EQ", "player.equalizer", { showEqualizer = true }) }
                             VerticalDivider(Modifier.height(22.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))
                             Box(Modifier.weight(1.4f)) {
                                 ActionSegment(Icons.Default.Bedtime, state.sleepRemainingMs?.let { trackDuration(it) } ?: "Sleep Timer", "player.sleep", { sleepMenu = true })
@@ -166,11 +174,13 @@ fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
                     ActionPill(if (marked) Icons.Default.Check else Icons.Default.Flag, if (marked) "Progress Marked!" else "Mark Progress Here",
                         "player.markProgress") { markConfirmation = true }
                     ActionPill(if (saved) Icons.Default.Check else Icons.Default.Bookmark, if (saved) "Saved!" else "Save Moment",
-                        "player.saveMoment") { controller.saveMoment(); saved = true }
+                        "player.saveMoment") { momentDraft = controller.draftMoment() }
                 }
             }
         }
     }
+    momentDraft?.let { draft -> MomentEditSheet(draft, onSave = { controller.saveMoment(it); momentDraft = null; saved = true }, onCancel = { momentDraft = null }) }
+    if (showEqualizer) EqualizerSheet(equalizer, controller::setEqualizer) { showEqualizer = false }
     if (chapters) ChaptersSheet(state, controller) { chapters = false }
     if (markConfirmation) AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { markConfirmation = false }, title = { Text("Mark Progress") },
         text = { Text("This will update your progress marker to the current playback position.") },

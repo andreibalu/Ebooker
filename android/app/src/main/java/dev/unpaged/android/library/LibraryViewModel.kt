@@ -126,6 +126,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun saveMoment(moment: LibraryMoment) {
+        operation { withContext(Dispatchers.IO) { repository.saveMoment(moment) }; refreshBooks() }
+    }
+
+    fun deleteMoment(id: String) {
+        operation { withContext(Dispatchers.IO) { repository.deleteMoment(id) }; refreshBooks() }
+    }
+
     fun refreshPlayback() {
         viewModelScope.launch { refreshBooks() }
     }
