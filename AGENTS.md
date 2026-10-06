@@ -13,7 +13,7 @@ Three names = intentional historical layers — no "fix". New user-facing copy s
 
 ## Android
 
-The native Kotlin/Compose app lives in `android/` (currently on `feat/android-foundation`). For Android work, read `android/AGENTS.md` for scoped instructions and `android/README.md` for build/lint commands; `docs/android/` holds the planning context. The iOS sections below describe the Apple app; use `Pageless/` as a behavior reference for Android.
+The native Kotlin/Compose app lives in `android/`. For Android work, read `android/AGENTS.md` and `docs/android/README.md` first; `android/README.md` has the build/lint commands and `docs/android/` holds the planning context. The iOS build and release instructions below apply to the Apple app, not the Android subtree; use `Pageless/` as a behavior reference for Android.
 
 ## External-facing docs
 

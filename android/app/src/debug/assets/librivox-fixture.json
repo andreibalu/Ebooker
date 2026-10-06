@@ -1,0 +1,298 @@
+{
+  "books": [
+    {
+      "id": "253",
+      "title": "Pride and Prejudice",
+      "author": "Jane Austen",
+      "description": "An offline cached public-domain classic.",
+      "language": "English",
+      "totaltimesecs": 47204,
+      "genres": [
+        {
+          "name": "General Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Pride and Prejudice",
+          "playtime": "47204",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "314",
+      "title": "Adventures of Sherlock Holmes",
+      "author": "Arthur Conan Doyle",
+      "description": "Twelve cases from Baker Street.",
+      "language": "English",
+      "totaltimesecs": 37800,
+      "genres": [
+        {
+          "name": "Detective Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Adventures of Sherlock Holmes",
+          "playtime": "37800",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "133",
+      "title": "Jane Eyre",
+      "author": "Charlotte Brontë",
+      "description": "An orphan governess and Thornfield Hall.",
+      "language": "English",
+      "totaltimesecs": 68400,
+      "genres": [
+        {
+          "name": "Romance"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Jane Eyre",
+          "playtime": "68400",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "381",
+      "title": "Frankenstein, or The Modern Prometheus",
+      "author": "Mary Shelley",
+      "description": "A creature and its maker.",
+      "language": "English",
+      "totaltimesecs": 30600,
+      "genres": [
+        {
+          "name": "Horror & Supernatural Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Frankenstein, or The Modern Prometheus",
+          "playtime": "30600",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "271",
+      "title": "Dracula",
+      "author": "Bram Stoker",
+      "description": "Letters and diaries from Transylvania.",
+      "language": "English",
+      "totaltimesecs": 55800,
+      "genres": [
+        {
+          "name": "Horror & Supernatural Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Dracula",
+          "playtime": "55800",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "449",
+      "title": "Treasure Island",
+      "author": "Robert Louis Stevenson",
+      "description": "A map, a cook and a mutiny.",
+      "language": "English",
+      "totaltimesecs": 25200,
+      "genres": [
+        {
+          "name": "Action & Adventure Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Treasure Island",
+          "playtime": "25200",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "436",
+      "title": "War of the Worlds",
+      "author": "H. G. Wells",
+      "description": "Cylinders fall on Surrey.",
+      "language": "English",
+      "totaltimesecs": 22800,
+      "genres": [
+        {
+          "name": "Science Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "War of the Worlds",
+          "playtime": "22800",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "510",
+      "title": "Tale of Two Cities",
+      "author": "Charles Dickens",
+      "description": "London, Paris and the Revolution.",
+      "language": "English",
+      "totaltimesecs": 57600,
+      "genres": [
+        {
+          "name": "Historical Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Tale of Two Cities",
+          "playtime": "57600",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "661",
+      "title": "Persuasion",
+      "author": "Jane Austen",
+      "description": "Anne Elliot, eight years later.",
+      "language": "English",
+      "totaltimesecs": 30000,
+      "genres": [
+        {
+          "name": "Romance"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Persuasion",
+          "playtime": "30000",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "620",
+      "title": "Sense and Sensibility",
+      "author": "Jane Austen",
+      "description": "Two Dashwood sisters.",
+      "language": "English",
+      "totaltimesecs": 42000,
+      "genres": [
+        {
+          "name": "Romance"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Sense and Sensibility",
+          "playtime": "42000",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "86",
+      "title": "Emma",
+      "author": "Jane Austen",
+      "description": "Highbury's matchmaker.",
+      "language": "English",
+      "totaltimesecs": 57000,
+      "genres": [
+        {
+          "name": "Romance"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Emma",
+          "playtime": "57000",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "911",
+      "title": "Wuthering Heights",
+      "author": "Emily Brontë",
+      "description": "The moors and Heathcliff.",
+      "language": "English",
+      "totaltimesecs": 44000,
+      "genres": [
+        {
+          "name": "Romance"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Wuthering Heights",
+          "playtime": "44000",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "2531",
+      "title": "Pride and Prejudice (version 2)",
+      "author": "Jane Austen",
+      "description": "A second full-cast recording.",
+      "language": "English",
+      "totaltimesecs": 45000,
+      "genres": [
+        {
+          "name": "General Fiction"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Pride and Prejudice (version 2)",
+          "playtime": "45000",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    },
+    {
+      "id": "1203",
+      "title": "Die Verwandlung",
+      "author": "Franz Kafka",
+      "description": "Gregor Samsa erwacht als Ungeziefer.",
+      "language": "German",
+      "totaltimesecs": 7200,
+      "genres": [
+        {
+          "name": "Short Stories"
+        }
+      ],
+      "sections": [
+        {
+          "section_number": 1,
+          "title": "Die Verwandlung",
+          "playtime": "7200",
+          "listen_url": "https://archive.org/download/pride_and_prejudice_librivox/prideandprejudice_01_austen_64kb.mp3"
+        }
+      ]
+    }
+  ]
+}
