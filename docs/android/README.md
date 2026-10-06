@@ -31,7 +31,7 @@ broader architecture decisions by assumption.
 ## Current stage
 
 The 2026-10-06 shared parity brief authorizes the native mirror build in slices.
-Each slice records its architecture decisions; the first five are merged, and slice 6 is implemented in this worktree:
+Each slice records its architecture decisions. All six are merged:
 
 1. [Shell, library and settings](slice-1-shell-library-settings.md): app shell,
    local library/card/detail parity, persistent settings and schema v2.
