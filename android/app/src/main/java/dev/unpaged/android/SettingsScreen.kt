@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.LibraryBooks
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,17 +51,32 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
     val uri = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = onDone, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
         containerColor = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onSurface,
-        shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp)) {
+        shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp),
+        dragHandle = { Box(Modifier.padding(top = 6.dp, bottom = 12.dp).width(58.dp).height(3.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .5f), CircleShape)) }) {
         Column(Modifier.fillMaxHeight(.94f).semantics { testTagsAsResourceId = true }) {
-            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Settings", Modifier.weight(1f), fontSize = 26.sp, lineHeight = 31.sp, fontWeight = FontWeight.Bold)
-                Surface(onClick = onDone, shape = CircleShape, color = MaterialTheme.colorScheme.onSurface) {
+                Surface(onClick = onDone, shape = CircleShape, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .4f)) {
                     Text("Done", Modifier.padding(horizontal = 16.dp, vertical = 7.dp), fontSize = 13.sp, lineHeight = 16.sp,
-                        fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.background)
+                        fontWeight = FontWeight.SemiBold, color = androidx.compose.ui.graphics.Color.White)
                 }
             }
             Column(Modifier.verticalScroll(rememberScrollState()).testTag("settings.scroll").padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                Column {
+                    SectionHeader("SOURCES", "Your own shelf.")
+                    val summary by absClient.summary.collectAsStateWithLifecycle()
+                    Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
+                        Row(Modifier.fillMaxWidth().clickable { absSettings = true }.testTag("settings.audiobookshelf").padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null, Modifier.padding(12.dp).size(22.dp)) }
+                            Column(Modifier.weight(1f)) {
+                                Text("Audiobookshelf Server", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text(summary?.let { "${it.username ?: "API key"} · ${java.net.URI(it.server).authority}" } ?: "Connect your server", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
                 Column {
                     SectionHeader("PLAYBACK", "Listening preferences.")
                     Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
@@ -112,12 +128,6 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                                 preferences.setText("appAppearance", it.lowercase())
                             }
                         }
-                    }
-                }
-                Column {
-                    SectionHeader("SOURCES", "Your own shelves.")
-                    Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
-                        Row(Modifier.fillMaxWidth().clickable { absSettings = true }.testTag("settings.audiobookshelf").padding(16.dp)) { Text("Audiobookshelf Server") }
                     }
                 }
                 // iOS Support contains only the excluded coffee purchase. Keep its non-payment legal rows.

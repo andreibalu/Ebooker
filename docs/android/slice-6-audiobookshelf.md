@@ -2,7 +2,7 @@
 
 ## Behavior
 
-Shelves always lists LibriVox and Audiobookshelf. Choosing an unconfigured server
+Tapping the selected Shelves tab opens the Catalog source menu. It lists LibriVox and Audiobookshelf, marks the active source and shows "Connect your server" while disconnected. There is no separate source row. Choosing an unconfigured server
 opens Connect. `UnpagedPreferences` owns `shelvesSource` and `absSelectedLibraryID`.
 Disconnected or unknown source preferences resolve to LibriVox. Disconnect clears
 credentials and selects LibriVox; it preserves streaming books in the local library.
@@ -32,7 +32,11 @@ Listening, Recently Added for libraries larger than twelve books, and All Books.
 The library picker persists its selection. Search filters titles and authors
 locally, matching iOS. Covers use authenticated requests and generated-cover
 fallbacks. Detail expands the item, displays author, narrator, duration,
-description and server progress, then adds or opens its existing local row.
+description and server progress. It fills the page and hides the library header and tabs. The circular back control and system back return to browsing. The amber Play or Resume button adds a streaming row when needed. Add to Library changes to the checked "In your Library" status and removes the secondary button. Tapping that status opens the local row.
+
+Browse places the server eyebrow directly below the tabs, with a bold serif library picker beneath it. Search uses a card-colored pill with a magnifier and italic serif placeholder. Section headers have a trailing hairline. Continue Listening covers have an amber progress bar and title and author labels. All Books uses a three-column cover grid. Server settings are reached through Settings, where the Sources card appears before Playback. The browse screen has no Server link.
+
+Connect has a left-aligned Cancel pill, separate uppercase field labels and rounded card-colored fields. The server field precedes the underlined Sign in and API key choices. The full-width amber Connect button fades while disabled. The lock footnote explains Android Keystore storage. Server settings use a connected-host card, separate Server, Signed in as and Method rows, an amber Open in Shelves button and a centered Disconnect action.
 
 ## Storage and playback
 
@@ -86,36 +90,13 @@ authorize, refresh, libraries, paged items, detail, authenticated covers, play,
 range-capable WAV streaming and media progress. It records counts and progress
 payloads, without recording tokens or URLs.
 
-New UI Automator journeys cover a wrong password and the full login, library
-picker, search, detail, add, playback, relaunch and disconnect path. Playback
-asserts that the fake server received a tokenized stream and a progress payload.
-Screenshots use `abs-connect`, `abs-browse`, `abs-detail` and `abs-library` with
-`-light.png` and `-dark.png` suffixes. The report generator includes these as
-source-review galleries because no ABS iOS screenshots were supplied. Existing
-`library-light.png` and `library-dark.png` remain paired with the iOS references.
+UI Automator journeys cover a wrong password and the full path through login, library picker, search, detail, add, playback, relaunch and disconnect. The playback journey asserts that the fake server received a tokenized stream request and a progress payload. A separate visual fixture uses the iOS fixture titles, authors, one chapter, a duration under one minute and 40% progress. The visual journey also checks the circular back button, system back, that detail hides the library header and tabs, and the state after adding.
 
-The full run on `emulator-5580` (`Unpaged_E2E_API35`) passed 25 of 25 UI
-Automator journeys, including all 23 existing journeys. Host tests passed 101
-of 101, including 27 ABS tests. Neither suite had failures, errors or skips.
-The fake server recorded one tokenized stream request and six progress updates,
-three with an advancing position. The runner stopped the server on exit.
-No emulator was created, wiped or stopped.
+Final run on 2026-10-07, on the dedicated `emulator-5580` with the full `tools/run-e2e.sh` command and no test filter: 101 of 101 host tests and 26 of 26 E2E journeys passed, with zero lint issues. Evidence is in `/private/tmp/unpaged-abs-e2e-final`.
 
-Evidence is `/private/tmp/unpaged-abs-e2e`. The full runner initially exited with
-one lint error in the final cover-tint accessor. Replacing `Bitmap.getPixel` with
-the equivalent Kotlin `Bitmap.get` accessor was followed by a successful debug
-build, all 101 host tests and lint with zero issues. The 25-journey run and its
-screenshots precede that accessor-only change. Logs preserve both results.
+The [visual report](visual-evidence/2026-10-07-abs/index.html) pairs Android captures with iOS captures of the source menu, connect, browse, detail and Settings. The iOS references came from the shipping app driven by the iOS fake ABS server. The iOS app's own appearance setting was Light during capture, so the iOS files named dark show light colors. Those pairs compare layout only, and the Android dark captures were reviewed on their own. Server settings and the added-detail state have no iOS capture and were compared against the SwiftUI source.
 
-The run used the requested JDK, SDK, serial and evidence directory. Writable
-scratch Gradle, Android signing and Robolectric home directories were required
-by the workspace sandbox, along with in-process Kotlin compilation.
-
-The [visual report](visual-evidence/2026-10-07-abs/index.html) contains both
-matching Library pairs and eight ABS captures. Heart placement and the broader
-shadow were reviewed in light and dark mode. The ABS captures show generated
-fallbacks as well as authenticated server covers. This is a human source and
-screenshot review, not an automated pixel comparison.
+Expected differences: the emulator reaches the fake server at `10.0.2.2:13378` and iOS used `127.0.0.1`. Library counts follow each platform's fixture. The connect footnote names Android Keystore instead of the Keychain. Android has no Plus button. Fonts, native icons and system bars cause small offsets.
 
 ## Limits
 
@@ -127,36 +108,3 @@ cover treatment. Fetched cover images are stored in the book's private folder. G
 the fallback when the server supplies no readable cover. Android fonts, icons, dialogs and
 system chrome differ from SwiftUI. Fake-server checks do not qualify a real ABS
 installation, VPN or Tailscale routing, physical devices or a release build.
-
-## Changed files
-
-Source and documentation paths are relative to the repository root. The visual
-report is stored under `docs/android/visual-evidence/2026-10-07-abs/`.
-
-- `android/README.md`
-- `android/app/src/main/AndroidManifest.xml`
-- `android/app/src/main/java/dev/unpaged/android/SettingsScreen.kt`
-- `android/app/src/main/java/dev/unpaged/android/UnpagedApplication.kt`
-- `android/app/src/main/java/dev/unpaged/android/UnpagedPreferences.kt`
-- `android/app/src/main/java/dev/unpaged/android/abs/ABSClient.kt`
-- `android/app/src/main/java/dev/unpaged/android/abs/ABSCredentials.kt`
-- `android/app/src/main/java/dev/unpaged/android/abs/ABSRules.kt`
-- `android/app/src/main/java/dev/unpaged/android/abs/ABSScreens.kt`
-- `android/app/src/main/java/dev/unpaged/android/library/LibraryModels.kt`
-- `android/app/src/main/java/dev/unpaged/android/library/LibraryPresentation.kt`
-- `android/app/src/main/java/dev/unpaged/android/library/LibraryScreen.kt`
-- `android/app/src/main/java/dev/unpaged/android/library/LibraryStore.kt`
-- `android/app/src/main/java/dev/unpaged/android/playback/PlaybackRules.kt`
-- `android/app/src/main/java/dev/unpaged/android/playback/PlaybackService.kt`
-- `android/app/src/main/java/dev/unpaged/android/playback/PlayerController.kt`
-- `android/app/src/main/res/xml/network_security_config.xml`
-- `android/app/src/test/java/dev/unpaged/android/abs/ABSTest.kt`
-- `android/app/src/test/java/dev/unpaged/android/activity/ReadingMigrationTest.kt`
-- `android/app/src/test/java/dev/unpaged/android/library/SQLiteLibraryStoreTest.kt`
-- `android/e2e/src/main/AndroidManifest.xml`
-- `android/e2e/src/main/java/dev/unpaged/android/e2e/LibraryE2ETest.kt`
-- `android/tools/fake-abs-server.py`
-- `android/tools/make-visual-report.py`
-- `android/tools/run-e2e.sh`
-- `docs/android/README.md`
-- `docs/android/slice-6-audiobookshelf.md`

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Deterministic ABS contract fixture. Only stdlib; no production app fixture hooks."""
+import copy
 import argparse
 import base64
 import json
@@ -51,6 +52,23 @@ items = [
                'tracks': [{'index': 1, 'duration': 60, 'title': 'Another.wav', 'contentUrl': '/audio/fixture.wav'}]}}
 ]
 
+default_items = copy.deepcopy(items)
+visual = False
+
+def use_fixture(is_visual):
+    global items, visual
+    visual = is_visual
+    items = copy.deepcopy(default_items)
+    if visual:
+        first, second = items
+        first['media']['metadata'] = {'title': 'Dune of Fixtures', 'authorName': 'E2E Herbert', 'description': 'Dune of Fixtures is served by the e2e fake Audiobookshelf server.'}
+        first['media']['duration'] = 48
+        first['media']['coverPath'] = ''
+        first['media']['tracks'][0]['duration'] = 48
+        first['media']['chapters'] = [{'id': 1, 'start': 0, 'end': 48, 'title': 'Dune of Fixtures'}]
+        second['media']['metadata'] = {'title': 'The Fixture Hobbit', 'authorName': 'E2E Tolkien', 'description': 'A generated-cover fallback.'}
+
+
 def save_state():
     (args.evidence / 'abs-server-state.json').write_text(json.dumps(state, indent=2))
 
@@ -88,7 +106,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlsplit(self.path).path
         body = self.body()
-        if path == '/_test/reset':
+        if path in ('/_test/reset', '/_test/visual'):
+            use_fixture(path == '/_test/visual')
             with lock:
                 for key in state:
                     state[key] = [] if key == 'progress' else 0
@@ -101,17 +120,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.record('bad_password')
                 return self.respond({}, 401)
             self.record('login')
-            return self.respond({'user': {'username': 'reader', 'accessToken': access, 'refreshToken': 'fixture-refresh'}})
+            return self.respond({'user': {'username': 'e2e-reader' if visual else 'reader', 'accessToken': access, 'refreshToken': 'fixture-refresh'}})
         if path == '/auth/refresh':
             if self.headers.get('x-refresh-token') != 'fixture-refresh':
                 return self.respond({}, 401)
             self.record('refresh')
-            return self.respond({'user': {'username': 'reader', 'accessToken': access, 'refreshToken': 'fixture-refresh'}})
+            return self.respond({'user': {'username': 'e2e-reader' if visual else 'reader', 'accessToken': access, 'refreshToken': 'fixture-refresh'}})
         if not self.authorized():
             return self.respond({}, 401)
         if path == '/api/authorize':
             self.record('authorize')
-            return self.respond({'user': {'username': 'reader', 'id': 'reader'}})
+            return self.respond({'user': {'username': 'e2e-reader' if visual else 'reader', 'id': 'reader'}})
         if path.endswith('/play'):
             self.record('play')
             return self.respond({'id': 'fixture-session', 'libraryItemId': 'fixture-book',
@@ -145,7 +164,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorized():
             return self.respond({}, 401)
         if path == '/api/libraries':
-            return self.respond({'libraries': [{'id': 'books', 'name': 'My Audiobooks', 'mediaType': 'book'},
+            return self.respond({'libraries': [{'id': 'books', 'name': 'E2E Shelf' if visual else 'My Audiobooks', 'mediaType': 'book'},
                                                {'id': 'other', 'name': 'Second Library', 'mediaType': 'book'}]})
         if path.startswith('/api/libraries/') and path.endswith('/items'):
             page = int(parse_qs(parts.query).get('page', ['0'])[0])
@@ -156,10 +175,10 @@ class Handler(BaseHTTPRequestHandler):
             self.record('covers')
             return self.respond(cover_png(), mime='image/png')
         if path == '/api/me/progress':
-            return self.respond({'mediaProgress': [{'libraryItemId': 'fixture-book', 'duration': 60, 'currentTime': 12,
-                                                    'progress': .2, 'isFinished': False, 'lastUpdate': 1700000000000}]})
+            return self.respond({'mediaProgress': [{'libraryItemId': 'fixture-book', 'duration': 48 if visual else 60, 'currentTime': 19.2 if visual else 12,
+                                                    'progress': .4 if visual else .2, 'isFinished': False, 'lastUpdate': 1700000000000}]})
         if path.startswith('/api/me/progress/'):
-            return self.respond({'libraryItemId': path.rsplit('/', 1)[1], 'duration': 60, 'currentTime': 12, 'progress': .2, 'isFinished': False})
+            return self.respond({'libraryItemId': path.rsplit('/', 1)[1], 'duration': 48 if visual else 60, 'currentTime': 19.2 if visual else 12, 'progress': .4 if visual else .2, 'isFinished': False})
         if path.startswith('/api/items/'):
             item = next((item for item in items if item['id'] == path.rsplit('/', 1)[1]), None)
             return self.respond(item or {}, 200 if item else 404)

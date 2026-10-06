@@ -31,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
@@ -88,6 +89,9 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     val pager = rememberPagerState(initialPage = if (landing.isNotEmpty()) tabs.indexOf(landing).coerceAtLeast(0) else if (preferences.shelvesFirst()) 1 else 0, pageCount = { 3 })
     LaunchedEffect(Unit) { if (landing.isNotEmpty()) preferences.setText("onboardingLanding", "") }
     val scope = rememberCoroutineScope()
+    var absDetail by remember { mutableStateOf(false) }
+    var absConnect by rememberSaveable { mutableStateOf(false) }
+    val absClient = (LocalContext.current.applicationContext as UnpagedApplication).abs
     var sortMenu by remember { mutableStateOf(false) }
     val tab = tabs[pager.currentPage]
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -107,7 +111,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
         }
     }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets)) {
-            if (selected == null) {
+            if (selected == null && !absDetail) {
                 LibraryHeader(state.books.size, canImport, onImport) { settings = true }
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
@@ -123,7 +127,8 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                                     }
                                     Box(Modifier.fillMaxWidth().height(2.dp).background(if (tab == label) MaterialTheme.colorScheme.onSurface else Color.Transparent))
                                 }
-                                DropdownMenu(expanded = sortMenu && tab == label, onDismissRequest = { sortMenu = false }) {
+                                if (label == "Shelves") dev.unpaged.android.abs.CatalogSourceMenu(preferences, sortMenu && tab == label, { sortMenu = false }, { absConnect = true })
+                                else DropdownMenu(expanded = sortMenu && tab == label, onDismissRequest = { sortMenu = false }) {
                                     LibrarySort.entries.forEach { option ->
                                         DropdownMenuItem(text = { Text(option.label) }, onClick = { preferences.setSort(label, option); sortMenu = false },
                                             trailingIcon = { if (preferences.sort(label) == option) Icon(Icons.Default.Check, null) })
@@ -134,7 +139,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), thickness = .5.dp)
                 }
-            } else DetailTopBar(selected, onBack = { selectedId = null }, onPlayer = if (playback.book != null) ({ fullPlayer = true }) else null)
+            } else if (selected != null) DetailTopBar(selected, onBack = { selectedId = null }, onPlayer = if (playback.book != null) ({ fullPlayer = true }) else null)
             when {
                 state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.preparing -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -144,11 +149,11 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     TextButton(onClick = model::cancelPreparation) { Text(stringResource(R.string.cancel)) }
                 }
                 selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) }, onMoment = { player.playMoment(selected, it); fullPlayer = true }, onSaveMoment = model::saveMoment, onDeleteMoment = model::deleteMoment)
-                else -> HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+                else -> HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !absDetail) { page ->
                     val pageTab = tabs[page]
                     val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
                     when {
-                        pageTab == "Shelves" -> dev.unpaged.android.abs.SourceShelves(preferences, onPlay = { playBook(it, null) }, onLibraryChanged = model::refreshCatalogBooks, onViewLibrary = { id -> selectedId = id; scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } })
+                        pageTab == "Shelves" -> dev.unpaged.android.abs.SourceShelves(preferences, onDetailChanged = { absDetail = it }, onPlay = { playBook(it, null) }, onLibraryChanged = model::refreshCatalogBooks, onViewLibrary = { id -> selectedId = id; scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } })
                         pageTab == "Favorites" && books.isEmpty() && sessions.isEmpty() -> EmptyFavorites()
                         books.isEmpty() && pageTab != "Favorites" -> EmptyLibrary(canImport, onImport) { scope.launch { pager.animateScrollToPage(tabs.indexOf("Shelves")) } }
                         else -> LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(),
@@ -167,6 +172,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     playback.error?.let { message -> AlertDialog(onDismissRequest = player::dismissError,
         title = { Text("Playback unavailable") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = player::dismissError) { Text("OK") } }) }
+    if (absConnect) dev.unpaged.android.abs.ABSConnect(absClient, { absConnect = false }) { preferences.setShelvesSource("audiobookshelf"); absConnect = false }
     if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } }) { settings = false }
     state.pending?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
     state.books.firstOrNull { it.id == removeId }?.let { book ->

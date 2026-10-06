@@ -43,7 +43,6 @@ Each slice records its architecture decisions; the first five are merged, and sl
    delete, pinning, filters and live per-book five-band EQ.
 5. [Reading activity and onboarding](slice-5-reading-onboarding.md): reading
    sessions, Favorites stats and once-per-install onboarding/reset.
-
 6. [Audiobookshelf source](slice-6-audiobookshelf.md): encrypted server credentials,
    library browsing, authenticated streaming, server progress and library-card fixes.
 
