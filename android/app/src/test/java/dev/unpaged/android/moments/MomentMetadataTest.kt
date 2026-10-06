@@ -44,6 +44,7 @@ class MomentMetadataTest {
                 characters_json TEXT NOT NULL, mood TEXT, created_at INTEGER NOT NULL)""")
             store.writableDatabase.execSQL("INSERT INTO moments SELECT id,book_id,track_index,time_ms,label,notes,categories_json,quote_line,characters_json,mood,created_at FROM moments_v3")
             store.writableDatabase.execSQL("DROP TABLE moments_v3")
+            store.writableDatabase.execSQL("DROP TABLE reading_sessions")
             store.writableDatabase.version = 2
         }
         withStore(context) { store ->

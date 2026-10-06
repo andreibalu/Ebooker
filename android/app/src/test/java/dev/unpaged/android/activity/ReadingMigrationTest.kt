@@ -27,6 +27,15 @@ class ReadingMigrationTest {
         withStore(context) { store ->
             store.insert(book); store.saveMoment(moment)
             store.writableDatabase.execSQL("DROP TABLE reading_sessions")
+            // Model the v2 moments table (no is_pinned); this SQLite predates DROP COLUMN.
+            store.writableDatabase.execSQL("ALTER TABLE moments RENAME TO moments_v3")
+            store.writableDatabase.execSQL("""CREATE TABLE moments (id TEXT PRIMARY KEY,
+                book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+                track_index INTEGER NOT NULL, time_ms INTEGER NOT NULL, label TEXT NOT NULL,
+                notes TEXT NOT NULL, categories_json TEXT NOT NULL, quote_line TEXT,
+                characters_json TEXT NOT NULL, mood TEXT, created_at INTEGER NOT NULL)""")
+            store.writableDatabase.execSQL("INSERT INTO moments SELECT id,book_id,track_index,time_ms,label,notes,categories_json,quote_line,characters_json,mood,created_at FROM moments_v3")
+            store.writableDatabase.execSQL("DROP TABLE moments_v3")
             store.writableDatabase.version = 2
         }
         val session = ReadingSession(day = LocalDate.of(2026, 10, 6), hour = 23, minutes = 5, bookId = book.id, bookTitle = book.title, bookAuthor = book.author, isFreeBook = false)
