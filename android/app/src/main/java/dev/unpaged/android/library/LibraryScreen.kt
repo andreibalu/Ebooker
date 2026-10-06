@@ -41,10 +41,34 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.unpaged.android.R
+import dev.unpaged.android.playback.*
 
 @Composable
 fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = viewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val player = remember { PlayerController.get(context) }
+    val playback by player.state.collectAsStateWithLifecycle()
+    var fullPlayer by rememberSaveable { mutableStateOf(false) }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val playBook: (LibraryBook, Int?) -> Unit = { book, track ->
+        player.play(book, track)
+        fullPlayer = true
+        if (android.os.Build.VERSION.SDK_INT >= 33 && preferences.text("notificationPrompted", "false") != "true") {
+            preferences.setText("notificationPrompted", "true")
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    LaunchedEffect(playback.revision) { if (playback.revision > 0) model.refreshPlayback() }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(player, lifecycleOwner) {
+        val lifecycle = lifecycleOwner.lifecycle
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.background()
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); player.background() }
+    }
     preferenceRevision(preferences)
     var settings by rememberSaveable { mutableStateOf(false) }
     val tabs = if (preferences.shelvesFirst()) listOf("Favorites", "Shelves", "Library") else listOf("Favorites", "Library", "Shelves")
@@ -54,13 +78,20 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     val tab = tabs[pager.currentPage]
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var removeId by rememberSaveable { mutableStateOf<String?>(null) }
-    val selected = state.books.firstOrNull { it.id == selectedId }
+    val selected = state.books.firstOrNull { it.id == selectedId }?.let { book ->
+        if (playback.book?.id == book.id) playback.book?.copy(isFavorite = book.isFavorite) else book
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), model::prepare)
     val onImport = { picker.launch(arrayOf("*/*")) }
     val canImport = !state.loading && !state.busy && state.error != LibraryFailure.LOAD
     BackHandler(enabled = selectedId != null && state.pending == null) { selectedId = null }
 
-    Scaffold(Modifier.semantics { testTagsAsResourceId = true }) { insets ->
+    Scaffold(Modifier.semantics { testTagsAsResourceId = true }, bottomBar = {
+        if (playback.book != null) Column {
+            MiniPlayer(playback, player) { fullPlayer = true }
+            Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
+        }
+    }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets)) {
             if (selected == null) {
                 LibraryHeader(state.books.size, canImport, onImport) { settings = true }
@@ -89,7 +120,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), thickness = .5.dp)
                 }
-            } else DetailTopBar(selected, onBack = { selectedId = null })
+            } else DetailTopBar(selected, onBack = { selectedId = null }, onPlayer = if (playback.book != null) ({ fullPlayer = true }) else null)
             when {
                 state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.preparing -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -98,7 +129,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     Text(stringResource(R.string.copying_audio))
                     TextButton(onClick = model::cancelPreparation) { Text(stringResource(R.string.cancel)) }
                 }
-                selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty())
+                selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) })
                 else -> HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
                     val pageTab = tabs[page]
                     val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
@@ -109,20 +140,24 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                         else -> LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(20.dp, 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            items(books, key = { it.id }) { book -> LibraryBookCard(book, { model.toggleFavorite(book) }, { removeId = book.id }) { selectedId = book.id } }
+                            items(books, key = { it.id }) { book -> LibraryBookCard(book, { model.toggleFavorite(book) }, { removeId = book.id }, playing = playback.book?.id == book.id && playback.playing) { selectedId = book.id } }
                         }
                     }
                 }
             }
         }
     }
+    if (fullPlayer && playback.book != null) FullPlayer(player) { fullPlayer = false }
+    playback.error?.let { message -> AlertDialog(onDismissRequest = player::dismissError,
+        title = { Text("Playback unavailable") }, text = { Text(message) },
+        confirmButton = { TextButton(onClick = player::dismissError) { Text("OK") } }) }
     if (settings) SettingsScreen(preferences) { settings = false }
     state.pending?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
     state.books.firstOrNull { it.id == removeId }?.let { book ->
         AlertDialog(onDismissRequest = { if (!state.busy) removeId = null },
             title = { Text("Remove Audiobook?") }, text = { Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
             confirmButton = { TextButton(enabled = !state.busy, onClick = {
-                model.remove(book); removeId = null; selectedId = null
+                player.removed(book.id); model.remove(book); removeId = null; selectedId = null
             }) { Text("Also Delete Files") } },
             dismissButton = { TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } })
     }
@@ -159,7 +194,11 @@ fun DetailTopBar(book: LibraryBook, onBack: () -> Unit, onPlayer: (() -> Unit)? 
         }
         Text(book.title, Modifier.align(Alignment.Center).padding(horizontal = if (onPlayer == null) 50.dp else 78.dp),
             fontSize = 17.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        if (onPlayer != null) TextButton(onClick = onPlayer, modifier = Modifier.align(Alignment.CenterEnd)) { Text("Player") }
+        if (onPlayer != null) Surface(onClick = onPlayer, modifier = Modifier.align(Alignment.CenterEnd).testTag("book.player"),
+            shape = CircleShape, color = MaterialTheme.colorScheme.surface,
+            border = androidx.compose.foundation.BorderStroke(.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .15f))) {
+            Text("Player", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), fontSize = 17.sp, lineHeight = 20.sp)
+        }
     }
 }
 
@@ -182,7 +221,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                                 Icon(Icons.Default.Storage, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("${book.storageBytes / (1024 * 1024)} MB", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            Text("at ${trackDuration(book.currentPositionMs)}", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("at ${trackDuration(book.currentPositionMs)}", Modifier.testTag("book.position"), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Button(onClick = { onPlay?.invoke() }, enabled = onPlay != null, modifier = Modifier.testTag("book.play"),
                                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp), shape = CircleShape,
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.onSurface, contentColor = MaterialTheme.colorScheme.background,

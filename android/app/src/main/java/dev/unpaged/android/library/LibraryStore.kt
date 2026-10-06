@@ -13,6 +13,8 @@ interface LibraryStore {
     fun delete(id: String)
     fun toggleFavorite(id: String)
     fun updatePlaybackProgress(id: String, progress: PlaybackProgress)
+    fun updateTrackDuration(id: String, trackIndex: Int, durationMs: Long)
+    fun setProgressMarker(id: String, positionMs: Long)
     fun moments(bookId: String): List<LibraryMoment>
     fun saveMoment(moment: LibraryMoment)
     fun deleteMoment(id: String)
@@ -121,6 +123,17 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             high_water_mark_ms = MAX(high_water_mark_ms, ?), playback_speed = ?, is_finished = ?, last_played_at = ? WHERE id = ?""",
             arrayOf<Any>(progress.trackIndex, progress.positionMs, progress.highWaterMarkMs, progress.speed,
                 if (progress.finished) 1 else 0, progress.playedAt, id))
+    }
+
+    override fun updateTrackDuration(id: String, trackIndex: Int, durationMs: Long) {
+        require(trackIndex >= 0 && durationMs > 0)
+        writableDatabase.execSQL("UPDATE tracks SET duration_ms = ? WHERE book_id = ? AND position = ?",
+            arrayOf<Any>(durationMs, id, trackIndex))
+    }
+
+    override fun setProgressMarker(id: String, positionMs: Long) {
+        require(positionMs >= 0)
+        writableDatabase.execSQL("UPDATE books SET high_water_mark_ms = ? WHERE id = ?", arrayOf<Any>(positionMs, id))
     }
 
     override fun moments(bookId: String): List<LibraryMoment> = buildList {

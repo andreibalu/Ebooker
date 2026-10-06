@@ -3,8 +3,11 @@
 Native Kotlin/Compose application under `android/app/`. Local audiobook import,
 metadata review, schema-v2 persistence, Favorites/Library/Shelves pager, per-tab
 sort menus, favorite hearts, detail disclosures and persisted listening/appearance
-settings are implemented. Shelves is a placeholder. Playback controls expose
-callbacks but remain disabled until the Media3 slice; network sources, AI,
+settings are implemented. Shelves is a placeholder. Media3 local/remote playback,
+full player, mini player, chapters, speed, sleep, progress and manual moment saves
+are implemented in [slice 2](../docs/android/slice-2-playback.md); its E2E driver
+is compiled but runtime/capture verification is deferred to the orchestrator.
+Network catalog sources, AI,
 payments and sync are absent. See [slice 1](../docs/android/slice-1-shell-library-settings.md)
 for the migration and next-slice API contract. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
 remains the product/architecture decision index.
@@ -84,7 +87,8 @@ are scaffolding choices. Minimum phone support, final application identity,
 release UI and broader feature architecture remain unresolved Wayfinder
 decisions. SDK level alone never establishes local-AI availability.
 
-No system permissions are declared. Local imports use the system document
+Playback declares INTERNET and foreground media-playback permissions. API33+
+notification permission is optional and denial never blocks playback. Local imports use the system document
 picker and copy audio into private storage; source files are never deleted.
 The private SQLite index and owned audio are excluded from backup; uninstalling
 Unpaged removes these copies. Import progress survives rotation, but process

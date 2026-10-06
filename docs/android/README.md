@@ -38,5 +38,8 @@ slices. No GitHub issue/PR state was changed during this work.
 
 [E2E and visual checks](e2e-visual-validation-2026-10-06.md) distinguish current
 emulator coverage from remaining product/visual and device qualification.
-Playback remains unwired; Shelves, activity, onboarding and moment creation
-are later slices. Payments, Plus/tips and Apple sync remain excluded.
+[Slice 2](slice-2-playback.md) wires Media3 service playback, full/mini player,
+chapter navigation, durable progress and manual moment creation. APK, lint,
+host tests and E2E-driver compilation are checked in its isolated worktree;
+shared-emulator runtime/capture validation follows merge. Shelves, activity,
+onboarding and full moment editing are later slices. Payments, Plus/tips and Apple sync remain excluded.
