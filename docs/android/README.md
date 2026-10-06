@@ -16,3 +16,13 @@ The isolated Android scaffold is in [`../../android/`](../../android/README.md),
 with its own agent instructions and Gradle build. Read that README for setup,
 provisional identity/device choices and validation boundaries. Product and
 architecture tickets remain the canonical place for decisions.
+
+
+## Continued implementation
+
+After the foundation, Andrei requested continued Android implementation on
+2026-10-06. The next bounded slice is [local import and persistent library](local-library.md),
+tracked in [#59](https://github.com/andreibalu/Ebooker/issues/59). Work remains
+isolated from unfinished iOS/E2E changes. This execution request permits the
+slice; it does not close the open mirror-contract, AI-policy, device-support or
+broader architecture decisions by assumption.
