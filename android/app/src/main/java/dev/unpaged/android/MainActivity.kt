@@ -5,21 +5,12 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.dp
+import dev.unpaged.android.library.LibraryScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,23 +23,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun UnpagedApp() {
     val colors = if (isSystemInDarkTheme()) {
-        darkColorScheme(primary = Color(0xFFE4B775))
+        darkColorScheme(onSurface = Color.White, onBackground = Color.White, primary = Color(0xFFE59A19), background = Color(0xFF1C1C1F),
+            surface = Color(0xFF2B2B30), surfaceVariant = Color(0xFF2B2B30), onSurfaceVariant = Color(0xFFAAAAAE))
     } else {
-        lightColorScheme(primary = Color(0xFF80531A), background = Color(0xFFFFFBF5))
+        lightColorScheme(onSurface = Color.Black, onBackground = Color.Black, primary = Color(0xFFCC8632), background = Color(0xFFF7F4ED),
+            surface = Color(0xFFFFFCF7), surfaceVariant = Color(0xFFEAE7DF), onSurfaceVariant = Color(0xFF6C6C70))
     }
-    MaterialTheme(colorScheme = colors) {
-        Scaffold { contentPadding ->
-            Column(
-                modifier = Modifier.fillMaxSize().padding(contentPadding).padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
-            ) {
-                Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.headlineLarge.copy(fontFamily = FontFamily.Serif),
-                )
-                Text(stringResource(R.string.your_library), style = MaterialTheme.typography.titleMedium)
-                Text(stringResource(R.string.empty_library), style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    }
+    MaterialTheme(colorScheme = colors) { LibraryScreen() }
 }

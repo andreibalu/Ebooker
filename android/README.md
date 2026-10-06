@@ -1,8 +1,9 @@
-# Unpaged Android foundation
+# Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`. This first piece builds
-an empty Unpaged library shell; it has no playback, import, network, AI, payments
-or sync implementation. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
+Native Kotlin/Compose application under `android/app/`. The current slice adds
+local audiobook import, an editable metadata review, a persistent library and
+ordered track details. Playback is the next slice; network sources, AI, payments
+and sync are not implemented. The [Android map](https://github.com/andreibalu/Ebooker/issues/49)
 remains the product/architecture decision index.
 
 ## Build and lint
@@ -13,7 +14,7 @@ On the current Mac, run from `android/`:
 ```sh
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
 export ANDROID_HOME="$HOME/Library/Android/sdk"
-./gradlew --no-daemon :app:assembleDebug :app:lintDebug
+./gradlew --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest
 ```
 
 These exports affect only the current shell. Other machines should substitute
@@ -28,6 +29,7 @@ Outputs, intentionally ignored by Git:
 
 - APK: `app/build/outputs/apk/debug/app-debug.apk`
 - Lint: `app/build/reports/lint-results-debug.html` and `.xml`
+- Tests: `app/build/reports/tests/testDebugUnitTest/index.html`
 
 To install after a physical Android device is connected, USB debugging enabled
 and its RSA prompt accepted:
@@ -38,7 +40,7 @@ and its RSA prompt accepted:
 ```
 
 Assembly/lint alone do not verify launch, layout, accessibility or runtime behavior.
-No emulator or physical-device run was performed for the foundation.
+The original foundation had build/lint evidence only. The local-library follow-up adds emulator E2E coverage below; physical-device qualification is still pending.
 
 ## Pinned tooling
 
@@ -76,9 +78,67 @@ by the wrapper when fetching Gradle. Wrapper scripts/JAR come from the official
 `dev.unpaged.android.development` is a development application ID. Version
 `0.0.1-dev`, minSdk 26, the two-bar placeholder icon and this empty-screen layout
 are scaffolding choices. Minimum phone support, final application identity,
-release UI, persistence and feature architecture remain unresolved Wayfinder
+release UI and broader feature architecture remain unresolved Wayfinder
 decisions. SDK level alone never establishes local-AI availability.
 
-No permissions are declared. Backup is disabled until data/secret handling is
-specified; there is currently no user data. No public iOS documentation or App
+No system permissions are declared. Local imports use the system document
+picker and copy audio into private storage; source files are never deleted.
+The private SQLite index and owned audio are excluded from backup; uninstalling
+Unpaged removes these copies. Import progress survives rotation, but process
+death abandons an uncommitted import and startup removes its staging files. No public iOS documentation or App
 Store metadata changes belong in this foundation.
+
+
+## Local library
+
+Choose **Import Audiobook** and select one or more MP3/M4A/M4B/AAC/WAV/OGG/Opus/FLAC
+files. The broad document picker permits M4B files with generic provider MIME
+types; selected extensions, actual audio tracks and positive durations are
+validated before review. Codec/container support still depends on Android's
+media stack and needs device fixtures. Import is foreground work: keep Unpaged
+open during the copy. Review/edit title and author, then **Save**.
+Tap a book to inspect its ordered files; **Remove from library** confirms removal
+of the app's copies, preserving the selected originals. Embedded chapters and
+cover artwork extraction are not included in this slice.
+
+Host tests exercise real temporary-file IO, ordering, iOS-compatible sampled
+fingerprints, duplicate multiplicity, cancelled/failed copies, commit failure,
+removal and restart cleanup. Robolectric tests exercise SQLite reopen, track
+ordering, cascade removal and atomic rollback. Robolectric downloads its API28
+framework fixture on the first test run; these are host tests, not device tests.
+Additional pinned dependencies: Lifecycle 2.9.4, coroutines 1.10.2, JUnit 4.13.2,
+Robolectric 4.16. See [slice details](../docs/android/local-library.md).
+
+
+## Android end-to-end tests
+
+`e2e/` is a separate `com.android.test` driver process using UI Automator. This
+lets it force-stop the production app and verify persistence through relaunch.
+The production app has no fixture hooks: generated real PCM WAV files and a
+corrupt MP3 are selected through Android's actual Storage Access Framework UI.
+Assertions use visible app/picker controls, never database or repository calls.
+
+Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
+Boot it and specify its serial explicitly, with no other Android devices attached:
+
+```sh
+export ANDROID_SERIAL=emulator-5580
+./tools/run-e2e.sh
+```
+
+The script requires the JDK/SDK exports above. It refuses physical devices,
+unrelated AVDs, incomplete boot and additional attached devices. Tests clear only
+`dev.unpaged.android.development` on this disposable emulator and disable its
+animations. Do not use an AVD holding personal app data. The driver also checks
+the emulator name before clearing the app. Picker selectors are pinned to the
+English API35 default image; alternate OS/provider/locales need their own run.
+
+The runner performs APK assembly, production lint, host tests and
+`:e2e:connectedDebugAndroidTest`. It prints its evidence directory containing
+JUnit/HTML results, logcat and light/dark screenshots. On test failure it captures
+the screen and accessibility hierarchy. Override `E2E_EVIDENCE_DIR` to retain a
+specific output directory. Capture files are evidence for human review, not an
+automatically passing pixel-diff gate.
+
+See [E2E and visual evidence](../docs/android/e2e-visual-validation-2026-10-06.md)
+for executed journeys, screenshot comparisons and remaining parity gaps.
