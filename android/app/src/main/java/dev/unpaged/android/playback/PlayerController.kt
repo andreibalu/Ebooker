@@ -57,7 +57,9 @@ class PlayerController internal constructor(private val context: Application) {
 
     val preferences = UnpagedPreferences(context)
     private val store = SQLiteLibraryStore(context)
+    private val abs = (context as UnpagedApplication).abs
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val reports = Channel<LibraryBook>(Channel.UNLIMITED)
     private val writes = Channel<() -> Unit>(Channel.UNLIMITED)
     private val mutableState = MutableStateFlow(PlayerState())
     val state = mutableState.asStateFlow()
@@ -74,6 +76,7 @@ class PlayerController internal constructor(private val context: Application) {
     private var preservingSkipTarget: Pair<Int, Long>? = null
 
     init {
+        scope.launch(Dispatchers.IO) { for (book in reports) runCatching { abs.report(book) } }
         scope.launch(Dispatchers.IO) {
             for (write in writes) {
                 try { write(); withContext(Dispatchers.Main) { mutableState.value = state.value.copy(revision = state.value.revision + 1) } }
@@ -166,6 +169,13 @@ class PlayerController internal constructor(private val context: Application) {
             val ready = CompletableDeferred<LibraryBook?>()
             writes.send { try { ready.complete(store.books().firstOrNull { it.id == book.id }) } catch (error: Exception) { ready.completeExceptionally(error); throw error } }
             val fresh = try { ready.await() } catch (_: Exception) { return@launch } ?: return@launch
+            if (fresh.absItemID != null) {
+                try { abs.startPlayback(fresh.absItemID) }
+                catch (e: Exception) {
+                    mutableState.value = state.value.copy(error = dev.unpaged.android.abs.ABSRules.message(e, abs.summary.value?.server ?: "the server"), loading = false)
+                    return@launch
+                }
+            }
             val target = track?.let { it to 0L } ?: resume.start(fresh, preferences.seconds("resumeBacktrackSeconds", 60))
             val action = { load(fresh, target.first, target.second) }
             if (player == null) { pending = action; mutableState.value = state.value.copy(loading = true) } else action()
@@ -187,6 +197,7 @@ class PlayerController internal constructor(private val context: Application) {
             val uri = if (file.storedName.isNotEmpty()) android.net.Uri.fromFile(File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
                 else (file.remoteUrl ?: "").toUri()
             MediaItem.Builder().setMediaId("${book.id}:$index").setUri(uri)
+                .setCustomCacheKey(if (book.absItemID != null) "abs:${book.id}:$index" else null)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(PlaybackRules.title(book, index))
                     .setAlbumTitle(book.title).setArtist(book.author).setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER).build()).build()
         }
@@ -225,6 +236,10 @@ class PlayerController internal constructor(private val context: Application) {
         val progress = PlaybackProgress(s.trackIndex, s.positionMs, book.highWaterMarkMs, s.speed.toDouble(), book.isFinished)
         if (!rules.shouldPersist(progress, force)) return
         writes.trySend { store.updatePlaybackProgress(book.id, progress) }
+        if (force && book.absItemID != null) {
+            val snapshot = book.copy(currentTrackIndex = s.trackIndex, currentPositionMs = s.positionMs)
+            reports.trySend(snapshot)
+        }
         rules.didPersist(progress)
     }
     fun background() { activity.flush(); update(); persist(true) }

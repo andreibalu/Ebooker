@@ -36,7 +36,11 @@ parity_references = {
     'settings-dark': '25-settings-dark.png',
     'detail-dark': '26-detail-dark.png',
 }
-if (args.ios_captures / '02-library-light.png').is_file():
+if (args.ios_captures / 'ios-abs-browse-light.png').is_file():
+    cases = [f'abs-{screen}-{theme}' for screen in ['source-menu', 'connect', 'browse', 'detail', 'settings'] for theme in ['light', 'dark']]
+    sources = [(platform, case, root / (f'ios-{case}.png' if platform == 'ios' else f'{case}.png'))
+               for case in cases for platform, root in [('ios', args.ios_captures), ('android', args.android_captures)]]
+elif (args.ios_captures / '02-library-light.png').is_file():
     playback_cases = ['player-light', 'chapters-light', 'detail-miniplayer-light', 'library-miniplayer-light']
     if args.cases:
         if any(case not in parity_references for case in args.cases):
@@ -74,16 +78,25 @@ sections = []
 for case in cases:
     figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in ['ios', 'android'])
     note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
+    if case.startswith('abs-source-menu'):
+        note += '<p>The Android background uses the existing saved-only LibriVox fixture. Its daily pick, chart and preparation notice differ from the iOS catalog snapshot. Compare the Catalog source popup in this pair.</p>'
+    if case.startswith('abs-settings'):
+        note += '<p>The supplied iOS state shows the Sources card in the main Settings sheet. The server settings page is reviewed separately in the Android gallery against SwiftUI source.</p>'
+    if case.startswith('abs-') and case.endswith('-dark'):
+        note += '<p>The supplied iOS capture rendered in light appearance. Android shows actual dark appearance. Compare structure here and colors against the related light pair.</p>'
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
 for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
+             *[f'abs-{screen}-{theme}' for screen in ['connect', 'browse', 'detail', 'detail-added', 'library', 'server-settings'] for theme in ['light', 'dark']],
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
              'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',
              'save-moment-light', 'edit-moment-dark',
              'onboarding-dark', 'stats-light', 'stats-dark', 'stats-sections-light',
              *[f'onboarding-{page}-{theme}' for page in ['permissions', 'playback', 'year', 'moments', 'storage', 'done'] for theme in ['light', 'dark']]]:
+    if (args.ios_captures / 'ios-abs-browse-light.png').is_file() and not case.startswith('abs-'):
+        continue
     source = args.android_captures / f'{case}.png'
-    if source.is_file():
+    if source.is_file() and case not in cases:
         name = f'android-{case}.png'
         shutil.copyfile(source, args.output / name)
         manifest[name] = hashlib.sha256(source.read_bytes()).hexdigest()
@@ -93,7 +106,7 @@ for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Unpaged Android / iOS visual review</title>
 <style>body{margin:40px auto;max-width:900px;padding:0 20px;background:#eeeae3;color:#252322;font:16px system-ui}h1{font-size:28px}p{line-height:1.6}section{margin:48px 0}.pair{display:flex;gap:24px;align-items:flex-start}figure{margin:0;flex:1;min-width:0}figcaption{text-transform:uppercase;font-size:12px;letter-spacing:2px;padding-bottom:12px}img{display:block;width:100%;height:auto;border-radius:12px}a{color:inherit}@media(max-width:600px){body{margin:24px auto;padding:0 12px}.pair{gap:12px}}</style>
-<h1>Unpaged — Android / iOS visual review</h1>
+<h1>Unpaged Android / iOS visual review</h1>
 <p>Actual emulator and simulator captures at equal display width. PNG bytes are unchanged; click to inspect full resolution. Matching fixture titles, authors and durations are used. System chrome, fonts and missing Android features remain visible. Plus, purchases and Apple sync stay excluded. Playback captures come from real imported tracks and live Media3 state; Shelves uses the debug fixture catalog, which fixes hero and chart order. Settings references include excluded rows, so section positions differ.</p>
 <p>This is a human comparison artifact, not an automated pixel-diff pass. See the adjacent validation document for provenance, fixes and outstanding parity gaps.</p>
 ''' + '\n'.join(sections) + '</html>\n')

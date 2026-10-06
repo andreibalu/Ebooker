@@ -31,7 +31,7 @@ broader architecture decisions by assumption.
 ## Current stage
 
 The 2026-10-06 shared parity brief authorizes the native mirror build in slices.
-Each slice records its architecture decisions; all five are merged on one branch:
+Each slice records its architecture decisions. All six are merged:
 
 1. [Shell, library and settings](slice-1-shell-library-settings.md): app shell,
    local library/card/detail parity, persistent settings and schema v2.
@@ -43,12 +43,15 @@ Each slice records its architecture decisions; all five are merged on one branch
    delete, pinning, filters and live per-book five-band EQ.
 5. [Reading activity and onboarding](slice-5-reading-onboarding.md): reading
    sessions, Favorites stats and once-per-install onboarding/reset.
+6. [Audiobookshelf source](slice-6-audiobookshelf.md): encrypted server credentials,
+   library browsing, authenticated streaming, server progress and library-card fixes.
 
 SQLite schema v3 combines slice 4's moment pin column and slice 5's
-`reading_sessions` table in one additive migration. Android replacements are
+`reading_sessions` table in one additive migration. Slice 6 advances it to v4 with nullable ABS identity
+and chapter columns. Android replacements are
 notifications, manual moments and private local storage. Payments, Plus/tips,
-Apple Intelligence and Apple sync remain excluded; Audiobookshelf and Android
-Auto are not implemented yet.
+Apple Intelligence and Apple sync remain excluded. Android Auto is not implemented
+yet.
 
 [E2E and visual checks](e2e-visual-validation-2026-10-06.md) and the
 [merged E2E fix run](e2e-merged-fix-2026-10-06.md) record emulator coverage,

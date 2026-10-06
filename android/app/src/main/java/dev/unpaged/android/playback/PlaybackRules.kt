@@ -14,7 +14,26 @@ object PlaybackRules {
         else book.tracks.getOrNull(index)?.title.orEmpty()
     fun miniSecondary(book: LibraryBook, index: Int): String? = book.tracks.getOrNull(index)?.title?.trim()
         ?.takeIf { book.tracks.size > 1 && it.isNotEmpty() && it != book.title.trim() }
+    private fun absChapters(book: LibraryBook): List<PlaybackChapter> = runCatching {
+        val array = org.json.JSONArray(book.absChaptersJson ?: "[]")
+        val ordered = (0 until array.length()).map { array.getJSONObject(it) }
+            .filter { it.getLong("start") >= 0 && it.getLong("start") < book.durationMs - 500 }
+            .sortedBy { it.getLong("start") }.fold(mutableListOf<org.json.JSONObject>()) { acc, chapter ->
+                if (acc.isEmpty() || chapter.getLong("start") - acc.last().getLong("start") >= 500) acc.add(chapter)
+                acc
+            }
+        if (ordered.size < 2) return emptyList()
+        ordered.mapIndexed { index, chapter ->
+            val start = if (index == 0) 0 else chapter.getLong("start")
+            var position = dev.unpaged.android.abs.ABSRules.position(start, book.tracks.map { it.durationMs })
+            if (position.first < book.tracks.lastIndex && book.tracks[position.first].durationMs - position.second < 500) position = position.first + 1 to 0L
+            PlaybackChapter(index, chapter.optString("title").trim().ifBlank { "Chapter ${index + 1}" }, position.first, position.second,
+                ((ordered.getOrNull(index + 1)?.getLong("start") ?: chapter.getLong("end")) - start).coerceAtLeast(0))
+        }
+    }.getOrDefault(emptyList())
     fun chapters(book: LibraryBook, markers: Map<Int, List<ChapterMarker>> = emptyMap()): List<PlaybackChapter> = buildList {
+        val abs = absChapters(book)
+        if (abs.isNotEmpty()) { addAll(abs); return@buildList }
         book.tracks.forEachIndexed { track, file ->
             val ordered = markers[track].orEmpty().filter { it.startMs >= 0 && (file.durationMs <= 0 || it.startMs < file.durationMs - 500) }
                 .sortedBy { it.startMs }.fold(mutableListOf<ChapterMarker>()) { acc, m ->

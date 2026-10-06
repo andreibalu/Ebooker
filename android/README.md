@@ -1,6 +1,6 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`, built in five merged slices:
+Native Kotlin/Compose application under `android/app/`, built in five merged slices and the current ABS slice:
 
 - [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
   import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
@@ -16,8 +16,15 @@ Native Kotlin/Compose application under `android/app/`, built in five merged sli
   Favorites activity/stats and seven-page onboarding, using notification
   permission, manual moments and local-library pages in place of Apple-only features.
 
-SQLite is at schema v3 via additive, tested migrations. Audiobookshelf, AI,
-Android Auto, payments and cloud sync are absent. The
+- [Slice 6](../docs/android/slice-6-audiobookshelf.md): Audiobookshelf source,
+  encrypted login/API-key credentials, server browsing and authenticated streaming,
+  server progress and card heart/shadow fixes.
+
+SQLite is at schema v4 via additive, tested migrations. AI,
+Android Auto, payments and cloud sync are absent. Self-hosted ABS permits HTTP
+through the network security configuration, with a public-host warning before
+credentials are sent. Credentials use Android Keystore AES/GCM encryption in
+app-private storage excluded from backups. The
 [Android map](https://github.com/andreibalu/Ebooker/issues/49) remains the
 product/architecture decision index.
 

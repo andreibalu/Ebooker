@@ -22,15 +22,34 @@ python3 tools/make-e2e-fixtures.py "$evidence/fixtures"
 "$adb" -s "$ANDROID_SERIAL" shell rm -rf /sdcard/Download/Unpaged_E2E_Captures
 collect() {
   result=$?
+  if [[ -n "${abs_server_pid:-}" ]]; then kill "$abs_server_pid" 2>/dev/null || true; wait "$abs_server_pid" 2>/dev/null || true; fi
   [[ "$result" == 0 ]] || tail -80 "$evidence/gradle.log" >&2
   "$adb" -s "$ANDROID_SERIAL" pull /sdcard/Download/Unpaged_E2E_Captures "$evidence/screenshots" > "$evidence/capture-pull.log" 2>&1 || true
   "$adb" -s "$ANDROID_SERIAL" logcat -d -v threadtime > "$evidence/logcat.txt" 2>&1 || true
+  [[ ! -d app/build/test-results/testDebugUnitTest ]] || cp -R app/build/test-results/testDebugUnitTest "$evidence/host-test-results"
+  [[ ! -d app/build/reports/tests/testDebugUnitTest ]] || cp -R app/build/reports/tests/testDebugUnitTest "$evidence/host-test-report"
+  [[ ! -f app/build/reports/lint-results-debug.xml ]] || cp app/build/reports/lint-results-debug.xml "$evidence/"
   [[ ! -d e2e/build/outputs/androidTest-results ]] || cp -R e2e/build/outputs/androidTest-results "$evidence/"
   [[ ! -d e2e/build/reports/androidTests ]] || cp -R e2e/build/reports/androidTests "$evidence/"
   echo "Android E2E evidence: $evidence"
   exit "$result"
 }
 trap collect EXIT
+python3 tools/fake-abs-server.py --fixtures "$evidence/fixtures" --evidence "$evidence" > "$evidence/abs-server.log" 2>&1 &
+abs_server_pid=$!
+python3 - <<'READY'
+import time
+import urllib.request
+for attempt in range(50):
+    try:
+        urllib.request.urlopen('http://127.0.0.1:13378/_test/health', timeout=1).close()
+        break
+    except OSError:
+        time.sleep(.1)
+else:
+    raise SystemExit('Fake ABS server did not become ready')
+READY
+kill -0 "$abs_server_pid" # Refuse accidentally using a server left by another run.
 ./gradlew --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest :e2e:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.e2eApproved=true "$@" > "$evidence/gradle.log" 2>&1
 cat "$evidence/gradle.log"
