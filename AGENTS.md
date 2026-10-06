@@ -7,7 +7,7 @@ Claude-Code-only notes — tool availability and Codex delegation — live in `C
 
 - **Marketing name (App Store / home screen)**: Unpaged
 - **Xcode scheme**: `Pageless` · **source folder**: `Pageless/` · **bundle id prefix**: `andreibaludev.Pageless`
-- **Marketing version**: see `VERSION` (currently 1.4.1)
+- **Marketing version**: see `VERSION` (currently 1.4.2)
 
 Three names = intentional historical layers — no "fix". New user-facing copy says "Unpaged".
 
