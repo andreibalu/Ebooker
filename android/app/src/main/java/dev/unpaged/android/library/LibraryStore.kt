@@ -24,8 +24,8 @@ interface LibraryStore {
     fun deleteMoment(id: String)
 }
 
-/** Additive schema: v2 library parity, v3 moment pins + historical reading sessions. Never rebuild user tables. */
-class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, 3), LibraryStore {
+/** Additive schema: v2 library parity, v3 moment pins + historical reading sessions, v4 ABS identity + chapters. Never rebuild user tables. */
+class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, 4), LibraryStore {
     private val audioRoot = java.io.File(context.filesDir, "audiobooks")
 
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
@@ -38,11 +38,21 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             PRIMARY KEY(book_id, position))""")
         migrateToV2(db)
         migrateToV3(db)
+        migrateToV4(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2 && newVersion >= 2) migrateToV2(db)
         if (oldVersion < 3 && newVersion >= 3) migrateToV3(db)
+        if (oldVersion < 4 && newVersion >= 4) migrateToV4(db)
+    }
+
+    private fun migrateToV4(db: SQLiteDatabase) {
+        val columns = db.rawQuery("PRAGMA table_info(books)", null).use { rows ->
+            buildSet { while (rows.moveToNext()) add(rows.getString(rows.getColumnIndexOrThrow("name"))) }
+        }
+        if ("abs_item_id" !in columns) db.execSQL("ALTER TABLE books ADD COLUMN abs_item_id TEXT")
+        if ("abs_chapters_json" !in columns) db.execSQL("ALTER TABLE books ADD COLUMN abs_chapters_json TEXT")
     }
 
     private fun migrateToV3(db: SQLiteDatabase) {
@@ -115,13 +125,17 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                     r.bool("is_favorite"), r.optionalLong("last_played_at"), r.long("current_track_index").toInt(),
                     r.long("current_position_ms"), r.long("high_water_mark_ms"), r.getDouble(r.getColumnIndexOrThrow("playback_speed")),
                     r.bool("is_finished"), r.bool("is_free_book"), r.optional("catalog_id"), r.bool("is_downloaded"),
-                    r.long("storage_bytes"), r.optional("equalizer_json"), r.long("date_added"))
+                    r.long("storage_bytes"), r.optional("equalizer_json"), r.long("date_added"), r.optional("abs_item_id"), r.optional("abs_chapters_json"))
             }
         }
         return result
     }
 
     override fun insert(book: LibraryBook) {
+        if (book.absItemID != null) {
+            require(!book.isDownloaded && !book.isFreeBook && book.tracks.isNotEmpty())
+            require(book.tracks.all { it.storedName.isEmpty() && it.remoteUrl != null && !dev.unpaged.android.abs.ABSRules.containsCredential(it.remoteUrl) })
+        }
         val db = writableDatabase
         db.transaction {
             db.insertOrThrow("books", null, ContentValues().apply {
@@ -132,6 +146,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                 put("is_finished", book.isFinished); put("is_free_book", book.isFreeBook); put("catalog_id", book.catalogId)
                 put("is_downloaded", book.isDownloaded); put("storage_bytes", book.storageBytes)
                 put("equalizer_json", book.equalizerJson); put("date_added", book.dateAdded)
+                put("abs_item_id", book.absItemID); put("abs_chapters_json", book.absChaptersJson)
             })
             book.tracks.forEachIndexed { index, track ->
                 db.insertOrThrow("tracks", null, ContentValues().apply {

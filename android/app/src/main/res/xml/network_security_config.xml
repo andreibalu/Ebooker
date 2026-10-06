@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Self-hosted ABS servers may use plain HTTP over LAN or private VPN. The connect
+         screen confirms public HTTP before transmitting credentials. -->
+    <!-- Intentional iOS NSAllowsArbitraryLoads parity. Suppress only this policy advisory. -->
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration" />
+</network-security-config>

@@ -76,6 +76,7 @@ for case in cases:
     note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
 for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
+             *[f'abs-{screen}-{theme}' for screen in ['connect', 'browse', 'detail', 'library'] for theme in ['light', 'dark']],
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
              'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',

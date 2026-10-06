@@ -148,7 +148,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     val pageTab = tabs[page]
                     val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
                     when {
-                        pageTab == "Shelves" -> ShelvesScreen(onLibraryChanged = model::refreshCatalogBooks, onViewLibrary = { id -> selectedId = id; scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } })
+                        pageTab == "Shelves" -> dev.unpaged.android.abs.SourceShelves(preferences, onPlay = { playBook(it, null) }, onLibraryChanged = model::refreshCatalogBooks, onViewLibrary = { id -> selectedId = id; scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } })
                         pageTab == "Favorites" && books.isEmpty() && sessions.isEmpty() -> EmptyFavorites()
                         books.isEmpty() && pageTab != "Favorites" -> EmptyLibrary(canImport, onImport) { scope.launch { pager.animateScrollToPage(tabs.indexOf("Shelves")) } }
                         else -> LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(),
@@ -167,14 +167,14 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     playback.error?.let { message -> AlertDialog(onDismissRequest = player::dismissError,
         title = { Text("Playback unavailable") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = player::dismissError) { Text("OK") } }) }
-    if (settings) SettingsScreen(preferences) { settings = false }
+    if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } }) { settings = false }
     state.pending?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
     state.books.firstOrNull { it.id == removeId }?.let { book ->
         AlertDialog(onDismissRequest = { if (!state.busy) removeId = null },
-            title = { Text("Remove Audiobook?") }, text = { Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
+            title = { Text("Remove Audiobook?") }, text = { Text(if (book.absItemID != null) "This removes the book from Unpaged only. The book stays on your Audiobookshelf server." else "Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
             confirmButton = { TextButton(enabled = !state.busy, onClick = {
                 player.removed(book.id); model.remove(book); removeId = null; selectedId = null
-            }) { Text("Also Delete Files") } },
+            }) { Text(if (book.absItemID != null) "Remove from App" else "Also Delete Files") } },
             dismissButton = { TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } })
     }
     state.error?.let { error ->
@@ -230,7 +230,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
             Surface(shape = UnpagedTheme.detailShape, shadowElevation = UnpagedTheme.cardShadow) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-                        GeneratedBookCover(book.title, Modifier.size(130.dp), cornerRadius = 20)
+                        LibraryBookCover(book, Modifier.size(130.dp), cornerRadius = 20)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(book.title, fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 3)
                             Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

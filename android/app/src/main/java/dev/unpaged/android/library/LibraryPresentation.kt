@@ -1,5 +1,6 @@
 package dev.unpaged.android.library
 
+import androidx.core.graphics.get
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,7 +17,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
@@ -80,6 +83,20 @@ internal fun GeneratedBookCover(title: String, modifier: Modifier = Modifier, co
 }
 
 @Composable
+internal fun LibraryBookCover(book: LibraryBook, modifier: Modifier, cornerRadius: Int = 16, onCoverColor: (Color) -> Unit = {}) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var bitmap by remember(book.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    LaunchedEffect(book.id, book.absItemID) {
+        if (book.absItemID != null) bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            android.graphics.BitmapFactory.decodeFile(java.io.File(context.filesDir, "audiobooks/${book.id}/cover.png").absolutePath)
+        }
+        bitmap?.let { onCoverColor(Color(it[it.width / 2, it.height / 2])) }
+    }
+    if (bitmap == null) GeneratedBookCover(book.title, modifier, cornerRadius)
+    else androidx.compose.foundation.Image(bitmap!!.asImageBitmap(), "Cover for ${book.title}", modifier.clip(RoundedCornerShape(cornerRadius.dp)), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+}
+
+@Composable
 internal fun LibraryHeader(count: Int, canImport: Boolean, onImport: () -> Unit, onSettings: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -104,11 +121,12 @@ private fun HeaderButton(description: String, onClick: () -> Unit, enabled: Bool
 @Composable
 internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove: () -> Unit, playing: Boolean = false, onOpen: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    Surface(Modifier.fillMaxWidth().combinedClickable(onClick = onOpen, onLongClick = { menu = true }).testTag("book.card.${book.id}"),
-        shape = UnpagedTheme.cardShape, shadowElevation = UnpagedTheme.cardShadow) {
+    var coverColor by remember(book.id) { mutableStateOf(CoverPalette.background(book.title)) }
+    Surface(Modifier.fillMaxWidth().shadow(12.dp, UnpagedTheme.cardShape, ambientColor = Color.Black.copy(alpha = .12f), spotColor = Color.Black.copy(alpha = .12f)).combinedClickable(onClick = onOpen, onLongClick = { menu = true }).testTag("book.card.${book.id}"),
+        shape = UnpagedTheme.cardShape, shadowElevation = 0.dp) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box {
-                GeneratedBookCover(book.title, Modifier.fillMaxWidth().height(185.dp))
+                LibraryBookCover(book, Modifier.fillMaxWidth().height(185.dp), onCoverColor = { coverColor = it })
                 if (playing || book.lastPlayedAt != null) {
                     Surface(Modifier.align(Alignment.TopEnd).padding(10.dp), shape = CircleShape,
                         color = MaterialTheme.colorScheme.surface.copy(alpha = .6f)) {
@@ -119,12 +137,12 @@ internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove
                         }
                     }
                 }
-                Surface(Modifier.align(Alignment.BottomEnd).padding(10.dp), shape = CircleShape,
-                    color = Color.White.copy(alpha = .32f)) {
-                    IconButton(onClick = onFavorite, modifier = Modifier.size(36.dp).testTag("book.favorite.${book.id}")
+                Surface(Modifier.align(Alignment.BottomEnd).offset(x = 9.dp, y = 9.dp), shape = CircleShape,
+                    color = androidx.compose.ui.graphics.lerp(coverColor, Color.White, .32f)) {
+                    IconButton(onClick = onFavorite, modifier = Modifier.size(40.dp).testTag("book.favorite.${book.id}")
                         .semantics { contentDescription = if (book.isFavorite) "Remove favorite" else "Add favorite" }) {
                         Icon(if (book.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null,
-                            Modifier.size(18.dp), tint = if (book.isFavorite) UnpagedTheme.favorite else Color.White)
+                            Modifier.size(20.dp), tint = if (book.isFavorite) UnpagedTheme.favorite else Color.White)
                     }
                 }
             }

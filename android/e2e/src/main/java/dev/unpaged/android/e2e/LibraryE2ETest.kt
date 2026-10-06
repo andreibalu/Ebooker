@@ -1007,6 +1007,105 @@ class LibraryE2ETest {
         visible(By.text("Streaming"))
     }
 
+    private fun absRequest(path: String, method: String = "GET"): org.json.JSONObject {
+        val connection = java.net.URL("http://10.0.2.2:13378/$path").openConnection() as java.net.HttpURLConnection
+        connection.connectTimeout = 5000; connection.readTimeout = 5000; connection.requestMethod = method
+        return try { org.json.JSONObject(connection.inputStream.bufferedReader().use { it.readText() }) } finally { connection.disconnect() }
+    }
+
+    private fun openABSConnect() {
+        selectTab("Shelves")
+        field("shelves.source").click()
+        field("shelves.source.audiobookshelf").click()
+        field("abs.connect.server")
+    }
+
+    private fun fillABSLogin(password: String) {
+        field("abs.connect.server").setText("http://10.0.2.2:13378")
+        field("abs.connect.username").setText("reader")
+        field("abs.connect.password").setText(password)
+        dismissKeyboard() // Only dismiss an actual input-method window.
+        field("abs.connect.submit").click()
+    }
+
+    @Test fun absBadPasswordShowsInlineError() {
+        absRequest("_test/reset", "POST")
+        openABSConnect(); fillABSLogin("wrong")
+        field("abs.connect.error")
+        visible(By.text("That username and password didn't work. Check them and try again."))
+        assertEquals(1, absRequest("_test/state").getInt("bad_password"))
+        assertEquals(0, absRequest("_test/state").getInt("authorize"))
+    }
+
+    @Test fun absLoginBrowseAddStreamPersistenceAndDisconnect() {
+        absRequest("_test/reset", "POST")
+        openABSConnect()
+        screenshot("abs-connect-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("abs.connect.server"); screenshot("abs-connect-dark")
+        device.executeShellCommand("cmd uimode night no")
+        fillABSLogin("password")
+        field("abs.book.fixture-book")
+        visible(By.text("All Books")); visible(By.text("Continue Listening"))
+        screenshot("abs-browse-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("abs.book.fixture-book"); screenshot("abs-browse-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("abs.search").setText("The Server")
+        dismissKeyboard()
+        field("abs.book.fixture-book")
+        assertFalse(device.hasObject(By.res("abs.book.fixture-other")))
+        field("abs.search").setText("")
+        dismissKeyboard()
+        field("abs.libraryPicker").click(); tapText("Second Library")
+        visible(By.text("This shelf is empty."))
+        field("abs.libraryPicker").click(); tapText("My Audiobooks")
+        field("abs.book.fixture-book").click()
+        field("abs.detail"); visible(By.text("20% listened"))
+        screenshot("abs-detail-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("abs.detail"); screenshot("abs-detail-dark")
+        device.executeShellCommand("cmd uimode night no")
+        scrollTo("abs.add", scrollId = "abs.detail")
+        field("abs.add").click(); field("abs.added")
+        scrollTo("abs.viewLibrary", scrollId = "abs.detail")
+        field("abs.viewLibrary").click()
+        visible(By.text("Streaming")); field("book.play").click()
+        dismissNotificationPrompt()
+        field("player.playPause")
+        val deadline = android.os.SystemClock.uptimeMillis() + 15000
+        var server = absRequest("_test/state")
+        while ((server.getInt("tokenized_streams") == 0 || server.getJSONArray("progress").length() == 0) && android.os.SystemClock.uptimeMillis() < deadline) {
+            android.os.SystemClock.sleep(200); server = absRequest("_test/state")
+        }
+        assertTrue("Server must see a tokenized stream", server.getInt("tokenized_streams") > 0)
+        assertTrue("Server must see a progress update", server.getJSONArray("progress").length() > 0)
+        assertTrue("Cover requests must authenticate", server.getInt("covers") > 0)
+        assertEquals(1, server.getInt("login"))
+        val progress = server.getJSONArray("progress").getJSONObject(0)
+        assertEquals(60.0, progress.getDouble("duration"), .01)
+        field("player.playPause").click()
+        device.pressBack(); device.pressBack()
+        visible(By.text("The Server Book"))
+        screenshot("abs-library-light")
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("The Server Book")); screenshot("abs-library-dark")
+        device.executeShellCommand("cmd uimode night no")
+        device.executeShellCommand("am force-stop $app"); launch()
+        selectTab("Shelves"); field("abs.book.fixture-book").click()
+        field("abs.added")
+        assertFalse(device.hasObject(By.res("abs.add")))
+        device.pressBack(); field("abs.browse.settings").click()
+        visible(By.text("Signed in as reader"))
+        field("abs.settings.disconnect").click(); field("abs.settings.disconnect.confirm").click()
+        field("shelves.source")
+        visible(By.text("LibriVox ▾"))
+        device.executeShellCommand("am force-stop $app"); launch(); selectTab("Shelves")
+        visible(By.text("LibriVox ▾"))
+        // The local streaming row remains after disconnect.
+        selectTab("Library"); visible(By.text("The Server Book"))
+    }
+
     private fun launch() {
         device.executeShellCommand("am start -W -n $app/dev.unpaged.android.MainActivity")
         visible(By.pkg(app).depth(0))

@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import android.content.Context
+import androidx.core.net.toUri
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import dev.unpaged.android.MainActivity
@@ -28,7 +29,16 @@ class PlaybackService : MediaSessionService() {
                 DefaultAudioSink.Builder(context).setEnableFloatOutput(false)
                     .setAudioProcessors(arrayOf(controller.equalizerProcessor)).build()
         }
+        val abs = (application as dev.unpaged.android.UnpagedApplication).abs
+        val source = androidx.media3.datasource.ResolvingDataSource.Factory(
+            androidx.media3.datasource.DefaultDataSource.Factory(this)) { spec ->
+            if (spec.key?.startsWith("abs:") == true) {
+                val url = kotlinx.coroutines.runBlocking { abs.playbackURL(spec.uri.toString()) }
+                spec.withUri(url.toUri())
+            } else spec
+        }
         engine = ExoPlayer.Builder(this, renderers)
+            .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(source))
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).build()
         val sessionPlayer = object : ForwardingPlayer(engine) {

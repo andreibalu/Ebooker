@@ -40,7 +40,7 @@ class ReadingMigrationTest {
         }
         val session = ReadingSession(day = LocalDate.of(2026, 10, 6), hour = 23, minutes = 5, bookId = book.id, bookTitle = book.title, bookAuthor = book.author, isFreeBook = false)
         withStore(context) { store ->
-            assertEquals(3, store.readableDatabase.version)
+            assertEquals(4, store.readableDatabase.version)
             assertEquals(book, store.books().single()); assertEquals(moment, store.moments(book.id).single()); assertTrue(audio.exists())
             store.saveReadingSession(session); store.delete(book.id)
         }

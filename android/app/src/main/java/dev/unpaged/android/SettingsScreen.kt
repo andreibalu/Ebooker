@@ -42,9 +42,11 @@ private val listeningPreferences = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(preferences: UnpagedPreferences, onDone: () -> Unit) {
+fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)? = null, onDone: () -> Unit) {
     preferenceRevision(preferences)
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    var absSettings by rememberSaveable { mutableStateOf(false) }
+    val absClient = (androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).abs
     val uri = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = onDone, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
         containerColor = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onSurface,
@@ -112,6 +114,12 @@ fun SettingsScreen(preferences: UnpagedPreferences, onDone: () -> Unit) {
                         }
                     }
                 }
+                Column {
+                    SectionHeader("SOURCES", "Your own shelves.")
+                    Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
+                        Row(Modifier.fillMaxWidth().clickable { absSettings = true }.testTag("settings.audiobookshelf").padding(16.dp)) { Text("Audiobookshelf Server") }
+                    }
+                }
                 // iOS Support contains only the excluded coffee purchase. Keep its non-payment legal rows.
                 Column {
                     SectionHeader("ABOUT", "The fine print.")
@@ -126,6 +134,7 @@ fun SettingsScreen(preferences: UnpagedPreferences, onDone: () -> Unit) {
             }
         }
     }
+    if (absSettings) dev.unpaged.android.abs.ABSServerSettings(absClient, preferences, onOpenShelves = { absSettings = false; onDone(); onOpenShelves?.invoke() }) { absSettings = false }
 }
 
 @Composable
