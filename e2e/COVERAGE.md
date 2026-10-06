@@ -12,7 +12,7 @@ This matrix covers every iOS feature except Apple Intelligence and iCloud sync, 
 
 Unit suite on the iPhone 18 Pro simulator (iOS 27.0), 623 Swift Testing tests in 73 suites. One StoreKit test, `legacyAIUnlockStillGrantsPlusPermanently`, failed once and passed when `StoreKitTransactionTests` was rerun on its own (14 of 14). The XCTest UI groups ran 4 and 8 tests with no failures.
 
-Native suite on the dedicated `Unpaged e2e` simulator (iOS 27.0), 68 tests in 11 files, with `live-catalog.e2e.ts` skipped because it is opt-in. The last full run (`01a11309-db66-7f6f-bb7e-c26929b3043b`) passed 65 of 67. Both failures were test faults, which are now fixed and passed on rerun (`01a1131d-9ac0-799f-b181-a26a9211e8f3`):
+Native suite on the dedicated `Unpaged e2e` simulator (iOS 27.0), 68 tests in 11 files, with `live-catalog.e2e.ts` skipped because it is opt-in. The final full run (`01a11326-a97b-74b1-bcfd-fba8a8cd70f8`) passed all 67. The run before it (`01a11309-db66-7f6f-bb7e-c26929b3043b`) passed 65 of 67, and both failures were test faults, fixed before the final run:
 
 - The Today's Pick helper counted one day short between midnight and 1 a.m. while daylight saving time is in effect.
 - The coffee row's subtitle is part of the button's label and is not always listed as separate text.
