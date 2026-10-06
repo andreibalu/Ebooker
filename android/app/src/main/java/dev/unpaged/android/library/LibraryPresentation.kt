@@ -124,8 +124,9 @@ internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove
                     }
                 }
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(book.title, Modifier.heightIn(min = 38.dp), fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
+            // iOS bottom-aligns the text block: a one-line title leaves its slack above the title, not below it.
+            Column(Modifier.heightIn(min = 76.dp), verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Bottom)) {
+                Text(book.title, fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 12.sp, lineHeight = 16.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
