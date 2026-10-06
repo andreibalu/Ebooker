@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
+import androidx.test.uiautomator.Configurator
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.UiSelector
@@ -37,13 +38,19 @@ class LibraryE2ETest {
     }
 
     @Before fun freshLibrary() {
+        // Continuous playback events can keep the default 10s idle wait busy long
+        // enough to miss 2s feedback. Geometry-sensitive actions settle explicitly.
+        Configurator.getInstance().waitForIdleTimeout = 100
         assertEquals("Use tools/run-e2e.sh on its dedicated emulator", "true",
             InstrumentationRegistry.getArguments().getString("e2eApproved"))
         assertEquals("1", device.executeShellCommand("getprop ro.kernel.qemu").trim())
         assertTrue(device.executeShellCommand("getprop ro.boot.qemu.avd_name").trim().startsWith("Unpaged_E2E_"))
         for (setting in listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale"))
             device.executeShellCommand("settings put global $setting 0")
+        device.pressHome()
+        settleLayout()
         device.executeShellCommand("pm clear $app")
+        settleLayout()
         device.executeShellCommand("cmd uimode night no")
         launchFixture()
         field("tab.Library").click()
@@ -171,8 +178,7 @@ class LibraryE2ETest {
         field("book.moments").click()
         assertTrue(device.wait(Until.gone(By.text("No saved moments yet")), 15_000))
         settleLayout()
-        field("book.tracks").click()
-        visible(By.text("Chapter 1"))
+        expandTracks("Chapter 1")
         screenshot("detail-expanded-light")
         device.pressBack()
         visible(By.text("My Library"))
@@ -292,7 +298,7 @@ class LibraryE2ETest {
         tapText("Done")
         device.executeShellCommand("am force-stop $app")
         launch()
-        device.waitForIdle()
+        device.waitForIdle(500)
         assertFalse(device.hasObject(By.text("No Favorites Yet")))
         field("tab.Shelves")
         tapDescription("Settings")
@@ -382,8 +388,9 @@ class LibraryE2ETest {
         visible(By.desc("Play playback"))
         field("player.saveMoment").click()
         visible(By.text("Saved!"))
-        visible(By.text("Save Moment"))
-        field("player.saveMoment").click()
+        waitForPillLabel("player.saveMoment", "Save Moment")
+        settleLayout()
+        visible(By.res("player.saveMoment")).click()
         visible(By.text("Saved!"))
         field("player.markProgress").click()
         visible(By.text("This will update your progress marker to the current playback position."))
@@ -395,8 +402,8 @@ class LibraryE2ETest {
         field("player.sleep").click()
         tapText("Off")
         visible(By.text("Sleep Timer"))
-        visible(By.text("Save Moment"))
-        visible(By.text("Mark Progress Here"))
+        waitForPillLabel("player.saveMoment", "Save Moment")
+        waitForPillLabel("player.markProgress", "Mark Progress Here")
         // Resume for the reference's playing transport state.
         field("player.playPause").click()
         visible(By.desc("Pause playback"))
@@ -480,7 +487,7 @@ class LibraryE2ETest {
     }
 
     private fun assertTheme(dark: Boolean) {
-        device.waitForIdle()
+        device.waitForIdle(500)
         val capture = File(captureDirectory(), "theme-check.png")
         assertTrue(device.takeScreenshot(capture))
         val bitmap = android.graphics.BitmapFactory.decodeFile(capture.absolutePath)
@@ -520,22 +527,85 @@ class LibraryE2ETest {
 
     private fun openPicker(vararg names: String) {
         tapDescription("Import Audiobook")
+        visible(By.pkg("com.android.documentsui"))
+        settleLayout()
         tapDescription("Show roots")
-        val root = device.findObject(UiSelector().resourceId("android:id/title").text("Android SDK built for arm64"))
-        assertTrue(root.waitForExists(15_000))
-        root.click()
-        val breadcrumb = device.findObject(UiSelector().resourceId("com.android.documentsui:id/breadcrumb_text").text("Android SDK built for arm64"))
-        assertTrue(breadcrumb.waitForExists(15_000))
-        breadcrumb.click()
+        settleLayout()
+        visible(By.res("android:id/title").text("Android SDK built for arm64")).click()
+        settleLayout()
+        visible(By.res("com.android.documentsui:id/breadcrumb_text").text("Android SDK built for arm64")).click()
+        settleLayout()
         tapText("Download")
+        settleLayout()
         tapText("Unpaged_E2E")
+        settleLayout()
         if (device.hasObject(By.desc("List view"))) tapDescription("List view")
-        if (names.size == 1) tapText(names.single())
+        if (names.size == 1) pickerFile(names.single()).click()
         else {
-            text(names.first()).longClick()
-            names.drop(1).forEach { tapText(it) }
+            pickerFile(names.first()).longClick()
+            names.drop(1).forEach { pickerFile(it).click() }
             tapText("Select")
         }
+    }
+
+    private fun tapMenuText(label: String) {
+        settleLayout()
+        repeat(10) {
+            refreshAccessibility()
+            val target = device.findObject(By.text(label))
+            val menu = device.findObject(By.scrollable(true))?.visibleBounds
+            val bounds = target?.visibleBounds
+            if (bounds != null && bounds.height() >= 40 &&
+                (menu == null || bounds.top > menu.top + 12 && bounds.bottom < menu.bottom - 12)) {
+                target.click()
+                return
+            }
+            checkNotNull(menu) { "Menu option not visible: $label" }
+            val top = menu.top + menu.height() / 5
+            val bottom = menu.bottom - menu.height() / 5
+            val clearing = label.startsWith("All ")
+            device.swipe(menu.centerX(), if (clearing) top else bottom,
+                menu.centerX(), if (clearing) bottom else top, 30)
+            settleLayout()
+        }
+        throw AssertionError("Menu option not found: $label")
+    }
+
+    private fun pickerFile(name: String): androidx.test.uiautomator.UiObject {
+        val selector = UiSelector().resourceId("android:id/title").text(name)
+        val list = UiScrollable(UiSelector().resourceId("com.android.documentsui:id/dir_list"))
+        assertTrue("Picker file not found: $name", list.scrollIntoView(selector))
+        // scrollIntoView can accept a clipped node beneath the system taskbar.
+        repeat(8) {
+            val file = device.findObject(selector)
+            val bounds = file.visibleBounds
+            if (bounds.height() >= 40 && bounds.bottom < device.displayHeight - 160) return file
+            list.scrollForward()
+        }
+        throw AssertionError("Picker file not fully visible: $name")
+    }
+
+    private fun expandTracks(firstTitle: String) {
+        settleLayout()
+        field("book.tracks").click()
+        // Refresh geometry before a single retry if Compose moved the row during the tap.
+        if (!device.wait(Until.hasObject(By.text(firstTitle)), 2000)) {
+            settleLayout()
+            field("book.tracks").click()
+        }
+        visible(By.text(firstTitle))
+    }
+
+    private fun waitForPillLabel(id: String, label: String) {
+        val deadline = android.os.SystemClock.uptimeMillis() + 15_000
+        do {
+            // Re-query the tagged action after discarding cached Compose semantics.
+            // Do not reuse the transient Saved! child across recompositions.
+            val pill = field(id)
+            if (pill.getChild(UiSelector().text(label)).exists()) return
+            android.os.SystemClock.sleep(100)
+        } while (android.os.SystemClock.uptimeMillis() < deadline)
+        throw AssertionError("Missing pill label: $id / $label")
     }
 
     // UiObject re-resolves its selector for each action. System-picker drawer nodes can
@@ -543,19 +613,29 @@ class LibraryE2ETest {
     private fun text(value: String) = device.findObject(UiSelector().text(value)).also {
         assertTrue("Missing text: $value", it.waitForExists(15_000))
     }
-    private fun field(id: String) = device.findObject(UiSelector().resourceId(id)).also {
-        assertTrue("Missing field: $id", it.waitForExists(15_000))
+    private fun field(id: String): androidx.test.uiautomator.UiObject {
+        val deadline = android.os.SystemClock.uptimeMillis() + 15_000
+        do {
+            refreshAccessibility()
+            val target = device.findObject(UiSelector().resourceId(id))
+            if (target.exists()) return target
+            android.os.SystemClock.sleep(100)
+        } while (android.os.SystemClock.uptimeMillis() < deadline)
+        throw AssertionError("Missing field: $id")
     }
-    private fun tapText(value: String) { device.waitForIdle(); text(value).click() }
+    private fun tapText(value: String) { device.waitForIdle(500); refreshAccessibility(); text(value).click() }
     private fun tapDescription(value: String) {
-        device.waitForIdle()
+        device.waitForIdle(500)
+        refreshAccessibility()
         val target = device.findObject(UiSelector().description(value).enabled(true))
         assertTrue("Missing description: $value", target.waitForExists(15_000))
         target.click()
     }
 
     private fun launchFixture() {
-        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true")
+        val command = "am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true"
+        val result = device.executeShellCommand(command)
+        if (result.contains("Status: timeout")) device.executeShellCommand(command)
         visible(By.pkg(app).depth(0))
     }
 
@@ -591,23 +671,31 @@ class LibraryE2ETest {
         field("shelves.search").setText("Jane")
         field("shelves.book.133")
         field("shelves.filter.LANGUAGE").click()
-        tapText("German")
+        tapMenuText("German")
         visible(By.text("Nothing on this shelf."))
         field("shelves.search").setText("")
         field("shelves.book.1203")
         field("shelves.filter.LENGTH").click()
-        tapText("< 1 hr")
+        tapMenuText("< 1 hr")
         visible(By.text("Nothing on this shelf."))
         field("shelves.filter.LENGTH").click()
-        tapText("All length")
+        tapMenuText("All length")
         field("shelves.book.1203")
         field("shelves.filter.LANGUAGE").click()
-        tapText("All language")
+        tapMenuText("All language")
         field("shelves.filter.GENRE").click()
-        tapText("Romance")
+        tapMenuText("Romance")
         field("shelves.book.133")
         field("shelves.filter.GENRE").click()
-        tapText("All genre")
+        tapMenuText("All genre")
+        repeat(8) {
+            refreshAccessibility()
+            if (!device.hasObject(By.res("shelves.hero"))) {
+                val list = field("shelves.list").visibleBounds
+                device.swipe(list.centerX(), list.top + 100, list.centerX(), list.bottom - 100, 30)
+                settleLayout()
+            }
+        }
         field("shelves.hero")
         field("shelves.collection.gothic-horror").click()
         field("shelves.collection")
@@ -643,7 +731,18 @@ class LibraryE2ETest {
         device.pressBack()
         field("shelves.search").setText("Pride and Prejudice")
         field("shelves.book.253").click()
-        UiScrollable(UiSelector().resourceId("shelves.detail")).scrollIntoView(UiSelector().text("Other Recordings"))
+        field("shelves.detail")
+        settleLayout()
+        // Wait for navigation before querying the detail list, then bring the
+        // alternative row fully above the taskbar rather than only its header.
+        repeat(8) {
+            refreshAccessibility()
+            val list = field("shelves.detail").visibleBounds
+            val row = device.findObject(By.res("shelves.book.2531"))?.visibleBounds
+            if (row != null && row.height() >= 100 && row.bottom < list.bottom - 20) return@repeat
+            device.swipe(list.centerX(), list.bottom - 120, list.centerX(), list.top + 120, 30)
+            settleLayout()
+        }
         visible(By.text("Other Recordings"))
         field("shelves.book.2531").click()
         visible(By.text("A second full-cast recording."))
@@ -657,7 +756,7 @@ class LibraryE2ETest {
         tapText("View in Library")
         visible(By.text("Streaming"))
         device.pressBack()
-        field("tab.Library").click()
+        // View in Library already selected this tab; tapping it again opens Sort.
         visible(By.text("Tale of Two Cities"))
         relaunch()
         visible(By.text("Tale of Two Cities"))
@@ -675,8 +774,13 @@ class LibraryE2ETest {
     }
 
     private fun visible(selector: BySelector): UiObject2 {
-        device.waitForIdle()
-        return device.wait(Until.findObject(selector), 15_000) ?: throw AssertionError("Missing UI: $selector")
+        val deadline = android.os.SystemClock.uptimeMillis() + 15_000
+        do {
+            refreshAccessibility()
+            device.findObject(selector)?.let { return it }
+            android.os.SystemClock.sleep(100)
+        } while (android.os.SystemClock.uptimeMillis() < deadline)
+        throw AssertionError("Missing UI: $selector")
     }
 
     private fun captureDirectory() = File(instrumentation.context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
@@ -690,11 +794,17 @@ class LibraryE2ETest {
         assertEquals("Capture copy failed", "", device.executeShellCommand("test -s $destination/${file.name} || echo missing").trim())
     }
 
+    private fun refreshAccessibility() {
+        // The API35 accessibility cache can retain a prior Compose semantics tree
+        // after timed labels or layout changes; fresh queries must read the screen.
+        if (android.os.Build.VERSION.SDK_INT >= 33) instrumentation.uiAutomation.clearCache()
+    }
+
     private fun settleLayout() {
-        device.waitForIdle()
+        device.waitForIdle(500)
         // Compose geometry can settle after accessibility idle, even with animator scale 0.
         android.os.SystemClock.sleep(400)
-        device.waitForIdle()
+        device.waitForIdle(500)
     }
 
     private fun screenshot(name: String) {

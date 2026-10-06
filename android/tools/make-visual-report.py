@@ -71,13 +71,15 @@ for case in cases:
     figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in ['ios', 'android'])
     note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
-for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark']:
+for case in ['player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
+             'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
+             'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light']:
     source = args.android_captures / f'{case}.png'
     if source.is_file():
         name = f'android-{case}.png'
         shutil.copyfile(source, args.output / name)
         manifest[name] = hashlib.sha256(source.read_bytes()).hexdigest()
-        sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2><p>No matching iOS dark playback reference was supplied. Compare with the light layout and Color+Theme.swift; this is not a verified dark screenshot pair.</p><figure><a href="{name}"><img src="{name}" alt="{case}" loading="lazy"></a></figure></section>')
+        sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2><p>No matching iOS reference was supplied for this state. Review against the supplied related layouts and SwiftUI source; this is not a verified screenshot pair.</p><figure><a href="{name}"><img src="{name}" alt="{case}" loading="lazy"></a></figure></section>')
 (args.output / 'sha256.json').write_text(json.dumps(manifest, indent=2) + '\n')
 (args.output / 'index.html').write_text('''<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

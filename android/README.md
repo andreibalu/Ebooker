@@ -127,7 +127,8 @@ point for Shelves. Local-library fixtures are generated real PCM WAV files and a
 corrupt MP3, selected through Android's actual Storage Access Framework UI.
 Assertions use visible app/picker controls, never database or repository calls.
 The Shelves driver uses bundled debug metadata and forced saved-only browsing.
-Slice 3 compiles these journeys but does not run them while Playback owns the emulator.
+Merged slice runtime checks are recorded in
+[the E2E fix run](../docs/android/e2e-merged-fix-2026-10-06.md).
 
 Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
 Boot it and specify its serial explicitly, with no other Android devices attached:

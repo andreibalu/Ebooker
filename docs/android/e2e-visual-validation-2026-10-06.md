@@ -236,3 +236,13 @@ Earlier E2E counts and visual reports above remain historical slice-1 evidence.
 The report generator now accepts `--cases shelves-light shelves-dark` for focused
 03/23 comparisons. Layout and live audio/download behavior remain unverified until
 that run; no visual parity pass is claimed from host tests or assembly.
+
+## Merged slices 1–3 — full runtime validation
+
+The [merged E2E fix run](e2e-merged-fix-2026-10-06.md) supersedes the deferred
+execution notes above: **18/18 E2E**, **54/54 host tests**, **0 app lint issues**.
+Evidence: `/private/tmp/unpaged-e2efix-full-verified`. All 35 captures were
+reviewed; the [regenerated report](visual-evidence/2026-10-06-merged-e2efix/index.html)
+includes playback, Shelves, shell/settings and unpaired states with explicit
+reference limitations. This is emulator journey coverage, not full pixel parity
+or physical-device/live-network qualification.

@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -193,10 +194,11 @@ private fun PlayPause(state: PlayerState, controller: PlayerController, size: In
 private fun SkipButton(forward: Boolean, seconds: Int, action: () -> Unit) {
     IconButton(action, Modifier.size(40.dp).testTag(if (forward) "player.skipForward" else "player.skipBack")) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(if (forward) Icons.Default.Forward30 else Icons.Default.Replay30,
-                if (forward) "Skip forward $seconds seconds" else "Skip backward $seconds seconds", Modifier.size(32.dp))
-            // The 30 glyph is covered so all settings choices display their actual interval.
-            Box(Modifier.padding(top = 5.dp).size(19.dp, 16.dp).background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+            Icon(Icons.Default.Replay,
+                if (forward) "Skip forward $seconds seconds" else "Skip backward $seconds seconds",
+                Modifier.size(32.dp).scale(if (forward) -1f else 1f, 1f))
+            // Replay has no baked-in numeral, so the chosen interval leaves its ring intact.
+            Box(Modifier.padding(top = 5.dp).size(19.dp, 16.dp), contentAlignment = Alignment.Center) {
                 Text(seconds.toString(), fontSize = 12.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold)
             }
         }

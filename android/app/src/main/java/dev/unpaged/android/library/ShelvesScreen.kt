@@ -217,7 +217,7 @@ private fun CollectionCard(shelf: BookCollection, open: () -> Unit) {
         Column(Modifier.width(160.dp).height(96.dp).padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(icon, null, Modifier.size(24.dp), tint = MaterialTheme.colorScheme.primary)
             Text(shelf.title, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Text("${shelf.ids.size} books", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${shelf.ids.size} books", fontSize = 11.sp, lineHeight = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
