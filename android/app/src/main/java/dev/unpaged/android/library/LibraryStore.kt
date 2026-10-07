@@ -66,6 +66,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             put("is_downloaded", downloaded); put("is_archived", archived)
             if (!downloaded) put("storage_bytes", 0)
         }, "id = ?", arrayOf(id))
+        LibraryContentChanges.committed()
     }
     override fun setFingerprint(id: String, position: Int, fingerprint: String) {
         writableDatabase.update("tracks", ContentValues().apply { put("fingerprint", fingerprint) },
