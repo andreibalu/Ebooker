@@ -18,8 +18,15 @@ class SpeechModelStore(context: Context) {
         const val REVISION = "5359861c739e955e79d9a303bcbc70fb988958b1"
         const val LICENSE = "https://github.com/openai/whisper/blob/main/LICENSE"
         const val MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/$REVISION/ggml-base-q5_1.bin"
-        fun verified(file: File): Boolean = file.isFile && file.length() == SIZE &&
-            file.inputStream().use { stream ->
+        // Hashing 60 MB on every readiness check is slow; reuse the result until the file changes.
+        private var lastVerified: Triple<String, Long, Long>? = null
+        @Synchronized fun verified(file: File): Boolean {
+            if (!file.isFile || file.length() != SIZE) return false
+            val stamp = Triple(file.absolutePath, file.length(), file.lastModified())
+            if (stamp == lastVerified) return true
+            return hash(file).also { if (it) lastVerified = stamp }
+        }
+        private fun hash(file: File): Boolean = file.inputStream().use { stream ->
                 val digest = MessageDigest.getInstance("SHA-256")
                 val bytes = ByteArray(65536)
                 while (true) { val n = stream.read(bytes); if (n < 0) break; digest.update(bytes, 0, n) }

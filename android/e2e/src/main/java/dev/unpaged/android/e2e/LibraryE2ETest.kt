@@ -999,16 +999,21 @@ class LibraryE2ETest {
 
     // edgeSwipe keeps the gesture off content that consumes vertical drags (EQ band sliders).
     private fun scrollTo(id: String, downward: Boolean = true, scrollId: String = "settings.scroll", edgeSwipe: Boolean = false) {
+        // A swipe can fling past a short row. Search back the other way before failing.
+        if (!scrollSearch(id, downward, scrollId, edgeSwipe)) scrollSearch(id, !downward, scrollId, edgeSwipe)
+        field(id)
+    }
+    private fun scrollSearch(id: String, downward: Boolean, scrollId: String, edgeSwipe: Boolean): Boolean {
         repeat(8) {
             val bounds = visible(By.res(scrollId)).visibleBounds
             val target = device.findObject(By.res(id))?.visibleBounds
-            if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return
+            if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return true
             val top = bounds.top + bounds.height() / 5
             val bottom = bounds.bottom - bounds.height() / 5
             val x = if (edgeSwipe) bounds.left + 30 else bounds.centerX()
             device.swipe(x, if (downward) bottom else top, x, if (downward) top else bottom, 30)
         }
-        field(id)
+        return false
     }
 
     private fun saveBook(title: String, author: String, vararg files: String) {

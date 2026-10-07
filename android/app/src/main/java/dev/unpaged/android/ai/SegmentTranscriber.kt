@@ -60,7 +60,7 @@ object PcmDecoder {
             codec = decoder; decoder.configure(format, null, null, 0); decoder.start()
             extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val info = MediaCodec.BufferInfo()
-            val output = ArrayList<Float>()
+            val output = FloatSink()
             var inputEnded = false; var outputEnded = false
             var nextTime = startMs * 1000.0
             var previous = 0f
@@ -104,7 +104,7 @@ object PcmDecoder {
                     decoder.releaseOutputBuffer(index, false)
                 }
             }
-            check(output.isNotEmpty()); return output.toFloatArray()
+            check(output.size > 0); return output.toFloatArray()
         } finally { codec?.runCatching { stop(); release() }; extractor.release() }
     }
     // WAV's PCM track is already decoded; Android has no required audio/raw MediaCodec.
@@ -116,7 +116,7 @@ object PcmDecoder {
         check(encoding == AudioFormat.ENCODING_PCM_16BIT || encoding == AudioFormat.ENCODING_PCM_FLOAT)
         val bytes = if (encoding == AudioFormat.ENCODING_PCM_FLOAT) 4 else 2
         val buffer = java.nio.ByteBuffer.allocate(1024 * 1024).order(ByteOrder.LITTLE_ENDIAN)
-        val output = ArrayList<Float>()
+        val output = FloatSink()
         var nextTime = startMs * 1000.0
         var previous = 0f
         var previousTime = Double.NaN
@@ -144,7 +144,19 @@ object PcmDecoder {
             }
             extractor.advance()
         }
-        check(output.isNotEmpty()); return output.toFloatArray()
+        check(output.size > 0); return output.toFloatArray()
     }
 
+}
+
+/** Unboxed growable buffer. A 200 s window is 3.2M samples; boxed Floats would cost ~50 MB of heap. */
+private class FloatSink {
+    private var data = FloatArray(16_000 * 30)
+    var size = 0
+        private set
+    fun add(value: Float) {
+        if (size == data.size) data = data.copyOf(data.size * 2)
+        data[size++] = value
+    }
+    fun toFloatArray() = data.copyOf(size)
 }
