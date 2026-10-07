@@ -150,3 +150,24 @@ Even a passing emulator transport test does not establish Google Drive cloud
 backup timing, quota behavior on a real account, physical-phone storage/audio
 behavior or OEM device-to-device transfer. Those remain unverified. No iOS source,
 release metadata, GitHub issue, PR, or public policy page changed.
+
+## Download-removal review fix, 2026-10-07
+
+Removing a LibriVox row cancels its unique WorkManager download before archiving
+or deleting the row. The staging cancellation marker also interrupts file copies.
+Download promotion now requires an active, non-archived row in the same database
+transaction that updates its tracks. The worker rechecks identity before moving
+staging and reports failure, rather than success, if removal wins the commit race.
+Audio placed by that worker is cleaned up when promotion loses the race.
+Explicit Stream or Shelves re-add still reactivates the retained row and allows a
+new requested download.
+
+The focused host regression `completedDownloadCannotReviveRemovedStreamingBook`
+fails against the original promotion implementation and passes with the fix. It
+also verifies moments survive archival and explicit restoration permits promotion.
+Build, zero-issue lint and 131 host tests pass. Runtime results follow below.
+
+The existing removal/Locate/archive/Stream/swipe journey passed on API35 emulator
+C. The first new removal-during-download journey could not open the card menu
+while progress updates refreshed the library; integration with slice 10's
+progress-only update fix is required before rerunning that regression.

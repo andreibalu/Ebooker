@@ -186,8 +186,9 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
 
     override fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) {
         writableDatabase.transaction {
-            check(update("books", ContentValues().apply { put("is_downloaded", true); put("is_archived", false); put("storage_bytes", bytes) },
-                "id = ?", arrayOf(id)) == 1) { "Book was removed during download" }
+            // Removing a book while its download runs archives or deletes the row. Never revive it.
+            check(update("books", ContentValues().apply { put("is_downloaded", true); put("storage_bytes", bytes) },
+                "id = ? AND is_archived = 0", arrayOf(id)) == 1) { "This book was removed from your library." }
             delete("tracks", "book_id = ?", arrayOf(id))
             tracks.forEachIndexed { index, track ->
                 insertOrThrow("tracks", null, ContentValues().apply {

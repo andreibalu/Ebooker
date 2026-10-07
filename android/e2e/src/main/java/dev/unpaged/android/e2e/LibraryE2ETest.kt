@@ -1292,6 +1292,38 @@ class LibraryE2ETest {
         assertFalse(device.hasObject(By.res("book.cover.remove")))
     }
 
+    @Test fun removingDownloadingFreeBookStaysRemovedAfterRelaunch() {
+        absRequest("/_test/reset", "POST")
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true --ez e2e-download-fixture true")
+        field("tab.Shelves").click()
+        field("shelves.book.133").click()
+        scrollTo("shelves.download", scrollId = "shelves.detail")
+        field("shelves.download").click()
+        visible(By.text("Cancel Download"))
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (absRequest("/_test/state").getJSONArray("download_ranges").length() == 0 &&
+            android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(100)
+        assertTrue(absRequest("/_test/state").getJSONArray("download_ranges").length() > 0)
+        device.pressBack(); selectLibraryTab()
+        text("Jane Eyre").longClick()
+        tapText("Remove from Library"); tapText("Remove from Library")
+        visible(By.text("Your Library Is Empty"))
+        openBackupLibrary(); field("backup.bucket.REMOVED"); visible(By.text("Jane Eyre"))
+        screenshot("download-removed-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout()
+        screenshot("download-removed-dark")
+        closeBackupLibrary()
+        relaunch(); visible(By.text("Your Library Is Empty"))
+        val requests = absRequest("/_test/state").getJSONArray("download_ranges").length()
+        android.os.SystemClock.sleep(2000)
+        assertEquals("Removed download must not restart", requests,
+            absRequest("/_test/state").getJSONArray("download_ranges").length())
+        openBackupLibrary(); field("backup.bucket.REMOVED"); visible(By.text("Jane Eyre"))
+        assertFalse(device.hasObject(By.res("backup.bucket.PHONE")))
+        closeBackupLibrary()
+    }
+
     @Test fun durableDownloadResumesPartialFileAfterForceStop() {
         absRequest("/_test/reset", "POST")
         device.executeShellCommand("am force-stop $app")

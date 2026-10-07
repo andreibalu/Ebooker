@@ -173,6 +173,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun remove(book: LibraryBook, permanent: Boolean = false, deleteFiles: Boolean = true) {
         if (job?.isActive == true) return
         operation {
+            dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).cancelForRemoval(book)
             withContext(Dispatchers.IO + NonCancellable) { if (!permanent && dev.unpaged.android.UnpagedPreferences(getApplication()).backupEnabled() && book.absItemID == null)
                 repository.removeFromPhone(book) else repository.remove(book, deleteFiles) }
             dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).libraryChanged()

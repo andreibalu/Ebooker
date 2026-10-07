@@ -124,6 +124,31 @@ class LibraryBackupTest {
         }
     }
 
+    @Test fun completedDownloadCannotReviveRemovedStreamingBook() {
+        fresh().withStore { db ->
+            val root = File(context.cacheDir, UUID.randomUUID().toString())
+            val repo = LocalLibraryRepository(root, db, AudioMetadataReader { AudioMetadata(1000) })
+            val stream = LibraryTrack("Track", "1.mp3", "", 1000, "free", "https://example.com/1.mp3")
+            val free = LibraryBook(id, "Free", "Author", listOf(stream), isFreeBook = true,
+                catalogId = "42", isDownloaded = false)
+            db.insert(free)
+            db.saveMoment(LibraryMoment("moment", id, 0, 1, "Remember"))
+            repo.removeFromPhone(free)
+            val removed = db.books().single()
+            assertThrows(IllegalStateException::class.java) {
+                db.promoteDownload(id, listOf(stream.copy(storedName = "0000.mp3")), 123)
+            }
+            assertEquals(removed, db.books().single())
+            assertEquals("Remember", db.moments(id).single().label)
+            // Explicit restoration makes a later requested download eligible again.
+            repo.restoreFree(removed)
+            db.promoteDownload(id, listOf(stream.copy(storedName = "0000.mp3")), 123)
+            assertTrue(db.books().single().isDownloaded)
+            assertFalse(db.books().single().isArchived)
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun archivedFreeRowStreamsInPlaceAndAbsNeverBecomesAnOrphan() {
         fresh().withStore { db ->
             val root = File(context.cacheDir, UUID.randomUUID().toString())

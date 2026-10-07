@@ -20,7 +20,7 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
         var folder: File? = null
         try {
             val library = CatalogLibraryService(store)
-            val row = library.identity(catalogID) ?: return@withContext Result.failure(workDataOf(ERROR to "This book was removed from your library."))
+            val row = library.identity(catalogID) ?: return@withContext removed()
             if (row.isDownloaded) return@withContext Result.success()
             foreground(notification(row.title, 0))
             val staging = File(applicationContext.filesDir, "shelves-downloads/${row.id}")
@@ -58,12 +58,23 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
                 track.copy(storedName = name, fingerprint = dev.unpaged.android.library.TrackIdentity.fingerprint(destination, track.durationMs))
             }
             currentCoroutineContext().ensureActive()
-            withContext(NonCancellable) {
+            return@withContext withContext(NonCancellable) commit@{
                 check(!File(staging, ".cancelled").exists()) { "Download cancelled." }
+                if (library.identity(catalogID)?.id != row.id) {
+                    staging.deleteRecursively()
+                    return@commit removed()
+                }
                 DownloadFiles.finish(staging, final, owned.map { it.storedName })
-                library.promote(row.id, owned, final.walkTopDown().filter { it.isFile }.sumOf { it.length() })
+                try { library.promote(row.id, owned, final.walkTopDown().filter { it.isFile }.sumOf { it.length() }) }
+                catch (error: IllegalStateException) {
+                    // The row was removed between the check and the write. Drop the audio we placed.
+                    if (library.identity(catalogID)?.id == row.id) throw error
+                    owned.forEach { File(final, it.storedName).delete() }
+                    final.delete()
+                    return@commit removed()
+                }
+                Result.success()
             }
-            Result.success()
         } catch (cancel: CancellationException) { throw cancel }
         catch (error: Exception) {
             if (DownloadFailures.retryable(error) && runAttemptCount < 4) Result.retry()
@@ -83,6 +94,7 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
         catch (cancel: CancellationException) { throw cancel }
         catch (_: Exception) { foregroundAllowed = false }
     }
+    private fun removed() = Result.failure(workDataOf(ERROR to "This book was removed from your library."))
 
     private fun notification(title: String, percent: Int): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)

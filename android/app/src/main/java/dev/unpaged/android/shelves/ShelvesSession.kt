@@ -125,6 +125,16 @@ class ShelvesSession private constructor(private val context: android.app.Applic
             mutable.update { it.copy(downloads = it.downloads - id) }
         }
     }
+    suspend fun cancelForRemoval(book: dev.unpaged.android.library.LibraryBook) {
+        val catalogID = book.catalogId?.takeIf { book.isFreeBook } ?: return
+        withContext(Dispatchers.IO) {
+            val staging = File(downloadRoot, book.id)
+            if (staging.isDirectory) File(staging, ".cancelled").writeText("")
+            work.cancelUniqueWork(LibriVoxDownloadWorker.name(catalogID)).result.get()
+        }
+        mutable.update { it.copy(downloads = it.downloads - catalogID) }
+    }
+
     fun stopSample() {
         sampleJob?.cancel(); sampleTimer?.cancel(); sample?.release(); sample = null
         if (sampleHasFocus) { audioManager.abandonAudioFocusRequest(sampleFocus); sampleHasFocus = false }
