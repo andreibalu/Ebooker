@@ -1306,19 +1306,31 @@ class LibraryE2ETest {
             android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(100)
         assertTrue(absRequest("/_test/state").getJSONArray("download_ranges").length() > 0)
         device.pressBack(); selectLibraryTab()
-        text("Jane Eyre").longClick()
-        tapText("Remove from Library"); tapText("Remove from Library")
+        val card = visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*")))
+        val bounds = card.visibleBounds
+        device.swipe(bounds.centerX(), bounds.centerY(), bounds.centerX(), bounds.centerY(), 200)
+        // A held zero-distance swipe is a long press that survives list refreshes from download progress.
+        visible(By.text("Remove from Library"))
+        tapText("Remove from Library"); visible(By.text("Remove from Library?")); tapText("Remove from Library")
         visible(By.text("Your Library Is Empty"))
         openBackupLibrary(); field("backup.bucket.REMOVED"); visible(By.text("Jane Eyre"))
         screenshot("download-removed-light")
         device.executeShellCommand("cmd uimode night yes"); settleLayout()
         screenshot("download-removed-dark")
         closeBackupLibrary()
+        // The fixture streams ~22s of audio. A cancelled worker stops pulling bytes; an uncancelled one
+        // would finish and revive the book. Watch the live process for longer than the whole download.
+        val removedRequests = absRequest("/_test/state").getJSONArray("download_ranges").length()
+        assertStays("Removed download must not revive in the live process", 30_000) {
+            device.hasObject(By.text("Your Library Is Empty")) &&
+                absRequest("/_test/state").getJSONArray("download_ranges").length() == removedRequests
+        }
         relaunch(); visible(By.text("Your Library Is Empty"))
-        val requests = absRequest("/_test/state").getJSONArray("download_ranges").length()
-        android.os.SystemClock.sleep(2000)
-        assertEquals("Removed download must not restart", requests,
-            absRequest("/_test/state").getJSONArray("download_ranges").length())
+        // WorkManager reschedules persisted work shortly after process start; a removed book must not restart.
+        assertStays("Removed download must not restart after relaunch", 8_000) {
+            device.hasObject(By.text("Your Library Is Empty")) &&
+                absRequest("/_test/state").getJSONArray("download_ranges").length() == removedRequests
+        }
         openBackupLibrary(); field("backup.bucket.REMOVED"); visible(By.text("Jane Eyre"))
         assertFalse(device.hasObject(By.res("backup.bucket.PHONE")))
         closeBackupLibrary()
@@ -1679,6 +1691,16 @@ class LibraryE2ETest {
         device.executeShellCommand("mkdir -p $destination")
         device.executeShellCommand("cp ${file.absolutePath} $destination/${file.name}")
         assertEquals("Capture copy failed", "", device.executeShellCommand("test -s $destination/${file.name} || echo missing").trim())
+    }
+
+    /** Negative assertion: [condition] must hold on every poll for the whole window. */
+    private fun assertStays(message: String, windowMs: Long, condition: () -> Boolean) {
+        val end = android.os.SystemClock.uptimeMillis() + windowMs
+        do {
+            refreshAccessibility()
+            assertTrue(message, condition())
+            android.os.SystemClock.sleep(500)
+        } while (android.os.SystemClock.uptimeMillis() < end)
     }
 
     private fun refreshAccessibility() {
