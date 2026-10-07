@@ -91,13 +91,13 @@ for case in cases:
     if case.startswith('abs-') and case.endswith('-dark'):
         note += '<p>The supplied iOS capture rendered in light appearance. Android shows actual dark appearance. Compare structure here and colors against the related light pair.</p>'
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
-for case in ['auto-player-dark', 'auto-shortcut-dark', 'auto-voice-dark', 'auto-moments-light', 'auto-moments-dark', 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
+for case in ['auto-player-dark', 'auto-shortcut-dark', 'auto-voice-dark', 'auto-moments-light', 'auto-moments-dark', *[f'{screen}-{theme}' for screen in ['embedded-chapters', 'book-menu', 'rename', 'reset-confirmation', 'cover-crop', 'cover-detail', 'cover-remove', 'download', 'download-complete'] for theme in ['light', 'dark']], 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
              *[f'abs-{screen}-{theme}' for screen in ['connect', 'browse', 'detail', 'detail-added', 'library', 'server-settings'] for theme in ['light', 'dark']],
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
              'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',
              'save-moment-light', 'edit-moment-dark',
-             'onboarding-dark', 'stats-light', 'stats-dark', 'stats-sections-light',
+             'onboarding-dark', 'stats-light', 'stats-dark', 'stats-sections-light', *[f'stats-{section}-{theme}' for section in ['your_best_day', 'you_read_most_in_the', 'the_book_you_stayed_with', 'on_a_roll', 'the_shape_of_it', 'public_domain,_private_joy'] for theme in ['light', 'dark']],
              *[f'onboarding-{page}-{theme}' for page in ['permissions', 'playback', 'year', 'moments', 'storage', 'done'] for theme in ['light', 'dark']]]:
     if (args.ios_captures / 'ios-abs-browse-light.png').is_file() and not case.startswith('abs-'):
         continue

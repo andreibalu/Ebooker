@@ -14,6 +14,7 @@ interface LibraryStore {
     fun insert(book: LibraryBook)
     fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) { error("Download promotion unsupported") }
     fun delete(id: String)
+    fun rename(id: String, title: String) { error("Rename unsupported") }
     fun toggleFavorite(id: String)
     fun updatePlaybackProgress(id: String, progress: PlaybackProgress)
     fun updateTrackDuration(id: String, trackIndex: Int, durationMs: Long)
@@ -125,7 +126,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                     r.bool("is_favorite"), r.optionalLong("last_played_at"), r.long("current_track_index").toInt(),
                     r.long("current_position_ms"), r.long("high_water_mark_ms"), r.getDouble(r.getColumnIndexOrThrow("playback_speed")),
                     r.bool("is_finished"), r.bool("is_free_book"), r.optional("catalog_id"), r.bool("is_downloaded"),
-                    r.long("storage_bytes"), r.optional("equalizer_json"), r.long("date_added"), r.optional("abs_item_id"), r.optional("abs_chapters_json"))
+                    r.long("storage_bytes"), r.optional("equalizer_json"), r.long("date_added"), r.optional("abs_item_id"), r.optional("abs_chapters_json"), java.io.File(audioRoot, "$id/cover.png").lastModified())
             }
         }
         return result
@@ -172,6 +173,13 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                 })
             }
         }
+        LibraryContentChanges.committed()
+    }
+
+    override fun rename(id: String, title: String) {
+        require(title.isNotBlank())
+        check(writableDatabase.update("books", ContentValues().apply { put("title", title.trim()) },
+            "id = ?", arrayOf(id)) == 1) { "Book was removed." }
         LibraryContentChanges.committed()
     }
 

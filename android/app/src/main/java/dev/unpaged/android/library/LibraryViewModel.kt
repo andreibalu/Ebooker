@@ -28,6 +28,7 @@ data class LibraryUiState(
     val completed: Int = 0,
     val total: Int = 0,
     val error: LibraryFailure? = null,
+    val errorTitle: String = "Something Went Wrong",
 )
 
 enum class LibraryFailure { INVALID_AUDIO, DUPLICATE, TITLE, READ, STORAGE, LOAD }
@@ -62,7 +63,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun prepare(uris: List<Uri>) {
         if (uris.isEmpty() || job?.isActive == true || state.value.pending != null) return
-        mutableState.update { it.copy(busy = true, preparing = true, completed = 0, total = uris.size, error = null) }
+        mutableState.update { it.copy(busy = true, preparing = true, completed = 0, total = uris.size, error = null, errorTitle = "Something Went Wrong") }
         job = viewModelScope.launch {
             var prepared: PendingImport? = null
             try {
@@ -93,7 +94,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun save(title: String, author: String) {
         val pending = state.value.pending ?: return
         if (job?.isActive == true) return
-        operation {
+        operation("Could Not Import") {
             // Save is a short atomic commit: completing it must not be interrupted by UI teardown.
             withContext(Dispatchers.IO + NonCancellable) { repository.save(pending, title, author) }
             mutableState.update { it.copy(pending = null) }
@@ -112,9 +113,45 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun toggleFavorite(book: LibraryBook) {
         if (job?.isActive == true) return
-        operation {
+        operation("Could Not Save Favorite") {
             withContext(Dispatchers.IO) { repository.toggleFavorite(book.id) }
             refreshBooks()
+        }
+    }
+
+    fun saveCover(book: LibraryBook, bitmap: android.graphics.Bitmap?) {
+        operation {
+            withContext(Dispatchers.IO) {
+                val folder = File(getApplication<Application>().filesDir, "audiobooks/${book.id}")
+                check(folder.mkdirs() || folder.isDirectory)
+                val cover = File(folder, "cover.png")
+                if (bitmap == null) { check(!cover.exists() || cover.delete()) }
+                else {
+                    val temp = File(folder, "cover.tmp")
+                    java.io.FileOutputStream(temp).use { output ->
+                        check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)); output.fd.sync()
+                    }
+                    check(temp.renameTo(cover))
+                }
+                LibraryContentChanges.committed()
+            }
+            refreshBooks()
+            refreshActiveMetadata(book.id)
+        }
+    }
+
+    fun rename(book: LibraryBook, title: String) {
+        if (title.isBlank()) return
+        operation("Could Not Rename Audiobook") {
+            withContext(Dispatchers.IO) { store.rename(book.id, title) }
+            refreshBooks()
+            refreshActiveMetadata(book.id)
+        }
+    }
+
+    private suspend fun refreshActiveMetadata(id: String) {
+        state.value.books.firstOrNull { it.id == id }?.let {
+            dev.unpaged.android.playback.PlayerController.get(getApplication<Application>()).refreshBookMetadata(it)
         }
     }
 
@@ -140,8 +177,8 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun dismissError() { mutableState.update { it.copy(error = null) } }
 
-    private fun operation(block: suspend () -> Unit) {
-        mutableState.update { it.copy(busy = true, error = null) }
+    private fun operation(title: String = "Something Went Wrong", block: suspend () -> Unit) {
+        mutableState.update { it.copy(busy = true, error = null, errorTitle = title) }
         job = viewModelScope.launch {
             try { block() }
             catch (error: CancellationException) { throw error }

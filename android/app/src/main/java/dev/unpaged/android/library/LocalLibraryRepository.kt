@@ -63,6 +63,7 @@ class LocalLibraryRepository(
                 checkCancelled()
                 val info = metadataReader.read(file)
                 if (info.durationMs <= 0) throw ImportProblem(ImportProblem.Reason.INVALID_AUDIO)
+                dev.unpaged.android.playback.Mp4Chapters.cached(file)
                 metadata += info
                 val track = LibraryTrack(info.title.clean() ?: document.displayName.substringBeforeLast('.'),
                     document.displayName, storedName, info.durationMs, TrackIdentity.fingerprint(file, info.durationMs))

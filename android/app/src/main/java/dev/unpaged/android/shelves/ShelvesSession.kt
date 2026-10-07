@@ -1,5 +1,6 @@
 package dev.unpaged.android.shelves
 
+import androidx.core.content.edit
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
@@ -13,22 +14,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
-import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URI
+import androidx.work.*
 
-data class DownloadEntry(val progress: Float = 0f, val error: String? = null, val complete: Boolean = false)
+data class DownloadEntry(val progress: Float = 0f, val error: String? = null, val complete: Boolean = false, val title: String = "", val currentTrack: Int = 0, val totalTracks: Int = 0, val workID: String = "")
 data class ShelvesSessionState(val downloads: Map<String, DownloadEntry> = emptyMap(), val sampleId: String? = null,
     val sampleLoading: Boolean = false, val error: String? = null, val libraryRevision: Int = 0)
 
-/** App-session ownership: navigation never cancels downloads; process death leaves a streaming row. */
+/** App-session UI owner observes durable unique work across navigation and relaunch. */
 class ShelvesSession private constructor(private val context: android.app.Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = SQLiteLibraryStore(context)
     private val library = CatalogLibraryService(store)
     private val catalog = SQLiteCatalogStore(context)
     private val client = LibriVoxClient()
-    private val jobs = mutableMapOf<String, Job>()
+    private val dismissed = context.getSharedPreferences("dismissed-downloads", Context.MODE_PRIVATE)
+    private val work = WorkManager.getInstance(context)
     private val mutable = MutableStateFlow(ShelvesSessionState())
     val state = mutable.asStateFlow()
     private val sampleAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
@@ -40,8 +40,31 @@ class ShelvesSession private constructor(private val context: android.app.Applic
     private var sampleJob: Job? = null
     private var sampleTimer: Job? = null
     private val downloadRoot = File(context.filesDir, "shelves-downloads")
-    private val cleanup = scope.async(Dispatchers.IO) { downloadRoot.listFiles()?.forEach { it.deleteRecursively() } }
+    private val downloadUpdates = DownloadUpdates(catalog::title)
+    init {
+        scope.launch {
+            work.getWorkInfosByTagFlow(LibriVoxDownloadWorker.TAG).collect { infos ->
+                val update = withContext(Dispatchers.IO) { downloadUpdates.observe(infos) }
+                val titles = update.titles
+                val entries = infos.groupBy { info ->
+                    info.tags.firstOrNull { it.startsWith(LibriVoxDownloadWorker.TAG + ":") }?.substringAfter(":")
+                }.mapNotNull { (id, rows) ->
+                    if (id == null) return@mapNotNull null
+                    val active = rows.firstOrNull { !it.state.isFinished }
+                    val chosen = active ?: rows.firstOrNull { it.state == WorkInfo.State.SUCCEEDED }
+                        ?: rows.firstOrNull { it.state == WorkInfo.State.FAILED }
+                    if (chosen == null || dismissed.getBoolean(chosen.id.toString(), false)) null else id to DownloadEntry(
+                        chosen.progress.getInt(LibriVoxDownloadWorker.PROGRESS, 0) / 100f,
+                        if (chosen.state == WorkInfo.State.FAILED) chosen.outputData.getString(LibriVoxDownloadWorker.ERROR) else null,
+                        chosen.state == WorkInfo.State.SUCCEEDED, titles[id] ?: "Audiobook",
+                        chosen.progress.getInt("track", 0), chosen.progress.getInt("total", 0), chosen.id.toString())
+                }.toMap()
+                mutable.update { it.copy(downloads = entries, libraryRevision = it.libraryRevision + if (update.finishedChanged) 1 else 0) }
+            }
+        }
+    }
     fun connected(): Boolean {
+        if (CatalogEnvironment.downloadFixture(context)) return true
         if (CatalogEnvironment.savedOnly(context)) return false
         val manager = context.getSystemService(ConnectivityManager::class.java)
         return manager.getNetworkCapabilities(manager.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
@@ -56,81 +79,51 @@ class ShelvesSession private constructor(private val context: android.app.Applic
     }
     fun identity(id: String) = library.identity(id)
     suspend fun add(book: CatalogBook) = withContext(Dispatchers.IO) {
+        val prior = library.identity(book.id)
         val added = library.add(book, tracks(book))
-        mutable.update { it.copy(libraryRevision = it.libraryRevision + 1, downloads = if (!added.isDownloaded && it.downloads[book.id]?.complete == true) it.downloads - book.id else it.downloads) }
+        mutable.update { it.copy(libraryRevision = it.libraryRevision + if (prior == null) 1 else 0, downloads = if (!added.isDownloaded && it.downloads[book.id]?.complete == true) it.downloads - book.id else it.downloads) }
         added
     }
     fun dismissError() { mutable.update { it.copy(error = null) } }
     fun download(book: CatalogBook) {
-        if (jobs[book.id]?.isActive == true) return
         if (!connected()) { mutable.update { it.copy(error = "You're offline. Connect to download this book.") }; return }
-        jobs[book.id] = scope.launch {
-            updateDownload(book.id, DownloadEntry())
-            var temp: File? = null
-            var destination: File? = null
-            var committed = false
+        scope.launch {
             try {
-                cleanup.await()
+                add(book)
+                // Older finished rows must not resurface once this attempt is replaced or cancelled.
                 withContext(Dispatchers.IO) {
-                    val tracks = tracks(book)
-                    val row = library.add(book, tracks)
-                    mutable.update { it.copy(libraryRevision = it.libraryRevision + 1) }
-                    if (row.isDownloaded) { committed = true; return@withContext }
-                    val folder = File(downloadRoot, row.id); temp = folder
-                    check(folder.mkdirs() || folder.isDirectory)
-                    val owned = tracks.mapIndexed { index, track ->
-                        currentCoroutineContext().ensureActive()
-                        require(URI(track.url).scheme == "https")
-                        val connection = URI(track.url).toURL().openConnection() as HttpURLConnection
-                        connection.connectTimeout = 15_000; connection.readTimeout = 15_000
-                        val name = "%04d.mp3".format(java.util.Locale.ROOT, index)
-                        val file = File(folder, name)
-                        try {
-                            if (connection.responseCode !in 200..299) throw FeedProblem(connection.responseCode)
-                            val length = connection.contentLengthLong
-                            var copied = 0L
-                            connection.inputStream.use { input -> FileOutputStream(file).use { output ->
-                                val buffer = ByteArray(64 * 1024)
-                                while (true) {
-                                    currentCoroutineContext().ensureActive()
-                                    val count = input.read(buffer); if (count < 0) break
-                                    output.write(buffer, 0, count); copied += count
-                                    val fraction = if (length > 0) (copied.toFloat() / length).coerceIn(0f, 1f) else 0f
-                                    updateDownload(book.id, DownloadEntry((index + fraction) / tracks.size))
-                                }
-                                output.fd.sync()
-                            } }
-                            check(file.length() > 0 && (length <= 0 || file.length() == length)) { "The download was incomplete. Please try again." }
-                        } finally { connection.disconnect() }
-                        row.tracks[index].copy(storedName = name)
-                    }
-                    currentCoroutineContext().ensureActive()
-                    // Short filesystem/index hand-off finishes atomically with respect to cancellation.
-                    withContext(NonCancellable) {
-                        val final = File(File(context.filesDir, "audiobooks"), row.id); destination = final
-                        check(final.parentFile!!.mkdirs() || final.parentFile!!.isDirectory)
-                        check(!final.exists() && folder.renameTo(final)) { "Couldn't save the download." }
-                        library.promote(row.id, owned, final.walkTopDown().filter { it.isFile }.sumOf { it.length() })
-                        committed = true
-                    }
+                    val rows = work.getWorkInfosForUniqueWork(LibriVoxDownloadWorker.name(book.id)).get()
+                    dismissed.edit { DownloadFailures.finishedIds(rows).forEach { putBoolean(it, true) } }
                 }
-                updateDownload(book.id, DownloadEntry(1f, complete = true))
-            } catch (_: CancellationException) { mutable.update { it.copy(downloads = it.downloads - book.id) } }
-            catch (error: Exception) { updateDownload(book.id, DownloadEntry(error = error.message ?: "Couldn't download this book. Please try again.")) }
-            finally {
-                withContext(Dispatchers.IO + NonCancellable) { temp?.deleteRecursively(); if (!committed) destination?.deleteRecursively() }
-                mutable.update { it.copy(libraryRevision = it.libraryRevision + 1) }
+                work.enqueueUniqueWork(LibriVoxDownloadWorker.name(book.id), ExistingWorkPolicy.KEEP,
+                    LibriVoxDownloadWorker.request(book.id))
+            } catch (error: Exception) {
+                mutable.update { it.copy(error = error.message ?: "Couldn't download this book. Please try again.") }
             }
         }
     }
-    private fun updateDownload(id: String, entry: DownloadEntry) { mutable.update { it.copy(downloads = it.downloads + (id to entry)) } }
+    fun dismissDownload(id: String) {
+        state.value.downloads[id]?.let { dismissed.edit { putBoolean(it.workID, true) } }
+        mutable.update { it.copy(downloads = it.downloads - id) }
+    }
     fun retryDownload(id: String) {
         scope.launch {
             val book = withContext(Dispatchers.IO) { catalog.books().firstOrNull { it.id == id } }
             if (book != null) download(book)
         }
     }
-    fun cancel(id: String) { jobs[id]?.cancel() }
+    fun cancel(id: String) {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                library.identity(id)?.let { row ->
+                    val folder = File(downloadRoot, row.id)
+                    if (folder.isDirectory) File(folder, ".cancelled").writeText("")
+                }
+            }
+            work.cancelUniqueWork(LibriVoxDownloadWorker.name(id))
+            mutable.update { it.copy(downloads = it.downloads - id) }
+        }
+    }
     fun stopSample() {
         sampleJob?.cancel(); sampleTimer?.cancel(); sample?.release(); sample = null
         if (sampleHasFocus) { audioManager.abandonAudioFocusRequest(sampleFocus); sampleHasFocus = false }
@@ -176,5 +169,23 @@ class ShelvesSession private constructor(private val context: android.app.Applic
         fun get(context: Context): ShelvesSession = instance ?: synchronized(this) {
             instance ?: ShelvesSession(context.applicationContext as android.app.Application).also { instance = it }
         }
+    }
+}
+
+/** Progress emissions reuse titles and invalidate the library only on finished-work changes. */
+internal class DownloadUpdates(private val title: (String) -> String?) {
+    private val titles = mutableMapOf<String, String>()
+    private var finished = emptyMap<java.util.UUID, WorkInfo.State>()
+    data class Update(val titles: Map<String, String>, val finishedChanged: Boolean)
+    fun observe(infos: List<WorkInfo>): Update {
+        val ids = infos.mapNotNull { info ->
+            info.tags.firstOrNull { it.startsWith(LibriVoxDownloadWorker.TAG + ":") }?.substringAfter(":")
+        }.toSet()
+        titles.keys.retainAll(ids)
+        ids.forEach { id -> if (id !in titles) titles[id] = title(id) ?: "Audiobook" }
+        val next = infos.filter { it.state.isFinished }.associate { it.id to it.state }
+        val changed = next != finished
+        finished = next
+        return Update(titles.toMap(), changed)
     }
 }

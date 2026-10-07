@@ -1,5 +1,7 @@
 package dev.unpaged.android.moments
 
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -38,25 +40,24 @@ fun MomentList(bookId: String, moments: List<LibraryMoment>, expanded: Boolean, 
             TextButton(onClick = { filterSheet = true }, modifier = Modifier.testTag("moment.filter")) { Icon(Icons.Default.FilterList, null, Modifier.size(16.dp)); Text("Filter", fontSize = 12.sp) }
         }
     }
-    if (expanded) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (filtered.isEmpty()) Text(if (filters.active) "No moments match your filters" else "No saved moments yet", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (expanded || moments.isEmpty()) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (filtered.isEmpty()) Text(if (filters.active) "No moments match your filters" else "Tap the bookmark in the player to save a moment", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (filters.active) TextButton(onClick = { filters = MomentFilters() }) { Text("Clear Filters") }
         filtered.forEach { moment ->
             var menu by remember(moment.id) { mutableStateOf(false) }
             SwipeMoment(moment, { delete(moment.id) }) {
                 Surface(shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp) {
-                    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { play(moment) }, onLongClick = { menu = true })
+                    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { editing = moment }, onLongClick = { menu = true })
                         .testTag("moment.row.${moment.id}").padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         IconButton(onClick = { save(moment.copy(isPinned = !moment.isPinned)) }, modifier = Modifier.size(24.dp)) { Icon(if (moment.isPinned) Icons.Default.PushPin else Icons.Default.Flag, if (moment.isPinned) "Unpin moment" else "Pin moment", Modifier.size(16.dp)) }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(moment.label, fontSize = 15.sp)
                             Text(trackDuration(moment.timeMs), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (moment.notes.isNotEmpty()) Text(moment.notes, fontSize = 12.sp, maxLines = 2, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            if (moment.categories.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) { moment.categories.forEach { AssistChip(onClick = { }, label = { Text(it.title, fontSize = 11.sp) }) } }
                         }
                         Box {
                             IconButton(onClick = { editing = moment }, modifier = Modifier.size(24.dp).testTag("moment.edit.${moment.id}")) { Icon(Icons.Default.Edit, "Edit moment", Modifier.size(16.dp)) }
-                            DropdownMenu(menu, { menu = false }) { DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete(moment.id) }) }
+                            DropdownMenu(menu, { menu = false }, modifier = Modifier.semantics { testTagsAsResourceId = true }) { DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; delete(moment.id) }) }
                         }
                         IconButton(onClick = { play(moment) }, modifier = Modifier.size(36.dp)) { Icon(Icons.Default.PlayCircleOutline, "Play from this moment", Modifier.size(20.dp)) }
                     }

@@ -37,7 +37,8 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-val ActivityAmber = Color(0xFFCC8632)
+val ActivityAmber: Color
+    @Composable get() = MaterialTheme.colorScheme.primary
 @Composable
 fun reducedMotion(): Boolean {
     val context = LocalContext.current
@@ -156,8 +157,8 @@ private fun Count(value: Int, suffix: String = "", hours: Boolean = false, size:
     LaunchedEffect(value, reduced) { if (reduced) count.snapTo(value.toFloat()) else count.animateTo(value.toFloat(), tween(1400)) }
     val number = if (hours) { val h = count.value / 60; if (h < 10) String.format(Locale.ENGLISH, "%.1f", h) else h.toInt().toString() } else count.value.roundToInt().toString()
     Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(number, fontFamily = FontFamily.Serif, fontSize = size.sp, color = ActivityAmber)
-        if (suffix.isNotEmpty()) Text(suffix.trim(), fontFamily = FontFamily.Serif, fontSize = 30.sp, modifier = Modifier.padding(bottom = 10.dp))
+        Text(number, fontFamily = FontFamily.Serif, fontSize = size.sp, fontWeight = FontWeight.SemiBold, color = ActivityAmber)
+        if (suffix.isNotEmpty()) Text(suffix.trim(), fontFamily = FontFamily.Serif, fontSize = 36.sp, modifier = Modifier.padding(bottom = 10.dp))
     }
 }
 @Composable
@@ -173,26 +174,48 @@ private fun Bars(values: List<Int>, labels: List<String>) {
 @Composable
 private fun ClockChart(stats: ReadingStats) {
     val ink = MaterialTheme.colorScheme.onSurface.copy(alpha = .18f)
+    val amber = ActivityAmber
+    val spoke = MaterialTheme.colorScheme.onSurface.copy(alpha = .25f)
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(240.dp)) {
             val radius = 92.dp.toPx(); val inner = 38.dp.toPx()
             val buckets = List(12) { stats.hours[it] + stats.hours[it + 12] }
             val maximum = (buckets.maxOrNull() ?: 0).coerceAtLeast(1)
-            drawCircle(ink, radius, style = Stroke(1.dp.toPx()))
             drawCircle(ink, inner, style = Stroke(1.dp.toPx()))
             buckets.forEachIndexed { index, minutes ->
                 val angle = index * Math.PI / 6 - Math.PI / 2
                 val direction = Offset(cos(angle).toFloat(), sin(angle).toFloat())
                 val length = (radius - inner) * minutes / maximum
-                drawLine(if (index == stats.bestHour % 12) ActivityAmber else ActivityAmber.copy(alpha = .4f), center + direction * inner, center + direction * (inner + length.coerceAtLeast(2.dp.toPx())), 10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                drawLine(if (index == stats.bestHour % 12) amber else spoke, center + direction * inner, center + direction * (inner + length.coerceAtLeast(2.dp.toPx())), (if (index == stats.bestHour % 12) 5.dp else 4.dp).toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
             }
         }
-        Text("12", Modifier.align(Alignment.TopCenter), fontSize = 12.sp)
+        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("peak", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("${if (stats.bestHour % 12 == 0) 12 else stats.bestHour % 12} ${if (stats.bestHour < 12) "AM" else "PM"}",
+                fontFamily = FontFamily.Serif, fontSize = 20.sp)
+        }
+        Text("12", Modifier.align(Alignment.TopCenter), fontSize = 18.sp, fontFamily = FontFamily.Serif)
         Text("6", Modifier.align(Alignment.BottomCenter), fontSize = 12.sp)
         Text("9", Modifier.align(Alignment.CenterStart).padding(start = 40.dp), fontSize = 12.sp)
         Text("3", Modifier.align(Alignment.CenterEnd).padding(end = 40.dp), fontSize = 12.sp)
     }
 }
+@Composable
+private fun BestDayGrid(stats: ReadingStats, best: LocalDate) {
+    val palette = heatPalette()
+    val ink = MaterialTheme.colorScheme.onSurface
+    val start = best.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY)).minusDays(7)
+    Canvas(Modifier.size(27.dp, 67.dp)) {
+        for (week in 0..2) for (day in 0..6) {
+            val date = start.plusDays((week * 7 + day).toLong())
+            val origin = Offset(week * 10.dp.toPx(), day * 10.dp.toPx())
+            val side = Size(7.dp.toPx(), 7.dp.toPx())
+            drawRoundRect(cellColor(stats.days[date] ?: 0, ink.copy(alpha = .04f), palette), origin, side, CornerRadius(1.5.dp.toPx()))
+            if (date == best) drawRoundRect(ink, origin, side, CornerRadius(1.5.dp.toPx()), style = Stroke(1.2.dp.toPx()))
+        }
+    }
+}
+
 @Composable
 private fun Metric(label: String, value: String, subtitle: String, modifier: Modifier) {
     Surface(modifier, shape = RoundedCornerShape(14.dp)) {
@@ -214,22 +237,25 @@ fun ReadingStatsScreen(stats: ReadingStats, onBack: () -> Unit) {
                 Text("Reading", Modifier.weight(1f).alpha(if (showTitle) 1f else 0f), fontWeight = FontWeight.SemiBold)
             }
             LazyColumn(Modifier.fillMaxSize().testTag("reading.stats.scroll"), state = scroll, contentPadding = PaddingValues(horizontal = 20.dp)) {
-                item { Reveal(20, 28) { Eyebrow("Reading · ${when { stats.daysTracked <= 7 -> "Last 7 days"; stats.daysTracked <= 30 -> "Last 30 days"; else -> "Last 4 months" }}"); Text("Page by page.", fontFamily = FontFamily.Serif, fontSize = 38.sp); Heatmap(stats, if (stats.daysTracked <= 7) 7 else if (stats.daysTracked <= 30) 30 else 120); Text("${stats.firstDay.format(DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH))} — ${stats.today.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH))}", Modifier.align(Alignment.CenterHorizontally), fontSize = 12.sp) } }
-                item { Reveal(60, 40) { Eyebrow("You spent"); Count(stats.totalMinutes, "hours", hours = true); Text("listening across ${stats.sessions.size} sessions and ${stats.days.size} days. That's about ${activityDuration(stats.totalMinutes / stats.daysTracked)} every day you've had the app.") } }
-                item { Reveal { Eyebrow("Your best day"); stats.bestDay?.let { day -> Text(day.key.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH)) + ".", fontFamily = FontFamily.Serif, fontSize = 64.sp); val book = stats.sessions.filter { it.day == day.key }.groupBy { it.bookId }.maxByOrNull { it.value.sumOf { row -> row.minutes } }?.value?.first(); Text("with ${book?.bookAuthor?.substringAfterLast(" ") ?: "a book"}.", fontFamily = FontFamily.Serif, fontSize = 28.sp)
+                item { Reveal(20, 28) { Eyebrow("Reading · ${when { stats.daysTracked <= 7 -> "Last 7 days"; stats.daysTracked <= 30 -> "Last 30 days"; else -> "Last 4 months" }}"); Text("Page by page.", fontFamily = FontFamily.Serif, fontSize = 38.sp); Heatmap(stats, if (stats.daysTracked <= 7) 7 else if (stats.daysTracked <= 30) 30 else 120); Text("${(if (stats.daysTracked <= 7) stats.today.minusDays(6) else if (stats.daysTracked <= 30) stats.today.minusDays(29) else stats.firstDay).format(DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH))} — ${stats.today.format(DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.ENGLISH))}", Modifier.align(Alignment.CenterHorizontally), fontSize = 12.sp) } }
+                item { Reveal(60, 40) { Eyebrow("You spent"); Count(stats.totalMinutes, "hours", hours = true); Text("listening across ${stats.sessions.size} ${if (stats.sessions.size == 1) "session" else "sessions"} and ${stats.days.size} ${if (stats.days.size == 1) "day" else "days"}. That's about ${activityDuration(stats.totalMinutes / stats.daysTracked)} every day you've had the app.") } }
+                item { Reveal { Eyebrow("Your best day"); stats.bestDay?.let { day -> Text("A long " + day.key.format(DateTimeFormatter.ofPattern("EEEE", Locale.ENGLISH)), fontFamily = FontFamily.Serif, fontSize = 42.sp); val book = stats.sessions.filter { it.day == day.key }.groupBy { it.bookId }.maxByOrNull { it.value.sumOf { row -> row.minutes } }?.value?.first(); Text("with ${book?.bookAuthor?.substringAfterLast(" ") ?: "a book"}.", fontFamily = FontFamily.Serif, fontSize = 42.sp, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Surface(shape = RoundedCornerShape(18.dp)) { Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                         GeneratedBookCover(book?.bookTitle ?: "Reading session", Modifier.size(64.dp), cornerRadius = 10)
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(day.key.format(DateTimeFormatter.ofPattern("EEE, MMMM d", Locale.ENGLISH)).uppercase(Locale.ENGLISH), fontSize = 10.sp); Text(book?.bookTitle.orEmpty(), fontFamily = FontFamily.Serif, fontSize = 17.sp); Text("${day.value} min", color = ActivityAmber, fontSize = 14.sp) }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(day.key.format(DateTimeFormatter.ofPattern("EEE, MMMM d", Locale.ENGLISH)).uppercase(Locale.ENGLISH), fontSize = 10.sp); Text(book?.bookTitle.orEmpty(), fontFamily = FontFamily.Serif, fontSize = 17.sp); Text(activityDuration(day.value), fontFamily = FontFamily.Serif, fontSize = 22.sp) }
+                        Spacer(Modifier.weight(1f))
+                        BestDayGrid(stats, day.key)
                     } } } } }
-                item { Reveal { Eyebrow("You read most in the"); Text(when(stats.bestHour) { in 0..4 -> "early hours."; in 5..10 -> "mornings."; in 11..13 -> "around noon."; in 14..17 -> "afternoons."; in 18..20 -> "evenings."; else -> "late evenings." }, fontFamily = FontFamily.Serif, fontSize = 38.sp); ClockChart(stats); Text("Peak hour: ${if (stats.bestHour % 12 == 0) 12 else stats.bestHour % 12} ${if (stats.bestHour < 12) "AM" else "PM"}"); Bars(stats.weekdays, listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")) } }
+                item { Reveal { Eyebrow("You read most in the"); Text(when(stats.bestHour) { in 0..4 -> "late nights."; in 5..10 -> "mornings."; in 11..13 -> "around noon."; in 14..17 -> "afternoons."; in 18..20 -> "evenings."; else -> "late evenings." }, fontFamily = FontFamily.Serif, fontSize = 38.sp); ClockChart(stats); Text("Peak hour: ${if (stats.bestHour % 12 == 0) 12 else stats.bestHour % 12} ${if (stats.bestHour < 12) "AM" else "PM"}") } }
                 item { Reveal { Eyebrow("The book you stayed with"); stats.longestBook?.let { GeneratedBookCover(it.bookTitle, Modifier.size(160.dp).rotate(-2f).align(Alignment.CenterHorizontally)); Text(it.bookTitle, Modifier.align(Alignment.CenterHorizontally), fontFamily = FontFamily.Serif, fontSize = 26.sp); Text("by ${it.bookAuthor}", Modifier.align(Alignment.CenterHorizontally), fontFamily = FontFamily.Serif); Count(stats.bookMinutes[it.bookId] ?: 0, "hours", hours = true, size = 56) } } }
                 item { Reveal { Eyebrow("On a roll"); Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) { Column { Count(stats.currentStreak); Text("day streak") }; Column { Count(stats.longestStreak); Text("longest") } }; Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     val palette = heatPalette()
                     (27 downTo 0).forEach { offset -> val minutes = stats.days[stats.today.minusDays(offset.toLong())] ?: 0; Box(Modifier.weight(1f).height(28.dp).background(palette[when { minutes == 0 -> 0; minutes < 15 -> 1; minutes < 30 -> 2; minutes < 60 -> 3; else -> 4 }], RoundedCornerShape(2.dp))) }
                 }; Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("4 weeks ago", fontSize = 11.sp); Text("today", fontSize = 11.sp) } } }
-                item { Reveal { Eyebrow("The shape of it"); Text("Steady, generous sessions", fontFamily = FontFamily.Serif, fontSize = 28.sp); Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Metric("Avg session", "${stats.averageSession.roundToInt()}", "min", Modifier.weight(1f)); Metric("Finished", "${stats.booksFinished}", "books", Modifier.weight(1f)); Metric("Top author", stats.topAuthor?.key?.substringAfterLast(" ") ?: "—", "", Modifier.weight(1f)) } } }
+                item { Reveal { Eyebrow("The shape of it"); Text(stats.topAuthor?.let { "Steady, generous sessions — mostly with ${it.key.substringAfterLast(" ")}." } ?: "Steady, generous sessions", fontFamily = FontFamily.Serif, fontSize = 32.sp); Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { Metric("Avg session", "${stats.averageSession.roundToInt()}", "min", Modifier.weight(1f)); Metric("Finished", "${stats.booksFinished}", "books", Modifier.weight(1f)); Metric("Top author", stats.topAuthor?.key?.substringAfterLast(" ") ?: "—", "", Modifier.weight(1f)) } } }
                 item { Reveal { Eyebrow("Public domain, private joy"); Box(Modifier.fillMaxWidth().height(170.dp), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.size(150.dp)) { drawCircle(ActivityAmber.copy(alpha = .12f), style = Stroke(12.dp.toPx())); drawArc(ActivityAmber, -90f, 360f * stats.freePercent / 100, false, style = Stroke(12.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)) }
+                    val amber = ActivityAmber
+                    Canvas(Modifier.size(150.dp)) { drawCircle(amber.copy(alpha = .12f), style = Stroke(12.dp.toPx())); drawArc(amber, -90f, 360f * stats.freePercent / 100, false, style = Stroke(12.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)) }
                     Text("${stats.freePercent}%", fontFamily = FontFamily.Serif, fontSize = 36.sp)
                 }; Text("${activityDuration(stats.freeMinutes)} of your listening was from free, public-domain recordings.") } }
                 item { Reveal { Text("The unread copy of every great\nbook is still a great book.", fontFamily = FontFamily.Serif, fontSize = 28.sp); TextButton(onClick = onBack, Modifier.testTag("reading.stats.backToLibrary")) { Text("Back to Library") } } }

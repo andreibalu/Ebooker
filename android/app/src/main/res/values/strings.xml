@@ -12,7 +12,6 @@
     <string name="preparing_tracks">Preparing tracks · %1$d of %2$d</string>
     <string name="copying_audio">Keep Unpaged open while your audio files are copied.</string>
     <string name="cancel">Cancel</string>
-    <string name="could_not_complete">Could not complete this step</string>
     <string name="invalid_audio">Choose readable audiobook files with a valid audio track and duration. Try MP3, M4A, M4B, AAC, WAV, OGG, Opus or FLAC.</string>
     <string name="duplicate_book">This audiobook is already in your library.</string>
     <string name="title_required">Give the audiobook a title before adding it.</string>

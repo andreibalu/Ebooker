@@ -10,7 +10,7 @@ class CatalogLibraryService(private val store: LibraryStore) {
         identity(book.id)?.let { return@synchronized it }
         require(tracks.isNotEmpty()) { "No audio tracks are available for this book." }
         val libraryTracks = tracks.map {
-            require(java.net.URI(it.url).scheme == "https") { "This recording has an unsupported audio URL." }
+            require(CatalogEnvironment.permitsAudio(it.url)) { "This recording has an unsupported audio URL." }
             LibraryTrack(it.title, "${it.number}.mp3", "", it.seconds * 1000, "librivox:${book.id}:${it.number}", it.url)
         }
         LibraryBook(UUID.randomUUID().toString(), book.title, book.author, libraryTracks,

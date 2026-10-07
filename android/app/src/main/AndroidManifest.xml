@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
@@ -20,6 +21,7 @@
         <!-- Exported for trusted media clients; openFile verifies callers and serves generated covers only. -->
         <provider tools:ignore="ExportedContentProvider" android:name=".playback.CarArtworkProvider"
             android:authorities="${applicationId}.car-artwork" android:exported="true" />
+        <service android:name="androidx.work.impl.foreground.SystemForegroundService" android:foregroundServiceType="dataSync" tools:node="merge" />
         <!-- Session token clients must be able to bind. onGetSession restricts callers to
              this app and Android's trusted media controllers; a manifest permission would
              prevent legitimate session clients from binding. -->

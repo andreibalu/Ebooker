@@ -50,6 +50,7 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
     val scope = rememberCoroutineScope()
     val reduced = reducedMotion()
     val context = LocalContext.current
+    val ambientAmber = ActivityAmber
     var granted by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted = it }
     val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -75,7 +76,7 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                     }
                     Box(Modifier.fillMaxSize().drawBehind {
                         if (page == 0) drawRect(Brush.radialGradient(
-                            listOf(ActivityAmber.copy(alpha = .12f), androidx.compose.ui.graphics.Color.Transparent),
+                            listOf(ambientAmber.copy(alpha = .12f), androidx.compose.ui.graphics.Color.Transparent),
                             center = Offset(size.width / 2, size.height * .14f), radius = 340.dp.toPx()))
                     }, contentAlignment = Alignment.TopCenter) {
                     Column(Modifier.fillMaxHeight().widthIn(max = 402.dp).fillMaxWidth().alpha(reveal.value).padding(horizontal = 26.dp).padding(top = if (page == 0) 8.dp else 24.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(if (page == 0) 0.dp else 16.dp)) {

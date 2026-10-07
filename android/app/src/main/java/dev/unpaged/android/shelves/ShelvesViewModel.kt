@@ -51,7 +51,7 @@ class ShelvesViewModel(application: Application) : AndroidViewModel(application)
             try {
                 readCache()
                 mutable.update { it.copy(offline = !session.connected(), error = null) }
-                if (!session.connected()) { mutable.update { it.copy(loading = false) }; return@launch }
+                if (!session.connected() || CatalogEnvironment.savedOnly(getApplication())) { mutable.update { it.copy(loading = false) }; return@launch }
                 mutable.update { it.copy(preparing = true) }
                 withContext(Dispatchers.IO) {
                     val cached = store.books().map { it.id }.toSet()

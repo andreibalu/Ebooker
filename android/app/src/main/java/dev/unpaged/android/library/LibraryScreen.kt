@@ -18,6 +18,7 @@ import dev.unpaged.android.*
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import dev.unpaged.android.activity.*
@@ -54,6 +55,8 @@ import dev.unpaged.android.moments.MomentList
 fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = viewModel()) {
     val state by model.state.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val shelvesSession = remember { dev.unpaged.android.shelves.ShelvesSession.get(context) }
+    val downloads by shelvesSession.state.collectAsStateWithLifecycle()
     val player = remember { PlayerController.get(context) }
     val playback by player.state.collectAsStateWithLifecycle()
     val activityStore = remember { SQLiteLibraryStore(context) }
@@ -95,9 +98,11 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     var sortMenu by remember { mutableStateOf(false) }
     val tab = tabs[pager.currentPage]
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameId by rememberSaveable { mutableStateOf<String?>(null) }
+    var renameTitle by rememberSaveable { mutableStateOf("") }
     var removeId by rememberSaveable { mutableStateOf<String?>(null) }
     val selected = state.books.firstOrNull { it.id == selectedId }?.let { book ->
-        if (playback.book?.id == book.id) playback.book?.copy(isFavorite = book.isFavorite) else book
+        if (playback.book?.id == book.id) playback.book?.copy(isFavorite = book.isFavorite, title = book.title, coverRevision = book.coverRevision) else book
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), model::prepare)
     val onImport = { picker.launch(arrayOf("*/*")) }
@@ -128,7 +133,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                                     Box(Modifier.fillMaxWidth().height(2.dp).background(if (tab == label) MaterialTheme.colorScheme.onSurface else Color.Transparent))
                                 }
                                 if (label == "Shelves") dev.unpaged.android.abs.CatalogSourceMenu(preferences, sortMenu && tab == label, { sortMenu = false }, { absConnect = true })
-                                else DropdownMenu(expanded = sortMenu && tab == label, onDismissRequest = { sortMenu = false }) {
+                                else DropdownMenu(expanded = sortMenu && tab == label, modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { sortMenu = false }) {
                                     LibrarySort.entries.forEach { option ->
                                         DropdownMenuItem(text = { Text(option.label) }, onClick = { preferences.setSort(label, option); sortMenu = false },
                                             trailingIcon = { if (preferences.sort(label) == option) Icon(Icons.Default.Check, null) })
@@ -139,7 +144,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), thickness = .5.dp)
                 }
-            } else if (selected != null) DetailTopBar(selected, onBack = { selectedId = null }, onPlayer = if (playback.book != null) ({ fullPlayer = true }) else null)
+            } else if (selected != null) DetailTopBar(selected, onBack = { selectedId = null }, onPlayer = if (playback.book?.id == selected.id) ({ fullPlayer = true }) else null)
             when {
                 state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 state.preparing -> Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -148,7 +153,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                     Text(stringResource(R.string.copying_audio))
                     TextButton(onClick = model::cancelPreparation) { Text(stringResource(R.string.cancel)) }
                 }
-                selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) }, onMoment = { player.playMoment(selected, it); fullPlayer = true }, onSaveMoment = model::saveMoment, onDeleteMoment = model::deleteMoment)
+                selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) }, onMoment = { player.playMoment(selected, it); fullPlayer = true }, onSaveMoment = model::saveMoment, onDeleteMoment = model::deleteMoment, onCover = { model.saveCover(selected, it) })
                 else -> HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !absDetail) { page ->
                     val pageTab = tabs[page]
                     val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
@@ -159,8 +164,13 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                         else -> LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(horizontal = 20.dp, vertical = if (pageTab == "Favorites" && sessions.isNotEmpty()) 16.dp else 32.dp), horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            if (pageTab == "Library" && downloads.downloads.isNotEmpty()) item(span = { GridItemSpan(2) }) {
+                                SharedDownloads(dev.unpaged.android.shelves.ShelvesSession.get(context)) { catalogID ->
+                                    selectedId = state.books.firstOrNull { it.catalogId == catalogID }?.id
+                                }
+                            }
                             if (pageTab == "Favorites" && sessions.isNotEmpty()) item(span = { GridItemSpan(2) }) { ActivityCard(stats) { showStats = true } }
-                            items(books, key = { it.id }) { book -> LibraryBookCard(book, { model.toggleFavorite(book) }, { removeId = book.id }, playing = playback.book?.id == book.id && playback.playing) { selectedId = book.id } }
+                            items(books, key = { it.id }) { book -> LibraryBookCard(book, { model.toggleFavorite(book) }, { removeId = book.id }, playing = playback.book?.id == book.id && playback.playing, onResume = { playBook(book, null) }, onRename = { renameId = book.id; renameTitle = book.title }) { selectedId = book.id } }
                         }
                     }
                 }
@@ -169,14 +179,23 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     }
     if (showStats) ReadingStatsScreen(stats) { showStats = false }
     if (fullPlayer && playback.book != null) FullPlayer(player) { fullPlayer = false }
-    playback.error?.let { message -> AlertDialog(onDismissRequest = player::dismissError,
+    playback.error?.let { message -> AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = player::dismissError,
         title = { Text("Playback unavailable") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = player::dismissError) { Text("OK") } }) }
     if (absConnect) dev.unpaged.android.abs.ABSConnect(absClient, { absConnect = false }) { preferences.setShelvesSource("audiobookshelf"); absConnect = false }
     if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } }) { settings = false }
     state.pending?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
+    state.books.firstOrNull { it.id == renameId }?.let { book ->
+        AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { renameId = null }, title = { Text("Rename Audiobook") },
+            text = { OutlinedTextField(renameTitle, { renameTitle = it }, label = { Text("Book title") },
+                singleLine = true, modifier = Modifier.testTag("book.rename.title")) },
+            confirmButton = { TextButton(enabled = renameTitle.isNotBlank() && !state.busy, onClick = {
+                model.rename(book, renameTitle); renameId = null
+            }, modifier = Modifier.testTag("book.rename.save")) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { renameId = null }) { Text("Cancel") } })
+    }
     state.books.firstOrNull { it.id == removeId }?.let { book ->
-        AlertDialog(onDismissRequest = { if (!state.busy) removeId = null },
+        AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (!state.busy) removeId = null },
             title = { Text("Remove Audiobook?") }, text = { Text(if (book.absItemID != null) "This removes the book from Unpaged only. The book stays on your Audiobookshelf server." else "Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
             confirmButton = { TextButton(enabled = !state.busy, onClick = {
                 player.removed(book.id); model.remove(book); removeId = null; selectedId = null
@@ -184,8 +203,8 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
             dismissButton = { TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } })
     }
     state.error?.let { error ->
-        AlertDialog(onDismissRequest = { if (error != LibraryFailure.LOAD) model.dismissError() },
-            title = { Text(stringResource(R.string.could_not_complete)) },
+        AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (error != LibraryFailure.LOAD) model.dismissError() },
+            title = { Text(state.errorTitle) },
             text = { Text(stringResource(when (error) {
                 LibraryFailure.INVALID_AUDIO -> R.string.invalid_audio
                 LibraryFailure.DUPLICATE -> R.string.duplicate_book
@@ -228,7 +247,16 @@ fun DetailTopBar(book: LibraryBook, onBack: () -> Unit, onPlayer: (() -> Unit)? 
 @Composable
 fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
     onPlay: (() -> Unit)? = null, onTrack: ((Int) -> Unit)? = null,
-    onMoment: (LibraryMoment) -> Unit = {}, onSaveMoment: (LibraryMoment) -> Unit = {}, onDeleteMoment: (String) -> Unit = {}) {
+    onMoment: (LibraryMoment) -> Unit = {}, onSaveMoment: (LibraryMoment) -> Unit = {}, onDeleteMoment: (String) -> Unit = {}, onCover: (android.graphics.Bitmap?) -> Unit = {}) {
+    val catalogModel: dev.unpaged.android.shelves.ShelvesViewModel = viewModel()
+    val catalogState by catalogModel.state.collectAsStateWithLifecycle()
+    var alternative by remember(book.id) { mutableStateOf<dev.unpaged.android.shelves.CatalogBook?>(null) }
+    alternative?.let { selected ->
+        BackHandler { alternative = null }
+        CatalogDetail(selected, catalogState.books, catalogModel, { alternative = null },
+            { alternative = it }, { alternative = null })
+        return
+    }
     var tracksExpanded by rememberSaveable(book.id) { mutableStateOf(false) }
     var momentsExpanded by rememberSaveable(book.id) { mutableStateOf(false) }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -236,7 +264,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
             Surface(shape = UnpagedTheme.detailShape, shadowElevation = UnpagedTheme.cardShadow) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-                        LibraryBookCover(book, Modifier.size(130.dp), cornerRadius = 20)
+                        EditableBookCover(book, onCover)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(book.title, fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 3)
                             Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -256,9 +284,25 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         BookProgress(book.progress)
-                        Text("${kotlin.math.round(book.progress * 100).toInt()}% · ${shortDuration((book.durationMs - book.globalPositionMs).coerceAtLeast(0))} remaining",
+                        Text(if (book.isFinished) "Finished" else "${kotlin.math.round(book.progress * 100).toInt()}% · ${shortDuration((book.durationMs - book.globalPositionMs).coerceAtLeast(0))} remaining",
                             fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+            }
+        }
+        if (book.isFreeBook && !book.isDownloaded) item {
+            val sessionState by catalogModel.session.state.collectAsStateWithLifecycle()
+            Surface(shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Download for Offline", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Save this LibriVox book to listen without internet.", fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val entry = sessionState.downloads[book.catalogId]
+                    if (entry != null) {
+                        CatalogDownloadBadge(book.catalogId)
+                    } else Button(onClick = {
+                        catalogState.books.firstOrNull { it.id == book.catalogId }?.let(catalogModel.session::download)
+                    }, modifier = Modifier.fillMaxWidth().testTag("book.download"), shape = CircleShape) { Text("Download for Offline") }
                 }
             }
         }
@@ -291,6 +335,11 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                 }
             }
         }
+        if (book.isFreeBook) item {
+            catalogState.books.firstOrNull { it.id == book.catalogId }?.let { catalogBook ->
+                AlternativesSection(catalogBook, catalogState.books, catalogModel) { alternative = it }
+            }
+        }
     }
 }
 
@@ -307,6 +356,13 @@ private fun DisclosureRow(label: String, tag: String, icon: androidx.compose.ui.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ImportReview(pending: PendingImport, busy: Boolean, save: (String, String) -> Unit, discard: () -> Unit) {
+    val reviewContext = LocalContext.current
+    val preview by produceState<android.graphics.Bitmap?>(null, pending.id) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            android.graphics.BitmapFactory.decodeFile(java.io.File(reviewContext.filesDir,
+                "audiobooks/.staging/${pending.id}/cover.png").absolutePath)
+        }
+    }
     var title by rememberSaveable(pending.id) { mutableStateOf(pending.suggestedTitle) }
     var author by rememberSaveable(pending.id) { mutableStateOf(pending.suggestedAuthor) }
     val currentBusy by rememberUpdatedState(busy)

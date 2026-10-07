@@ -1,5 +1,7 @@
 package dev.unpaged.android.library
 
+import androidx.compose.ui.semantics.testTagsAsResourceId
+import androidx.compose.ui.semantics.semantics
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -79,7 +81,7 @@ fun ShelvesScreen(onLibraryChanged: () -> Unit = {}, onViewLibrary: (String) -> 
                     "This collection needs a connection the first time to load its books from LibriVox.") { model.collection(collection) }
                 else LazyColumn(Modifier.testTag("shelves.collection")) {
                     itemsIndexed(books, key = { _, b -> b.id }) { index, book -> CatalogRow(book, index, model) { selectedId = book.id } }
-                    item { Colophon() }
+                    item { CollectionColophon() }
                 }
             }
             else -> {
@@ -91,6 +93,9 @@ fun ShelvesScreen(onLibraryChanged: () -> Unit = {}, onViewLibrary: (String) -> 
                 else if (state.books.isEmpty() && state.error != null) ShelvesEmpty("Couldn’t Load Shelves", state.error!!, model::refresh)
                 else LazyColumn(Modifier.fillMaxSize().testTag("shelves.list"), contentPadding = PaddingValues(bottom = 24.dp)) {
                     if (state.filtered) {
+                        if (!state.searching) item {
+                            SectionHeader("Found · ${state.results.size} Recording${if (state.results.size == 1) "" else "s"}")
+                        }
                         if (state.results.isEmpty() && !state.searching) item {
                             ShelvesEmpty("Nothing on this shelf.", "Try a different title or author, or clear a filter.") {
                                 model.query(""); model.language(null); model.genre(null); model.length(null)
@@ -100,6 +105,7 @@ fun ShelvesScreen(onLibraryChanged: () -> Unit = {}, onViewLibrary: (String) -> 
                     } else {
                         val pick = state.books.firstOrNull { it.id == Classics.pick(model.day) }
                         if (pick != null) item { Hero(pick) { selectedId = pick.id } }
+                        item { SharedDownloads(model.session) { selectedId = it } }
                         item { SectionHeader("Collections", if (collectionsHidden) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowDown) {
                             collectionsHidden = !collectionsHidden
                             preferences.setCollectionsHidden(collectionsHidden)
@@ -121,7 +127,7 @@ fun ShelvesScreen(onLibraryChanged: () -> Unit = {}, onViewLibrary: (String) -> 
             }
         }
     }
-    sessionState.error?.let { message -> AlertDialog(onDismissRequest = model.session::dismissError,
+    sessionState.error?.let { message -> AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = model.session::dismissError,
         title = { Text("Could Not Complete") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = model.session::dismissError) { Text("OK") } }) }
 }
@@ -154,8 +160,8 @@ private fun FilterMenu(label: String, selected: String?, options: List<String>, 
             }
             Box(Modifier.width(82.dp).height(2.dp).background(if (selected != null) MaterialTheme.colorScheme.primary else Color.Transparent))
         }
-        DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text("All ${label.lowercase()}") }, onClick = { expanded = false; onSelect(null) }, trailingIcon = { if (selected == null) Icon(Icons.Default.Check, null) })
+        DropdownMenu(expanded, onDismissRequest = { expanded = false }, modifier = Modifier.semantics { testTagsAsResourceId = true }) {
+            DropdownMenuItem(text = { Text(when (label) { "LANGUAGE" -> "All Languages"; "GENRE" -> "All Genres"; else -> "Any Length" }) }, onClick = { expanded = false; onSelect(null) }, trailingIcon = { if (selected == null) Icon(Icons.Default.Check, null) })
             options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { expanded = false; onSelect(option) },
                 trailingIcon = { if (selected == option) Icon(Icons.Default.Check, null) }) }
         }
@@ -166,7 +172,10 @@ private fun StatusLine(state: ShelvesState, model: ShelvesViewModel) {
     val text = when {
         state.searching -> "Searching LibriVox…"
         state.offline -> if (state.filtered) "Offline — showing saved matches." else "Offline — showing saved books."
-        state.partial -> "Showing saved matches. Offline search is still preparing."
+        state.partial -> {
+            val scope = if (state.books.isEmpty()) "from books saved so far" else "from ${state.books.size} books saved so far"
+            if (state.preparing) "Partial results $scope — the full catalog is still downloading." else "Partial results $scope."
+        }
         state.preparing -> if (state.ready) "Checking for new books…" else "Preparing offline search… ${state.books.size} saved"
         state.error != null -> state.error
         else -> null
@@ -263,6 +272,12 @@ private fun ShelvesEmpty(title: String, message: String, retry: () -> Unit) {
     }
 }
 @Composable
+private fun CollectionColophon() {
+    Text("Free books courtesy of LibriVox — public domain audio recorded by volunteers.",
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp), fontSize = 11.sp,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+}
+@Composable
 private fun Colophon() {
     Text("Every book here is read by LibriVox volunteers and free in the public domain — yours to keep, forever.",
         Modifier.padding(24.dp), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -274,7 +289,13 @@ private fun DownloadLine(entry: DownloadEntry) {
     when {
         entry.complete -> Text("Downloaded", fontSize = 11.sp)
         entry.error != null -> Text(entry.error, fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-        else -> { LinearProgressIndicator(progress = { entry.progress }, Modifier.fillMaxWidth()); Text("Downloading… ${(entry.progress * 100).toInt()}%", fontSize = 11.sp) }
+        else -> {
+            if (entry.totalTracks == 0) Text("Preparing…", fontSize = 11.sp)
+            else {
+                LinearProgressIndicator(progress = { entry.progress }, Modifier.fillMaxWidth())
+                Text(if (entry.progress >= 1) "Finishing…" else "Track ${entry.currentTrack} of ${entry.totalTracks}", fontSize = 11.sp)
+            }
+        }
     }
 }
 
@@ -295,7 +316,7 @@ internal fun CatalogDownloadBadge(catalogId: String?) {
 }
 
 @Composable
-private fun CatalogDetail(book: CatalogBook, books: List<CatalogBook>, model: ShelvesViewModel, back: () -> Unit,
+internal fun CatalogDetail(book: CatalogBook, books: List<CatalogBook>, model: ShelvesViewModel, back: () -> Unit,
     open: (CatalogBook) -> Unit, viewLibrary: (String) -> Unit) {
     val session by model.session.state.collectAsStateWithLifecycle()
     var expanded by rememberSaveable(book.id) { mutableStateOf(false) }
@@ -337,7 +358,10 @@ private fun CatalogDetail(book: CatalogBook, books: List<CatalogBook>, model: Sh
                 val entry = session.downloads[book.id]
                 if (entry != null && !entry.complete) {
                     DownloadLine(entry)
-                    if (entry.error != null) OutlinedButton(onClick = { model.session.download(book) }) { Text("Try Again") }
+                    if (entry.error != null) Row {
+                        OutlinedButton(onClick = { model.session.download(book) }) { Text("Try Again") }
+                        TextButton(onClick = { model.session.dismissDownload(book.id) }) { Text("Dismiss") }
+                    }
                     else TextButton(onClick = { model.session.cancel(book.id) }) { Text("Cancel Download") }
                 } else if (identity?.isDownloaded != true) {
                     Button(onClick = { model.session.download(book) }, Modifier.fillMaxWidth().testTag("shelves.download"), shape = RoundedCornerShape(10.dp),
@@ -364,11 +388,64 @@ private fun CatalogDetail(book: CatalogBook, books: List<CatalogBook>, model: Sh
                 }
             }
         }
-        val alternatives = OtherRecordings.alternatives(book, books)
-        if (alternatives.isNotEmpty()) {
-            item { Text("Other Recordings", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) }
-            itemsIndexed(alternatives, key = { _, b -> b.id }) { index, other ->
-                Column { Text(OtherRecordings.label(other.title) ?: "Original", fontSize = 11.sp); CatalogRow(other, index, model) { open(other) } }
+        item { AlternativesSection(book, books, model) { open(it) } }
+    }
+}
+
+@Composable
+internal fun AlternativesSection(book: CatalogBook, books: List<CatalogBook>, model: ShelvesViewModel, open: (CatalogBook) -> Unit) {
+    val alternatives = OtherRecordings.alternatives(book, books)
+    if (alternatives.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Other Recordings", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text("${alternatives.size}", fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Text("Same book, different narrators. Play a sample to compare.", fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        alternatives.forEach { other ->
+            val session by model.session.state.collectAsStateWithLifecycle()
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.weight(1f).clickable { open(other) }.testTag("shelves.book.${other.id}"),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    GeneratedBookCover(other.title, Modifier.size(44.dp), cornerRadius = 8)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(OtherRecordings.label(other.title) ?: "Original", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(other.duration, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(16.dp))
+                }
+                IconButton({ model.session.sample(other) }, enabled = model.session.connected() || session.sampleId == other.id,
+                    modifier = Modifier.size(30.dp).testTag("shelves.alternative.sample.${other.id}")) {
+                    Icon(if (session.sampleId == other.id) Icons.Default.StopCircle else Icons.Default.PlayCircleOutline, "Play sample")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun SharedDownloads(session: ShelvesSession, open: (String) -> Unit = {}) {
+    val state by session.state.collectAsStateWithLifecycle()
+    if (state.downloads.isNotEmpty()) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Downloads · ${state.downloads.size}", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            HorizontalDivider(Modifier.weight(1f))
+        }
+        state.downloads.entries.sortedBy { it.value.title }.forEach { (id, entry) ->
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(entry.title, Modifier.weight(1f).clickable { open(id) }.testTag("download.open.$id"), fontSize = 15.sp)
+                    when {
+                        entry.error != null -> {
+                            TextButton({ session.retryDownload(id) }, Modifier.testTag("download.retry.$id")) { Text("Retry") }
+                            TextButton({ session.dismissDownload(id) }, Modifier.testTag("download.dismiss.$id")) { Text("Dismiss") }
+                        }
+                        !entry.complete -> TextButton({ session.cancel(id) }, Modifier.testTag("download.cancel.$id")) { Text("Cancel") }
+                    }
+                }
+                DownloadLine(entry)
             }
         }
     }

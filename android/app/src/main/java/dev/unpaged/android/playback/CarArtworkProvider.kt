@@ -35,7 +35,7 @@ internal object CarArtwork {
         MessageDigest.getInstance("SHA-256").digest("$id\u0000$title".toByteArray()).joinToString("") { "%02x".format(it) } + ".png"
 }
 
-/** Car clients can read generated covers, never audio files or arbitrary paths. */
+/** Car clients can read book covers, never audio files or arbitrary paths. */
 class CarArtworkProvider : ContentProvider() {
     companion object {
         fun uri(context: android.content.Context, mediaId: String): Uri = Uri.Builder()
@@ -58,6 +58,9 @@ class CarArtworkProvider : ContentProvider() {
         if (mode != "r" || uri.authority != "${context.packageName}.car-artwork" || uri.pathSegments.size != 1) throw FileNotFoundException()
         val id = uri.pathSegments.single()
         val title = CarArtwork.title(context, id) ?: throw FileNotFoundException("Unknown book")
+        // A custom or embedded cover is a fixed file name in the book's own folder, never an audio path.
+        if (id.startsWith("book:")) File(context.filesDir, "audiobooks/${id.removePrefix("book:")}/cover.png").takeIf { it.isFile }
+            ?.let { return ParcelFileDescriptor.open(it, ParcelFileDescriptor.MODE_READ_ONLY) }
         val file = File(File(context.cacheDir, "car-artwork"), CarArtwork.fileName(id, title)).also { it.parentFile?.mkdirs() }
         val directory = file.parentFile!!
         val hash = file.nameWithoutExtension

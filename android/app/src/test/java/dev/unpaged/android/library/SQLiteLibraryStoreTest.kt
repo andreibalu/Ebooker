@@ -30,6 +30,22 @@ class SQLiteLibraryStoreTest {
         }
     }
 
+    @Test fun renamePreservesBookIdentityPlaybackAndMomentsAcrossReopen() {
+        val context = RuntimeEnvironment.getApplication()
+        context.deleteDatabase("library.db")
+        val book = LibraryBook("rename", "Before", "Author", listOf(LibraryTrack("Track", "1", "1", 300000, "a")),
+            isFavorite = true, currentPositionMs = 45000, equalizerJson = "custom")
+        withStore(context) { store ->
+            store.insert(book)
+            store.saveMoment(LibraryMoment("moment", book.id, 0, 15000, "A passage"))
+            store.rename(book.id, "  After  ")
+        }
+        withStore(context) { store ->
+            assertEquals(book.copy(title = "After"), store.books().single())
+            assertEquals("A passage", store.moments(book.id).single().label)
+        }
+    }
+
     @Test fun explicitProgressMarkCanMoveBackwardAndSurvivesReopen() {
         val context = RuntimeEnvironment.getApplication()
         context.deleteDatabase("library.db")

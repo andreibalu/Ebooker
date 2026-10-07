@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -46,6 +47,7 @@ private val listeningPreferences = listOf(
 fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)? = null, onDone: () -> Unit) {
     preferenceRevision(preferences)
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
+    var resetConfirmation by rememberSaveable { mutableStateOf(false) }
     var absSettings by rememberSaveable { mutableStateOf(false) }
     val absClient = (androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).abs
     val uri = LocalUriHandler.current
@@ -71,7 +73,7 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                             Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) { Icon(Icons.AutoMirrored.Filled.LibraryBooks, null, Modifier.padding(12.dp).size(22.dp)) }
                             Column(Modifier.weight(1f)) {
                                 Text("Audiobookshelf Server", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                                Text(summary?.let { "${it.username ?: "API key"} · ${java.net.URI(it.server).authority}" } ?: "Connect your server", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(summary?.let { "${it.username ?: "API key"} · ${java.net.URI(it.server).authority}" } ?: "Not connected", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -122,10 +124,14 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                     SectionHeader("APP", "Appearance & tour.")
                     Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            TextButton(onClick = { onDone(); preferences.setOnboardingComplete(false) }, modifier = Modifier.testTag("settings.resetOnboarding")) { Text("Reset Onboarding", color = MaterialTheme.colorScheme.onSurface) }
                             SettingLabel("Appearance", "Follow your phone, or always use light or dark")
                             Segments(listOf("System", "Light", "Dark"), preferences.text("appAppearance", "system").replaceFirstChar { it.uppercase() }, "appearance") {
                                 preferences.setText("appAppearance", it.lowercase())
+                            }
+                            Hairline()
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { SettingLabel("Reset Onboarding", "Show the welcome walkthrough again") }
+                                TextButton(onClick = { resetConfirmation = true }, modifier = Modifier.testTag("settings.resetOnboarding")) { Text("Reset") }
                             }
                         }
                     }
@@ -144,6 +150,12 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
             }
         }
     }
+    if (resetConfirmation) AlertDialog(onDismissRequest = { resetConfirmation = false }, modifier = Modifier.semantics { testTagsAsResourceId = true },
+        title = { Text("Reset Onboarding?") },
+        text = { Text("The onboarding walkthrough will start again from the beginning.") },
+        confirmButton = { TextButton(onClick = { resetConfirmation = false; onDone(); preferences.setOnboardingComplete(false) },
+            modifier = Modifier.testTag("settings.confirmReset")) { Text("Reset") } },
+        dismissButton = { TextButton(onClick = { resetConfirmation = false }) { Text("Cancel") } })
     if (absSettings) dev.unpaged.android.abs.ABSServerSettings(absClient, preferences, onOpenShelves = { absSettings = false; onDone(); onOpenShelves?.invoke() }) { absSettings = false }
 }
 
@@ -186,6 +198,6 @@ private fun Segments(labels: List<String>, selected: String, prefix: String, onS
 private fun LegalRow(title: String, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).testTag("settings.legal.$title").padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f), fontSize = 15.sp)
-        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(Icons.AutoMirrored.Filled.OpenInNew, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

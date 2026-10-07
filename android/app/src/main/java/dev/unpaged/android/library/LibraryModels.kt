@@ -37,6 +37,7 @@ data class LibraryBook(
     val dateAdded: Long = System.currentTimeMillis(),
     val absItemID: String? = null,
     val absChaptersJson: String? = null,
+    val coverRevision: Long = 0,
 ) {
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
     val globalPositionMs: Long get() = tracks.take(currentTrackIndex).sumOf { it.durationMs } + currentPositionMs

@@ -91,6 +91,7 @@ class PlayerController internal constructor(private val context: Application) {
     private val queueGate = SessionQueueGate()
     private var queueTimeout: Job? = null
     private var sessionBook: LibraryBook? = null
+    private var sessionMarkers: Map<Int, List<ChapterMarker>> = emptyMap()
     private var configureSessionBook = false
     private val queueTokenKey = "dev.unpaged.queueGeneration"
     private var preservingSkipTarget: Pair<Int, Long>? = null
@@ -199,16 +200,27 @@ class PlayerController internal constructor(private val context: Application) {
                 }
             }
             val target = track?.let { it to 0L } ?: resume.start(fresh, preferences.seconds("resumeBacktrackSeconds", 60))
-            val action = { load(fresh, target.first, target.second) }
+            val (embedded, cover) = localMedia(fresh)
+            val action = { load(fresh, target.first, target.second, embedded, cover) }
             if (player == null) { pending = action; mutableState.value = state.value.copy(loading = true) } else action()
         }
     }
-    private fun load(book: LibraryBook, track: Int, position: Long) {
+    /** Embedded chapter markers and the custom cover, read off the main thread. */
+    private suspend fun localMedia(book: LibraryBook): Pair<Map<Int, List<ChapterMarker>>, ByteArray?> = withContext(Dispatchers.IO) {
+        val artwork = readArtwork(book)
+        book.tracks.mapIndexedNotNull { index, file ->
+            if (file.storedName.isEmpty()) null else index to Mp4Chapters.cached(
+                File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
+        }.toMap() to artwork
+    }
+    private fun readArtwork(book: LibraryBook): ByteArray? = ArtworkThumbnail.load(
+        File(context.filesDir, "audiobooks/${book.id}/cover.png"), File(context.cacheDir, "notification-artwork"), book.id)
+    private fun load(book: LibraryBook, track: Int, position: Long, embedded: Map<Int, List<ChapterMarker>>, cover: ByteArray?) {
         val engine = player ?: return
         if (book.tracks.isEmpty()) return
         clearSessionQueueWait()
-        configureBook(book)
-        val items = mediaItems(book)
+        configureBook(book, embedded)
+        val items = mediaItems(book, cover)
         replacing = true
         engine.setMediaItems(items, track.coerceIn(book.tracks.indices), position.coerceAtLeast(0))
         engine.setPlaybackSpeed(book.playbackSpeed.toFloat().takeIf { it in PlaybackRules.speeds } ?: 1f)
@@ -233,14 +245,16 @@ class PlayerController internal constructor(private val context: Application) {
         val fresh = ready.await() ?: error("This book is no longer available.")
         check(queueGate.current(token)) { "This playback request is no longer current." }
         if (fresh.absItemID != null) abs.startPlayback(fresh.absItemID)
+        val (embedded, cover) = localMedia(fresh)
         check(queueGate.current(token)) { "This playback request is no longer current." }
         val target = CarResumePolicy.start(resume, fresh, preferences.seconds("resumeBacktrackSeconds", 60), restart)
-        return stageSessionQueue(token, fresh, mediaItems(fresh), target.first.coerceIn(fresh.tracks.indices), target.second.coerceAtLeast(0), true)
+        return stageSessionQueue(token, fresh, mediaItems(fresh, cover), target.first.coerceIn(fresh.tracks.indices), target.second.coerceAtLeast(0), true, embedded)
     }
     internal fun stageSessionQueue(token: Int, book: LibraryBook, items: List<MediaItem>, index: Int, position: Long,
-        configure: Boolean = false): androidx.media3.session.MediaSession.MediaItemsWithStartPosition {
+        configure: Boolean = false, embedded: Map<Int, List<ChapterMarker>> = emptyMap()): androidx.media3.session.MediaSession.MediaItemsWithStartPosition {
         check(items.isNotEmpty() && queueGate.stage(token, book.id)) { "This playback request is no longer current." }
         sessionBook = book
+        sessionMarkers = embedded
         configureSessionBook = configure
         val tagged = items.map { item -> item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon()
             .setExtras(android.os.Bundle(item.mediaMetadata.extras ?: android.os.Bundle.EMPTY).apply { putInt(queueTokenKey, token) }).build()).build() }
@@ -255,7 +269,7 @@ class PlayerController internal constructor(private val context: Application) {
             || !queueGate.consume(token, book.id)) return false
         replacing = true
         try {
-            if (configureSessionBook) configureBook(book)
+            if (configureSessionBook) configureBook(book, sessionMarkers)
             clearSessionQueueWait()
             engine.setMediaItems(items, index, position)
             engine.setPlaybackSpeed(book.playbackSpeed.toFloat().takeIf { it in PlaybackRules.speeds } ?: 1f)
@@ -264,24 +278,25 @@ class PlayerController internal constructor(private val context: Application) {
         return true
     }
     fun cancelSessionQueue(token: Int) { if (queueGate.expire(token)) clearSessionQueueWait() }
-    private fun clearSessionQueueWait() { queueGate.clear(); queueTimeout?.cancel(); queueTimeout = null; sessionBook = null }
+    private fun clearSessionQueueWait() { queueGate.clear(); queueTimeout?.cancel(); queueTimeout = null; sessionBook = null; sessionMarkers = emptyMap() }
     /** Only the requesting controller can abandon its pending queue. */
     fun sessionControllerDisconnected(controller: Any) { if (queueGate.disconnect(controller)) clearSessionQueueWait() }
     /** Runs on the app-lifetime scope so a request survives the activity that started it. */
     fun launchIntegration(block: suspend () -> Unit) { scope.launch { block() } }
-    private fun configureBook(book: LibraryBook) {
+    private fun configureBook(book: LibraryBook, embedded: Map<Int, List<ChapterMarker>>) {
         activity.end()
         persist(true)
         markers.clear()
+        markers.putAll(embedded)
         preservingSkipTarget = null
         rules.load()
         val eq = EqualizerConfiguration.decode(book.equalizerJson)
         mutableEqualizer.value = eq
         equalizerProcessor.configuration = eq
-        mutableState.value = state.value.copy(book = book, error = null, chapters = PlaybackRules.chapters(book))
+        mutableState.value = state.value.copy(book = book, error = null, chapters = PlaybackRules.chapters(book, markers))
     }
-    private fun mediaItems(book: LibraryBook): List<MediaItem> {
-        val artwork = GeneratedArtwork.png(book.title)
+    private fun mediaItems(book: LibraryBook, cover: ByteArray?): List<MediaItem> {
+        val artwork = cover ?: GeneratedArtwork.png(book.title)
         return book.tracks.mapIndexed { index, file ->
             val uri = if (file.storedName.isNotEmpty()) android.net.Uri.fromFile(File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
                 else (file.remoteUrl ?: "").toUri()
@@ -382,9 +397,31 @@ class PlayerController internal constructor(private val context: Application) {
     fun playMoment(book: LibraryBook, moment: LibraryMoment) {
         clearSessionQueueWait()
         connect(); loadJob?.cancel(); pending = null
-        val action = { load(book, moment.trackIndex, moment.timeMs) }
-        if (player == null) { pending = action; mutableState.value = state.value.copy(loading = true) } else action()
+        loadJob = scope.launch {
+            val (embedded, cover) = localMedia(book)
+            val action = { load(book, moment.trackIndex, moment.timeMs, embedded, cover) }
+            if (player == null) { pending = action; mutableState.value = state.value.copy(loading = true) } else action()
+        }
     }
+    /** Replace metadata in place; keep the engine's queue position and playback state. */
+    suspend fun refreshBookMetadata(edited: LibraryBook) {
+        if (state.value.book?.id != edited.id) return
+        val cover = withContext(Dispatchers.IO) { readArtwork(edited) }
+        val active = state.value.book?.takeIf { it.id == edited.id } ?: return
+        val book = active.copy(title = edited.title, coverRevision = edited.coverRevision)
+        val artwork = cover ?: GeneratedArtwork.png(book.title)
+        mutableState.value = state.value.copy(book = book)
+        player?.let { engine ->
+            for (index in 0 until engine.mediaItemCount) {
+                val item = engine.getMediaItemAt(index)
+                val metadata = item.mediaMetadata.buildUpon()
+                    .setTitle(PlaybackRules.title(book, index)).setAlbumTitle(book.title)
+                    .setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER).build()
+                engine.replaceMediaItem(index, item.buildUpon().setMediaMetadata(metadata).build())
+            }
+        }
+    }
+
     fun removed(id: String) {
         if (state.value.book?.id != id) return
         activity.end()

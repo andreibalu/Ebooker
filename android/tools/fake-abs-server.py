@@ -22,7 +22,7 @@ events = args.evidence / 'abs-server-events.jsonl'
 events.write_text('')
 lock = threading.Lock()
 state = {'login': 0, 'bad_password': 0, 'authorize': 0, 'covers': 0, 'play': 0,
-         'tokenized_streams': 0, 'progress': [], 'refresh': 0}
+         'download_ranges': [], 'tokenized_streams': 0, 'progress': [], 'refresh': 0}
 
 def jwt(payload):
     return 'fixture.' + base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip('=') + '.signature'
@@ -110,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
             use_fixture(path == '/_test/visual')
             with lock:
                 for key in state:
-                    state[key] = [] if key == 'progress' else 0
+                    state[key] = [] if key in ('progress', 'download_ranges') else 0
                 save_state()
             return self.respond({})
         if path == '/login':
@@ -148,6 +148,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(state)
         if path == '/_test/health':
             return self.respond({'ready': True})
+        if path == '/audio/download.wav':
+            data = (args.fixtures / 'Chapter 1.wav').read_bytes()
+            start = int(self.headers.get('Range', 'bytes=0-').removeprefix('bytes=').split('-')[0])
+            self.record('download_ranges', start)
+            self.send_response(206 if start else 200)
+            self.send_header('Content-Type', 'audio/wav')
+            self.send_header('Content-Length', str(len(data) - start))
+            self.send_header('ETag', '"durable-v1"')
+            if start:
+                self.send_header('Content-Range', f'bytes {start}-{len(data)-1}/{len(data)}')
+            self.end_headers()
+            try:
+                for offset in range(start, len(data), 32768):
+                    self.wfile.write(data[offset:offset+32768])
+                    self.wfile.flush()
+                    time.sleep(.15)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if path == '/audio/fixture.wav':
             if parse_qs(parts.query).get('token') not in ([access], [api_key]):
                 return self.respond({}, 401)
