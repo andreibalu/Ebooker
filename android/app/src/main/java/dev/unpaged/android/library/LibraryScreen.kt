@@ -209,14 +209,19 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (!state.busy) removeId = null },
             title = { Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library?" else if (book.isFreeBook) "Remove Download?" else if (preferences.backupEnabled()) "Remove from This Phone?" else "Remove Audiobook?") },
             text = { Text(removalMessage(book, preferences.backupEnabled())) },
-            confirmButton = { TextButton(enabled = !state.busy, onClick = {
-                player.removed(book.id); model.remove(book); removeId = null; selectedId = null
-            }) { Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library" else if (book.isFreeBook) "Remove Download" else if (preferences.backupEnabled()) "Remove from This Phone" else "Also Delete Files") } },
-            dismissButton = { Column {
-                if (!preferences.backupEnabled() && !book.isFreeBook && book.absItemID == null) TextButton(enabled = !state.busy, onClick = {
-                    player.removed(book.id); model.remove(book, deleteFiles = false); removeId = null; selectedId = null
-                }) { Text("Remove from App") }
-                TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } } })
+            confirmButton = {
+                val remove = { deleteFiles: Boolean -> player.removed(book.id); model.remove(book, deleteFiles = deleteFiles); removeId = null; selectedId = null }
+                // Own books without backup get the iOS three-button stack; one Column keeps it compact.
+                if (!preferences.backupEnabled() && !book.isFreeBook && book.absItemID == null) Column(horizontalAlignment = Alignment.End) {
+                    TextButton(enabled = !state.busy, onClick = { remove(false) }) { Text("Remove from App") }
+                    TextButton(enabled = !state.busy, onClick = { remove(true) }) { Text("Also Delete Files") }
+                    TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) }
+                } else TextButton(enabled = !state.busy, onClick = { remove(true) }) {
+                    Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library" else if (book.isFreeBook) "Remove Download" else "Remove from This Phone")
+                }
+            },
+            dismissButton = if (!preferences.backupEnabled() && !book.isFreeBook && book.absItemID == null) null
+                else ({ TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } }))
     }
     state.error?.let { error ->
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (error != LibraryFailure.LOAD) model.dismissError() },
