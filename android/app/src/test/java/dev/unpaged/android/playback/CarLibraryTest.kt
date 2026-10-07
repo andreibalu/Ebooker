@@ -154,7 +154,7 @@ class CarLibraryTest {
             try { library.resolve("catalog:133"); fail("Expected offline failure") }
             catch (error: IllegalStateException) { assertEquals("No internet connection", error.message) }
             assertTrue(store.books().isEmpty())
-            store.insert(book("remote", "Remote").copy(isDownloaded = false))
+            store.insert(book("remote", "Remote").copy(isDownloaded = false, isFreeBook = true))
             try { library.resolve("book:remote"); fail("Expected offline failure") }
             catch (error: IllegalStateException) { assertEquals("No internet connection", error.message) }
             assertEquals(1, store.books().size)

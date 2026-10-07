@@ -55,7 +55,7 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
                     check(partial.renameTo(destination)) { "Couldn't save the download." }
                     File(partial.path + ".validator").delete()
                 }
-                track.copy(storedName = name)
+                track.copy(storedName = name, fingerprint = dev.unpaged.android.library.TrackIdentity.fingerprint(destination, track.durationMs))
             }
             currentCoroutineContext().ensureActive()
             withContext(NonCancellable) {

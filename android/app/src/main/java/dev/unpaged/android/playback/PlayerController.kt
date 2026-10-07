@@ -186,6 +186,10 @@ class PlayerController internal constructor(private val context: Application,
     }
 
     fun play(book: LibraryBook, track: Int? = null) {
+        if (book.isAudioMissing || book.isArchived) {
+            mutableState.value = state.value.copy(error = "Audio is missing. Locate the original files in Backed-up Library to restore this book.")
+            return
+        }
         clearSessionQueueWait()
         connect()
         loadJob?.cancel()
@@ -308,7 +312,7 @@ class PlayerController internal constructor(private val context: Application,
     private fun mediaItems(book: LibraryBook, cover: ByteArray?): List<MediaItem> {
         val artwork = cover ?: GeneratedArtwork.png(book.title)
         return book.tracks.mapIndexed { index, file ->
-            val uri = if (file.storedName.isNotEmpty()) android.net.Uri.fromFile(File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
+            val uri = if (book.isDownloaded && file.storedName.isNotEmpty()) android.net.Uri.fromFile(File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
                 else (file.remoteUrl ?: "").toUri()
             MediaItem.Builder().setMediaId("${book.id}:$index").setUri(uri)
                 .setCustomCacheKey(if (book.absItemID != null) "abs:${book.id}:$index" else null)

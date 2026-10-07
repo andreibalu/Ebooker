@@ -84,13 +84,15 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
                 .appendPath(dev.unpaged.android.R.drawable.car_chapters.toString()).build() else null
         return item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setArtworkUri(uri).build()).build()
     }
+    // Archived free books and audio-missing rows live in Backed-up Library, not the car lists.
+    private fun books() = store.books().filter { it.isInActiveLibrary }
     fun children(parent: String): List<MediaItem> = when (parent) {
         // Car hosts cannot open a list from a now-playing button, so chapters are a browse tab while a book is loaded.
         ROOT -> tabs.map { folder(it) } + listOfNotNull(if (playback().book != null) folder(CHAPTERS, "Chapters") else null)
-        "Favorites", "Library" -> sortedBooks(store.books().filter { parent != "Favorites" || it.isFavorite },
+        "Favorites", "Library" -> sortedBooks(books().filter { parent != "Favorites" || it.isFavorite },
             UnpagedPreferences(context).sort("Library")).map(::bookItem)
         "Shelves" -> {
-            val inLibrary = store.books().mapNotNull { it.catalogId }.toSet()
+            val inLibrary = books().mapNotNull { it.catalogId }.toSet()
             classics().filter { it.id !in inLibrary }.map(::catalogItem)
         }
         CHAPTERS -> playback().let { state -> state.book?.let { book -> state.chapters.map {
@@ -102,7 +104,7 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
         state.book?.let { book -> chapterIndex(id, book.id)?.let { index -> state.chapters.firstOrNull { it.index == index } } }
     }
     fun search(query: String): List<MediaItem> {
-        val books = store.books(); val cached = classics()
+        val books = books(); val cached = classics()
         return searchIDs(query, books, cached).mapNotNull { id ->
             books.firstOrNull { "book:${it.id}" == id }?.let(::bookItem)
                 ?: cached.firstOrNull { "catalog:${it.id}" == id }?.let(::catalogItem)
@@ -112,13 +114,13 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
         id == ROOT -> folder(ROOT, "Unpaged")
         id in tabs -> folder(id)
         id == CHAPTERS -> folder(CHAPTERS, "Chapters")
-        id.startsWith("book:") -> store.books().firstOrNull { "book:${it.id}" == id }?.let(::bookItem)
+        id.startsWith("book:") -> books().firstOrNull { "book:${it.id}" == id }?.let(::bookItem)
         id.startsWith("catalog:") -> classics().firstOrNull { "catalog:${it.id}" == id }?.let(::catalogItem)
         id.startsWith("chapter:") -> children(CHAPTERS).firstOrNull { it.mediaId == id }
         else -> null
     }?.let(::withArtwork)
     suspend fun resolve(id: String): LibraryBook = withContext(Dispatchers.IO) {
-        val existing = if (id.startsWith("book:")) store.books().firstOrNull { "book:${it.id}" == id }
+        val existing = if (id.startsWith("book:")) books().firstOrNull { "book:${it.id}" == id }
             else if (id.startsWith("catalog:")) CatalogLibraryService(store).identity(id.removePrefix("catalog:")) else null
         if (existing != null) {
             require(existing.tracks.isNotEmpty()) { "This book has no available tracks." }

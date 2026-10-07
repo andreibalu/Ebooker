@@ -38,7 +38,11 @@ data class LibraryBook(
     val absItemID: String? = null,
     val absChaptersJson: String? = null,
     val coverRevision: Long = 0,
+    val isArchived: Boolean = false,
 ) {
+    val isAudioMissing: Boolean get() = !isDownloaded && !isFreeBook && absItemID == null
+    val isStreamingOnly: Boolean get() = !isDownloaded && (isFreeBook || absItemID != null) && !isArchived
+    val isInActiveLibrary: Boolean get() = !isArchived && !isAudioMissing
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
     val globalPositionMs: Long get() = tracks.take(currentTrackIndex).sumOf { it.durationMs } + currentPositionMs
     val progress: Float get() = if (durationMs > 0) (globalPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f

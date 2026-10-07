@@ -77,6 +77,7 @@ class ShelvesSession private constructor(private val context: android.app.Applic
         catalog.seed(listOf(book.copy(tracks = tracks)))
         return tracks
     }
+    fun libraryChanged() { mutable.update { it.copy(libraryRevision = it.libraryRevision + 1) } }
     fun identity(id: String) = library.identity(id)
     suspend fun add(book: CatalogBook) = withContext(Dispatchers.IO) {
         val prior = library.identity(book.id)

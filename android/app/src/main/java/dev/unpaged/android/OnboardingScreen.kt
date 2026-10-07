@@ -137,7 +137,7 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                             5 -> {
                                 OnboardingHeading("Your library", "Your books.\nYour phone.", "Imported audio and listening activity stay in Unpaged's private storage on this device.")
                                 Text("Import copies your files; your originals stay where they are. Download Shelves books for offline listening.", fontSize = 17.sp)
-                                Text("Cloud sync is not available. Uninstalling Unpaged removes its local library and activity.", fontSize = 17.sp)
+                                Text("Android can back up your library metadata when Backup by Google is on. Audio files stay on this phone and need re-importing after restore.", fontSize = 17.sp)
                             }
                             6 -> {
                                 Spacer(Modifier.height(28.dp))

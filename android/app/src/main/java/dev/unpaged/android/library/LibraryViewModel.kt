@@ -23,6 +23,8 @@ data class LibraryUiState(
     val books: List<LibraryBook> = emptyList(),
     val moments: Map<String, List<LibraryMoment>> = emptyMap(),
     val pending: PendingImport? = null,
+    val restoreMatch: LibraryBook? = null,
+    val locateTarget: LibraryBook? = null,
     val busy: Boolean = false,
     val preparing: Boolean = false,
     val completed: Int = 0,
@@ -61,7 +63,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { job?.join(); refreshBooks() }
     }
 
-    fun prepare(uris: List<Uri>) {
+    fun prepare(uris: List<Uri>, locateTarget: LibraryBook? = null) {
         if (uris.isEmpty() || job?.isActive == true || state.value.pending != null) return
         mutableState.update { it.copy(busy = true, preparing = true, completed = 0, total = uris.size, error = null, errorTitle = "Something Went Wrong") }
         job = viewModelScope.launch {
@@ -74,10 +76,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     val resolver = getApplication<Application>().contentResolver
                     prepared = repository.prepare(uris.map { AndroidImportDocument(resolver, it) },
                         checkCancelled = { operationContext.ensureActive() },
-                        progress = { done, total -> mutableState.update { it.copy(completed = done, total = total) } })
+                        progress = { done, total -> mutableState.update { it.copy(completed = done, total = total) } }, allowDuplicate = locateTarget != null)
                 }
                 operationContext.ensureActive()
-                mutableState.update { it.copy(pending = prepared) }
+                val match = withContext(Dispatchers.IO) { prepared?.let(repository::findRestoreMatch) }
+                mutableState.update { it.copy(pending = prepared, restoreMatch = locateTarget ?: match, locateTarget = locateTarget) }
                 prepared = null // ownership transferred to UI state
             } catch (_: CancellationException) {
                 // A user cancellation is not an error.
@@ -91,13 +94,25 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun cancelPreparation() { if (state.value.preparing) job?.cancel() }
 
+    fun addAsNew() { mutableState.update { it.copy(restoreMatch = null, locateTarget = null) } }
+    fun restore() {
+        val pending = state.value.pending ?: return
+        val orphan = state.value.restoreMatch ?: return
+        operation {
+            withContext(Dispatchers.IO + NonCancellable) { repository.adopt(pending, orphan) }
+            mutableState.update { it.copy(pending = null, restoreMatch = null, locateTarget = null) }
+            refreshBooks()
+        }
+    }
+    fun restoreFree(book: LibraryBook) { operation { withContext(Dispatchers.IO) { repository.restoreFree(book) }; dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).libraryChanged(); refreshBooks() } }
+
     fun save(title: String, author: String) {
         val pending = state.value.pending ?: return
         if (job?.isActive == true) return
         operation("Could Not Import") {
             // Save is a short atomic commit: completing it must not be interrupted by UI teardown.
             withContext(Dispatchers.IO + NonCancellable) { repository.save(pending, title, author) }
-            mutableState.update { it.copy(pending = null) }
+            mutableState.update { it.copy(pending = null, restoreMatch = null, locateTarget = null) }
             refreshBooks()
         }
     }
@@ -107,7 +122,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (job?.isActive == true) return
         operation {
             withContext(Dispatchers.IO + NonCancellable) { repository.discard(pending) }
-            mutableState.update { it.copy(pending = null) }
+            mutableState.update { it.copy(pending = null, restoreMatch = null, locateTarget = null) }
         }
     }
 
@@ -155,10 +170,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun remove(book: LibraryBook) {
+    fun remove(book: LibraryBook, permanent: Boolean = false, deleteFiles: Boolean = true) {
         if (job?.isActive == true) return
         operation {
-            withContext(Dispatchers.IO + NonCancellable) { repository.remove(book) }
+            withContext(Dispatchers.IO + NonCancellable) { if (!permanent && dev.unpaged.android.UnpagedPreferences(getApplication()).backupEnabled() && book.absItemID == null)
+                repository.removeFromPhone(book) else repository.remove(book, deleteFiles) }
+            dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).libraryChanged()
             refreshBooks()
         }
     }

@@ -156,7 +156,7 @@ internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Schedule, null, Modifier.size(10.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${shortDuration(book.durationMs)} · ${if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB"}", fontSize = 11.sp, lineHeight = 14.sp,
+                    Text("${shortDuration(book.durationMs)} · ${if (book.isAudioMissing) "Audio Missing" else if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB"}", fontSize = 11.sp, lineHeight = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }

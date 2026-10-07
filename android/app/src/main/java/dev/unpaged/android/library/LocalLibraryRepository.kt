@@ -20,7 +20,18 @@ class LocalLibraryRepository(
         val referenced = books.map { it.id }.toSet()
         root.listFiles()?.filter { it.isDirectory && isUUID(it.name) && it.name !in referenced }
             ?.forEach { it.deleteRecursively() }
-        return books
+        for (book in books.filter { it.isDownloaded && it.absItemID == null }) {
+            val folder = ownedFolder(root, book.id)
+            val hasAudio = book.tracks.any { it.storedName.isNotEmpty() && File(folder, it.storedName).isFile }
+            if (!hasAudio) store.setAvailability(book.id, false)
+            else book.tracks.forEachIndexed { index, track ->
+                if (!track.fingerprint.matches(Regex("[a-f0-9]{64}")) && track.storedName.isNotEmpty()) {
+                    val file = File(folder, track.storedName)
+                    if (file.isFile) runCatching { TrackIdentity.fingerprint(file, track.durationMs) }.getOrNull()?.let { store.setFingerprint(book.id, index, it) }
+                }
+            }
+        }
+        return store.books()
     }
 
     fun books(): List<LibraryBook> = store.books()
@@ -31,7 +42,7 @@ class LocalLibraryRepository(
     fun deleteMoment(id: String) = store.deleteMoment(id)
 
     fun prepare(documents: List<ImportDocument>, checkCancelled: () -> Unit = {},
-                progress: (Int, Int) -> Unit = { _, _ -> }): PendingImport {
+                progress: (Int, Int) -> Unit = { _, _ -> }, allowDuplicate: Boolean = false): PendingImport {
         if (documents.isEmpty()) throw ImportProblem(ImportProblem.Reason.EMPTY)
         ensureRoot()
         val id = UUID.randomUUID().toString()
@@ -71,7 +82,7 @@ class LocalLibraryRepository(
                 progress(index + 1, sorted.size)
                 track
             }
-            if (store.books().any { TrackIdentity.matches(tracks, it.tracks) })
+            if (!allowDuplicate && store.books().any { !it.isAudioMissing && TrackIdentity.matches(tracks, it.tracks) })
                 throw ImportProblem(ImportProblem.Reason.DUPLICATE)
             val albums = metadata.mapNotNull { it.album.clean() }.distinct()
             val title = albums.singleOrNull() ?: if (tracks.size == 1) tracks.first().title
@@ -85,7 +96,7 @@ class LocalLibraryRepository(
 
     fun save(pending: PendingImport, title: String, author: String): LibraryBook {
         if (title.isBlank()) throw ImportProblem(ImportProblem.Reason.TITLE)
-        if (store.books().any { TrackIdentity.matches(pending.tracks, it.tracks) })
+        if (store.books().any { !it.isAudioMissing && TrackIdentity.matches(pending.tracks, it.tracks) })
             throw ImportProblem(ImportProblem.Reason.DUPLICATE)
         val source = ownedFolder(staging, pending.id)
         val destination = ownedFolder(root, pending.id)
@@ -103,11 +114,60 @@ class LocalLibraryRepository(
 
     fun discard(pending: PendingImport) { ownedFolder(staging, pending.id).deleteRecursively() }
 
-    fun remove(book: LibraryBook) {
+    fun findRestoreMatch(pending: PendingImport): LibraryBook? {
+        val identities = pending.tracks.map { it.fingerprint }.filter { it.isNotBlank() }.toSet()
+        return store.books().filter { it.isAudioMissing }.map { book ->
+            book to book.tracks.map { it.fingerprint }.filter { it.isNotBlank() }.toSet().intersect(identities).size
+        }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
+    }
+
+    fun adopt(pending: PendingImport, orphan: LibraryBook) {
+        check(store.books().any { it.id == orphan.id && it.isAudioMissing })
+        val source = ownedFolder(staging, pending.id)
+        val destination = ownedFolder(root, orphan.id)
+        // A missing book can have a residual cover. Preserve it until the index commits.
+        val previous = ownedFolder(staging, orphan.id)
+        if (destination.exists() && !destination.renameTo(previous)) throw ImportProblem(ImportProblem.Reason.STORAGE)
+        if (!source.renameTo(destination)) {
+            previous.renameTo(destination)
+            throw ImportProblem(ImportProblem.Reason.STORAGE)
+        }
+        try {
+            store.promoteDownload(orphan.id, pending.tracks, destination.walkTopDown().filter { it.isFile }.sumOf { it.length() })
+        } catch (error: Throwable) {
+            destination.renameTo(source)
+            previous.renameTo(destination)
+            throw error
+        }
+        previous.deleteRecursively()
+    }
+
+    fun removeFromPhone(book: LibraryBook) {
+        store.setAvailability(book.id, false, book.isFreeBook)
+        ownedFolder(root, book.id).deleteRecursively()
+    }
+
+    fun restoreFree(book: LibraryBook) {
+        require(book.isFreeBook && book.tracks.any { it.remoteUrl != null })
+        store.setAvailability(book.id, false, false)
+    }
+
+    fun remove(book: LibraryBook, deleteFiles: Boolean = true) {
         // Commit index removal first. A crash or failed cleanup leaves an unreferenced owned
         // directory, recovered on the next load, never a visible row pointing at deleted audio.
-        store.delete(book.id)
-        ownedFolder(root, book.id).deleteRecursively()
+        val folder = ownedFolder(root, book.id)
+        if (!deleteFiles && folder.exists()) {
+            // The no-backup two-option dialog can retain copies after removing their index.
+            // Keep them outside the UUID recovery sweep so a relaunch does not delete them.
+            val retainedRoot = File(root, ".removed")
+            if (!retainedRoot.isDirectory && !retainedRoot.mkdirs()) throw ImportProblem(ImportProblem.Reason.STORAGE)
+            val retained = ownedFolder(retainedRoot, book.id)
+            if (retained.exists() || !folder.renameTo(retained)) throw ImportProblem(ImportProblem.Reason.STORAGE)
+            try { store.delete(book.id) } catch (error: Throwable) { retained.renameTo(folder); throw error }
+        } else {
+            store.delete(book.id)
+            if (deleteFiles) folder.deleteRecursively()
+        }
     }
 
     private fun ensureRoot() {

@@ -86,6 +86,8 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
         onDispose { lifecycle.removeObserver(observer); player.background() }
     }
     preferenceRevision(preferences)
+    var backupLibrary by rememberSaveable { mutableStateOf(false) }
+    var locateId by rememberSaveable { mutableStateOf<String?>(null) }
     var settings by rememberSaveable { mutableStateOf(false) }
     val tabs = if (preferences.shelvesFirst()) listOf("Favorites", "Shelves", "Library") else listOf("Favorites", "Library", "Shelves")
     val landing = remember { preferences.text("onboardingLanding", "") }
@@ -95,6 +97,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     var absDetail by remember { mutableStateOf(false) }
     var absConnect by rememberSaveable { mutableStateOf(false) }
     val absClient = (LocalContext.current.applicationContext as UnpagedApplication).abs
+    val absSummary by absClient.summary.collectAsStateWithLifecycle()
     var sortMenu by remember { mutableStateOf(false) }
     val tab = tabs[pager.currentPage]
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -104,7 +107,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     val selected = state.books.firstOrNull { it.id == selectedId }?.let { book ->
         if (playback.book?.id == book.id) playback.book?.copy(isFavorite = book.isFavorite, title = book.title, coverRevision = book.coverRevision) else book
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments(), model::prepare)
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris -> model.prepare(uris, state.books.firstOrNull { it.id == locateId }); locateId = null }
     val onImport = { picker.launch(arrayOf("*/*")) }
     val canImport = !state.loading && !state.busy && state.error != LibraryFailure.LOAD
     BackHandler(enabled = selectedId != null && state.pending == null) { selectedId = null }
@@ -117,7 +120,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     }) { insets ->
         Column(Modifier.fillMaxSize().padding(insets)) {
             if (selected == null && !absDetail) {
-                LibraryHeader(state.books.size, canImport, onImport) { settings = true }
+                LibraryHeader(state.books.count { it.isInActiveLibrary }, canImport, onImport) { settings = true }
                 Column(Modifier.padding(horizontal = 20.dp)) {
                     Row(Modifier.fillMaxWidth().padding(top = 12.dp)) {
                         tabs.forEachIndexed { index, label ->
@@ -156,7 +159,7 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
                 selected != null -> BookDetails(selected, state.moments[selected.id].orEmpty(), onPlay = { playBook(selected, null) }, onTrack = { playBook(selected, it) }, onMoment = { player.playMoment(selected, it); fullPlayer = true }, onSaveMoment = model::saveMoment, onDeleteMoment = model::deleteMoment, onCover = { model.saveCover(selected, it) })
                 else -> HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !absDetail) { page ->
                     val pageTab = tabs[page]
-                    val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isFavorite } else state.books, preferences.sort(pageTab))
+                    val books = sortedBooks(if (pageTab == "Favorites") state.books.filter { it.isInActiveLibrary && it.isFavorite } else state.books.filter { it.isInActiveLibrary }, preferences.sort(pageTab))
                     when {
                         pageTab == "Shelves" -> dev.unpaged.android.abs.SourceShelves(preferences, onDetailChanged = { absDetail = it }, onPlay = { playBook(it, null) }, onLibraryChanged = model::refreshCatalogBooks, onViewLibrary = { id -> selectedId = id; scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } })
                         pageTab == "Favorites" && books.isEmpty() && sessions.isEmpty() -> EmptyFavorites()
@@ -183,8 +186,16 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
         title = { Text("Playback unavailable") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = player::dismissError) { Text("OK") } }) }
     if (absConnect) dev.unpaged.android.abs.ABSConnect(absClient, { absConnect = false }) { preferences.setShelvesSource("audiobookshelf"); absConnect = false }
-    if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } }) { settings = false }
-    state.pending?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
+    if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } }, onOpenBackup = { backupLibrary = true }) { settings = false }
+    if (backupLibrary) dev.unpaged.android.backup.BackedUpLibrary(state.books, state.moments, preferences.backupEnabled(),
+        onLocate = { locateId = it.id; picker.launch(arrayOf("*/*")) }, onStream = model::restoreFree,
+        onDelete = { player.removed(it.id); model.remove(it, permanent = true) }, absConnected = absSummary != null) { backupLibrary = false }
+    state.restoreMatch?.let { book ->
+        dev.unpaged.android.backup.RestoreMatchSheet(book, state.moments[book.id].orEmpty().size, state.busy,
+            state.locateTarget != null && state.pending?.let { !TrackIdentity.matches(it.tracks, book.tracks) } == true,
+            model::restore, if (state.locateTarget != null) model::discard else model::addAsNew, model::discard)
+    }
+    state.pending?.takeIf { state.restoreMatch == null }?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
     state.books.firstOrNull { it.id == renameId }?.let { book ->
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { renameId = null }, title = { Text("Rename Audiobook") },
             text = { OutlinedTextField(renameTitle, { renameTitle = it }, label = { Text("Book title") },
@@ -196,11 +207,15 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     }
     state.books.firstOrNull { it.id == removeId }?.let { book ->
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (!state.busy) removeId = null },
-            title = { Text("Remove Audiobook?") }, text = { Text(if (book.absItemID != null) "This removes the book from Unpaged only. The book stays on your Audiobookshelf server." else "Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
+            title = { Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library?" else if (book.isFreeBook) "Remove Download?" else if (preferences.backupEnabled()) "Remove from This Phone?" else "Remove Audiobook?") }, text = { Text(if (book.absItemID != null) "This removes the book from Unpaged only. The book stays on your Audiobookshelf server." else if (preferences.backupEnabled()) "Removes the audio from this phone. Your progress, moments, favorites and EQ stay in Backed-up Library for restore." else "Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
             confirmButton = { TextButton(enabled = !state.busy, onClick = {
                 player.removed(book.id); model.remove(book); removeId = null; selectedId = null
-            }) { Text(if (book.absItemID != null) "Remove from App" else "Also Delete Files") } },
-            dismissButton = { TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } })
+            }) { Text(if (book.absItemID != null) "Remove from App" else if (preferences.backupEnabled()) "Remove from This Phone" else "Also Delete Files") } },
+            dismissButton = { Column {
+                if (!preferences.backupEnabled() && !book.isFreeBook && book.absItemID == null) TextButton(enabled = !state.busy, onClick = {
+                    player.removed(book.id); model.remove(book, deleteFiles = false); removeId = null; selectedId = null
+                }) { Text("Remove from App") }
+                TextButton(enabled = !state.busy, onClick = { removeId = null }) { Text(stringResource(R.string.cancel)) } } })
     }
     state.error?.let { error ->
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (error != LibraryFailure.LOAD) model.dismissError() },
@@ -270,7 +285,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                             Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Icon(Icons.Default.Storage, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(if (book.isAudioMissing) "Audio Missing" else if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text("at ${trackDuration(book.currentPositionMs)}", Modifier.testTag("book.position"), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Button(onClick = { onPlay?.invoke() }, enabled = onPlay != null, modifier = Modifier.testTag("book.play"),

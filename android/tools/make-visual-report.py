@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('android_captures', type=Path)
 parser.add_argument('ios_captures', type=Path)
 parser.add_argument('output', type=Path)
+parser.add_argument('--backup-only', action='store_true', help='Review backup light/dark captures against SwiftUI source; no iOS backup captures exist')
 parser.add_argument('--playback-only', action='store_true', help='Require the four playback light captures; include dark captures as source-derived galleries')
 parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
@@ -39,7 +40,10 @@ parity_references = {
     'settings-dark': '25-settings-dark.png',
     'detail-dark': '26-detail-dark.png',
 }
-if (args.ios_captures / 'ios-abs-browse-light.png').is_file():
+if args.backup_only:
+    cases = [f'backup-{screen}-{theme}' for screen in ['settings', 'library', 'match', 'buckets', 'remove', 'remove-off'] for theme in ['light', 'dark']] + ['onboarding-storage-light', 'onboarding-storage-dark']
+    sources = [('android', case, args.android_captures / f'{case}.png') for case in cases]
+elif (args.ios_captures / 'ios-abs-browse-light.png').is_file():
     cases = [f'abs-{screen}-{theme}' for screen in ['source-menu', 'connect', 'browse', 'detail', 'settings'] for theme in ['light', 'dark']]
     sources = [(platform, case, root / (f'ios-{case}.png' if platform == 'ios' else f'{case}.png'))
                for case in cases for platform, root in [('ios', args.ios_captures), ('android', args.android_captures)]]
@@ -80,8 +84,9 @@ duplicate_dark_reference = (
 )
 sections = []
 for case in cases:
-    figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in ['ios', 'android'])
-    note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
+    figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in (['android'] if args.backup_only else ['ios', 'android']))
+    note = '<p>Compared against CloudLibraryView.swift, RestoreMatchSheet.swift and SettingsDesign.swift. No iOS capture exists for this Android backup state. Light and dark captures are separate evidence, not pixel-diff verification.</p>' if args.backup_only else ''
+    note += '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
     if case.startswith('auto-'):
         note += '<p>This captures the phone after a system command, not an Android Auto head unit. Fixture counts and playback state differ from the iOS reference. Compare the player or library structure and use source review for the car command behavior.</p>'
     if case.startswith('abs-source-menu'):

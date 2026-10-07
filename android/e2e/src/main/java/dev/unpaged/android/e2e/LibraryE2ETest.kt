@@ -206,7 +206,7 @@ class LibraryE2ETest {
         visible(By.text("Timestamps are saved on your phone. Automatic naming and AI recaps are not available."))
         captureOnboardingPage("moments")
         field("onboarding.page.5").click()
-        visible(By.text("Cloud sync is not available. Uninstalling Unpaged removes its local library and activity."))
+        visible(By.text("Android can back up your library metadata when Backup by Google is on. Audio files stay on this phone and need re-importing after restore."))
         captureOnboardingPage("storage")
         field("onboarding.page.6").click()
         visible(By.text("Skip forward: 45s"))
@@ -342,6 +342,8 @@ class LibraryE2ETest {
     }
 
     @Test fun removalRequiresConfirmationAndPreservesProviderOriginal() {
+        tapDescription("Settings"); expandSettings()
+        scrollTo("settings.backup.enabled"); field("settings.backup.enabled").click(); tapText("Done")
         saveBook("Removal Fixture", "Fixture Author", "Another.wav")
         text("Removal Fixture").longClick()
         tapText("Delete")
@@ -791,6 +793,147 @@ class LibraryE2ETest {
         assertTrue(visible(By.res("equalizer.enabled")).wait(Until.checked(false), 5_000))
         scrollTo("equalizer.preset.flat", scrollId = "equalizer.scroll", edgeSwipe = true)
         assertTrue(visible(By.res("equalizer.preset.flat")).wait(Until.checked(true), 5_000))
+    }
+
+    private fun openBackupLibrary() {
+        tapDescription("Settings"); expandSettings()
+        scrollTo("settings.legal.Backed-up Library")
+        field("settings.legal.Backed-up Library").click()
+        // A tap right after relaunch can land while the settings list is still settling.
+        if (!device.wait(Until.hasObject(By.res("backup.library")), 5_000)) field("settings.legal.Backed-up Library").click()
+        field("backup.library")
+    }
+
+    private fun closeBackupLibrary() {
+        field("backup.library.done").click(); tapText("Done")
+        visible(By.text("My Library"))
+    }
+
+    private fun backupLocally(): String {
+        device.executeShellCommand("bmgr enable true")
+        val transports = device.executeShellCommand("bmgr list transports")
+        assertTrue("Local transport is required: $transports", transports.contains("com.android.localtransport/.LocalTransport"))
+        device.executeShellCommand("bmgr transport com.android.localtransport/.LocalTransport")
+        device.executeShellCommand("bmgr wipe com.android.localtransport/.LocalTransport $app")
+        device.pressHome()
+        settleLayout() // Allow background/pause persistence before the OS stops the app for backup.
+        val result = device.executeShellCommand("bmgr backupnow $app")
+        File(captureDirectory(), "backup-transport.txt").apply { appendText(result + "\n") }.also(::persistCapture)
+        assertTrue("Backup failed: $result", result.contains("Success"))
+        val sets = device.executeShellCommand("bmgr list sets")
+        return Regex("(?m)^\\s*([0-9a-fA-F]+)\\s*:").find(sets)?.groupValues?.get(1)
+            ?: throw AssertionError("No local restore set: $sets")
+    }
+
+    private fun restoreLocally(token: String) {
+        assertTrue(device.executeShellCommand("pm clear $app").contains("Success"))
+        val result = device.executeShellCommand("bmgr restore $token $app")
+        File(captureDirectory(), "backup-transport.txt").apply { appendText(result + "\n") }.also(::persistCapture)
+        assertTrue("Restore failed: $result", result.contains("restoreFinished: 0"))
+        launch(); completeOnboarding(); selectLibraryTab()
+    }
+
+    @Test fun realAutoBackupRestoreMissingAudioAndInPlaceReimport() {
+        saveBook("Backup Fixture", "Fixture Author", "E2E Chapter 1.wav")
+        tapDescription("Add favorite")
+        val originalId = visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*"))).resourceName.removePrefix("book.card.")
+        tapText("Backup Fixture"); field("book.play").click(); dismissNotificationPrompt()
+        waitForElapsed { it >= 2 }; field("player.playPause").click()
+        field("player.skipForward").click()
+        field("player.saveMoment").click(); field("moment.name").setText("Backup moment"); field("moment.done").click()
+        visible(By.text("Saved!")); field("player.close").click()
+        val savedPosition = field("book.position").text
+        device.pressBack()
+        val token = backupLocally()
+        restoreLocally(token)
+        visible(By.text("Your Library Is Empty"))
+        openBackupLibrary()
+        field("backup.bucket.MISSING")
+        field("backup.row.$originalId")
+        val restoredSeconds = savedPosition.removePrefix("at ").split(":").map { it.toInt() }.fold(0) { total, part -> total * 60 + part }
+        val restoredPercent = kotlin.math.round(restoredSeconds / 3f).toInt()
+        visible(By.text("1 moment · $restoredPercent%"))
+        screenshot("backup-library-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-library-dark")
+        device.executeShellCommand("cmd uimode night no")
+        closeBackupLibrary()
+        openPicker("E2E Chapter 1.wav")
+        field("backup.restore"); field("backup.match.moments").text.let { assertEquals("1 moment", it) }
+        screenshot("backup-match-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-match-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("backup.restore").click()
+        field("book.card.$originalId")
+        tapText("Backup Fixture"); assertEquals(savedPosition, field("book.position").text)
+        field("book.moments").click(); visible(By.text("Backup moment"))
+        device.pressBack(); field("tab.Favorites").click(); visible(By.text("Backup Fixture"))
+        relaunch(); field("book.card.$originalId")
+        openBackupLibrary(); field("backup.bucket.PHONE"); field("backup.row.$originalId")
+        assertFalse(device.hasObject(By.res("backup.bucket.MISSING")))
+        closeBackupLibrary()
+    }
+
+    @Test fun backupToggleOffWritesNoLibraryAndUsesPermanentRemovalCopy() {
+        saveBook("Excluded Backup", "Fixture Author", "Another.wav")
+        tapDescription("Settings"); expandSettings(); scrollTo("settings.backup.enabled")
+        assertTrue(field("settings.backup.enabled").isChecked)
+        screenshot("backup-settings-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-settings-dark")
+        device.executeShellCommand("cmd uimode night no")
+        scrollTo("settings.legal.System Backup Settings"); field("settings.legal.System Backup Settings").click()
+        visible(By.pkg("com.android.settings")); device.pressBack(); visible(By.text("Settings"))
+        scrollTo("settings.backup.enabled", downward = false)
+        field("settings.backup.enabled").click(); tapText("Done")
+        relaunch(); tapDescription("Settings"); expandSettings(); scrollTo("settings.backup.enabled")
+        assertFalse(field("settings.backup.enabled").isChecked); tapText("Done")
+        text("Excluded Backup").longClick(); tapText("Delete")
+        visible(By.text("Also Delete Files")); visible(By.text("Remove from App"))
+        screenshot("backup-remove-off-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-remove-off-dark")
+        device.executeShellCommand("cmd uimode night no"); tapText("Cancel")
+        val token = backupLocally(); restoreLocally(token)
+        visible(By.text("Your Library Is Empty"))
+        openBackupLibrary(); assertFalse(device.hasObject(By.text("Excluded Backup")))
+        closeBackupLibrary()
+    }
+
+    @Test fun backupRemovalLocateAddNewArchiveStreamAndSwipeDeletion() {
+        saveBook("Removed Local", "Fixture Author", "Another.wav")
+        val originalId = visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*"))).resourceName.removePrefix("book.card.")
+        text("Removed Local").longClick(); tapText("Delete"); visible(By.text("Remove from This Phone"))
+        screenshot("backup-remove-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-remove-dark")
+        device.executeShellCommand("cmd uimode night no")
+        tapText("Remove from This Phone"); visible(By.text("Your Library Is Empty"))
+        openPicker("Another.wav"); field("backup.addNew").click()
+        field("import.title").setText("New Copy"); tapText("Save"); visible(By.text("New Copy"))
+        openBackupLibrary(); field("backup.bucket.PHONE"); field("backup.bucket.MISSING")
+        field("backup.locate.$originalId").click(); selectPickerFiles("Chapter 10.wav")
+        visible(By.text("These files do not match the backup copy")); field("backup.addNew").click()
+        assertTrue(device.wait(Until.gone(By.res("backup.restore")), 5000))
+        field("backup.row.$originalId")
+        closeBackupLibrary()
+        selectTab("Shelves"); field("shelves.search").setText("Pride and Prejudice"); dismissKeyboard(); field("shelves.book.253").click(); field("shelves.add").click()
+        visible(By.text("Added to Your Library")); device.pressBack(); selectLibraryTab()
+        text("Pride and Prejudice").longClick(); tapText("Delete"); tapText("Remove from This Phone")
+        selectTab("Shelves"); field("shelves.search").setText("Adventures of Sherlock Holmes"); dismissKeyboard()
+        field("shelves.book.314").click(); field("shelves.add").click(); visible(By.text("Added to Your Library"))
+        device.pressBack(); selectLibraryTab()
+        openBackupLibrary(); field("backup.bucket.PHONE"); field("backup.bucket.STREAMING"); field("backup.bucket.MISSING"); field("backup.bucket.REMOVED")
+        val stream = visible(By.res(java.util.regex.Pattern.compile("backup\\.stream\\..*"))).resourceName
+        screenshot("backup-buckets-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-buckets-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field(stream).click(); field("backup.bucket.STREAMING"); visible(By.text("Pride and Prejudice")) // Night mode recreates the screen, so look the row up again.
+        closeBackupLibrary(); relaunch(); visible(By.text("Pride and Prejudice"))
+        openBackupLibrary()
+        val bounds = field("backup.row.$originalId").visibleBounds
+        device.swipe(bounds.right - 10, bounds.centerY(), bounds.left + 10, bounds.centerY(), 25)
+        field("backup.delete").click()
+        assertTrue(device.wait(Until.gone(By.res("backup.row.$originalId")), 5000))
+        closeBackupLibrary(); relaunch(); openBackupLibrary()
+        assertFalse(device.hasObject(By.res("backup.row.$originalId")))
+        closeBackupLibrary()
     }
 
     private fun dismissNotificationPrompt() {

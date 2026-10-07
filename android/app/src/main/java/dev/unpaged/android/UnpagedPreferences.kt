@@ -13,6 +13,11 @@ enum class LibrarySort(val key: String, val label: String) {
 /** One owner for iOS-compatible preference keys. Writes are observed by every app surface. */
 class UnpagedPreferences(context: Context) {
     private val storage = context.getSharedPreferences("unpaged", Context.MODE_PRIVATE)
+    fun backupEnabled() = storage.getBoolean("libraryBackupEnabled", true)
+    fun setBackupEnabled(value: Boolean) {
+        // Synchronous so a backup immediately after leaving Settings sees the new policy.
+        storage.edit(commit = true) { putBoolean("libraryBackupEnabled", value) }
+    }
     fun text(key: String, default: String) = storage.getString(key, default) ?: default
     fun seconds(key: String, default: Int) = storage.getInt(key, default)
     fun shelvesSource(connected: Boolean) = text("shelvesSource", "librivox").takeIf { it == "librivox" || it == "audiobookshelf" && connected } ?: "librivox"

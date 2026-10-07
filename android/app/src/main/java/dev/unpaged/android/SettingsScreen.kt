@@ -44,12 +44,13 @@ private val listeningPreferences = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)? = null, onDone: () -> Unit) {
+fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)? = null, onOpenBackup: (() -> Unit)? = null, onDone: () -> Unit) {
     preferenceRevision(preferences)
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var resetConfirmation by rememberSaveable { mutableStateOf(false) }
     var absSettings by rememberSaveable { mutableStateOf(false) }
     val absClient = (androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).abs
+    val context = androidx.compose.ui.platform.LocalContext.current
     val uri = LocalUriHandler.current
     ModalBottomSheet(onDismissRequest = onDone, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
         containerColor = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onSurface,
@@ -135,6 +136,22 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                             }
                         }
                     }
+                }
+                Column {
+                    SectionHeader("BACKUP", "Backup and restore.")
+                    Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
+                        Column {
+                            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Back Up Library", Modifier.weight(1f), fontSize = 15.sp)
+                                Switch(preferences.backupEnabled(), onCheckedChange = { preferences.setBackupEnabled(it); android.app.backup.BackupManager(context).dataChanged() }, modifier = Modifier.testTag("settings.backup.enabled"))
+                            }
+                            Hairline()
+                            LegalRow("Backed-up Library") { onOpenBackup?.invoke() }
+                            Hairline()
+                            LegalRow("System Backup Settings") { dev.unpaged.android.backup.openSystemBackupSettings(context) }
+                        }
+                    }
+                    Text("Android backs up your library metadata when Backup by Google is on in system settings. Audio files are not backed up. Restore happens when you install Unpaged on a new or reset phone. No live multi-device or cross-platform sync.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // iOS Support contains only the excluded coffee purchase. Keep its non-payment legal rows.
                 Column {

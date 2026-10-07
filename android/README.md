@@ -1,6 +1,6 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`, built in six merged slices, the Android Auto slice and the media/parity slice:
+Native Kotlin/Compose application under `android/app/`, built in six merged slices plus the Android Auto, media/parity and backup slices:
 
 - [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
   import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
@@ -26,9 +26,12 @@ Native Kotlin/Compose application under `android/app/`, built in six merged slic
 - [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
   WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
   parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md).
+- [Slice 8](../docs/android/slice-8-library-backup-restore.md): Android's Auto Backup
+  of library metadata, missing-audio detection, in-place re-import, archived free
+  books and Backed-up Library.
 
-SQLite is at schema v4 via additive, tested migrations. AI,
-payments and cloud sync are absent. Self-hosted ABS permits HTTP
+SQLite is at schema v5 via additive, tested migrations. AI,
+payments and live cloud sync are absent. Self-hosted ABS permits HTTP
 through the network security configuration, with a public-host warning before
 credentials are sent. Credentials use Android Keystore AES/GCM encryption in
 app-private storage excluded from backups. The
@@ -114,8 +117,10 @@ Playback declares INTERNET and foreground media-playback permissions; ACCESS_NET
 supports LibriVox offline detection. API33+ notification permission is optional and
 denial never blocks playback. Local imports use the system document
 picker and copy audio into private storage; source files are never deleted.
-The private SQLite index and owned audio are excluded from backup; uninstalling
-Unpaged removes these copies. Import progress survives rotation, but process
+The library SQLite index and user preferences are included in Android Auto Backup
+when Back Up Library and Backup by Google are on. Owned audio, covers, catalog
+cache, staging and credentials are excluded. Uninstalling removes owned audio;
+restored metadata needs the original files or streaming source. Import progress survives rotation, but process
 death abandons an uncommitted import and startup removes its staging files. No public iOS documentation or App
 Store metadata changes belong in this foundation.
 

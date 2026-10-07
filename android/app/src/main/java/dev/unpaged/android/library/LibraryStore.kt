@@ -10,6 +10,8 @@ import androidx.core.database.sqlite.transaction
 interface LibraryStore {
     fun readingSessions(): List<dev.unpaged.android.activity.ReadingSession> = emptyList()
     fun saveReadingSession(session: dev.unpaged.android.activity.ReadingSession) { error("Activity unsupported") }
+    fun setAvailability(id: String, downloaded: Boolean, archived: Boolean = false) { error("Availability unsupported") }
+    fun setFingerprint(id: String, position: Int, fingerprint: String) { error("Fingerprint unsupported") }
     fun books(): List<LibraryBook>
     fun insert(book: LibraryBook)
     fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) { error("Download promotion unsupported") }
@@ -25,8 +27,9 @@ interface LibraryStore {
     fun deleteMoment(id: String)
 }
 
-/** Additive schema: v2 library parity, v3 moment pins + historical reading sessions, v4 ABS identity + chapters. Never rebuild user tables. */
-class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, 4), LibraryStore {
+/** Additive schema: v2 library parity, v3 moment pins + historical reading sessions, v4 ABS identity + chapters, v5 archives. Never rebuild user tables. */
+class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.db", null, DATABASE_VERSION), LibraryStore {
+    companion object { const val DATABASE_VERSION = 5 }
     private val audioRoot = java.io.File(context.filesDir, "audiobooks")
 
     override fun onConfigure(db: SQLiteDatabase) { db.setForeignKeyConstraintsEnabled(true) }
@@ -40,12 +43,33 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
         migrateToV2(db)
         migrateToV3(db)
         migrateToV4(db)
+        migrateToV5(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2 && newVersion >= 2) migrateToV2(db)
         if (oldVersion < 3 && newVersion >= 3) migrateToV3(db)
         if (oldVersion < 4 && newVersion >= 4) migrateToV4(db)
+        if (oldVersion < 5 && newVersion >= 5) migrateToV5(db)
+    }
+
+    private fun migrateToV5(db: SQLiteDatabase) {
+        // Fingerprints already exist since v1. Retain them; backfill empty identities at launch.
+        val columns = db.rawQuery("PRAGMA table_info(books)", null).use { rows ->
+            buildSet { while (rows.moveToNext()) add(rows.getString(rows.getColumnIndexOrThrow("name"))) }
+        }
+        if ("is_archived" !in columns) db.execSQL("ALTER TABLE books ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0")
+    }
+
+    override fun setAvailability(id: String, downloaded: Boolean, archived: Boolean) {
+        writableDatabase.update("books", ContentValues().apply {
+            put("is_downloaded", downloaded); put("is_archived", archived)
+            if (!downloaded) put("storage_bytes", 0)
+        }, "id = ?", arrayOf(id))
+    }
+    override fun setFingerprint(id: String, position: Int, fingerprint: String) {
+        writableDatabase.update("tracks", ContentValues().apply { put("fingerprint", fingerprint) },
+            "book_id = ? AND position = ?", arrayOf(id, position.toString()))
     }
 
     private fun migrateToV4(db: SQLiteDatabase) {
@@ -126,7 +150,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                     r.bool("is_favorite"), r.optionalLong("last_played_at"), r.long("current_track_index").toInt(),
                     r.long("current_position_ms"), r.long("high_water_mark_ms"), r.getDouble(r.getColumnIndexOrThrow("playback_speed")),
                     r.bool("is_finished"), r.bool("is_free_book"), r.optional("catalog_id"), r.bool("is_downloaded"),
-                    r.long("storage_bytes"), r.optional("equalizer_json"), r.long("date_added"), r.optional("abs_item_id"), r.optional("abs_chapters_json"), java.io.File(audioRoot, "$id/cover.png").lastModified())
+                    r.long("storage_bytes"), r.optional("equalizer_json"), r.long("date_added"), r.optional("abs_item_id"), r.optional("abs_chapters_json"), java.io.File(audioRoot, "$id/cover.png").lastModified(), r.bool("is_archived"))
             }
         }
         return result
@@ -147,7 +171,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                 put("is_finished", book.isFinished); put("is_free_book", book.isFreeBook); put("catalog_id", book.catalogId)
                 put("is_downloaded", book.isDownloaded); put("storage_bytes", book.storageBytes)
                 put("equalizer_json", book.equalizerJson); put("date_added", book.dateAdded)
-                put("abs_item_id", book.absItemID); put("abs_chapters_json", book.absChaptersJson)
+                put("is_archived", book.isArchived); put("abs_item_id", book.absItemID); put("abs_chapters_json", book.absChaptersJson)
             })
             book.tracks.forEachIndexed { index, track ->
                 db.insertOrThrow("tracks", null, ContentValues().apply {
@@ -162,7 +186,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
 
     override fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) {
         writableDatabase.transaction {
-            check(update("books", ContentValues().apply { put("is_downloaded", true); put("storage_bytes", bytes) },
+            check(update("books", ContentValues().apply { put("is_downloaded", true); put("is_archived", false); put("storage_bytes", bytes) },
                 "id = ?", arrayOf(id)) == 1) { "Book was removed during download" }
             delete("tracks", "book_id = ?", arrayOf(id))
             tracks.forEachIndexed { index, track ->
