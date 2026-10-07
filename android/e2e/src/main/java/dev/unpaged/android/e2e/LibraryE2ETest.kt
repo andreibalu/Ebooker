@@ -915,7 +915,7 @@ class LibraryE2ETest {
         closeBackupLibrary()
         selectTab("Shelves"); field("shelves.search").setText("Pride and Prejudice"); dismissKeyboard(); field("shelves.book.253").click(); field("shelves.add").click()
         visible(By.text("Added to Your Library")); device.pressBack(); selectLibraryTab()
-        text("Pride and Prejudice").longClick(); tapText("Delete"); tapText("Remove from This Phone")
+        text("Pride and Prejudice").longClick(); tapText("Remove from Library"); tapText("Remove from Library")
         selectTab("Shelves"); field("shelves.search").setText("Adventures of Sherlock Holmes"); dismissKeyboard()
         field("shelves.book.314").click(); field("shelves.add").click(); visible(By.text("Added to Your Library"))
         device.pressBack(); selectLibraryTab()

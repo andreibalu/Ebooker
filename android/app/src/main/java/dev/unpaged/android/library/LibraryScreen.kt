@@ -207,10 +207,11 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
     }
     state.books.firstOrNull { it.id == removeId }?.let { book ->
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { if (!state.busy) removeId = null },
-            title = { Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library?" else if (book.isFreeBook) "Remove Download?" else if (preferences.backupEnabled()) "Remove from This Phone?" else "Remove Audiobook?") }, text = { Text(if (book.absItemID != null) "This removes the book from Unpaged only. The book stays on your Audiobookshelf server." else if (preferences.backupEnabled()) "Removes the audio from this phone. Your progress, moments, favorites and EQ stay in Backed-up Library for restore." else "Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.") },
+            title = { Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library?" else if (book.isFreeBook) "Remove Download?" else if (preferences.backupEnabled()) "Remove from This Phone?" else "Remove Audiobook?") },
+            text = { Text(removalMessage(book, preferences.backupEnabled())) },
             confirmButton = { TextButton(enabled = !state.busy, onClick = {
                 player.removed(book.id); model.remove(book); removeId = null; selectedId = null
-            }) { Text(if (book.absItemID != null) "Remove from App" else if (preferences.backupEnabled()) "Remove from This Phone" else "Also Delete Files") } },
+            }) { Text(if (book.absItemID != null || book.isStreamingOnly) "Remove from Library" else if (book.isFreeBook) "Remove Download" else if (preferences.backupEnabled()) "Remove from This Phone" else "Also Delete Files") } },
             dismissButton = { Column {
                 if (!preferences.backupEnabled() && !book.isFreeBook && book.absItemID == null) TextButton(enabled = !state.busy, onClick = {
                     player.removed(book.id); model.remove(book, deleteFiles = false); removeId = null; selectedId = null
@@ -438,4 +439,15 @@ private fun ReviewValue(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label); Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** Mirrors the iOS delete alert copy; Backed-up Library stands in for the iCloud Library. */
+private fun removalMessage(book: LibraryBook, backup: Boolean) = when {
+    book.absItemID != null -> "Removes this book from Unpaged. It stays on your Audiobookshelf server, and you can add it again from Shelves."
+    book.isStreamingOnly -> if (backup) "Removes this book from your library on this phone. Your progress and moments stay in Backed-up Library, and you can stream it again anytime."
+        else "This will remove the book from your library. You can add it again from Shelves."
+    book.isFreeBook -> if (backup) "Removes the download from this phone. Your progress and moments stay in Backed-up Library, and you can stream or download it again anytime."
+        else "This will remove the downloaded audiobook. You can download it again from Shelves."
+    backup -> "Removes the audio from this phone. The book stays in Backed-up Library, and you can restore it anytime."
+    else -> "Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage."
 }
