@@ -8,10 +8,14 @@ adb="$ANDROID_HOME/platform-tools/adb"
 case "$ANDROID_SERIAL" in emulator-*) ;; *) echo 'Use a dedicated emulator, not a physical/user device.' >&2; exit 1;; esac
 name="$("$adb" -s "$ANDROID_SERIAL" emu avd name | tr -d '\r' | head -1)"
 case "$name" in Unpaged_E2E_*) ;; *) echo "Refusing unrelated AVD: $name" >&2; exit 1;; esac
-devices="$("$adb" devices | awk 'NR>1 && NF>0 { print $1 }')"
-[[ "$devices" == "$ANDROID_SERIAL" ]] || {
-  echo 'Refusing a connected-test run with additional Android devices attached.' >&2; exit 1;
-}
+# Other attached devices are allowed only when they are dedicated Unpaged_E2E emulators,
+# so parallel worktrees can each drive their own instance. Gradle targets ANDROID_SERIAL.
+for other in $("$adb" devices | awk 'NR>1 && $2=="device" { print $1 }'); do
+  [[ "$other" == "$ANDROID_SERIAL" ]] && continue
+  case "$other" in emulator-*) ;; *) echo "Refusing a run with non-emulator device $other attached." >&2; exit 1;; esac
+  other_name="$("$adb" -s "$other" emu avd name | tr -d '\r' | head -1)"
+  case "$other_name" in Unpaged_E2E_*) ;; *) echo "Refusing a run with unrelated AVD $other_name attached." >&2; exit 1;; esac
+done
 boot="$("$adb" -s "$ANDROID_SERIAL" shell getprop sys.boot_completed | tr -d '\r')"
 [[ "$boot" == 1 ]] || { echo 'Wait for the emulator to finish booting.' >&2; exit 1; }
 evidence="${E2E_EVIDENCE_DIR:-$(mktemp -d /private/tmp/unpaged-android-e2e.XXXXXX)}"
@@ -35,14 +39,19 @@ collect() {
   exit "$result"
 }
 trap collect EXIT
-python3 tools/fake-abs-server.py --fixtures "$evidence/fixtures" --evidence "$evidence" > "$evidence/abs-server.log" 2>&1 &
+# Each run gets its own host port; the device always reaches it as 127.0.0.1:13378.
+abs_port="${E2E_ABS_PORT:-$((13400 + ${ANDROID_SERIAL#emulator-} % 1000))}"
+"$adb" -s "$ANDROID_SERIAL" reverse tcp:13378 "tcp:$abs_port" > /dev/null
+python3 tools/fake-abs-server.py --port "$abs_port" --fixtures "$evidence/fixtures" --evidence "$evidence" > "$evidence/abs-server.log" 2>&1 &
 abs_server_pid=$!
-python3 - <<'READY'
+python3 - "$abs_port" <<'READY'
+import sys
 import time
+port = sys.argv[1]
 import urllib.request
 for attempt in range(50):
     try:
-        urllib.request.urlopen('http://127.0.0.1:13378/_test/health', timeout=1).close()
+        urllib.request.urlopen(f'http://127.0.0.1:{port}/_test/health', timeout=1).close()
         break
     except OSError:
         time.sleep(.1)

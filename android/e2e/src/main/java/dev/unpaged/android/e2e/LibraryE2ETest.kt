@@ -1009,7 +1009,7 @@ class LibraryE2ETest {
     }
 
     private fun absRequest(path: String, method: String = "GET"): org.json.JSONObject {
-        val connection = java.net.URL("http://10.0.2.2:13378/$path").openConnection() as java.net.HttpURLConnection
+        val connection = java.net.URL("http://127.0.0.1:13378/$path").openConnection() as java.net.HttpURLConnection
         connection.connectTimeout = 5000; connection.readTimeout = 5000; connection.requestMethod = method
         return try { org.json.JSONObject(connection.inputStream.bufferedReader().use { it.readText() }) } finally { connection.disconnect() }
     }
@@ -1027,7 +1027,7 @@ class LibraryE2ETest {
     }
 
     private fun fillABSLogin(password: String) {
-        field("abs.connect.server").setText("http://10.0.2.2:13378")
+        field("abs.connect.server").setText("http://127.0.0.1:13378")
         field("abs.connect.username").setText("reader")
         field("abs.connect.password").setText(password)
         dismissKeyboard() // Only dismiss an actual input-method window.
