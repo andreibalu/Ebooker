@@ -1,6 +1,5 @@
 package dev.unpaged.android.playback
 
-import android.os.Bundle
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.SessionError
 import androidx.media3.session.SessionResult
@@ -24,7 +23,6 @@ internal class CarCommands(private val preferences: UnpagedPreferences,
             }
             CarSessionCallback.MARK_PROGRESS -> mark()
             CarSessionCallback.CYCLE_SPEED -> setSpeed(PlaybackRules.speeds[(PlaybackRules.speeds.indexOf(speed()) + 1) % PlaybackRules.speeds.size])
-            CarSessionCallback.CHAPTERS -> return SessionResult(SessionResult.RESULT_SUCCESS, Bundle().apply { putString("parentId", CarLibrary.CHAPTERS) })
             else -> return SessionResult(SessionError.ERROR_NOT_SUPPORTED)
         }
         return SessionResult(SessionResult.RESULT_SUCCESS)

@@ -116,8 +116,8 @@ class LibraryE2ETest {
             assertEquals(0, command("MARK_PROGRESS").resultCode)
             assertEquals(0, command("CYCLE_SPEED").resultCode)
             visible(By.text("1.25x"))
-            val chapterResult = command("CHAPTERS")
-            assertEquals("chapters", chapterResult.extras.getString("parentId"))
+            assertEquals(listOf("Favorites", "Library", "Shelves", "chapters"),
+                mediaResult(onMediaMain { browser.getChildren("root", 0, 10, null) }).value!!.map { it.mediaId })
             val chapters = mediaResult(onMediaMain { browser.getChildren("chapters", 0, 30, null) }).value!!
             assertEquals(2, chapters.size)
             screenshot("auto-player-light")

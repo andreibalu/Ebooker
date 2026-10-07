@@ -60,6 +60,7 @@ class PlaybackService : MediaLibraryService() {
         session = MediaLibrarySession.Builder(this, sessionPlayer, callback).setSessionActivity(activity)
             .setCustomLayout(CarSessionCallback.buttons()).setMediaButtonPreferences(CarSessionCallback.buttons()).build()
         controller.attach(engine)
+        callback.watchChapters(requireNotNull(session))
     }
     internal fun allowed(info: MediaSession.ControllerInfo): Boolean =
         BrowserCallerPolicy.allowed(info.packageName, packageName, info.isTrusted, debugBrowserAllowed(info.packageName))

@@ -36,14 +36,16 @@ metadata retains the existing PNG and adds its content URI. This follows
 which require local URIs for Automotive and warn against many inline bitmaps in
 browser results. Artwork cache files live in the app's cache directory.
 
-Now playing exposes Playback Rate, Save Moment, Mark Progress and Chapters as
-Media3 custom commands with Material icons. Rate cycling uses the existing
+Now playing exposes Playback Rate, Save Moment and Mark Progress as Media3
+custom commands with Material icons. Rate cycling uses the existing
 supported rates. Save delegates to the phone's manual draft, including the
 configured offset, then labels it `CarPlay N`, matching iOS's global sequence
 and wrap after 999. Mark delegates to the phone's explicit progress marker.
-Chapters returns the `chapters` browse parent; compatible MediaBrowser clients
-can fetch its numbered chapter IDs and play a row. Whether a real head unit
-presents that navigation from a custom command remains unverified.
+CarPlay's Chapters button pushes a list. Car hosts cannot open a list from a
+custom command, so chapters are a fourth browse tab, `Chapters`, that appears
+while a book is loaded. Android Auto allows four root tabs. The service
+notifies browsers when the book or its chapters change. Selecting a row plays
+that chapter.
 
 Search uses case/diacritic-insensitive title or author containment. Matching
 library rows precede cached curated classics; duplicate titles are omitted and
@@ -77,19 +79,26 @@ are:
 ANDROID_SERIAL=emulator-5582 ./tools/run-e2e.sh
 ```
 
-The unfiltered E2E command and the focused three-journey command both failed
-before installation because emulator-5582 was unavailable. The driver compiles
-29 journeys, including three new journeys; zero were executed in this slice.
-There are no new captures. The requested full-suite and visual gates remain open.
+The initial unfiltered and three-journey E2E attempts could not install because
+emulator-5582 was unavailable. After its restoration, the review fix passed the
+focused `carBrowserTreePlaybackCommandsOfflineErrorAndMomentPersistence` journey
+on `Unpaged_E2E_API35_B`, serial `emulator-5582`, on 2026-10-07. It verifies that
+loading a book exposes the Chapters root tab and that selecting its second row
+plays the second chapter. It also covers generated artwork, all three remaining
+custom commands, offline refusal and moment persistence through relaunch.
 
-Evidence is in `/private/tmp/unpaged-auto-validation/` for build logs, host XML,
-lint XML and APK isolation checks. `/private/tmp/unpaged-auto-e2e-final/run.log`
-records the unfiltered runner failure; it contains no screenshots or device-test
-results. Byte inspection found the E2E package exception and existing fixture
-activity names, intent markers and catalog asset in debug and absent from release.
-The compiled release manifest has the library/browser declarations, Auto metadata,
-shortcut metadata and voice intent, with no microphone permission. `git diff --check`
-and the report generator's Python syntax check passed.
+The review-fix runner passed debug assembly, zero-issue lint and all 113 host
+tests. The host-test and build tasks reused their unchanged cached outputs.
+Evidence is in `/private/tmp/unpaged-auto-review-fix-20261007/`, including the
+runner log, instrumentation XML, host XML, lint XML, logcat and four player/moment
+light/dark captures. The full 29-journey suite remains a separate gate.
+
+Initial release evidence remains in `/private/tmp/unpaged-auto-validation/`.
+Byte inspection found the E2E package exception and fixture activity names,
+intent markers and catalog asset in debug and absent from release. The compiled
+release manifest has library/browser declarations, Auto metadata, shortcut
+metadata and voice intent, with no microphone permission. This release check
+predates the Chapters review fix. `git diff --check` passes for the fix.
 
 Twelve new host tests cover root order, sort, subtitles, bounded pagination, caller
 policy, generated artwork access, local classics, voice ordering and empty
@@ -99,20 +108,12 @@ moments, progress persistence, rate wrap and sequence wrap/reopen.
 Three new UI Automator journeys are compiled for:
 
 - MediaBrowser root, Favorites/Library/Shelves, generated PNG retrieval, playback,
-  all four custom commands, chapter selection, offline error, saved moment visible
+  all three custom commands, the Chapters tab, chapter selection, offline error, saved moment visible
   on the phone and retained through force-stop/relaunch.
 - Static shortcut intent, most-recent selection over a newer unplayed import,
   one-shot consumption through rotation and ordinary relaunch.
 - Voice intent, browser search precedence over a duplicate catalog title,
   MediaSession search-query selection and empty-query resume.
-
-The focused run could not start because the assigned emulator-5582 was not
-attached. `adb -s emulator-5582 emu avd name` failed with `could not connect to TCP
-port 5582: Connection refused`. Read-only device inventory showed only
-emulator-5580, assigned elsewhere. No emulator was booted, killed, wiped or
-substituted. Restoration/reassignment was requested from the orchestrator.
-No E2E pass, screenshot capture or visual parity pass is claimed until that
-runtime gate is resolved.
 
 Capture names are `auto-player-light/dark`, `auto-moments-light/dark`,
 `auto-shortcut-light/dark` and `auto-voice-light/dark`. The report generator maps
@@ -131,12 +132,11 @@ cached metadata, host tests or fake-server tests. Android fonts, native icons an
 host-controlled car layouts differ from SwiftUI/CarPlay. This slice makes no
 pixel-identical car UI claim.
 
-## Commit handoff
+## Review fix
 
-Scoped staging succeeded on `codex/android-auto`. The requested commit failed
-because the sandbox refused creation of
-`/Users/andreibalu/Developer/Ebooker/.git/worktrees/android-auto/index.lock`
-with `Operation not permitted`. No workaround or push was attempted. Changes
-remain uncommitted. The intended message is
-`feat(android): add Android Auto and system playback integration`, with
-`Co-Authored-By: Codex <noreply@openai.com>` as its trailer.
+PR #63's review identified that a `parentId` result extra does not navigate a
+normal Android Auto host. The fix removes the no-op Chapters custom command,
+exposes chapters in the standard browse tree while a book is loaded, and
+notifies subscribed browsers when the book or chapter list changes. Host tests
+cover the conditional fourth root tab and the three remaining custom buttons.
+Actual host rendering and subscription refresh on a head unit remain unverified.

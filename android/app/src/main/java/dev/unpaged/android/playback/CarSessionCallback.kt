@@ -9,6 +9,9 @@ import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class CarSessionCallback(private val service: PlaybackService, private val player: PlayerController) : MediaLibrarySession.Callback {
@@ -20,17 +23,24 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
         const val SAVE_MOMENT = "dev.unpaged.SAVE_MOMENT"
         const val MARK_PROGRESS = "dev.unpaged.MARK_PROGRESS"
         const val CYCLE_SPEED = "dev.unpaged.CYCLE_SPEED"
-        const val CHAPTERS = "dev.unpaged.CHAPTERS"
-        val actions = listOf(CYCLE_SPEED, SAVE_MOMENT, MARK_PROGRESS, CHAPTERS)
+        val actions = listOf(CYCLE_SPEED, SAVE_MOMENT, MARK_PROGRESS)
         fun buttons() = listOf(
             Triple(CYCLE_SPEED, "Playback Rate", CommandButton.ICON_PLAYBACK_SPEED),
             Triple(SAVE_MOMENT, "Save Moment", CommandButton.ICON_BOOKMARK_FILLED),
-            Triple(MARK_PROGRESS, "Mark Progress", CommandButton.ICON_FLAG_FILLED),
-            Triple(CHAPTERS, "Chapters", CommandButton.ICON_ALBUM)
+            Triple(MARK_PROGRESS, "Mark Progress", CommandButton.ICON_FLAG_FILLED)
         ).map { (action, title, icon) -> CommandButton.Builder(icon).setDisplayName(title)
             .setSessionCommand(SessionCommand(action, Bundle.EMPTY)).build() }
     }
     fun close() { scope.cancel(); library.close() }
+    /** The Chapters tab comes and goes with the loaded book, and its rows follow the book's chapters. */
+    fun watchChapters(session: MediaLibrarySession) {
+        scope.launch {
+            player.state.map { it.book?.id to it.chapters }.distinctUntilChanged().drop(1).collect { (_, chapters) ->
+                session.notifyChildrenChanged(CarLibrary.ROOT, CarLibrary.tabs.size + if (player.state.value.book != null) 1 else 0, null)
+                session.notifyChildrenChanged(CarLibrary.CHAPTERS, chapters.size, null)
+            }
+        }
+    }
     private fun <T> async(block: suspend () -> T): ListenableFuture<T> {
         val future = SettableFuture.create<T>()
         val job = scope.launch { try { future.set(block()) } catch (error: Exception) { future.setException(error) } }

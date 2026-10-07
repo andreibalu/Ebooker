@@ -25,9 +25,15 @@ class CarLibraryTest {
         context.getSharedPreferences("unpaged", 0).edit().clear().commit()
     }
     @Test fun rootTabsOrderMetadataAndUnknownIDs() {
-        val library = CarLibrary(context)
+        var loaded = false
+        val library = CarLibrary(context, bookLoaded = { loaded })
         val tabs = library.children(CarLibrary.ROOT)
         assertEquals(listOf("Favorites", "Library", "Shelves"), tabs.map { it.mediaId })
+        loaded = true
+        val playing = library.children(CarLibrary.ROOT)
+        assertEquals(listOf("Favorites", "Library", "Shelves", "chapters"), playing.map { it.mediaId })
+        assertEquals("Chapters", playing.last().mediaMetadata.title)
+        assertTrue(playing.all { it.mediaMetadata.artworkUri?.scheme == "android.resource" })
         assertTrue(tabs.all { it.mediaMetadata.isBrowsable == true && it.mediaMetadata.isPlayable == false })
         assertNull(library.item("file:///etc/passwd"))
         assertNull(library.item("https://example.com/arbitrary.mp3"))
@@ -150,7 +156,6 @@ class CarLibraryTest {
             assertTrue(marked); assertEquals(35000L, store.books().single().highWaterMarkMs)
             assertEquals(0, commands.perform(CarSessionCallback.CYCLE_SPEED).resultCode)
             assertEquals(PlaybackRules.speeds.first(), rate)
-            assertEquals("chapters", commands.perform(CarSessionCallback.CHAPTERS).extras.getString("parentId"))
             assertEquals(androidx.media3.session.SessionError.ERROR_NOT_SUPPORTED, commands.perform("unknown").resultCode)
             loaded = false
             assertEquals(androidx.media3.session.SessionError.ERROR_INVALID_STATE, commands.perform(CarSessionCallback.SAVE_MOMENT).resultCode)
@@ -173,8 +178,8 @@ class CarLibraryTest {
     }
     @Test fun customButtonsExposeCarPlayOrderAndDistinctCommands() {
         val buttons = CarSessionCallback.buttons()
-        assertEquals(listOf("Playback Rate", "Save Moment", "Mark Progress", "Chapters"), buttons.map { it.displayName })
+        assertEquals(listOf("Playback Rate", "Save Moment", "Mark Progress"), buttons.map { it.displayName })
         assertEquals(CarSessionCallback.actions, buttons.map { it.sessionCommand?.customAction })
-        assertEquals(4, buttons.map { it.sessionCommand }.toSet().size)
+        assertEquals(3, buttons.map { it.sessionCommand }.toSet().size)
     }
 }

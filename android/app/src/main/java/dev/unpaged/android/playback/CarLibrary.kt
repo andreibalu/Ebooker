@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 @androidx.annotation.OptIn(UnstableApi::class)
 class CarLibrary(private val context: Context, private val store: LibraryStore = SQLiteLibraryStore(context),
     private val catalog: CatalogStore = SQLiteCatalogStore(context),
+    private val bookLoaded: () -> Boolean = { PlayerController.get(context).state.value.book != null },
     private val connected: () -> Boolean = { ShelvesSession.get(context).connected() }) : java.io.Closeable {
     companion object {
         const val ROOT = "root"
@@ -61,11 +62,14 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
             else if (item.mediaId in tabs) android.net.Uri.Builder().scheme("android.resource").authority(context.packageName)
                 .appendPath(when (item.mediaId) { "Favorites" -> dev.unpaged.android.R.drawable.car_favorites
                     "Library" -> dev.unpaged.android.R.drawable.car_library
-                    else -> dev.unpaged.android.R.drawable.car_shelves }.toString()).build() else null
+                    else -> dev.unpaged.android.R.drawable.car_shelves }.toString()).build()
+            else if (item.mediaId == CHAPTERS) android.net.Uri.Builder().scheme("android.resource").authority(context.packageName)
+                .appendPath(dev.unpaged.android.R.drawable.car_chapters.toString()).build() else null
         return item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon().setArtworkUri(uri).build()).build()
     }
     fun children(parent: String): List<MediaItem> = when (parent) {
-        ROOT -> tabs.map { folder(it) }
+        // Car hosts cannot open a list from a now-playing button, so chapters are a browse tab while a book is loaded.
+        ROOT -> tabs.map { folder(it) } + listOfNotNull(if (bookLoaded()) folder(CHAPTERS, "Chapters") else null)
         "Favorites", "Library" -> sortedBooks(store.books().filter { parent != "Favorites" || it.isFavorite },
             UnpagedPreferences(context).sort("Library")).map(::bookItem)
         "Shelves" -> {
@@ -86,7 +90,8 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
     }
     fun item(id: String): MediaItem? = when {
         id == ROOT -> folder(ROOT, "Unpaged")
-        id in tabs || id == CHAPTERS -> folder(id)
+        id in tabs -> folder(id)
+        id == CHAPTERS -> folder(CHAPTERS, "Chapters")
         id.startsWith("book:") -> store.books().firstOrNull { "book:${it.id}" == id }?.let(::bookItem)
         id.startsWith("catalog:") -> classics().firstOrNull { "catalog:${it.id}" == id }?.let(::catalogItem)
         id.startsWith("chapter:") -> children(CHAPTERS).firstOrNull { it.mediaId == id }
