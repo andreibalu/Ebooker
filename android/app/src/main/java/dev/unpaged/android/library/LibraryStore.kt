@@ -53,6 +53,9 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
         if (oldVersion < 5 && newVersion >= 5) migrateToV5(db)
     }
 
+    /** Every schema change is additive, so a newer file stays readable by an older build. */
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+
     private fun migrateToV5(db: SQLiteDatabase) {
         // Fingerprints already exist since v1. Retain them; backfill empty identities at launch.
         val columns = db.rawQuery("PRAGMA table_info(books)", null).use { rows ->

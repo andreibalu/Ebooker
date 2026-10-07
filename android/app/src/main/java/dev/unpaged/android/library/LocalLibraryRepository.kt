@@ -17,6 +17,7 @@ class LocalLibraryRepository(
         val books = store.books() // Fail closed: never clean files if the index cannot be read.
         ensureRoot()
         staging.listFiles()?.forEach { it.deleteRecursively() }
+        File(root, ".removed").deleteRecursively() // Retired "Remove from App" copies were unreachable.
         val referenced = books.map { it.id }.toSet()
         root.listFiles()?.filter { it.isDirectory && isUUID(it.name) && it.name !in referenced }
             ?.forEach { it.deleteRecursively() }
@@ -127,6 +128,7 @@ class LocalLibraryRepository(
         val destination = ownedFolder(root, orphan.id)
         // Remove from This Phone keeps the cover. As on iOS, it wins over the import's embedded art.
         val previous = ownedFolder(staging, orphan.id)
+        previous.deleteRecursively() // A killed earlier run can leave a swap folder that blocks renameTo.
         if (destination.exists() && !destination.renameTo(previous)) throw ImportProblem(ImportProblem.Reason.STORAGE)
         if (!source.renameTo(destination)) {
             previous.renameTo(destination)
@@ -159,22 +161,12 @@ class LocalLibraryRepository(
         store.setAvailability(book.id, false, false)
     }
 
-    fun remove(book: LibraryBook, deleteFiles: Boolean = true) {
+    fun remove(book: LibraryBook) {
         // Commit index removal first. A crash or failed cleanup leaves an unreferenced owned
         // directory, recovered on the next load, never a visible row pointing at deleted audio.
-        val folder = ownedFolder(root, book.id)
-        if (!deleteFiles && folder.exists()) {
-            // The no-backup two-option dialog can retain copies after removing their index.
-            // Keep them outside the UUID recovery sweep so a relaunch does not delete them.
-            val retainedRoot = File(root, ".removed")
-            if (!retainedRoot.isDirectory && !retainedRoot.mkdirs()) throw ImportProblem(ImportProblem.Reason.STORAGE)
-            val retained = ownedFolder(retainedRoot, book.id)
-            if (retained.exists() || !folder.renameTo(retained)) throw ImportProblem(ImportProblem.Reason.STORAGE)
-            try { store.delete(book.id) } catch (error: Throwable) { retained.renameTo(folder); throw error }
-        } else {
-            store.delete(book.id)
-            if (deleteFiles) folder.deleteRecursively()
-        }
+        // App-owned audio is always a private copy; provider originals are never modified.
+        store.delete(book.id)
+        ownedFolder(root, book.id).deleteRecursively()
     }
 
     private fun ensureRoot() {

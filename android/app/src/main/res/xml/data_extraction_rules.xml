@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <include domain="database" path="library.db" />
+        <include domain="database" path="library-backup.db" />
         <include domain="sharedpref" path="unpaged.xml" />
     </cloud-backup>
     <device-transfer>
-        <include domain="database" path="library.db" />
+        <include domain="database" path="library-backup.db" />
         <include domain="sharedpref" path="unpaged.xml" />
     </device-transfer>
 </data-extraction-rules>

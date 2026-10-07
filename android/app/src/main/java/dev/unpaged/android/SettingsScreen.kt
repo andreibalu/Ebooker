@@ -151,7 +151,7 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                             LegalRow("System Backup Settings") { dev.unpaged.android.backup.openSystemBackupSettings(context) }
                         }
                     }
-                    Text("Android backs up your library metadata when Backup by Google is on in system settings. Audio files are not backed up. Restore happens when you install Unpaged on a new or reset phone. No live multi-device or cross-platform sync.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Android backs up your library metadata when Backup by Google is on in system settings. Audio files are not backed up. Turning Back Up Library off stops cloud backup only; moving to a new phone with a direct device-to-device transfer still carries the library over. Restore happens when you install Unpaged on a new or reset phone. No live multi-device or cross-platform sync.", Modifier.padding(horizontal = 4.dp, vertical = 8.dp), fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 // iOS Support contains only the excluded coffee purchase. Keep its non-payment legal rows.
                 Column {

@@ -173,16 +173,54 @@ class LibraryBackupTest {
         }
     }
 
-    @Test fun removeFromAppKeepsOwnedCopiesAfterRestartWhenBackupIsOff() {
+    @Test fun removeDeletesOwnedCopiesAndLoadSweepsLegacyRemovedFolder() {
         fresh().withStore { db ->
             val root = File(context.cacheDir, UUID.randomUUID().toString())
             val repo = LocalLibraryRepository(root, db, AudioMetadataReader { AudioMetadata(1000) })
-            val book = repo.save(repo.prepare(listOf(doc())), "Retained", "Author")
-            repo.remove(book, deleteFiles = false)
+            val book = repo.save(repo.prepare(listOf(doc())), "Gone", "Author")
+            val legacy = File(root, ".removed/${UUID.randomUUID()}").apply { mkdirs(); File(this, "a.wav").writeBytes(byteArrayOf(1)) }
+            repo.remove(book)
+            assertFalse(File(root, book.id).exists())
             assertTrue(repo.load().isEmpty())
-            assertTrue(File(root, ".removed/${book.id}/${book.tracks.single().storedName}").isFile)
+            assertFalse(legacy.exists()); assertFalse(File(root, ".removed").exists())
             root.deleteRecursively()
         }
+    }
+
+    @Test fun adoptSucceedsDespiteStaleSwapFolder() {
+        fresh().withStore { db ->
+            val root = File(context.cacheDir, UUID.randomUUID().toString())
+            val repo = LocalLibraryRepository(root, db, AudioMetadataReader { AudioMetadata(1000) })
+            val book = repo.save(repo.prepare(listOf(doc())), "Orphan", "Author")
+            repo.removeFromPhone(book)
+            val orphan = repo.load().single()
+            File(root, ".staging/${orphan.id}").apply { mkdirs(); File(this, "stale").writeBytes(byteArrayOf(9)) }
+            val pending = repo.prepare(listOf(doc()))
+            repo.adopt(pending, orphan)
+            assertTrue(File(root, "${orphan.id}/${repo.load().single().tracks.single().storedName}").isFile)
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun snapshotIsConsistentAndRestoresIntoLivePath() {
+        val live = fresh().also { it.insert(LibraryBook(id, "Snap", "Author", emptyList())) }
+        try {
+            val snapshot = context.getDatabasePath(dev.unpaged.android.backup.LibrarySnapshot.NAME)
+            dev.unpaged.android.backup.LibrarySnapshot.create(context.getDatabasePath("library.db"), snapshot)
+            live.close(); context.deleteDatabase("library.db")
+            dev.unpaged.android.backup.LibrarySnapshot.install(snapshot, context.getDatabasePath("library.db"))
+            assertFalse(snapshot.exists())
+            SQLiteLibraryStore(context).withStore { restored ->
+                assertEquals(5, restored.readableDatabase.version)
+                assertEquals("Snap", restored.books().single().title)
+            }
+        } finally { live.close() }
+    }
+
+    @Test fun olderBuildOpensNewerDatabaseWithoutCrashing() {
+        fresh().withStore { it.insert(LibraryBook(id, "Newer", "Author", emptyList())) }
+        context.openOrCreateDatabase("library.db", 0, null).use { it.version = 9 }
+        SQLiteLibraryStore(context).withStore { assertEquals("Newer", it.books().single().title) }
     }
 
     @Test fun backupDefaultsOnAndToggleSurvivesNewPreferenceOwner() {

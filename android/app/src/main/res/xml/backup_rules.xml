@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-        <include domain="database" path="library.db" />
+        <include domain="database" path="library-backup.db" />
         <include domain="sharedpref" path="unpaged.xml" />
 </full-backup-content>

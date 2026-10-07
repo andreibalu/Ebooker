@@ -4,27 +4,45 @@ import android.app.backup.BackupAgent
 import android.app.backup.BackupDataInput
 import android.app.backup.BackupDataOutput
 import android.app.backup.FullBackupDataOutput
-import android.database.sqlite.SQLiteDatabase
+import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import dev.unpaged.android.UnpagedPreferences
 
-/** Full-file backup only. The OS stops normal app writes before invoking this agent. */
+/**
+ * Full-file backup only. The app process stays live during a full backup, so the live
+ * `library.db` is never streamed. A consistent snapshot named [LibrarySnapshot.NAME] is the
+ * only database the XML rules include; [onRestoreFinished] moves it into place before the app
+ * opens the library.
+ */
 class LibraryBackupAgent : BackupAgent() {
     override fun onBackup(oldState: ParcelFileDescriptor?, data: BackupDataOutput, newState: ParcelFileDescriptor) = Unit
     override fun onRestore(data: BackupDataInput, appVersionCode: Int, newState: ParcelFileDescriptor) = Unit
 
     override fun onFullBackup(data: FullBackupDataOutput) {
-        if (!UnpagedPreferences(this).backupEnabled()) return
-        val file = getDatabasePath("library.db")
-        if (file.isFile) {
-            SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
-                db.rawQuery("PRAGMA wal_checkpoint(FULL)", null).use { result ->
-                    check(result.moveToFirst() && result.getInt(0) == 0) { "Library checkpoint is busy" }
-                }
+        // The toggle gates cloud backup only. Device-to-device transfer (API 28+) is the user
+        // moving their own phone, so it proceeds regardless.
+        val deviceTransfer = Build.VERSION.SDK_INT >= 28 && data.transportFlags and FLAG_DEVICE_TO_DEVICE_TRANSFER != 0
+        if (!UnpagedPreferences(this).backupEnabled() && !deviceTransfer) return
+        val live = getDatabasePath("library.db")
+        val snapshot = getDatabasePath(LibrarySnapshot.NAME)
+        var created = false
+        if (live.isFile) {
+            for (attempt in 1..3) {
+                created = runCatching { LibrarySnapshot.create(live, snapshot) }
+                    .onFailure { Log.w("LibraryBackupAgent", "Library snapshot attempt $attempt failed", it); Thread.sleep(250L * attempt) }
+                    .isSuccess
+                if (created) break
             }
         }
-        // XML allowlists contain only library.db and unpaged.xml. Never send owned audio,
+        if (!created) LibrarySnapshot.delete(snapshot) // Never ship a partial file.
+        // XML allowlists contain only the snapshot and unpaged.xml. Never send owned audio,
         // catalog, caches or Keystore-bound credentials. noBackupFilesDir is platform-excluded.
-        super.onFullBackup(data)
+        try { super.onFullBackup(data) } finally { LibrarySnapshot.delete(snapshot) }
+    }
+
+    override fun onRestoreFinished() {
+        LibrarySnapshot.install(getDatabasePath(LibrarySnapshot.NAME), getDatabasePath("library.db"))
+        super.onRestoreFinished()
     }
 }

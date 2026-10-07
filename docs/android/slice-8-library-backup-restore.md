@@ -23,10 +23,14 @@ book, tracks, moments, progress, favorite, EQ, and history. The row leaves the
 main Library and Favorites and appears under Audio Missing. Free-book removal
 archives the original row and retains its catalog identity and remote URLs.
 Stream or re-add from Shelves clears its archive flag in place. ABS removal
-continues to remove the Unpaged row only. With backup off, the dialog offers
-Remove from App and Also Delete Files. The former retains app-owned copies
-under `audiobooks/.removed/`, outside startup's unreferenced-directory sweep.
-Provider originals are never changed.
+continues to remove the Unpaged row only. With backup off, the dialog is a
+single destructive Remove from Library plus Cancel; it deletes the app-owned
+copies and says the original files on the phone are not touched. This differs
+deliberately from iOS, which keeps two options because its files can be
+user-visible. On Android app-owned audio is always a private copy and provider
+originals are never modified, so retaining it has no value. The earlier
+`audiobooks/.removed/` mechanism was unreachable and is gone; startup deletes any
+leftover directory.
 
 Import probes orphan fingerprints and offers Restore from Backup, Add as New,
 or Cancel. Restore keeps the original book UUID, title, author, progress,
@@ -58,12 +62,19 @@ this digest. Catalog ID remains the free-book restore identity.
 The manifest enables `allowBackup`, `fullBackupOnly` and a custom
 `LibraryBackupAgent`. Explicit legacy and Android 12+ allowlists include only
 `database/library.db` and `sharedpref/unpaged.xml` for cloud backup and device
-transfer. The agent checks the app toggle before writing anything, checkpoints
-SQLite WAL with FULL, checks that the checkpoint is not busy, closes its database
-handle, and then invokes the platform file backup. Android stops normal app
-writes for full backup. Audio, retained copies, download staging, the separately
-stored LibriVox catalog, covers and all other files/databases/preferences are
-excluded. The platform always excludes `noBackupFilesDir`, including ABS
+transfer. The agent checks the app toggle first: off
+stops cloud backup, but on API 28+ a device-to-device transfer
+(`FLAG_DEVICE_TO_DEVICE_TRANSFER`) still proceeds; below API 28 off blocks both.
+The app process stays live during full backup, so the live `library.db` is never
+streamed. The agent builds a consistent snapshot, `databases/library-backup.db`,
+by attaching the live file and copying schema and rows inside one transaction
+(`VACUUM INTO` needs SQLite 3.27, above minSdk 26), retries up to three times,
+and lets `super.onFullBackup` ship it. The XML rules include the snapshot, not
+`library.db`, plus `unpaged.xml`. The snapshot is deleted afterwards. On restore,
+`onRestoreFinished` replaces `library.db` (and stale WAL/SHM files) with the
+restored snapshot before the app opens the library. Audio, download staging, the
+separately stored LibriVox catalog, covers and all other files are excluded. The
+platform always excludes `noBackupFilesDir`, including ABS
 Keystore-encrypted credentials and future model files.
 
 After metadata restoration, startup checks local track files. A downloaded own
@@ -90,7 +101,7 @@ Host tests cover an actual v4 schema migration to v5 with every metadata table
 preserved; backfill and sampled fingerprints; overlap matching and exact
 multiplicity; orphan detection; in-place adoption and injected transaction
 failure; free-book archival and streaming; ABS non-orphan classification;
-persisted toggle; retained copies after Remove from App; and the large-library
+persisted toggle; permanent removal and the legacy `.removed` sweep; stale adopt swap folders; snapshot create/install; opening a newer-version database (no-op `onDowngrade`); and the large-library
 quota measurement. Existing v1/v2/v3 migration test version expectations advance
 to v5 without removing their assertions.
 
