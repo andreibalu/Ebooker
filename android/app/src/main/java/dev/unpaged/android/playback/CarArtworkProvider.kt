@@ -23,7 +23,9 @@ internal object BrowserCallerPolicy {
 internal object CarArtwork {
     /** Single-row lookups, so listing N covers is O(N) rather than loading every book per cover. */
     fun title(context: android.content.Context, id: String): String? = when {
-        id.startsWith("book:") -> SQLiteLibraryStore(context).let { store ->
+        // Opening the store creates library.db. System UI can ask for stale artwork right after
+        // data is cleared, while a backup restore is writing the real file, so never create it here.
+        id.startsWith("book:") -> if (!context.getDatabasePath("library.db").isFile) null else SQLiteLibraryStore(context).let { store ->
             try { store.title(id.removePrefix("book:")) } finally { store.close() }
         }
         id.startsWith("catalog:") && id.removePrefix("catalog:") in Classics.ids -> SQLiteCatalogStore(context).let { store ->

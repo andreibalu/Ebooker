@@ -484,9 +484,7 @@ class LibraryE2ETest {
         field("settings.picker.Skip Forward").click()
         scrollTo("settings.option.skipForwardSeconds.15")
         field("settings.option.skipForwardSeconds.15").click()
-        scrollTo("settings.appearance.Dark")
-        field("settings.appearance.Dark").click()
-        assertTheme(dark = true)
+        chooseAppearance("Dark", dark = true)
         screenshot("settings-preferences-dark")
         tapText("Done")
         device.executeShellCommand("am force-stop $app")
@@ -501,9 +499,7 @@ class LibraryE2ETest {
         visible(By.text("45 seconds"))
         scrollTo("settings.picker.Skip Forward")
         visible(By.text("15 seconds"))
-        scrollTo("settings.appearance.Light")
-        field("settings.appearance.Light").click()
-        assertTheme(dark = false)
+        chooseAppearance("Light", dark = false)
         screenshot("appearance-light-overrides-system")
         scrollTo("settings.home.Shelves", downward = false)
         field("settings.home.Shelves").click()
@@ -809,7 +805,8 @@ class LibraryE2ETest {
         visible(By.text("My Library"))
     }
 
-    private fun backupLocally(): String {
+    /** [expectData] false: the agent writes nothing, and the local transport rejects an empty package. */
+    private fun backupLocally(expectData: Boolean = true): String {
         device.executeShellCommand("bmgr enable true")
         val transports = device.executeShellCommand("bmgr list transports")
         assertTrue("Local transport is required: $transports", transports.contains("com.android.localtransport/.LocalTransport"))
@@ -817,9 +814,16 @@ class LibraryE2ETest {
         device.executeShellCommand("bmgr wipe com.android.localtransport/.LocalTransport $app")
         device.pressHome()
         settleLayout() // Allow background/pause persistence before the OS stops the app for backup.
-        val result = device.executeShellCommand("bmgr backupnow $app")
-        File(captureDirectory(), "backup-transport.txt").apply { appendText(result + "\n") }.also(::persistCapture)
-        assertTrue("Backup failed: $result", result.contains("Success"))
+        // The overall line says Success even when the transport rejects the package, so check
+        // the package's own result. The local transport rejects transiently; retry a few times.
+        var result = ""
+        for (attempt in 1..4) {
+            result = device.executeShellCommand("bmgr backupnow $app")
+            File(captureDirectory(), "backup-transport.txt").apply { appendText(result + "\n") }.also(::persistCapture)
+            if (!expectData || result.contains("Package $app with result: Success")) break
+            android.os.SystemClock.sleep(3_000)
+        }
+        assertTrue("Backup failed: $result", if (expectData) result.contains("Package $app with result: Success") else result.contains("Backup finished with result: Success"))
         val sets = device.executeShellCommand("bmgr list sets")
         return Regex("(?m)^\\s*([0-9a-fA-F]+)\\s*:").find(sets)?.groupValues?.get(1)
             ?: throw AssertionError("No local restore set: $sets")
@@ -891,7 +895,7 @@ class LibraryE2ETest {
         screenshot("backup-remove-off-light")
         device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-remove-off-dark")
         device.executeShellCommand("cmd uimode night no"); tapText("Cancel")
-        val token = backupLocally(); restoreLocally(token)
+        val token = backupLocally(expectData = false); restoreLocally(token)
         visible(By.text("Your Library Is Empty"))
         openBackupLibrary(); assertFalse(device.hasObject(By.text("Excluded Backup")))
         closeBackupLibrary()
@@ -964,14 +968,32 @@ class LibraryE2ETest {
     }
 
     private fun assertTheme(dark: Boolean) {
+        var brightness = renderedBrightness()
+        val deadline = android.os.SystemClock.uptimeMillis() + 3_000
+        while (!themeMatches(brightness, dark) && android.os.SystemClock.uptimeMillis() < deadline) {
+            android.os.SystemClock.sleep(250); brightness = renderedBrightness()
+        }
+        assertTrue("Rendered background brightness $brightness, expected dark=$dark", themeMatches(brightness, dark))
+    }
+
+    private fun themeMatches(brightness: Int, dark: Boolean) = if (dark) brightness < 70 else brightness > 160
+
+    private fun renderedBrightness(): Int {
         device.waitForIdle(500)
         val capture = File(captureDirectory(), "theme-check.png")
         assertTrue(device.takeScreenshot(capture))
         val bitmap = android.graphics.BitmapFactory.decodeFile(capture.absolutePath)
         val pixel = bitmap.getPixel(8, bitmap.height / 2)
-        val brightness = (android.graphics.Color.red(pixel) + android.graphics.Color.green(pixel) + android.graphics.Color.blue(pixel)) / 3
         bitmap.recycle()
-        assertTrue("Rendered background brightness $brightness, expected dark=$dark", if (dark) brightness < 70 else brightness > 160)
+        return (android.graphics.Color.red(pixel) + android.graphics.Color.green(pixel) + android.graphics.Color.blue(pixel)) / 3
+    }
+
+    /** A tap can land while the settings list is still settling from a scroll; tap again if the theme did not change. */
+    private fun chooseAppearance(name: String, dark: Boolean) {
+        scrollTo("settings.appearance.$name"); settleLayout()
+        field("settings.appearance.$name").click()
+        if (!themeMatches(renderedBrightness(), dark)) { settleLayout(); field("settings.appearance.$name").click() }
+        assertTheme(dark)
     }
 
     // edgeSwipe keeps the gesture off content that consumes vertical drags (EQ band sliders).
