@@ -140,3 +140,18 @@ exposes chapters in the standard browse tree while a book is loaded, and
 notifies subscribed browsers when the book or chapter list changes. Host tests
 cover the conditional fourth root tab and the three remaining custom buttons.
 Actual host rendering and subscription refresh on a head unit remain unverified.
+
+## Review follow-up
+
+A second review found that subscribed car lists did not refresh after phone-side
+library changes, and that a Chapters row from a previously loaded book could seek
+inside a different loaded book. Library and catalog writes now signal a
+process-wide `LibraryContentChanges` revision (the phone and the car browser open
+separate store instances); `CarSessionCallback` debounces it by 250 ms and calls
+`notifyChildrenChanged` for Favorites, Library and Shelves. Chapter media ids are
+now `chapter:<url-encoded book id>:<index>`; `CarLibrary.chapter` resolves only
+against the currently loaded book, so stale, malformed or other-book ids are
+rejected with "This chapter is no longer available." Host tests cover both. Android
+has no rename or archive operation yet, so those paths do not exist to signal; a
+change of the Library sort preference does not trigger a refresh. Subscription
+refresh on a real head unit remains unverified.

@@ -156,6 +156,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                 })
             }
         }
+        LibraryContentChanges.committed()
     }
 
     override fun promoteDownload(id: String, tracks: List<LibraryTrack>, bytes: Long) {
@@ -171,10 +172,12 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
                 })
             }
         }
+        LibraryContentChanges.committed()
     }
 
     override fun toggleFavorite(id: String) {
         writableDatabase.execSQL("UPDATE books SET is_favorite = 1 - is_favorite WHERE id = ?", arrayOf(id))
+        LibraryContentChanges.committed()
     }
 
     override fun updatePlaybackProgress(id: String, progress: PlaybackProgress) {
@@ -184,6 +187,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             high_water_mark_ms = MAX(high_water_mark_ms, ?), playback_speed = ?, is_finished = ?, last_played_at = ? WHERE id = ?""",
             arrayOf<Any>(progress.trackIndex, progress.positionMs, progress.highWaterMarkMs, progress.speed,
                 if (progress.finished) 1 else 0, progress.playedAt, id))
+        LibraryContentChanges.committed()
     }
 
     override fun updateTrackDuration(id: String, trackIndex: Int, durationMs: Long) {
@@ -195,6 +199,7 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
     override fun setProgressMarker(id: String, positionMs: Long) {
         require(positionMs >= 0)
         writableDatabase.execSQL("UPDATE books SET high_water_mark_ms = ? WHERE id = ?", arrayOf<Any>(positionMs, id))
+        LibraryContentChanges.committed()
     }
 
     override fun moments(bookId: String): List<LibraryMoment> = buildList {
@@ -223,7 +228,9 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
     }
 
     override fun deleteMoment(id: String) { writableDatabase.delete("moments", "id = ?", arrayOf(id)) }
-    override fun delete(id: String) { writableDatabase.delete("books", "id = ?", arrayOf(id)) }
+    override fun delete(id: String) {
+        if (writableDatabase.delete("books", "id = ?", arrayOf(id)) > 0) LibraryContentChanges.committed()
+    }
 }
 
 private fun Cursor.text(column: String): String = getString(getColumnIndexOrThrow(column))

@@ -26,7 +26,7 @@ class CarLibraryTest {
     }
     @Test fun rootTabsOrderMetadataAndUnknownIDs() {
         var loaded = false
-        val library = CarLibrary(context, bookLoaded = { loaded })
+        val library = CarLibrary(context, playback = { PlayerState(book = if (loaded) book("root-book", "Loaded") else null) })
         val tabs = library.children(CarLibrary.ROOT)
         assertEquals(listOf("Favorites", "Library", "Shelves"), tabs.map { it.mediaId })
         loaded = true
@@ -38,6 +38,40 @@ class CarLibraryTest {
         assertNull(library.item("file:///etc/passwd"))
         assertNull(library.item("https://example.com/arbitrary.mp3"))
         assertEquals("Unpaged", library.item(CarLibrary.ROOT)?.mediaMetadata?.title)
+    }
+    @Test fun chapterRowsRejectIDsFromAnotherBookAndMalformedIndexes() {
+        val first = book("one:with separator", "First")
+        var state = PlayerState(book = first, chapters = listOf(PlaybackChapter(0, "Chapter", 0, 0, 120000)))
+        CarLibrary(context, playback = { state }).use { library ->
+            val old = library.children(CarLibrary.CHAPTERS).single()
+            assertEquals("chapter:one%3Awith%20separator:0", old.mediaId)
+            assertNotNull(library.chapter(old.mediaId))
+            assertNotNull(library.item(old.mediaId))
+            state = state.copy(book = book("two", "Second"))
+            assertNull(library.chapter(old.mediaId)); assertNull(library.item(old.mediaId))
+            assertNotEquals(old.mediaId, library.children(CarLibrary.CHAPTERS).single().mediaId)
+            for (id in listOf("chapter:0", "chapter:two:-1", "chapter:two:99999999999", "chapter:two:0:extra"))
+                assertNull(library.chapter(id))
+            state = state.copy(book = null)
+            assertTrue(library.children(CarLibrary.CHAPTERS).isEmpty())
+        }
+    }
+    @Test fun folderInvalidationFollowsCommittedPhoneMutationsAcrossStoreInstances() {
+        val store = SQLiteLibraryStore(context); val other = SQLiteLibraryStore(context); val catalog = SQLiteCatalogStore(context)
+        fun committed(action: () -> Unit) {
+            val before = LibraryContentChanges.changes.value
+            action(); assertTrue(LibraryContentChanges.changes.value > before)
+        }
+        try {
+            committed { store.insert(book("one", "First")) }
+            committed { other.toggleFavorite("one") }
+            committed { catalog.seed(listOf(CatalogBook("133", "Jane Eyre", "Author", "", "English", 60))) }
+            committed { catalog.commit(listOf(CatalogBook("314", "Sherlock Holmes", "Author", "", "English", 60)), SyncCursor()) }
+            val beforeFailure = LibraryContentChanges.changes.value
+            assertThrows(android.database.sqlite.SQLiteConstraintException::class.java) { store.insert(book("one", "Duplicate")) }
+            assertEquals(beforeFailure, LibraryContentChanges.changes.value)
+            committed { other.delete("one") }
+        } finally { store.close(); other.close(); catalog.close() }
     }
     @Test fun carListsUseLibrarySortForBothTabsAndDurableSubtitle() {
         val store = SQLiteLibraryStore(context)

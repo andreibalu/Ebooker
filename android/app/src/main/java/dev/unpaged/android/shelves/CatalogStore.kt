@@ -53,13 +53,17 @@ class SQLiteCatalogStore(context: Context) : SQLiteOpenHelper(context, "librivox
             }, SQLiteDatabase.CONFLICT_REPLACE)
         }
     }
-    override fun seed(books: List<CatalogBook>) { writableDatabase.transaction { write(this, books) } }
+    override fun seed(books: List<CatalogBook>) {
+        writableDatabase.transaction { write(this, books) }
+        if (books.isNotEmpty()) dev.unpaged.android.library.LibraryContentChanges.committed()
+    }
     override fun commit(books: List<CatalogBook>, cursor: SyncCursor) {
         writableDatabase.transaction {
             write(this, books)
             execSQL("UPDATE sync SET offset=?,since=?,started=?,completed=?,ready=? WHERE singleton=1",
                 arrayOf<Any>(cursor.offset, cursor.since, cursor.started, cursor.completed, if (cursor.ready) 1 else 0))
         }
+        if (books.isNotEmpty()) dev.unpaged.android.library.LibraryContentChanges.committed()
     }
 }
 

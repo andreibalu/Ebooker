@@ -14,12 +14,15 @@ import kotlinx.coroutines.withContext
 @androidx.annotation.OptIn(UnstableApi::class)
 class CarLibrary(private val context: Context, private val store: LibraryStore = SQLiteLibraryStore(context),
     private val catalog: CatalogStore = SQLiteCatalogStore(context),
-    private val bookLoaded: () -> Boolean = { PlayerController.get(context).state.value.book != null },
+    private val playback: () -> PlayerState = { PlayerController.get(context).state.value },
     private val connected: () -> Boolean = { ShelvesSession.get(context).connected() }) : java.io.Closeable {
     companion object {
         const val ROOT = "root"
         val tabs = listOf("Favorites", "Library", "Shelves")
         const val CHAPTERS = "chapters"
+        fun chapterID(bookId: String, index: Int) = "chapter:${android.net.Uri.encode(bookId)}:$index"
+        fun chapterIndex(id: String, bookId: String): Int? = id.removePrefix("chapter:${android.net.Uri.encode(bookId)}:")
+            .takeIf { id.startsWith("chapter:${android.net.Uri.encode(bookId)}:") }?.toIntOrNull()?.takeIf { it >= 0 }
         fun latest(books: List<LibraryBook>) = books.filter { it.tracks.isNotEmpty() }
             .maxByOrNull { it.lastPlayedAt ?: 0L }
         fun searchIDs(query: String, books: List<LibraryBook>, classics: List<CatalogBook>): List<String> {
@@ -69,18 +72,21 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
     }
     fun children(parent: String): List<MediaItem> = when (parent) {
         // Car hosts cannot open a list from a now-playing button, so chapters are a browse tab while a book is loaded.
-        ROOT -> tabs.map { folder(it) } + listOfNotNull(if (bookLoaded()) folder(CHAPTERS, "Chapters") else null)
+        ROOT -> tabs.map { folder(it) } + listOfNotNull(if (playback().book != null) folder(CHAPTERS, "Chapters") else null)
         "Favorites", "Library" -> sortedBooks(store.books().filter { parent != "Favorites" || it.isFavorite },
             UnpagedPreferences(context).sort("Library")).map(::bookItem)
         "Shelves" -> {
             val inLibrary = store.books().mapNotNull { it.catalogId }.toSet()
             classics().filter { it.id !in inLibrary }.map(::catalogItem)
         }
-        CHAPTERS -> PlayerController.get(context).state.value.chapters.map {
-            item("chapter:${it.index}", it.title, trackDuration(it.durationMs), true)
-        }
+        CHAPTERS -> playback().let { state -> state.book?.let { book -> state.chapters.map {
+            item(chapterID(book.id, it.index), it.title, trackDuration(it.durationMs), true)
+        } }.orEmpty() }
         else -> throw IllegalArgumentException("Unknown list")
     }.map(::withArtwork)
+    fun chapter(id: String): PlaybackChapter? = playback().let { state ->
+        state.book?.let { book -> chapterIndex(id, book.id)?.let { index -> state.chapters.firstOrNull { it.index == index } } }
+    }
     fun search(query: String): List<MediaItem> {
         val books = store.books(); val cached = classics()
         return searchIDs(query, books, cached).mapNotNull { id ->

@@ -9,6 +9,7 @@ import androidx.media3.session.MediaLibraryService.MediaLibrarySession
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -34,6 +35,13 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
     fun close() { scope.cancel(); library.close() }
     /** The Chapters tab comes and goes with the loaded book, and its rows follow the book's chapters. */
     fun watchChapters(session: MediaLibrarySession) {
+        scope.launch {
+            dev.unpaged.android.library.LibraryContentChanges.changes.drop(1).collectLatest {
+                kotlinx.coroutines.delay(250) // coalesce bursts such as progress saves
+                val counts = read { CarLibrary.tabs.map { it to library.children(it).size } }
+                counts.forEach { (parent, count) -> session.notifyChildrenChanged(parent, count, null) }
+            }
+        }
         scope.launch {
             player.state.map { it.book?.id to it.chapters }.distinctUntilChanged().drop(1).collect { (_, chapters) ->
                 session.notifyChildrenChanged(CarLibrary.ROOT, CarLibrary.tabs.size + if (player.state.value.book != null) 1 else 0, null)
@@ -91,8 +99,7 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
             val id = if (query != null) read { library.search(query).firstOrNull()?.mediaId }
                 ?: error("No matches for \"$query\"") else request.mediaId
             if (id.startsWith("chapter:")) {
-                val chapter = player.state.value.chapters.getOrNull(id.removePrefix("chapter:").toIntOrNull() ?: -1)
-                    ?: error("This chapter is no longer available.")
+                val chapter = library.chapter(id) ?: error("This chapter is no longer available.")
                 return MediaSession.MediaItemsWithStartPosition((0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) },
                     chapter.trackIndex, chapter.startMs)
             }
