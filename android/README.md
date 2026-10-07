@@ -147,15 +147,21 @@ Merged slice runtime checks are recorded in
 [the E2E validation log](../docs/android/e2e-visual-validation-2026-10-06.md).
 
 Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
-Boot it and specify its serial explicitly, with no other Android devices attached:
+Boot it and specify its serial explicitly. Other attached devices are allowed only
+if they are also dedicated `Unpaged_E2E_*` emulators, so parallel worktrees can
+each drive their own instance:
 
 ```sh
 export ANDROID_SERIAL=emulator-5580
 ./tools/run-e2e.sh
 ```
 
-The script requires the JDK/SDK exports above. It refuses physical devices,
-unrelated AVDs, incomplete boot and additional attached devices. Tests clear only
+The script requires the JDK/SDK exports above. It refuses a physical or unrelated
+target, any attached physical device or non-`Unpaged_E2E_*` AVD, and incomplete
+boot. Gradle runs the suite only on `ANDROID_SERIAL`; the script fails if the log
+shows tests on any other AVD. Each run starts the fake Audiobookshelf server on its
+own host port (derived from the serial, or `E2E_ABS_PORT`) and maps it to
+`127.0.0.1:13378` on the device with `adb reverse`. Tests clear only
 `dev.unpaged.android.development` on this disposable emulator and disable its
 animations. Do not use an AVD holding personal app data. The driver also checks
 the emulator name before clearing the app. Picker selectors are pinned to the
