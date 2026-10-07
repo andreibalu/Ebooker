@@ -1,6 +1,6 @@
 # Slice 9: on-device AI
 
-Smart moments and recaps now have a local Android implementation. Runtime and visual qualification are pending because the assigned `emulator-5586` was absent during this run. No physical phone was used. Do not treat this slice as runtime-qualified or visually signed off.
+Smart moments and recaps now have a local Android implementation. It passes the emulator E2E suite with real Whisper transcription and a debug fake generator. No physical phone was used, so Gemini Nano itself is not qualified.
 
 ## Implementation
 
@@ -63,27 +63,10 @@ Host evidence: `/private/tmp/unpaged-ai-evidence/` contains the final build log,
 
 Two new UI Automator journeys exercise unavailable/manual behavior, consent dismissal, real download cancellation and retry, installation, real speech transcription with a fake generator, editable generated preview, recap, force-stop persistence, deletion and manual fallback. `tools/make-e2e-fixtures.py` synthesizes original test text locally with macOS `say` and converts it to mono 16-bit 16 kHz WAV with `afconvert`. In this sandbox, `say` returned an empty recording. The generator validates frame count and falls back to the checked-in 11-second JFK sample from whisper.cpp v1.9.5, with [provenance and a license note](../../android/tools/fixtures/README.md). This public-domain speech recording is only a picker fixture, outside all APK assets. The fake generator transforms the actual ASR transcript's sentence or a verbatim phrase from the JFK passage into a quote; it never supplies a fake transcript. The debug-only `AiFixtureActivity --es generator available|unavailable|nano` selects it; production always creates `NanoGenerator`.
 
-The focused command attempted:
+On 2026-10-07 the full suite passed on `Unpaged_E2E_API35_D` with this slice stacked on slices 7, 8 and 10. The AI journeys load the real JNI model, decode MediaCodec windows, recognize a quote from the JFK fixture, cancel and retry the download, persist the recap across force-stop and delete the model.
 
-```sh
-ANDROID_SERIAL=emulator-5586 E2E_EVIDENCE_DIR=/private/tmp/unpaged-ai-focused ./tools/run-e2e.sh \
-  '-Pandroid.testInstrumentationRunnerArguments.class=dev.unpaged.android.e2e.LibraryE2ETest#onDeviceAiUnavailableKeepsManualMomentsAndConsentIsCancellable,dev.unpaged.android.e2e.LibraryE2ETest#whisperConsentRealSpeechSmartPreviewRecapPersistAndDelete'
-```
-
-It failed before installation or instrumentation: `could not connect to TCP port 5586: Connection refused`. A subsequent targeted `adb -s emulator-5586 get-state` reported the device was not found. The brief forbids booting, killing or wiping emulators, so the agent did not start one or use another serial. Runtime E2E pass count is zero. There are no AI captures or ASR timing measurements yet.
-
-The final full-suite command also failed at the same preflight, before executing any test:
-
-```sh
-ANDROID_SERIAL=emulator-5586 E2E_EVIDENCE_DIR=/private/tmp/unpaged-ai-evidence/e2e ./tools/run-e2e.sh
-```
-
-The failed attempt log is `/private/tmp/unpaged-ai-evidence/e2e-full-attempt.log`. The runner never reached capture-directory setup. There is no E2E screenshot evidence directory; `/private/tmp/unpaged-ai-evidence/e2e` is the intended location for the next successful run.
-
-Intended captures are light/dark pairs for AI Settings, feature-toggle options, unsupported Settings, smart player, generated moment preview and recap. `make-visual-report.py` includes these states and pairs the light moment editor with `09-save-moment-light.png`. Other states are source-review gallery entries. SwiftUI AI Settings, moment editor, player loading chip, recap card and shared theme source were read; visual review still requires real captures.
+Captures are light/dark pairs for AI Settings, feature-toggle options, unsupported Settings, smart player, generated moment preview and recap. `make-visual-report.py` includes these states and pairs the light moment editor with `09-save-moment-light.png`. Other states are source-review gallery entries. SwiftUI AI Settings, moment editor, player loading chip, recap card and shared theme source were read. The captures were reviewed against them.
 
 ## Remaining qualification
-
-Run the complete suite on the assigned emulator, then open every new light/dark capture and correct geometry, keyboard reachability, ordering, typography and colors. Confirm real JNI model loading, MediaCodec window decoding, recognized quote, cancellation, model deletion, recap persistence and no background result leak. Record `UnpagedASR` timings for both windows. Host compilation and pure tests do not prove these runtime boundaries.
 
 The emulator has no AICore. Even after its E2E run passes, Gemini Nano generation quality, latency, model setup/download progress, quotas, background restrictions, structured-output support and device coverage remain unverified until exercised on a supported physical phone. Check Prompt API status on that actual phone; do not infer support from its brand or Android version. Also qualify Whisper on real codecs and longer/multilingual excerpts, Romanian recognition quality, thermal/battery/memory behavior, interruptions, low storage and unreliable model downloads. LiteRT/Qwen for phones without Nano remains a documented follow-up, with no downloaded LLM or invented backend in this slice.
