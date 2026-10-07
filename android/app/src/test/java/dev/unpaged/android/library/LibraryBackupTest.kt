@@ -88,6 +88,25 @@ class LibraryBackupTest {
         }
     }
 
+    @Test fun removeFromPhoneKeepsTheCoverThroughAdoption() {
+        fresh().withStore { db ->
+            val root = File(context.cacheDir, UUID.randomUUID().toString())
+            val repo = LocalLibraryRepository(root, db, AudioMetadataReader { AudioMetadata(1000) })
+            val book = repo.save(repo.prepare(listOf(doc())), "Book", "Author")
+            File(root, "${book.id}/cover.png").writeText("custom")
+            repo.removeFromPhone(book)
+            assertEquals(listOf("cover.png"), File(root, book.id).list()?.toList())
+            val orphan = repo.load().single()
+            assertTrue(orphan.isAudioMissing)
+            val pending = repo.prepare(listOf(doc()))
+            File(root, ".staging/${pending.id}/cover.png").writeText("embedded")
+            repo.adopt(pending, orphan)
+            assertEquals("custom", File(root, "${book.id}/cover.png").readText())
+            assertTrue(repo.load().single().isDownloaded)
+            root.deleteRecursively()
+        }
+    }
+
     @Test fun failedAdoptionRollsBackTracksAndKeepsPendingRetryable() {
         fresh().withStore { db ->
             val root = File(context.cacheDir, UUID.randomUUID().toString())

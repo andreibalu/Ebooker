@@ -125,7 +125,7 @@ class LocalLibraryRepository(
         check(store.books().any { it.id == orphan.id && it.isAudioMissing })
         val source = ownedFolder(staging, pending.id)
         val destination = ownedFolder(root, orphan.id)
-        // A missing book can have a residual cover. Preserve it until the index commits.
+        // Remove from This Phone keeps the cover. As on iOS, it wins over the import's embedded art.
         val previous = ownedFolder(staging, orphan.id)
         if (destination.exists() && !destination.renameTo(previous)) throw ImportProblem(ImportProblem.Reason.STORAGE)
         if (!source.renameTo(destination)) {
@@ -139,12 +139,19 @@ class LocalLibraryRepository(
             previous.renameTo(destination)
             throw error
         }
+        File(previous, "cover.png").takeIf { it.isFile }?.let { kept ->
+            val cover = File(destination, "cover.png")
+            if (!cover.exists() || cover.delete()) kept.renameTo(cover)
+        }
         previous.deleteRecursively()
     }
 
     fun removeFromPhone(book: LibraryBook) {
         store.setAvailability(book.id, false, book.isFreeBook)
-        ownedFolder(root, book.id).deleteRecursively()
+        // Keep the cover so Backed-up Library and a later restore still show it.
+        val folder = ownedFolder(root, book.id)
+        folder.listFiles()?.filter { it.name != "cover.png" }?.forEach { it.deleteRecursively() }
+        folder.delete() // Only succeeds when no cover was kept.
     }
 
     fun restoreFree(book: LibraryBook) {
