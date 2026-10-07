@@ -51,7 +51,7 @@ class WhisperTranscriber(private val models: SpeechModelStore) : SegmentTranscri
                     // The cancellation watcher aborts native inference; joining keeps buffers alive until it returns.
                     val watcher = CoroutineScope(Dispatchers.IO).launch { while (caller?.isActive != false) delay(50); WhisperNative.cancel() }
                     try { SpeechText.clean(WhisperNative.transcribe(models.model.path, pcm, "auto")) }
-                    finally { watcher.cancel() }
+                    finally { watcher.cancelAndJoin() }
                 }
             }
             currentCoroutineContext().ensureActive()
