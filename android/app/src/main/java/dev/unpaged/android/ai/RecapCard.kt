@@ -27,8 +27,9 @@ fun RecapCard(book: LibraryBook) {
     val model by ai.models.state.collectAsStateWithLifecycle()
     val preferences = remember { UnpagedPreferences(context) }
     dev.unpaged.android.preferenceRevision(preferences)
-    val cache = remember { RecapCache(preferences) }
-    var recap by remember(book.id, book.currentTrackIndex, book.currentPositionMs) { mutableStateOf(cache.read(book)) }
+    val cache = remember { RecapCache(context) }
+    val headline = preferences.text("shortenSummary", "false") == "true"
+    var recap by remember(book.id, book.currentTrackIndex, book.currentPositionMs, headline) { mutableStateOf(cache.read(book, headline)) }
     var loading by remember { mutableStateOf(false) }
     var error by remember(book.id, book.currentTrackIndex, book.currentPositionMs) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -41,13 +42,13 @@ fun RecapCard(book: LibraryBook) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.onSurface.copy(alpha = .06f), RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text(if (preferences.text("shortenSummary", "false") == "true") recap?.headline ?: "Your progress" else "Your progress", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text(if (headline) recap?.headline ?: "Your progress" else "Your progress", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             if (loading) CircularProgressIndicator(Modifier.size(20.dp).testTag("recap.loading"), strokeWidth = 2.dp)
             else if (recap == null) IconButton(onClick = {
                 scope.launch {
                     loading = true; error = null
                     try {
-                        val result = ai.recap(book, book.currentTrackIndex, book.currentPositionMs, preferences.text("shortenSummary", "false") == "true")
+                        val result = ai.recap(book, book.currentTrackIndex, book.currentPositionMs, headline)
                         cache.save(book, result); recap = result
                     } catch (e: CancellationException) { throw e }
                     catch (e: Exception) { error = if (!book.isDownloaded) "Audio for this book isn't on this phone." else "Couldn't generate a recap. Please try again." }

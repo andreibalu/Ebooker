@@ -1,6 +1,7 @@
 package dev.unpaged.android.ai
 
 import android.content.Context
+import androidx.core.content.edit
 import dev.unpaged.android.UnpagedPreferences
 import dev.unpaged.android.library.LibraryBook
 import dev.unpaged.android.library.LibraryMoment
@@ -42,16 +43,19 @@ class AiCoordinator(private val context: Context) {
 }
 
 /** Recaps are bound to their exact progress snapshot; moving the marker invalidates the cache. */
-class RecapCache(private val preferences: UnpagedPreferences) {
+class RecapCache(context: Context) {
+    private val preferences = context.getSharedPreferences("recap_cache", Context.MODE_PRIVATE)
+    init { UnpagedPreferences.removeLegacyRecaps(context) }
     private fun key(book: LibraryBook) = "recap.${book.id}"
-    fun read(book: LibraryBook): Recap? = preferences.text(key(book), "").takeIf { it.isNotEmpty() }?.let {
+    fun read(book: LibraryBook, headline: Boolean = false): Recap? = preferences.getString(key(book), "").orEmpty().takeIf { it.isNotEmpty() }?.let {
         runCatching { org.json.JSONObject(it).let { json ->
             if (json.getInt("track") == book.currentTrackIndex && json.getLong("position") == book.currentPositionMs)
-                Recap(json.getString("text"), json.optString("headline").ifBlank { null }) else null
+                Recap(json.getString("text"), json.optString("headline").ifBlank { null }).takeIf { !headline || !it.headline.isNullOrBlank() } else null
         } }.getOrNull()
     }
+    fun remove(book: LibraryBook) { preferences.edit { remove(key(book)) } }
     fun save(book: LibraryBook, value: Recap) {
-        preferences.setText(key(book), org.json.JSONObject().put("track", book.currentTrackIndex).put("position", book.currentPositionMs)
-            .put("text", value.text).put("headline", value.headline.orEmpty()).toString())
+        preferences.edit { putString(key(book), org.json.JSONObject().put("track", book.currentTrackIndex).put("position", book.currentPositionMs)
+            .put("text", value.text).put("headline", value.headline.orEmpty()).toString()) }
     }
 }

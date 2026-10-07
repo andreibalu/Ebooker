@@ -13,6 +13,19 @@ enum class LibrarySort(val key: String, val label: String) {
 /** One owner for iOS-compatible preference keys. Writes are observed by every app surface. */
 class UnpagedPreferences(context: Context) {
     private val storage = context.getSharedPreferences("unpaged", Context.MODE_PRIVATE)
+    init { removeLegacyRecaps(context) }
+    companion object {
+        internal fun removeLegacyRecaps(context: Context) {
+            val storage = context.getSharedPreferences("unpaged", Context.MODE_PRIVATE)
+            if (!storage.getBoolean("legacyRecapsRemoved", false)) {
+                // Commit before these preferences can be used by the backup agent.
+                storage.edit(commit = true) {
+                    storage.all.keys.filter { it.startsWith("recap.") }.forEach { remove(it) }
+                    putBoolean("legacyRecapsRemoved", true)
+                }
+            }
+        }
+    }
     fun backupEnabled() = storage.getBoolean("libraryBackupEnabled", true)
     fun setBackupEnabled(value: Boolean) {
         // Synchronous so a backup immediately after leaving Settings sees the new policy.

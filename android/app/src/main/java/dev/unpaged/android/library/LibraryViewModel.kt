@@ -183,7 +183,7 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
                     repository.removeFromPhone(book)
                 else {
                     repository.remove(book)
-                    dev.unpaged.android.UnpagedPreferences(getApplication()).remove("recap.${book.id}")
+                    dev.unpaged.android.ai.RecapCache(getApplication()).remove(book)
                 }
             }
             dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).libraryChanged()
