@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="play_latest_book" android:enabled="true"
+        android:icon="@drawable/ic_unpaged" android:shortcutShortLabel="@string/play_latest_book">
+        <intent android:action="dev.unpaged.android.PLAY_LATEST_BOOK"
+            android:targetPackage="dev.unpaged.android.development" android:targetClass="dev.unpaged.android.MainActivity" />
+    </shortcut>
+</shortcuts>

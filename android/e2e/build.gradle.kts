@@ -27,6 +27,7 @@ android {
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
+    implementation("androidx.media3:media3-session:1.8.0")
     implementation("androidx.test:runner:1.7.0")
     implementation("androidx.test.ext:junit:1.3.0")
     implementation("androidx.test.uiautomator:uiautomator:2.3.0")

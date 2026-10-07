@@ -73,6 +73,7 @@ class PlayerController internal constructor(private val context: Application) {
     private var loadJob: Job? = null
     private val markers = mutableMapOf<Int, List<ChapterMarker>>()
     private var replacing = false
+    private var awaitingSessionQueue = false
     private var preservingSkipTarget: Pair<Int, Long>? = null
 
     init {
@@ -114,13 +115,14 @@ class PlayerController internal constructor(private val context: Application) {
     fun detach() {
         activity.end(); update(); persist(true); ticker?.cancel(); player?.removeListener(listener)
         player = null
+        awaitingSessionQueue = false
         connection?.let(MediaController::releaseFuture); connection = null
         mutableState.value = PlayerState(revision = state.value.revision + 1)
     }
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            if (replacing) return
+            if (replacing || awaitingSessionQueue) return
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
                 (events.contains(Player.EVENT_IS_PLAYING_CHANGED) && !player.isPlaying)) activity.flush()
             if (player.playbackState == Player.STATE_ENDED) activity.end()
@@ -184,6 +186,42 @@ class PlayerController internal constructor(private val context: Application) {
     private fun load(book: LibraryBook, track: Int, position: Long) {
         val engine = player ?: return
         if (book.tracks.isEmpty()) return
+        awaitingSessionQueue = false
+        val items = configureBook(book)
+        replacing = true
+        engine.setMediaItems(items, track.coerceIn(book.tracks.indices), position.coerceAtLeast(0))
+        engine.setPlaybackSpeed(book.playbackSpeed.toFloat().takeIf { it in PlaybackRules.speeds } ?: 1f)
+        engine.prepare()
+        engine.play()
+        replacing = false
+        update(); persist(true)
+    }
+    /** Browser playback uses the same resume, persistence, session recorder and EQ setup. */
+    suspend fun prepareSessionBook(book: LibraryBook): androidx.media3.session.MediaSession.MediaItemsWithStartPosition {
+        loadJob?.cancel(); pending = null
+        val ready = CompletableDeferred<LibraryBook?>()
+        writes.send { try { ready.complete(store.books().firstOrNull { it.id == book.id }) }
+            catch (error: Exception) { ready.completeExceptionally(error) } }
+        val fresh = ready.await() ?: error("This book is no longer available.")
+        if (fresh.absItemID != null) abs.startPlayback(fresh.absItemID)
+        val target = resume.start(fresh, preferences.seconds("resumeBacktrackSeconds", 60))
+        val items = configureBook(fresh)
+        // The service applies this queue atomically before any old-engine callback can save
+        // its position against the newly selected book.
+        awaitingSessionQueue = true
+        return androidx.media3.session.MediaSession.MediaItemsWithStartPosition(items,
+            target.first.coerceIn(fresh.tracks.indices), target.second.coerceAtLeast(0))
+    }
+    fun setSessionMediaItems(items: List<MediaItem>, index: Int, position: Long) {
+        val engine = player ?: return
+        replacing = true
+        awaitingSessionQueue = false
+        engine.setMediaItems(items, index, position)
+        engine.setPlaybackSpeed(state.value.book?.playbackSpeed?.toFloat()?.takeIf { it in PlaybackRules.speeds } ?: 1f)
+        replacing = false
+        update(); persist(true)
+    }
+    private fun configureBook(book: LibraryBook): List<MediaItem> {
         activity.end()
         persist(true)
         markers.clear()
@@ -199,18 +237,15 @@ class PlayerController internal constructor(private val context: Application) {
             MediaItem.Builder().setMediaId("${book.id}:$index").setUri(uri)
                 .setCustomCacheKey(if (book.absItemID != null) "abs:${book.id}:$index" else null)
                 .setMediaMetadata(MediaMetadata.Builder().setTitle(PlaybackRules.title(book, index))
-                    .setAlbumTitle(book.title).setArtist(book.author).setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER).build()).build()
+                    .setAlbumTitle(book.title).setArtist(book.author).setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    .setArtworkUri(CarArtworkProvider.uri(context, "book:${book.id}")).build()).build()
         }
         mutableState.value = state.value.copy(book = book, error = null, chapters = PlaybackRules.chapters(book))
-        replacing = true
-        engine.setMediaItems(items, track.coerceIn(book.tracks.indices), position.coerceAtLeast(0))
-        engine.setPlaybackSpeed(book.playbackSpeed.toFloat().takeIf { it in PlaybackRules.speeds } ?: 1f)
-        engine.prepare()
-        engine.play()
-        replacing = false
-        update(); persist(true)
+        return items
     }
+
     private fun update() {
+        if (awaitingSessionQueue) return
         val engine = player ?: return
         var book = state.value.book ?: return
         val index = engine.currentMediaItemIndex.coerceIn(book.tracks.indices)
@@ -231,6 +266,7 @@ class PlayerController internal constructor(private val context: Application) {
             speed = engine.playbackParameters.speed, chapters = PlaybackRules.chapters(book, markers), sleepRemainingMs = rules.sleepRemaining())
     }
     private fun persist(force: Boolean) {
+        if (awaitingSessionQueue) return
         val s = state.value
         val book = s.book ?: return
         val progress = PlaybackProgress(s.trackIndex, s.positionMs, book.highWaterMarkMs, s.speed.toDouble(), book.isFinished)
@@ -304,5 +340,6 @@ class PlayerController internal constructor(private val context: Application) {
         replacing = true; player?.stop(); player?.clearMediaItems(); replacing = false
         mutableState.value = PlayerState(revision = state.value.revision + 1)
     }
+    fun integrationError(message: String) { mutableState.value = state.value.copy(error = message, loading = false) }
     fun dismissError() { mutableState.value = state.value.copy(error = null) }
 }
