@@ -121,6 +121,13 @@ object TrackIdentity {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
+    /** Consume each repeated fingerprint once, in its imported order. */
+    fun orderedLike(imported: List<LibraryTrack>, original: List<LibraryTrack>): List<LibraryTrack> {
+        require(matches(imported, original))
+        val remaining = imported.groupBy { it.fingerprint }.mapValues { (_, tracks) -> ArrayDeque(tracks) }
+        return original.map { remaining.getValue(it.fingerprint).removeFirst() }
+    }
+
     fun matches(a: List<LibraryTrack>, b: List<LibraryTrack>): Boolean =
         a.isNotEmpty() && a.groupingBy { it.fingerprint }.eachCount() ==
             b.groupingBy { it.fingerprint }.eachCount()

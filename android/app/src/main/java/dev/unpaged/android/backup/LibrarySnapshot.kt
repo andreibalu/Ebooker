@@ -3,6 +3,7 @@ package dev.unpaged.android.backup
 import android.database.sqlite.SQLiteDatabase
 import androidx.core.database.sqlite.transaction
 import java.io.File
+import java.io.IOException
 
 /**
  * Consistent copy of the live library for Auto Backup. The app keeps running during a full
@@ -13,6 +14,24 @@ import java.io.File
  */
 internal object LibrarySnapshot {
     const val NAME = "library-backup.db"
+
+    /** A library backup must never succeed with preferences alone when a live database exists. */
+    fun prepare(live: File, snapshot: File, createSnapshot: (File, File) -> Unit = ::create,
+        onFailure: (Int, Exception) -> Unit = { _, _ -> }) {
+        if (!live.isFile) { delete(snapshot); return }
+        var failure: Exception? = null
+        for (attempt in 1..3) {
+            try {
+                createSnapshot(live, snapshot)
+                return
+            } catch (error: Exception) {
+                failure = error
+                onFailure(attempt, error)
+            }
+        }
+        delete(snapshot)
+        throw IOException("Could not snapshot the library for backup", failure)
+    }
 
     fun create(live: File, snapshot: File) {
         delete(snapshot)

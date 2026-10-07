@@ -35,8 +35,8 @@ leftover directory.
 Import probes orphan fingerprints and offers Restore from Backup, Add as New,
 or Cancel. Restore keeps the original book UUID, title, author, progress,
 favorite, EQ, moments and reading history while replacing its audio tracks.
-Locate compares the complete fingerprint multiset, including repeated-track
-counts. Mismatches require explicit Adopt These Files or Choose Different Files.
+Ordinary import and Locate compare the complete fingerprint multiset, including
+repeated-track counts. Exact adoption restores the original fingerprint order. Mismatches require explicit Adopt These Files or Choose Different Files.
 Add as New proceeds through the existing metadata review. Active-library
 imports still reject exact duplicates. Missing and archived books cannot play;
 streaming free books whose downloads were lost resolve their remote URLs.
@@ -182,3 +182,24 @@ The existing removal/Locate/archive/Stream/swipe journey passed on API35 emulato
 C. The first new removal-during-download journey could not open the card menu
 while progress updates refreshed the library; integration with slice 10's
 progress-only update fix is required before rerunning that regression.
+
+
+## Review follow-up
+
+### Review round 3
+
+- Exhausted snapshot retries now delete the partial snapshot and throw IOException
+  with the last failure, so a live library cannot produce a preferences-only backup.
+- Exact adoption reorders imported tracks to the original fingerprint sequence,
+  consuming repeated fingerprints once each so progress and moment indexes stay valid.
+- Ordinary import uses the same complete-multiset mismatch warning as Locate.
+  Adopt These Files explicitly permits replacement; Choose Different Files discards
+  the pending selection. Unconfirmed mismatch adoption fails before changing files or rows.
+
+Four new host regressions cover exhausted snapshot retries and cleanup, eventual
+success and an absent library, renamed/repeated tracks with stored references,
+and ordinary-import/Locate mismatch detection with explicit-adoption enforcement.
+
+The required debug app, lint, host-test and E2E-driver assembly command passed
+on 2026-10-08: 163 host tests, no failures, errors or skips, and 0 lint issues.
+No emulator, device or backup-transport runtime checks ran in this review round.

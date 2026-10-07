@@ -202,6 +202,100 @@ class LibraryBackupTest {
         }
     }
 
+    @Test fun snapshotExhaustionThrowsWithLastFailureAndDeletesPartialFiles() {
+        val folder = File(context.cacheDir, UUID.randomUUID().toString()).apply { mkdirs() }
+        try {
+            val live = File(folder, "library.db").apply { writeText("live") }
+            val snapshot = File(folder, "snapshot.db")
+            val failures = List(3) { java.io.IOException("No space on attempt ${it + 1}") }
+            var attempts = 0
+            val thrown = assertThrows(java.io.IOException::class.java) {
+                dev.unpaged.android.backup.LibrarySnapshot.prepare(live, snapshot, createSnapshot = { _, target ->
+                    target.writeText("partial")
+                    File(target.path + "-journal").writeText("partial journal")
+                    throw failures[attempts++]
+                })
+            }
+            assertEquals(3, attempts); assertSame(failures.last(), thrown.cause)
+            assertFalse(snapshot.exists()); assertFalse(File(snapshot.path + "-journal").exists())
+            assertEquals("live", live.readText())
+        } finally { folder.deleteRecursively() }
+    }
+
+    @Test fun snapshotRetriesThenSucceedsAndMissingLibraryClearsStaleSnapshot() {
+        val folder = File(context.cacheDir, UUID.randomUUID().toString()).apply { mkdirs() }
+        try {
+            val live = File(folder, "library.db").apply { writeText("live") }
+            val snapshot = File(folder, "snapshot.db")
+            var attempts = 0
+            dev.unpaged.android.backup.LibrarySnapshot.prepare(live, snapshot, createSnapshot = { _, target ->
+                attempts++
+                if (attempts < 3) throw java.io.IOException("Busy")
+                target.writeText("complete")
+            })
+            assertEquals(3, attempts); assertEquals("complete", snapshot.readText())
+            live.delete()
+            dev.unpaged.android.backup.LibrarySnapshot.prepare(live, snapshot, createSnapshot = { _, _ -> fail("Missing library must not be opened") })
+            assertFalse(snapshot.exists())
+        } finally { folder.deleteRecursively() }
+    }
+
+    @Test fun renamedImportsRestoreOriginalOrderIncludingRepeatedFingerprintsAndReferences() {
+        fresh().withStore { db ->
+            val root = File(context.cacheDir, UUID.randomUUID().toString())
+            try {
+                val repo = LocalLibraryRepository(root, db, AudioMetadataReader { AudioMetadata(60000) })
+                fun named(name: String, value: Byte) = object : ImportDocument {
+                    override val displayName = name
+                    override fun open() = ByteArrayInputStream(byteArrayOf(value))
+                }
+                val book = repo.save(repo.prepare(listOf(named("1-A.wav", 1), named("2-B.wav", 2), named("3-A.wav", 1))), "Book", "Author")
+                db.updatePlaybackProgress(book.id, PlaybackProgress(1, 20000, 80000, 1.5))
+                book.tracks.indices.forEach { db.saveMoment(LibraryMoment("moment-$it", book.id, it, 1234, "Moment $it")) }
+                repo.removeFromPhone(book)
+                val orphan = repo.load().single()
+                val pending = repo.prepare(listOf(named("1-B.wav", 2), named("2-A.wav", 1), named("3-A.wav", 1)))
+                assertTrue(TrackIdentity.matches(pending.tracks, orphan.tracks))
+                repo.adopt(pending, orphan)
+                val restored = repo.load().single()
+                assertEquals(book.tracks.map { it.fingerprint }, restored.tracks.map { it.fingerprint })
+                assertEquals(listOf("2-A.wav", "1-B.wav", "3-A.wav"), restored.tracks.map { it.originalName })
+                assertEquals(3, restored.tracks.map { it.storedName }.distinct().size)
+                assertEquals(1, restored.currentTrackIndex); assertEquals(20000L, restored.currentPositionMs)
+                assertEquals(book.tracks[1].fingerprint, restored.tracks[restored.currentTrackIndex].fingerprint)
+                db.moments(book.id).forEach { moment ->
+                    assertEquals(book.tracks[moment.trackIndex].fingerprint, restored.tracks[moment.trackIndex].fingerprint)
+                }
+                restored.tracks.forEach { assertTrue(File(root, "${book.id}/${it.storedName}").isFile) }
+            } finally { root.deleteRecursively() }
+        }
+    }
+
+    @Test fun ordinaryImportOverlapRequiresMismatchConfirmationJustLikeLocate() {
+        fresh().withStore { db ->
+            val root = File(context.cacheDir, UUID.randomUUID().toString())
+            try {
+                val repo = LocalLibraryRepository(root, db, AudioMetadataReader { AudioMetadata(60000) })
+                val book = repo.save(repo.prepare(listOf(doc(), doc(byteArrayOf(4)), doc(byteArrayOf(5)))), "Book", "Author")
+                repo.removeFromPhone(book)
+                val orphan = repo.load().single()
+                val pending = repo.prepare(listOf(doc()))
+                assertEquals(orphan.id, repo.findRestoreMatch(pending)?.id)
+                val ordinary = LibraryUiState(pending = pending, restoreMatch = orphan)
+                assertTrue(ordinary.restoreMismatch)
+                assertTrue(ordinary.copy(locateTarget = orphan).restoreMismatch)
+                assertThrows(IllegalArgumentException::class.java) { repo.adopt(pending, orphan) }
+                assertEquals(orphan, db.books().single())
+                assertTrue(File(root, ".staging/${pending.id}").isDirectory)
+                repo.adopt(pending, orphan, allowMismatch = true)
+                assertEquals(1, repo.load().single().tracks.size)
+                val exact = repo.prepare(listOf(doc()), allowDuplicate = true)
+                assertFalse(LibraryUiState(pending = exact, restoreMatch = db.books().single()).restoreMismatch)
+                assertTrue(LibraryUiState(pending = exact, restoreMatch = orphan.copy(tracks = exact.tracks + exact.tracks)).restoreMismatch)
+            } finally { root.deleteRecursively() }
+        }
+    }
+
     @Test fun snapshotIsConsistentAndRestoresIntoLivePath() {
         val live = fresh().also { it.insert(LibraryBook(id, "Snap", "Author", emptyList())) }
         try {

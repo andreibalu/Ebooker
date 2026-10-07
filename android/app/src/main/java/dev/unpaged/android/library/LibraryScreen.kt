@@ -192,8 +192,9 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
         onDelete = { player.removed(it.id); model.remove(it, permanent = true) }, absConnected = absSummary != null) { backupLibrary = false }
     state.restoreMatch?.let { book ->
         dev.unpaged.android.backup.RestoreMatchSheet(book, state.moments[book.id].orEmpty().size, state.busy,
-            state.locateTarget != null && state.pending?.let { !TrackIdentity.matches(it.tracks, book.tracks) } == true,
-            model::restore, if (state.locateTarget != null) model::discard else model::addAsNew, model::discard)
+            state.restoreMismatch,
+            { model.restore(allowMismatch = state.restoreMismatch) },
+            if (state.locateTarget != null || state.restoreMismatch) model::discard else model::addAsNew, model::discard)
     }
     state.pending?.takeIf { state.restoreMatch == null }?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
     state.books.firstOrNull { it.id == renameId }?.let { book ->

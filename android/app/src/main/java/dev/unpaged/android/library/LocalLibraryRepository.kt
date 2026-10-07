@@ -122,8 +122,11 @@ class LocalLibraryRepository(
         }.filter { it.second > 0 }.maxByOrNull { it.second }?.first
     }
 
-    fun adopt(pending: PendingImport, orphan: LibraryBook) {
+    fun adopt(pending: PendingImport, orphan: LibraryBook, allowMismatch: Boolean = false) {
         check(store.books().any { it.id == orphan.id && it.isAudioMissing })
+        val exact = TrackIdentity.matches(pending.tracks, orphan.tracks)
+        require(exact || allowMismatch) { "Track mismatch requires explicit adoption." }
+        val tracks = if (exact) TrackIdentity.orderedLike(pending.tracks, orphan.tracks) else pending.tracks
         val source = ownedFolder(staging, pending.id)
         val destination = ownedFolder(root, orphan.id)
         // Remove from This Phone keeps the cover. As on iOS, it wins over the import's embedded art.
@@ -135,7 +138,7 @@ class LocalLibraryRepository(
             throw ImportProblem(ImportProblem.Reason.STORAGE)
         }
         try {
-            store.promoteDownload(orphan.id, pending.tracks, destination.walkTopDown().filter { it.isFile }.sumOf { it.length() })
+            store.promoteDownload(orphan.id, tracks, destination.walkTopDown().filter { it.isFile }.sumOf { it.length() })
         } catch (error: Throwable) {
             destination.renameTo(source)
             previous.renameTo(destination)

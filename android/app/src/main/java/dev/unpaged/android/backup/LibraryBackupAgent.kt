@@ -26,16 +26,10 @@ class LibraryBackupAgent : BackupAgent() {
         if (!UnpagedPreferences(this).backupEnabled() && !deviceTransfer) return
         val live = getDatabasePath("library.db")
         val snapshot = getDatabasePath(LibrarySnapshot.NAME)
-        var created = false
-        if (live.isFile) {
-            for (attempt in 1..3) {
-                created = runCatching { LibrarySnapshot.create(live, snapshot) }
-                    .onFailure { Log.w("LibraryBackupAgent", "Library snapshot attempt $attempt failed", it); Thread.sleep(250L * attempt) }
-                    .isSuccess
-                if (created) break
-            }
+        LibrarySnapshot.prepare(live, snapshot) { attempt, error ->
+            Log.w("LibraryBackupAgent", "Library snapshot attempt $attempt failed", error)
+            Thread.sleep(250L * attempt)
         }
-        if (!created) LibrarySnapshot.delete(snapshot) // Never ship a partial file.
         // XML allowlists contain only the snapshot and unpaged.xml. Never send owned audio,
         // catalog, caches or Keystore-bound credentials. noBackupFilesDir is platform-excluded.
         try { super.onFullBackup(data) } finally { LibrarySnapshot.delete(snapshot) }

@@ -31,7 +31,11 @@ data class LibraryUiState(
     val total: Int = 0,
     val error: LibraryFailure? = null,
     val errorTitle: String = "Something Went Wrong",
-)
+) {
+    val restoreMismatch: Boolean get() = pending?.let { imported ->
+        restoreMatch?.let { !TrackIdentity.matches(imported.tracks, it.tracks) }
+    } == true
+}
 
 enum class LibraryFailure { INVALID_AUDIO, DUPLICATE, TITLE, READ, STORAGE, LOAD }
 
@@ -95,11 +99,11 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
     fun cancelPreparation() { if (state.value.preparing) job?.cancel() }
 
     fun addAsNew() { mutableState.update { it.copy(restoreMatch = null, locateTarget = null) } }
-    fun restore() {
+    fun restore(allowMismatch: Boolean = false) {
         val pending = state.value.pending ?: return
         val orphan = state.value.restoreMatch ?: return
         operation {
-            withContext(Dispatchers.IO + NonCancellable) { repository.adopt(pending, orphan) }
+            withContext(Dispatchers.IO + NonCancellable) { repository.adopt(pending, orphan, allowMismatch) }
             mutableState.update { it.copy(pending = null, restoreMatch = null, locateTarget = null) }
             refreshBooks()
         }
