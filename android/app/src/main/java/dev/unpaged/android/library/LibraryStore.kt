@@ -187,7 +187,13 @@ class SQLiteLibraryStore(context: Context) : SQLiteOpenHelper(context, "library.
             high_water_mark_ms = MAX(high_water_mark_ms, ?), playback_speed = ?, is_finished = ?, last_played_at = ? WHERE id = ?""",
             arrayOf<Any>(progress.trackIndex, progress.positionMs, progress.highWaterMarkMs, progress.speed,
                 if (progress.finished) 1 else 0, progress.playedAt, id))
-        LibraryContentChanges.committed()
+        // Routine progress writes run every few seconds and never signal car lists; PlayerController
+        // signals on user-visible transitions (load, pause, seek) instead.
+    }
+
+    /** One-row lookup for artwork and similar callers that must not load the whole library. */
+    fun title(id: String): String? = readableDatabase.query("books", arrayOf("title"), "id = ?", arrayOf(id), null, null, null).use {
+        if (it.moveToFirst()) it.getString(0) else null
     }
 
     override fun updateTrackDuration(id: String, trackIndex: Int, durationMs: Long) {

@@ -20,6 +20,21 @@ internal object BrowserCallerPolicy {
         caller == own || trusted || debug || caller in setOf("com.google.android.projection.gearhead", "com.android.car.media")
 }
 
+internal object CarArtwork {
+    /** Single-row lookups, so listing N covers is O(N) rather than loading every book per cover. */
+    fun title(context: android.content.Context, id: String): String? = when {
+        id.startsWith("book:") -> SQLiteLibraryStore(context).let { store ->
+            try { store.title(id.removePrefix("book:")) } finally { store.close() }
+        }
+        id.startsWith("catalog:") && id.removePrefix("catalog:") in Classics.ids -> SQLiteCatalogStore(context).let { store ->
+            try { store.title(id.removePrefix("catalog:")) } finally { store.close() }
+        }
+        else -> null
+    }
+    fun fileName(id: String, title: String) =
+        MessageDigest.getInstance("SHA-256").digest("$id\u0000$title".toByteArray()).joinToString("") { "%02x".format(it) } + ".png"
+}
+
 /** Car clients can read generated covers, never audio files or arbitrary paths. */
 class CarArtworkProvider : ContentProvider() {
     companion object {
@@ -42,18 +57,10 @@ class CarArtworkProvider : ContentProvider() {
         if (!BrowserCallerPolicy.allowed(caller, context.packageName, trusted, debugBrowserAllowed(caller))) throw SecurityException("Artwork access denied")
         if (mode != "r" || uri.authority != "${context.packageName}.car-artwork" || uri.pathSegments.size != 1) throw FileNotFoundException()
         val id = uri.pathSegments.single()
-        val title = when {
-            id.startsWith("book:") -> SQLiteLibraryStore(context).let { store ->
-                try { store.books().firstOrNull { "book:${it.id}" == id }?.title } finally { store.close() }
-            }
-            id.startsWith("catalog:") -> SQLiteCatalogStore(context).let { store ->
-                try { store.books().firstOrNull { "catalog:${it.id}" == id && it.id in Classics.ids }?.title } finally { store.close() }
-            }
-            else -> null
-        } ?: throw FileNotFoundException("Unknown book")
-        val hash = MessageDigest.getInstance("SHA-256").digest(title.toByteArray()).joinToString("") { "%02x".format(it) }
-        val directory = File(context.cacheDir, "car-artwork").apply { mkdirs() }
-        val file = File(directory, "$hash.png")
+        val title = CarArtwork.title(context, id) ?: throw FileNotFoundException("Unknown book")
+        val file = File(File(context.cacheDir, "car-artwork"), CarArtwork.fileName(id, title)).also { it.parentFile?.mkdirs() }
+        val directory = file.parentFile!!
+        val hash = file.nameWithoutExtension
         if (!file.exists()) {
             val temporary = File(directory, "$hash.tmp")
             temporary.writeBytes(GeneratedArtwork.png(title))

@@ -14,10 +14,20 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 
+/** Remembers what each car list last showed so unchanged lists are never re-announced. */
+internal class ChildrenChangeFilter {
+    private val seen = mutableMapOf<String, Int>()
+    fun subscribed(parent: String) = parent in seen
+    /** True when [items] differ from the last list recorded for [parent] (or none was recorded). */
+    fun changed(parent: String, items: List<MediaItem>): Boolean = CarLibrary.signature(items).let { seen.put(parent, it) != it }
+    fun clear() = seen.clear()
+}
+
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class CarSessionCallback(private val service: PlaybackService, private val player: PlayerController) : MediaLibrarySession.Callback {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val library = CarLibrary(service)
+    private val listFilter = ChildrenChangeFilter()
     private val commands = CarCommands(player.preferences, { player.state.value.book != null },
         player::draftMoment, player::saveMoment, player::markProgress, { player.state.value.speed }, player::speed)
     companion object {
@@ -32,14 +42,16 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
         ).map { (action, title, icon) -> CommandButton.Builder(icon).setDisplayName(title)
             .setSessionCommand(SessionCommand(action, Bundle.EMPTY)).build() }
     }
-    fun close() { scope.cancel(); library.close() }
+    fun close() { scope.cancel(); listFilter.clear(); library.close() }
+    override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) { player.sessionControllerDisconnected() }
     /** The Chapters tab comes and goes with the loaded book, and its rows follow the book's chapters. */
     fun watchChapters(session: MediaLibrarySession) {
         scope.launch {
             dev.unpaged.android.library.LibraryContentChanges.changes.drop(1).collectLatest {
-                kotlinx.coroutines.delay(250) // coalesce bursts such as progress saves
-                val counts = read { CarLibrary.tabs.map { it to library.children(it).size } }
-                counts.forEach { (parent, count) -> session.notifyChildrenChanged(parent, count, null) }
+                kotlinx.coroutines.delay(250) // coalesce bursts of writes
+                val lists = read { CarLibrary.tabs.filter(listFilter::subscribed).map { it to library.children(it) } }
+                lists.filter { (parent, items) -> listFilter.changed(parent, items) }
+                    .forEach { (parent, items) -> session.notifyChildrenChanged(parent, items.size, null) }
             }
         }
         scope.launch {
@@ -79,9 +91,12 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
         item?.let { LibraryResult.ofItem(it, null) } ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
     }
     override fun onSubscribe(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, params: LibraryParams?) = async {
-        val items = if (parentId == CarLibrary.CHAPTERS) library.children(parentId) else read { library.children(parentId) }
-        session.notifyChildrenChanged(browser, parentId, items.size, params)
-        LibraryResult.ofVoid(params)
+        try {
+            val items = if (parentId == CarLibrary.CHAPTERS) library.children(parentId) else read { library.children(parentId) }
+            if (parentId in CarLibrary.tabs) listFilter.changed(parentId, items)
+            session.notifyChildrenChanged(browser, parentId, items.size, params)
+            LibraryResult.ofVoid(params)
+        } catch (_: IllegalArgumentException) { LibraryResult.ofError(SessionError.ERROR_BAD_VALUE) }
     }
     override fun onSearch(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, query: String, params: LibraryParams?) = async {
         val count = read { library.search(query).size }
@@ -102,6 +117,13 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
                 val chapter = library.chapter(id) ?: error("This chapter is no longer available.")
                 return MediaSession.MediaItemsWithStartPosition((0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) },
                     chapter.trackIndex, chapter.startMs)
+            }
+            val loaded = player.state.value.book
+            if (loaded != null && session.player.mediaItemCount > 0 && (id == "book:${loaded.id}" || (loaded.catalogId != null && id == "catalog:${loaded.catalogId}"))) {
+                // Already loaded with its queue: keep the position instead of resuming from the saved one.
+                session.player.play()
+                return MediaSession.MediaItemsWithStartPosition((0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) },
+                    session.player.currentMediaItemIndex, session.player.currentPosition)
             }
             return player.prepareSessionBook(library.resolve(id))
         } catch (error: Exception) {

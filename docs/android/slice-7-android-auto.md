@@ -155,3 +155,19 @@ rejected with "This chapter is no longer available." Host tests cover both. Andr
 has no rename or archive operation yet, so those paths do not exist to signal; a
 change of the Library sort preference does not trigger a refresh. Subscription
 refresh on a real head unit remains unverified.
+
+A third review found the following, all addressed. Routine playback-progress writes
+(every ~5 s) no longer signal `LibraryContentChanges`; `PlayerController` signals
+only after forced saves (pause, seek, load), and `CarSessionCallback` re-queries only
+subscribed tabs and calls `notifyChildrenChanged` only when a per-parent signature of
+child ids, titles and subtitles changed (`ChildrenChangeFilter`). The wait for a
+browser-supplied queue (`SessionQueueGate`) now has a generation token, a 10 s
+timeout and a controller-disconnect reset that restores the previous book state, so
+phone UI and progress saving cannot freeze. `onSubscribe` returns `ERROR_BAD_VALUE`
+for unknown parents. Voice search folds punctuation and apostrophes, tokenizes,
+ignores filler words ("by", "and", "the", ...) and requires every remaining token in
+title plus author, ranking exact-phrase matches first. The Siri-style intent lookup
+in `MainActivity` runs on the player's app-lifetime scope. Car artwork looks up one
+book by id (cache file keyed by id and title) instead of loading the library per
+cover. Choosing the book that is already loaded with its queue just plays it from
+the current position. Head-unit behavior remains unverified.

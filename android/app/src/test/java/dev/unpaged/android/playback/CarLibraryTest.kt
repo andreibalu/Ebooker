@@ -216,4 +216,66 @@ class CarLibraryTest {
         assertEquals(CarSessionCallback.actions, buttons.map { it.sessionCommand?.customAction })
         assertEquals(3, buttons.map { it.sessionCommand }.toSet().size)
     }
+    @Test fun voiceSearchToleratesFillerWordOrderAndPunctuation() {
+        val books = listOf(book("pp", "Pride and Prejudice").copy(author = "Jane Austen"),
+            book("alice", "Alice's Adventures in Wonderland").copy(author = "Lewis Carroll"),
+            book("pride", "Pride of Lions").copy(author = "Someone"))
+        assertEquals("book:pp", CarLibrary.searchIDs("Pride and Prejudice by Jane Austen", books, emptyList()).first())
+        assertEquals(listOf("book:pp"), CarLibrary.searchIDs("Austen Pride", books, emptyList()))
+        assertEquals(listOf("book:alice"), CarLibrary.searchIDs("Alices adventures", books, emptyList()))
+        assertEquals(listOf("book:alice"), CarLibrary.searchIDs("alice\u2019s, adventures!", books, emptyList()))
+        assertEquals("book:pp", CarLibrary.searchIDs("prejudice pride", books, emptyList()).single())
+        assertEquals(listOf("pride", "prejudice"), CarLibrary.searchTokens("the Pride by Prejudice"))
+        assertEquals(listOf("the"), CarLibrary.searchTokens("the"))
+        assertTrue(CarLibrary.searchIDs("Pride by Dickens", books, emptyList()).isEmpty())
+    }
+    @Test fun exactPhraseOutranksTokenOnlyMatches() {
+        val loose = book("loose", "Wonder Alice").copy(author = "A")
+        val exact = book("exact", "Alice Wonder").copy(author = "B")
+        assertEquals(listOf("book:exact", "book:loose"), CarLibrary.searchIDs("alice wonder", listOf(loose, exact), emptyList()))
+    }
+    @Test fun childrenFilterSkipsUnchangedListsAndReportsTitleOrOrderChanges() {
+        val filter = ChildrenChangeFilter()
+        val a = CarLibrary.bookItem(book("a", "Alpha")); val b = CarLibrary.bookItem(book("b", "Beta"))
+        assertFalse(filter.subscribed("Library"))
+        assertTrue(filter.changed("Library", listOf(a, b)))
+        assertTrue(filter.subscribed("Library"))
+        assertFalse(filter.changed("Library", listOf(a, b)))
+        assertTrue(filter.changed("Library", listOf(b, a)))
+        assertTrue(filter.changed("Library", listOf(b, CarLibrary.bookItem(book("a", "Renamed")))))
+        assertFalse(filter.changed("Library", listOf(b, CarLibrary.bookItem(book("a", "Renamed")))))
+        assertTrue(filter.changed("Favorites", emptyList()))
+    }
+    @Test fun routineProgressWritesDoNotSignalCarLists() {
+        val store = SQLiteLibraryStore(context)
+        try {
+            store.insert(book("p", "Progress"))
+            val before = LibraryContentChanges.changes.value
+            repeat(5) { store.updatePlaybackProgress("p", PlaybackProgress(0, 1000L * it, 1000L * it, playedAt = 1L + it)) }
+            assertEquals(before, LibraryContentChanges.changes.value)
+        } finally { store.close() }
+    }
+    @Test fun artworkLooksUpOneBookByIdAndKeysCacheByIdAndTitle() {
+        val store = SQLiteLibraryStore(context); val catalog = SQLiteCatalogStore(context)
+        try {
+            store.insert(book("one", "First")); store.insert(book("two", "Second"))
+            catalog.seed(listOf(CatalogBook("133", "Jane Eyre", "Author", "", "English", 60), CatalogBook("9999", "Not Classic", "A", "", "English", 60)))
+        } finally { store.close(); catalog.close() }
+        assertEquals("Second", CarArtwork.title(context, "book:two"))
+        assertNull(CarArtwork.title(context, "book:missing"))
+        assertEquals("Jane Eyre", CarArtwork.title(context, "catalog:133"))
+        assertNull(CarArtwork.title(context, "catalog:9999"))
+        assertNull(CarArtwork.title(context, "file:///etc/passwd"))
+        assertNotEquals(CarArtwork.fileName("book:one", "First"), CarArtwork.fileName("book:two", "First"))
+        assertNotEquals(CarArtwork.fileName("book:one", "First"), CarArtwork.fileName("book:one", "Renamed"))
+    }
+    @Test fun sessionQueueGateClearsOnEveryExitAndIgnoresStaleTimeouts() {
+        val gate = SessionQueueGate()
+        val first = gate.begin(); assertTrue(gate.awaiting)
+        val second = gate.begin()
+        assertFalse(gate.expire(first)); assertTrue(gate.awaiting)
+        assertTrue(gate.expire(second)); assertFalse(gate.awaiting)
+        gate.begin(); gate.clear(); assertFalse(gate.awaiting)
+        val late = gate.begin(); gate.clear(); assertFalse(gate.expire(late))
+    }
 }

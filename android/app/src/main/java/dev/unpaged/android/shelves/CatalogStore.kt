@@ -37,6 +37,9 @@ class SQLiteCatalogStore(context: Context) : SQLiteOpenHelper(context, "librivox
             while (rows.moveToNext()) add(LibriVoxClient.decodeBook(JSONObject(rows.getString(0))))
         }
     }
+    fun title(id: String): String? = readableDatabase.rawQuery("SELECT json FROM catalog WHERE id = ?", arrayOf(id)).use {
+        if (it.moveToFirst()) LibriVoxClient.decodeBook(JSONObject(it.getString(0))).title else null
+    }
     override fun count(): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM catalog", null).use { it.moveToFirst(); it.getInt(0) }
     override fun cursor(): SyncCursor = readableDatabase.rawQuery("SELECT offset,since,started,completed,ready FROM sync WHERE singleton=1", null).use {
         check(it.moveToFirst()); SyncCursor(it.getInt(0), it.getLong(1), it.getLong(2), it.getLong(3), it.getInt(4) == 1)

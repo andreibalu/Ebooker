@@ -25,15 +25,29 @@ class CarLibrary(private val context: Context, private val store: LibraryStore =
             .takeIf { id.startsWith("chapter:${android.net.Uri.encode(bookId)}:") }?.toIntOrNull()?.takeIf { it >= 0 }
         fun latest(books: List<LibraryBook>) = books.filter { it.tracks.isNotEmpty() }
             .maxByOrNull { it.lastPlayedAt ?: 0L }
-        fun searchIDs(query: String, books: List<LibraryBook>, classics: List<CatalogBook>): List<String> {
-            val needle = fold(query.trim())
-            if (needle.isEmpty()) return listOfNotNull(latest(books)?.let { "book:${it.id}" })
-            val library = books.filter { fold(it.title).contains(needle) || fold(it.author).contains(needle) }
-            val titles = library.map { fold(it.title) }.toSet()
-            return (library.map { "book:${it.id}" } + classics.filter {
-                fold(it.title) !in titles && (fold(it.title).contains(needle) || fold(it.author).contains(needle))
-            }.distinctBy { fold(it.title) }.map { "catalog:${it.id}" }).take(30)
+        private val fillerTokens = setOf("by", "the", "a", "an", "and", "of", "from", "audiobook", "book")
+        /** Folds case, diacritics, apostrophes and punctuation so "Alices adventures" meets "Alice's Adventures". */
+        fun searchFold(text: String): String = fold(text).replace(Regex("['\u2019`]"), "")
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+        fun searchTokens(query: String): List<String> {
+            val all = searchFold(query).split(' ').filter { it.isNotEmpty() }
+            return all.filter { it !in fillerTokens }.ifEmpty { all }
         }
+        fun searchIDs(query: String, books: List<LibraryBook>, classics: List<CatalogBook>): List<String> {
+            val phrase = searchFold(query); val tokens = searchTokens(query)
+            if (tokens.isEmpty()) return listOfNotNull(latest(books)?.let { "book:${it.id}" })
+            fun exact(title: String, author: String) = searchFold(title).contains(phrase) || searchFold(author).contains(phrase)
+            fun loose(title: String, author: String) = "${searchFold(title)} ${searchFold(author)}".let { text -> tokens.all { it in text } }
+            val library = books.filter { loose(it.title, it.author) }.sortedByDescending { exact(it.title, it.author) }
+            val titles = library.map { fold(it.title) }.toSet()
+            return (library.map { "book:${it.id}" } + classics.filter { fold(it.title) !in titles && loose(it.title, it.author) }
+                .sortedByDescending { exact(it.title, it.author) }
+                .distinctBy { fold(it.title) }.map { "catalog:${it.id}" }).take(30)
+        }
+        /** Cheap identity of a car list: ids, titles and subtitles; artwork URIs follow the id. */
+        fun signature(items: List<MediaItem>): Int = items.map {
+            Triple(it.mediaId, it.mediaMetadata.title?.toString(), it.mediaMetadata.subtitle?.toString())
+        }.hashCode()
         fun page(items: List<MediaItem>, page: Int, size: Int): List<MediaItem> {
             require(page >= 0 && size > 0)
             val from = (page.toLong() * size).coerceAtMost(items.size.toLong()).toInt()

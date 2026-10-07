@@ -2,8 +2,6 @@ package dev.unpaged.android
 
 import android.os.Bundle
 import android.content.Intent
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import dev.unpaged.android.playback.CarLibrary
@@ -32,13 +30,15 @@ open class MainActivity : ComponentActivity() {
             "android.media.action.MEDIA_PLAY_FROM_SEARCH" -> request.getStringExtra(android.app.SearchManager.QUERY).orEmpty()
             else -> return
         }
-        // Consume before asynchronous lookup. Rotation and ordinary relaunch cannot replay it.
+        // Consume before asynchronous lookup. Rotation and ordinary relaunch cannot replay it. The lookup
+        // runs on the player's app-lifetime scope so destroying this activity cannot drop the request.
         request.action = Intent.ACTION_MAIN
         request.removeExtra(android.app.SearchManager.QUERY)
-        lifecycleScope.launch {
-            val player = PlayerController.get(this@MainActivity)
+        val context = applicationContext
+        PlayerController.get(context).launchIntegration {
+            val player = PlayerController.get(context)
             try {
-                CarLibrary(this@MainActivity).use { library ->
+                CarLibrary(context).use { library ->
                     val id = withContext(Dispatchers.IO) { library.search(query).firstOrNull()?.mediaId }
                         ?: error(if (query.isBlank()) "Your Library Is Empty" else "No matches for \"$query\"")
                     player.play(library.resolve(id))
