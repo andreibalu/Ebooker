@@ -48,6 +48,7 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
     preferenceRevision(preferences)
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var resetConfirmation by rememberSaveable { mutableStateOf(false) }
+    var aiSettings by rememberSaveable { mutableStateOf(false) }
     var absSettings by rememberSaveable { mutableStateOf(false) }
     val absClient = (androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).abs
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -122,6 +123,16 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                     }
                 }
                 Column {
+                    SectionHeader("AI", "On your phone.")
+                    Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
+                        Row(Modifier.fillMaxWidth().clickable { aiSettings = true }.testTag("settings.ai").padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, null, Modifier.size(22.dp))
+                            Column(Modifier.weight(1f).padding(horizontal = 14.dp)) { Text("On-device AI", fontSize = 16.sp, fontWeight = FontWeight.SemiBold); Text("Smart moments & recaps", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(16.dp))
+                        }
+                    }
+                }
+                Column {
                     SectionHeader("APP", "Appearance & tour.")
                     Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -173,6 +184,7 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
         confirmButton = { TextButton(onClick = { resetConfirmation = false; onDone(); preferences.setOnboardingComplete(false) },
             modifier = Modifier.testTag("settings.confirmReset")) { Text("Reset") } },
         dismissButton = { TextButton(onClick = { resetConfirmation = false }) { Text("Cancel") } })
+    if (aiSettings) dev.unpaged.android.ai.AiSettingsScreen((androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).ai, preferences) { aiSettings = false }
     if (absSettings) dev.unpaged.android.abs.ABSServerSettings(absClient, preferences, onOpenShelves = { absSettings = false; onDone(); onOpenShelves?.invoke() }) { absSettings = false }
 }
 

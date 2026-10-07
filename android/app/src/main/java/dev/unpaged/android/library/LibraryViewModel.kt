@@ -178,8 +178,14 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         if (job?.isActive == true) return
         operation {
             dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).cancelForRemoval(book)
-            withContext(Dispatchers.IO + NonCancellable) { if (!permanent && dev.unpaged.android.UnpagedPreferences(getApplication()).backupEnabled() && book.absItemID == null)
-                repository.removeFromPhone(book) else repository.remove(book) }
+            withContext(Dispatchers.IO + NonCancellable) {
+                if (!permanent && dev.unpaged.android.UnpagedPreferences(getApplication()).backupEnabled() && book.absItemID == null)
+                    repository.removeFromPhone(book)
+                else {
+                    repository.remove(book)
+                    dev.unpaged.android.UnpagedPreferences(getApplication()).remove("recap.${book.id}")
+                }
+            }
             dev.unpaged.android.shelves.ShelvesSession.get(getApplication()).libraryChanged()
             refreshBooks()
         }

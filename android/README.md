@@ -1,6 +1,6 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`, built in six merged slices plus the Android Auto, media/parity and backup slices:
+Native Kotlin/Compose application under `android/app/`, built in six merged slices plus the Android Auto, backup, on-device AI and media/parity slices:
 
 - [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
   import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
@@ -23,15 +23,18 @@ Native Kotlin/Compose application under `android/app/`, built in six merged slic
 - [Slice 7](../docs/android/slice-7-android-auto.md): MediaLibraryService browse tree,
   car commands, voice search and Play Latest Book shortcut.
   Real Android Auto rendering is unverified.
-- [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
-  WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
-  parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md).
 - [Slice 8](../docs/android/slice-8-library-backup-restore.md): Android's Auto Backup
   of library metadata, missing-audio detection, in-place re-import, archived free
   books and Backed-up Library.
+- [Slice 9](../docs/android/slice-9-on-device-ai.md): Gemini Nano smart moments,
+  recaps and optional downloaded Whisper transcription. Physical Nano qualification
+  remains open.
+- [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
+  WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
+  parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md).
 
-SQLite is at schema v5 via additive, tested migrations. AI,
-payments and live cloud sync are absent. Self-hosted ABS permits HTTP
+SQLite is at schema v5 via additive, tested migrations. Payments and live cloud
+sync are absent. Self-hosted ABS permits HTTP
 through the network security configuration, with a public-host warning before
 credentials are sent. Credentials use Android Keystore AES/GCM encryption in
 app-private storage excluded from backups. The
@@ -50,8 +53,9 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 ```
 
 These exports affect only the current shell. Other machines should substitute
-local JDK/SDK paths. Android Studio and an emulator are optional; global Gradle,
-NDK and shell-profile edits are unnecessary. First build downloads Gradle and
+local JDK/SDK paths. Android Studio is optional. Use the assigned emulator for
+runtime checks. Global Gradle and shell-profile edits are unnecessary. AGP installs
+the pinned NDK/CMake for the Whisper native build. First build downloads Gradle and
 Maven dependencies into the user's Gradle cache and creates the normal local
 Android debug signing key if absent. Never commit that key. SDK license terms
 must be accepted by the developer before SDK installation (already accepted by

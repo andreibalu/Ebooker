@@ -27,7 +27,17 @@ class UnpagedPreferences(context: Context) {
     fun onboardingComplete() = storage.getBoolean("onboardingComplete", storage.getInt("onboardingPhase", 0) == 3)
     fun setOnboardingComplete(value: Boolean) { storage.edit { putBoolean("onboardingComplete", value) } }
     fun shelvesFirst() = storage.getBoolean("startOnFreeBooks", false)
+    fun remove(key: String) { storage.edit { remove(key) } }
     fun setText(key: String, value: String) { storage.edit { putString(key, value) } }
+    fun setAiPreference(key: String, enabled: Boolean) {
+        require(key in setOf("useLocalAIFeatures", "useSmartMomentNaming", "useSmartSummary", "shortenSummary"))
+        storage.edit {
+            putString(key, enabled.toString())
+            if (key == "useLocalAIFeatures" && !enabled) {
+                putString("useSmartMomentNaming", "false"); putString("useSmartSummary", "false"); putString("shortenSummary", "false")
+            } else if (key == "useSmartSummary" && !enabled) putString("shortenSummary", "false")
+        }
+    }
     fun setSeconds(key: String, value: Int) { storage.edit { putInt(key, value) } }
     fun setShelvesFirst(value: Boolean) { storage.edit { putBoolean("startOnFreeBooks", value) } }
     fun sort(tab: String) = LibrarySort.entries.firstOrNull { it.key == text(sortKey(tab), "recent") } ?: LibrarySort.RECENT

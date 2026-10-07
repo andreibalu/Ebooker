@@ -15,6 +15,7 @@ parser.add_argument('--playback-only', action='store_true', help='Require the fo
 parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
 parity_references = {
+    'ai-moment-light': '09-save-moment-light.png',
     'eq-light': '08-eq-light.png',
     'onboarding-light': '00-launch.png',
     'activity-light': '01-favorites-light.png',
@@ -96,7 +97,7 @@ for case in cases:
     if case.startswith('abs-') and case.endswith('-dark'):
         note += '<p>The supplied iOS capture rendered in light appearance. Android shows actual dark appearance. Compare structure here and colors against the related light pair.</p>'
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
-for case in ['auto-player-dark', 'auto-shortcut-dark', 'auto-voice-dark', 'auto-moments-light', 'auto-moments-dark', *[f'{screen}-{theme}' for screen in ['embedded-chapters', 'book-menu', 'rename', 'reset-confirmation', 'cover-crop', 'cover-detail', 'cover-remove', 'download', 'download-complete'] for theme in ['light', 'dark']], 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
+for case in [*[f'ai-{screen}-{theme}' for screen in ['settings', 'options', 'unavailable', 'player', 'moment', 'recap'] for theme in ['light', 'dark']], 'auto-player-dark', 'auto-shortcut-dark', 'auto-voice-dark', 'auto-moments-light', 'auto-moments-dark', *[f'{screen}-{theme}' for screen in ['embedded-chapters', 'book-menu', 'rename', 'reset-confirmation', 'cover-crop', 'cover-detail', 'cover-remove', 'download', 'download-complete'] for theme in ['light', 'dark']], 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
              *[f'abs-{screen}-{theme}' for screen in ['connect', 'browse', 'detail', 'detail-added', 'library', 'server-settings'] for theme in ['light', 'dark']],
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',

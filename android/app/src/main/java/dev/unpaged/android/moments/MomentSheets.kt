@@ -22,7 +22,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (LibraryMoment) -> Unit, onCancel: () -> Unit) {
+fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, aiGenerated: Boolean = false, warning: String? = null, onSave: (LibraryMoment) -> Unit, onCancel: () -> Unit) {
     var name by rememberSaveable(moment.id) { mutableStateOf(moment.label) }
     var note by rememberSaveable(moment.id) { mutableStateOf(moment.notes) }
     var quote by rememberSaveable(moment.id) { mutableStateOf(moment.quoteLine.orEmpty()) }
@@ -41,9 +41,10 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (Li
             }) { Text("Done") }
         }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("moment.scroll").navigationBarsPadding().padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            warning?.let { Text(it, Modifier.testTag("moment.warning"), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             MomentSection("Name") { TextField(name, { name = it }, Modifier.fillMaxWidth().testTag("moment.name"), colors = momentFieldColors(), placeholder = { Text("Moment name") }, singleLine = true) }
-            MomentSection("Note") { TextField(note, { note = it }, Modifier.fillMaxWidth().testTag("moment.note"), colors = momentFieldColors(), placeholder = { Text("Add a note (optional)") }, minLines = 4, maxLines = 8) }
-            MomentSection("Quote") { TextField(quote, { quote = it }, Modifier.fillMaxWidth().testTag("moment.quote"), colors = momentFieldColors(), placeholder = { Text("Add a quote (optional)") }, minLines = 2, maxLines = 6, textStyle = LocalTextStyle.current.copy(fontStyle = FontStyle.Italic, fontSize = 14.sp)) }
+            MomentSection("Note", badge = if (aiGenerated) "AI generated" else null) { TextField(note, { note = it }, Modifier.fillMaxWidth().testTag("moment.note"), colors = momentFieldColors(), placeholder = { Text("Add a note (optional)") }, minLines = 4, maxLines = 8) }
+            MomentSection("Quote") { TextField(quote, { quote = it }, Modifier.fillMaxWidth().testTag("moment.quote"), colors = momentFieldColors(), placeholder = { Text(if (aiGenerated) "On-device AI couldn't extract a quote from this sequence" else "Add a quote (optional)") }, minLines = 2, maxLines = 6, textStyle = LocalTextStyle.current.copy(fontStyle = FontStyle.Italic, fontSize = 14.sp)) }
             MomentSection("Categories") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     categories.forEach { key -> MomentChip(MomentCategory.valueOf(key).title) { categories = ArrayList(categories - key) } }
@@ -68,9 +69,12 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (Li
 }
 
 @Composable
-private fun MomentSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun MomentSection(title: String, badge: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title.uppercase(Locale.ROOT), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth()) {
+            Text(title.uppercase(Locale.ROOT), Modifier.weight(1f), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            badge?.let { Text(it, Modifier.testTag("moment.aiGenerated"), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
         Surface(shape = RoundedCornerShape(12.dp)) { Column(Modifier.fillMaxWidth().padding(8.dp), content = content) }
     }
 }

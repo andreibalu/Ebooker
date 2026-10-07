@@ -131,7 +131,7 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                                 Surface(shape = RoundedCornerShape(24.dp)) { Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text("SAVED MOMENT · 1:24:07", fontSize = 11.sp, color = ActivityAmber)
                                     Text("Saved Moment", fontFamily = FontFamily.Serif, fontSize = 28.sp)
-                                    Text("Timestamps are saved on your phone. Automatic naming and AI recaps are not available.")
+                                    Text("On-device AI can name moments and recap local books on supported phones. Set it up in Settings → On-device AI.")
                                 } }
                             }
                             5 -> {

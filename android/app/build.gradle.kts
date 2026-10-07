@@ -1,4 +1,5 @@
 plugins {
+    id("com.google.devtools.ksp")
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -9,10 +10,13 @@ android {
     namespace = "dev.unpaged.android"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
+    ndkVersion = "28.2.13676358"
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     defaultConfig {
         applicationId = "dev.unpaged.android.development"
         // Provisional scaffold floor, not a product/device-support decision.
         minSdk = 26
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         targetSdk = 36
         versionCode = 1
         versionName = "0.0.1-dev"
@@ -32,6 +36,8 @@ android {
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 
 dependencies {
+    ksp("com.google.mlkit:genai-schema-compiler:1.0.0-alpha1")
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
     implementation("androidx.exifinterface:exifinterface:1.3.6")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("androidx.media3:media3-exoplayer:1.8.0")

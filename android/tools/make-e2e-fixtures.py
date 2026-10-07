@@ -4,6 +4,7 @@ import sys
 import subprocess
 import struct
 import zlib
+import shutil
 import wave
 from pathlib import Path
 
@@ -52,3 +53,18 @@ pixels = b''.join(b'\0' + b''.join(bytes([x % 256, y % 256, 100]) for x in range
 (root / 'Cover.png').write_bytes(b'\x89PNG\r\n\x1a\n' +
     png_chunk(b'IHDR', struct.pack('>IIBBBBB', 400, 200, 8, 2, 0, 0, 0)) +
     png_chunk(b'IDAT', zlib.compress(pixels)) + png_chunk(b'IEND', b''))
+# Speech synthesized locally by macOS say, original text authored for Unpaged E2E.
+# No third-party recording or book excerpt. Used only by the test document picker.
+speech = root / 'Speech.aiff'
+subprocess.run(['say', '-v', 'Samantha', '-r', '155', '-o', str(speech),
+    'The old garden was quiet in the morning. Alice opened the gate and listened to the birds. A new journey was about to begin.'], check=True)
+subprocess.run(['afconvert', str(speech), str(root / 'AI Speech.wav'), '-f', 'WAVE', '-d', 'LEI16@16000', '-c', '1'], check=True)
+speech.unlink()
+with wave.open(str(root / 'AI Speech.wav')) as spoken:
+    has_speech = spoken.getnframes() > spoken.getframerate() * 2
+if not has_speech:
+    # macOS speech synthesis may exit 0 with no frames inside a process sandbox.
+    shutil.copyfile(Path(__file__).parent / 'fixtures/jfk.wav', root / 'AI Speech.wav')
+with wave.open(str(root / 'AI Speech.wav')) as spoken:
+    assert spoken.getnchannels() == 1 and spoken.getsampwidth() == 2 and spoken.getframerate() == 16000
+    assert spoken.getnframes() > 32000, 'Speech fixture must contain actual audio'

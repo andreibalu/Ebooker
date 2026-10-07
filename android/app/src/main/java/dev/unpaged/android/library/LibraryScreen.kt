@@ -322,6 +322,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                 }
             }
         }
+        item { dev.unpaged.android.ai.RecapCard(book) }
         item {
             Surface(shape = UnpagedTheme.disclosureShape, shadowElevation = UnpagedTheme.cardShadow) {
                 Column {
