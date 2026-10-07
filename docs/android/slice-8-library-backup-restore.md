@@ -141,11 +141,10 @@ Inspect every light/dark capture and resolve discrepancies before runtime signof
 
 ## Evidence boundaries
 
-The assigned `emulator-5584` was not visible to adb during implementation. The
-brief forbids booting it or using another serial. Emulator E2E execution, local
-transport restore, screenshots and visual review remain pending unless the
-assigned emulator becomes available. Host tests and assembly do not prove these
-runtime paths.
+On 2026-10-07 the full suite passed on `Unpaged_E2E_API35_C` with this slice
+stacked on slices 7 and 10. The backup journeys cover local transport backup and
+restore, Audio Missing, in-place re-import, Locate mismatch, free-book archive and
+Stream, and swipe deletion, with light and dark captures.
 
 Even a passing emulator transport test does not establish Google Drive cloud
 backup timing, quota behavior on a real account, physical-phone storage/audio
