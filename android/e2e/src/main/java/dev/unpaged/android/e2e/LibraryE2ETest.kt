@@ -160,13 +160,13 @@ class LibraryE2ETest {
     fun voiceIntentAndBrowserSearchChooseLibraryFirstAndEmptyQueryResumesLatest() {
         saveBook("Jane Eyre", "Charlotte Bronte", "Another.wav")
         saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 1.wav", "E2E Chapter 2.wav")
-        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.MainActivity -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query 'Jane Eyre'")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.MainActivity -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query Eyre") // No shell here: a quoted space would split the argument.
         visible(By.res("miniPlayer.title").text("Jane Eyre")); visible(By.desc("Pause playback"))
         field("miniPlayer.playPause").click(); visible(By.desc("Play playback"))
         val browser = browser()
         try {
-            assertEquals(0, mediaResult(onMediaMain { browser.search("Jane", null) }).resultCode)
-            val results = mediaResult(onMediaMain { browser.getSearchResult("Jane", 0, 30, null) }).value!!
+            assertEquals(0, mediaResult(onMediaMain { browser.search("Eyre", null) }).resultCode)
+            val results = mediaResult(onMediaMain { browser.getSearchResult("Eyre", 0, 30, null) }).value!!
             assertEquals(1, results.size); assertTrue(results.single().mediaId.startsWith("book:"))
             val request = androidx.media3.common.MediaItem.Builder().setRequestMetadata(
                 androidx.media3.common.MediaItem.RequestMetadata.Builder().setSearchQuery("Listening").build()).build()
