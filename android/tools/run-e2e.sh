@@ -62,3 +62,9 @@ kill -0 "$abs_server_pid" # Refuse accidentally using a server left by another r
 ./gradlew --no-daemon :app:assembleDebug :app:lintDebug :app:testDebugUnitTest :e2e:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.e2eApproved=true "$@" > "$evidence/gradle.log" 2>&1
 cat "$evidence/gradle.log"
+# AGP's connected-device provider honors ANDROID_SERIAL. Fail loudly if a future
+# plugin version ever fans the suite out to another attached emulator.
+targets="$(grep -oE 'Starting [0-9]+ tests on [A-Za-z0-9_.-]+' "$evidence/gradle.log" | awk '{print $5}' | sort -u)"
+[[ -z "$targets" || "$targets" == "$name" ]] || {
+  echo "E2E ran on unexpected devices: $targets (expected only $name)" >&2; exit 1;
+}
