@@ -271,11 +271,23 @@ class CarLibraryTest {
     }
     @Test fun sessionQueueGateClearsOnEveryExitAndIgnoresStaleTimeouts() {
         val gate = SessionQueueGate()
-        val first = gate.begin(); assertTrue(gate.awaiting)
-        val second = gate.begin()
+        val first = gate.begin("browser"); assertTrue(gate.awaiting)
+        val second = gate.begin("browser")
         assertFalse(gate.expire(first)); assertTrue(gate.awaiting)
         assertTrue(gate.expire(second)); assertFalse(gate.awaiting)
-        gate.begin(); gate.clear(); assertFalse(gate.awaiting)
-        val late = gate.begin(); gate.clear(); assertFalse(gate.expire(late))
+        gate.begin("browser"); gate.clear(); assertFalse(gate.awaiting)
+        val late = gate.begin("browser"); gate.clear(); assertFalse(gate.expire(late))
     }
+    @Test fun subscribingDuringDebouncePreservesExistingBrowsersBaseline() {
+        val filter = ChildrenChangeFilter()
+        val before = listOf(CarLibrary.bookItem(book("a", "Alpha")))
+        val after = before + CarLibrary.bookItem(book("b", "Beta"))
+        filter.subscribe("Library", before)
+        filter.subscribe("Library", after)
+        assertTrue(filter.changed("Library", after))
+        assertFalse(filter.changed("Library", after))
+        filter.subscribe("Favorites", emptyList())
+        assertFalse(filter.changed("Favorites", emptyList()))
+    }
+
 }

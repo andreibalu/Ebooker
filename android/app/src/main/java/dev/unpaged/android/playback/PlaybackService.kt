@@ -44,8 +44,9 @@ class PlaybackService : MediaLibraryService() {
             .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true)
             .setHandleAudioBecomingNoisy(true).setWakeMode(C.WAKE_MODE_NETWORK).build()
         val sessionPlayer = object : ForwardingPlayer(engine) {
-            override fun setMediaItems(items: List<androidx.media3.common.MediaItem>, startIndex: Int, startPositionMs: Long) =
+            override fun setMediaItems(items: List<androidx.media3.common.MediaItem>, startIndex: Int, startPositionMs: Long) {
                 controller.setSessionMediaItems(items, startIndex, startPositionMs)
+            }
             override fun seekBack() = controller.skip(false)
             override fun seekForward() = controller.skip(true)
             override fun seekToNextMediaItem() = controller.next()

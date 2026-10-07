@@ -20,6 +20,7 @@ internal class ChildrenChangeFilter {
     fun subscribed(parent: String) = parent in seen
     /** True when [items] differ from the last list recorded for [parent] (or none was recorded). */
     fun changed(parent: String, items: List<MediaItem>): Boolean = CarLibrary.signature(items).let { seen.put(parent, it) != it }
+    fun subscribe(parent: String, items: List<MediaItem>) { seen.putIfAbsent(parent, CarLibrary.signature(items)) }
     fun clear() = seen.clear()
 }
 
@@ -43,13 +44,14 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
             .setSessionCommand(SessionCommand(action, Bundle.EMPTY)).build() }
     }
     fun close() { scope.cancel(); listFilter.clear(); library.close() }
-    override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) { player.sessionControllerDisconnected() }
+    override fun onDisconnected(session: MediaSession, controller: MediaSession.ControllerInfo) { player.sessionControllerDisconnected(controller) }
     /** The Chapters tab comes and goes with the loaded book, and its rows follow the book's chapters. */
     fun watchChapters(session: MediaLibrarySession) {
         scope.launch {
             dev.unpaged.android.library.LibraryContentChanges.changes.drop(1).collectLatest {
                 kotlinx.coroutines.delay(250) // coalesce bursts of writes
-                val lists = read { CarLibrary.tabs.filter(listFilter::subscribed).map { it to library.children(it) } }
+                val parents = CarLibrary.tabs.filter(listFilter::subscribed)
+                val lists = read { parents.map { it to library.children(it) } }
                 lists.filter { (parent, items) -> listFilter.changed(parent, items) }
                     .forEach { (parent, items) -> session.notifyChildrenChanged(parent, items.size, null) }
             }
@@ -93,7 +95,7 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
     override fun onSubscribe(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, params: LibraryParams?) = async {
         try {
             val items = if (parentId == CarLibrary.CHAPTERS) library.children(parentId) else read { library.children(parentId) }
-            if (parentId in CarLibrary.tabs) listFilter.changed(parentId, items)
+            if (parentId in CarLibrary.tabs) listFilter.subscribe(parentId, items)
             session.notifyChildrenChanged(browser, parentId, items.size, params)
             LibraryResult.ofVoid(params)
         } catch (_: IllegalArgumentException) { LibraryResult.ofError(SessionError.ERROR_BAD_VALUE) }
@@ -109,24 +111,28 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
         catch (_: IllegalArgumentException) { LibraryResult.ofError(SessionError.ERROR_BAD_VALUE) }
     }
     private suspend fun queue(session: MediaSession, controller: MediaSession.ControllerInfo, request: MediaItem): MediaSession.MediaItemsWithStartPosition {
+        val token = player.beginSessionQueue(controller)
         try {
             val query = request.requestMetadata.searchQuery
             val id = if (query != null) read { library.search(query).firstOrNull()?.mediaId }
                 ?: error("No matches for \"$query\"") else request.mediaId
             if (id.startsWith("chapter:")) {
                 val chapter = library.chapter(id) ?: error("This chapter is no longer available.")
-                return MediaSession.MediaItemsWithStartPosition((0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) },
-                    chapter.trackIndex, chapter.startMs)
+                return player.stageSessionQueue(token, requireNotNull(player.state.value.book),
+                    (0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) }, chapter.trackIndex, chapter.startMs)
             }
             val loaded = player.state.value.book
-            if (loaded != null && session.player.mediaItemCount > 0 && (id == "book:${loaded.id}" || (loaded.catalogId != null && id == "catalog:${loaded.catalogId}"))) {
-                // Already loaded with its queue: keep the position instead of resuming from the saved one.
-                session.player.play()
-                return MediaSession.MediaItemsWithStartPosition((0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) },
+            if (loaded != null && CarResumePolicy.reuse(loaded.isFinished, session.player.playbackState == androidx.media3.common.Player.STATE_ENDED) && session.player.mediaItemCount > 0 && (id == "book:${loaded.id}" || (loaded.catalogId != null && id == "catalog:${loaded.catalogId}"))) {
+                // Already loaded and unfinished: keep the position instead of resuming from the saved one.
+                val resolved = player.stageSessionQueue(token, loaded, (0 until session.player.mediaItemCount).map { session.player.getMediaItemAt(it) },
                     session.player.currentMediaItemIndex, session.player.currentPosition)
+                session.player.play()
+                return resolved
             }
-            return player.prepareSessionBook(library.resolve(id))
+            return player.prepareSessionBook(token, library.resolve(id), loaded != null &&
+                (id == "book:${loaded.id}" || id == "catalog:${loaded.catalogId}") && session.player.playbackState == androidx.media3.common.Player.STATE_ENDED)
         } catch (error: Exception) {
+            player.cancelSessionQueue(token)
             if (error is CancellationException) throw error
             val message = error.message ?: "Couldn't open book"
             session.sendError(controller, SessionError(SessionError.ERROR_IO, message))
@@ -143,8 +149,9 @@ internal class CarSessionCallback(private val service: PlaybackService, private 
         require(mediaItems.size == 1) { "Choose one audiobook" }
         val resolved = queue(session, controller, mediaItems.single())
         // Add/search requests select a book, not tracks to append to another audiobook.
-        session.player.setMediaItems(resolved.mediaItems, resolved.startIndex, resolved.startPositionMs)
-        session.player.prepare(); session.player.play()
+        if (player.setSessionMediaItems(resolved.mediaItems, resolved.startIndex, resolved.startPositionMs)) {
+            session.player.prepare(); session.player.play()
+        }
         emptyList()
     }
     override fun onPlaybackResumption(session: MediaSession, controller: MediaSession.ControllerInfo) = async {

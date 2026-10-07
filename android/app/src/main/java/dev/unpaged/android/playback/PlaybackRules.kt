@@ -103,3 +103,10 @@ class PlaybackPersistenceRules(private val clock: () -> Long) {
     fun sleepRemaining() = sleepDeadline?.let { (it - clock()).coerceAtLeast(0) }
     fun expireSleep(): Boolean = if (sleepDeadline != null && clock() >= sleepDeadline!!) { sleepDeadline = null; true } else false
 }
+
+/** An ended engine must restart even if its finished flag has not reached storage yet. */
+internal object CarResumePolicy {
+    fun reuse(finished: Boolean, ended: Boolean) = !finished && !ended
+    fun start(resume: ResumePolicy, book: LibraryBook, seconds: Int, ended: Boolean) =
+        resume.start(if (ended) book.copy(isFinished = true) else book, seconds)
+}

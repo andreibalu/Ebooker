@@ -171,3 +171,20 @@ in `MainActivity` runs on the player's app-lifetime scope. Car artwork looks up 
 book by id (cache file keyed by id and title) instead of loading the library per
 cover. Choosing the book that is already loaded with its queue just plays it from
 the current position. Head-unit behavior remains unverified.
+
+### Review round 3
+
+Fixed pending car queues by binding each request to its controller, generation and
+book. Resolution leaves the current book and EQ intact; only a matching queue
+application commits the new book, EQ and engine queue together. Other-controller
+disconnects no longer cancel the request. Disconnected, expired and superseded
+results cannot replace the engine queue, and failed requests clear only their own
+pending generation. Finished or ended same-book selections and empty-query
+resumption use the restart policy at track zero, position zero. New subscriptions
+preserve the shared list baseline so the debounced update still reaches existing
+subscribers.
+
+Added JVM gate and restart regressions, Robolectric controller tests for atomic
+book/EQ/queue application and stale-result rejection, and a subscription-during-
+debounce regression. The required app and E2E APK assemblies, host tests and lint
+pass with zero lint issues. No emulator or head-unit checks ran in this round.

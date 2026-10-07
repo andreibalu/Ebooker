@@ -26,13 +26,17 @@ import dev.unpaged.android.equalizer.*
 
 /** Tracks the window between handing a queue to Media3 and the service applying it; a stale token never clears a newer wait. */
 internal class SessionQueueGate {
-    var awaiting = false; private set
     private var generation = 0
-    fun begin(): Int { awaiting = true; return ++generation }
-    /** Applied, loaded, detached or disconnected. */
-    fun clear() { awaiting = false; generation++ }
-    /** True when [token] is still the pending wait, in which case it is cleared. */
-    fun expire(token: Int): Boolean = (awaiting && token == generation).also { if (it) clear() }
+    private var owner: Any? = null
+    private var bookID: String? = null
+    val awaiting get() = owner != null
+    fun begin(controller: Any): Int { owner = controller; bookID = null; return ++generation }
+    fun current(token: Int) = awaiting && token == generation
+    fun stage(token: Int, book: String): Boolean = current(token).also { if (it) bookID = book }
+    fun consume(token: Int, book: String): Boolean = (current(token) && bookID == book).also { if (it) clear() }
+    fun disconnect(controller: Any): Boolean = (owner == controller).also { if (it) clear() }
+    fun clear() { owner = null; bookID = null; generation++ }
+    fun expire(token: Int): Boolean = current(token).also { if (it) clear() }
 }
 
 /** Shared with the service: state and commands always operate on the session's sole engine. */
@@ -85,9 +89,10 @@ class PlayerController internal constructor(private val context: Application) {
     private val markers = mutableMapOf<Int, List<ChapterMarker>>()
     private var replacing = false
     private val queueGate = SessionQueueGate()
-    private val awaitingSessionQueue get() = queueGate.awaiting
     private var queueTimeout: Job? = null
-    private var bookBeforeQueue: LibraryBook? = null
+    private var sessionBook: LibraryBook? = null
+    private var configureSessionBook = false
+    private val queueTokenKey = "dev.unpaged.queueGeneration"
     private var preservingSkipTarget: Pair<Int, Long>? = null
 
     init {
@@ -136,7 +141,7 @@ class PlayerController internal constructor(private val context: Application) {
 
     private val listener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
-            if (replacing || awaitingSessionQueue) return
+            if (replacing) return
             if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION) ||
                 (events.contains(Player.EVENT_IS_PLAYING_CHANGED) && !player.isPlaying)) activity.flush()
             if (player.playbackState == Player.STATE_ENDED) activity.end()
@@ -177,6 +182,7 @@ class PlayerController internal constructor(private val context: Application) {
     }
 
     fun play(book: LibraryBook, track: Int? = null) {
+        clearSessionQueueWait()
         connect()
         loadJob?.cancel()
         pending = null
@@ -201,7 +207,8 @@ class PlayerController internal constructor(private val context: Application) {
         val engine = player ?: return
         if (book.tracks.isEmpty()) return
         clearSessionQueueWait()
-        val items = configureBook(book)
+        configureBook(book)
+        val items = mediaItems(book)
         replacing = true
         engine.setMediaItems(items, track.coerceIn(book.tracks.indices), position.coerceAtLeast(0))
         engine.setPlaybackSpeed(book.playbackSpeed.toFloat().takeIf { it in PlaybackRules.speeds } ?: 1f)
@@ -210,49 +217,59 @@ class PlayerController internal constructor(private val context: Application) {
         replacing = false
         update(); persist(true)
     }
-    /** Browser playback uses the same resume, persistence, session recorder and EQ setup. */
-    suspend fun prepareSessionBook(book: LibraryBook): androidx.media3.session.MediaSession.MediaItemsWithStartPosition {
+    /** Resolution leaves the current book and engine untouched until the matching queue arrives. */
+    fun beginSessionQueue(controller: Any): Int {
         loadJob?.cancel(); pending = null
+        clearSessionQueueWait()
+        val token = queueGate.begin(controller)
+        queueTimeout = scope.launch { delay(10_000); if (queueGate.expire(token)) clearSessionQueueWait() }
+        return token
+    }
+    suspend fun prepareSessionBook(token: Int, book: LibraryBook, restart: Boolean = false): androidx.media3.session.MediaSession.MediaItemsWithStartPosition {
+        check(queueGate.current(token)) { "This playback request is no longer current." }
         val ready = CompletableDeferred<LibraryBook?>()
         writes.send { try { ready.complete(store.books().firstOrNull { it.id == book.id }) }
             catch (error: Exception) { ready.completeExceptionally(error) } }
         val fresh = ready.await() ?: error("This book is no longer available.")
+        check(queueGate.current(token)) { "This playback request is no longer current." }
         if (fresh.absItemID != null) abs.startPlayback(fresh.absItemID)
-        val target = resume.start(fresh, preferences.seconds("resumeBacktrackSeconds", 60))
-        bookBeforeQueue = state.value.book
-        val items = configureBook(fresh)
-        // The service applies this queue atomically before any old-engine callback can save
-        // its position against the newly selected book.
-        val token = queueGate.begin()
-        queueTimeout?.cancel()
-        // Media3 may drop the result (controller disconnected, request cancelled); never freeze the phone UI.
-        queueTimeout = scope.launch { delay(10_000); if (queueGate.expire(token)) abandonSessionQueue() }
-        return androidx.media3.session.MediaSession.MediaItemsWithStartPosition(items,
-            target.first.coerceIn(fresh.tracks.indices), target.second.coerceAtLeast(0))
+        check(queueGate.current(token)) { "This playback request is no longer current." }
+        val target = CarResumePolicy.start(resume, fresh, preferences.seconds("resumeBacktrackSeconds", 60), restart)
+        return stageSessionQueue(token, fresh, mediaItems(fresh), target.first.coerceIn(fresh.tracks.indices), target.second.coerceAtLeast(0), true)
     }
-    fun setSessionMediaItems(items: List<MediaItem>, index: Int, position: Long) {
-        val engine = player ?: return
+    internal fun stageSessionQueue(token: Int, book: LibraryBook, items: List<MediaItem>, index: Int, position: Long,
+        configure: Boolean = false): androidx.media3.session.MediaSession.MediaItemsWithStartPosition {
+        check(items.isNotEmpty() && queueGate.stage(token, book.id)) { "This playback request is no longer current." }
+        sessionBook = book
+        configureSessionBook = configure
+        val tagged = items.map { item -> item.buildUpon().setMediaMetadata(item.mediaMetadata.buildUpon()
+            .setExtras(android.os.Bundle(item.mediaMetadata.extras ?: android.os.Bundle.EMPTY).apply { putInt(queueTokenKey, token) }).build()).build() }
+        return androidx.media3.session.MediaSession.MediaItemsWithStartPosition(tagged, index, position)
+    }
+    fun setSessionMediaItems(items: List<MediaItem>, index: Int, position: Long): Boolean {
+        val engine = player ?: return false
+        val book = sessionBook ?: return false
+        val token = items.firstOrNull()?.mediaMetadata?.extras?.getInt(queueTokenKey, -1) ?: return false
+        if (items.size != book.tracks.size || items.withIndex().any { (i, item) ->
+                item.mediaId != "${book.id}:$i" || item.mediaMetadata.extras?.getInt(queueTokenKey, -1) != token }
+            || !queueGate.consume(token, book.id)) return false
         replacing = true
-        clearSessionQueueWait()
-        engine.setMediaItems(items, index, position)
-        engine.setPlaybackSpeed(state.value.book?.playbackSpeed?.toFloat()?.takeIf { it in PlaybackRules.speeds } ?: 1f)
-        replacing = false
+        try {
+            if (configureSessionBook) configureBook(book)
+            clearSessionQueueWait()
+            engine.setMediaItems(items, index, position)
+            engine.setPlaybackSpeed(book.playbackSpeed.toFloat().takeIf { it in PlaybackRules.speeds } ?: 1f)
+        } finally { replacing = false }
         update(); persist(true)
+        return true
     }
-    private fun clearSessionQueueWait() { queueGate.clear(); queueTimeout?.cancel(); queueTimeout = null; bookBeforeQueue = null }
-    /** The queue never arrived: the engine still holds the previous book, so restore its state. */
-    private fun abandonSessionQueue() {
-        val previous = bookBeforeQueue
-        clearSessionQueueWait()
-        mutableState.value = state.value.copy(book = previous, chapters = previous?.let { PlaybackRules.chapters(it) }.orEmpty())
-        previous?.let { EqualizerConfiguration.decode(it.equalizerJson) }?.let { mutableEqualizer.value = it; equalizerProcessor.configuration = it }
-        update()
-    }
-    /** The browser that requested a queue went away before the service applied it. */
-    fun sessionControllerDisconnected() { if (queueGate.awaiting) abandonSessionQueue() }
+    fun cancelSessionQueue(token: Int) { if (queueGate.expire(token)) clearSessionQueueWait() }
+    private fun clearSessionQueueWait() { queueGate.clear(); queueTimeout?.cancel(); queueTimeout = null; sessionBook = null }
+    /** Only the requesting controller can abandon its pending queue. */
+    fun sessionControllerDisconnected(controller: Any) { if (queueGate.disconnect(controller)) clearSessionQueueWait() }
     /** Runs on the app-lifetime scope so a request survives the activity that started it. */
     fun launchIntegration(block: suspend () -> Unit) { scope.launch { block() } }
-    private fun configureBook(book: LibraryBook): List<MediaItem> {
+    private fun configureBook(book: LibraryBook) {
         activity.end()
         persist(true)
         markers.clear()
@@ -261,8 +278,11 @@ class PlayerController internal constructor(private val context: Application) {
         val eq = EqualizerConfiguration.decode(book.equalizerJson)
         mutableEqualizer.value = eq
         equalizerProcessor.configuration = eq
+        mutableState.value = state.value.copy(book = book, error = null, chapters = PlaybackRules.chapters(book))
+    }
+    private fun mediaItems(book: LibraryBook): List<MediaItem> {
         val artwork = GeneratedArtwork.png(book.title)
-        val items = book.tracks.mapIndexed { index, file ->
+        return book.tracks.mapIndexed { index, file ->
             val uri = if (file.storedName.isNotEmpty()) android.net.Uri.fromFile(File(context.filesDir, "audiobooks/${book.id}/${file.storedName}"))
                 else (file.remoteUrl ?: "").toUri()
             MediaItem.Builder().setMediaId("${book.id}:$index").setUri(uri)
@@ -271,12 +291,9 @@ class PlayerController internal constructor(private val context: Application) {
                     .setAlbumTitle(book.title).setArtist(book.author).setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                     .setArtworkUri(CarArtworkProvider.uri(context, "book:${book.id}")).build()).build()
         }
-        mutableState.value = state.value.copy(book = book, error = null, chapters = PlaybackRules.chapters(book))
-        return items
     }
 
     private fun update() {
-        if (awaitingSessionQueue) return
         val engine = player ?: return
         var book = state.value.book ?: return
         val index = engine.currentMediaItemIndex.coerceIn(book.tracks.indices)
@@ -297,7 +314,6 @@ class PlayerController internal constructor(private val context: Application) {
             speed = engine.playbackParameters.speed, chapters = PlaybackRules.chapters(book, markers), sleepRemainingMs = rules.sleepRemaining())
     }
     private fun persist(force: Boolean) {
-        if (awaitingSessionQueue) return
         val s = state.value
         val book = s.book ?: return
         val progress = PlaybackProgress(s.trackIndex, s.positionMs, book.highWaterMarkMs, s.speed.toDouble(), book.isFinished)
@@ -364,6 +380,7 @@ class PlayerController internal constructor(private val context: Application) {
     }
     fun saveMoment(moment: LibraryMoment) { writes.trySend { store.saveMoment(moment) } }
     fun playMoment(book: LibraryBook, moment: LibraryMoment) {
+        clearSessionQueueWait()
         connect(); loadJob?.cancel(); pending = null
         val action = { load(book, moment.trackIndex, moment.timeMs) }
         if (player == null) { pending = action; mutableState.value = state.value.copy(loading = true) } else action()
@@ -371,6 +388,7 @@ class PlayerController internal constructor(private val context: Application) {
     fun removed(id: String) {
         if (state.value.book?.id != id) return
         activity.end()
+        clearSessionQueueWait()
         loadJob?.cancel(); pending = null
         replacing = true; player?.stop(); player?.clearMediaItems(); replacing = false
         mutableState.value = PlayerState(revision = state.value.revision + 1)
