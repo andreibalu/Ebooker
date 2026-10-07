@@ -5,6 +5,7 @@ import android.os.StatFs
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -40,12 +41,18 @@ class SpeechModelStore(context: Context) {
     private var job: Job? = null
     private val mutableState = MutableStateFlow(ModelState())
     val state = mutableState.asStateFlow()
-    init { scope.launch { partial.delete(); refresh() } }
+    /** Coordinates native inference, model deletion and startup cleanup. WhisperTranscriber holds it for a whole run. */
+    val lock = kotlinx.coroutines.sync.Mutex()
+    /** Frees the cached native speech context; invoked under [lock] before the model file is removed. */
+    @Volatile var onRelease: () -> Unit = {}
+    // A download waits for this cleanup so it can never delete a freshly started partial file.
+    private val startup = scope.launch { lock.withLock { partial.delete(); refresh() } }
     suspend fun refresh() = withContext(Dispatchers.IO) { mutableState.value = mutableState.value.copy(installed = verified(model)) }
     fun hasSpace() = StatFs(directory.path).availableBytes >= SIZE + 16 * 1024 * 1024
     fun downloadWithConsent() {
         if (job?.isActive == true) return
         job = scope.launch {
+            startup.join()
             if (!hasSpace()) { mutableState.value = ModelState(error = "Not enough free space. Free at least 77 MB and try again."); return@launch }
             mutableState.value = ModelState(downloading = true)
             var connection: HttpURLConnection? = null
@@ -69,6 +76,10 @@ class SpeechModelStore(context: Context) {
         }
     }
     fun cancel() { job?.cancel() }
-    suspend fun delete() { job?.cancelAndJoin(); withContext(Dispatchers.IO) { model.delete(); partial.delete(); mutableState.value = ModelState() } }
+    suspend fun delete() {
+        job?.cancelAndJoin(); startup.join()
+        // Waits for any in-flight transcription, then frees the native context before unlinking the file.
+        lock.withLock { withContext(Dispatchers.IO) { onRelease(); model.delete(); partial.delete(); mutableState.value = ModelState() } }
+    }
 }
 data class ModelState(val installed: Boolean = false, val downloading: Boolean = false, val bytes: Long = 0, val error: String? = null)

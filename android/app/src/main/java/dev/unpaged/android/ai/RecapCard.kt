@@ -51,7 +51,7 @@ fun RecapCard(book: LibraryBook) {
                         val result = ai.recap(book, book.currentTrackIndex, book.currentPositionMs, headline)
                         cache.save(book, result); recap = result
                     } catch (e: CancellationException) { throw e }
-                    catch (e: Exception) { error = if (!book.isDownloaded) "Audio for this book isn't on this phone." else "Couldn't generate a recap. Please try again." }
+                    catch (e: Exception) { error = AiMessages.recapFailure(e, book.isDownloaded) }
                     finally { loading = false }
                 }
             }, modifier = Modifier.testTag("recap.generate")) { Icon(Icons.Default.AutoAwesome, "Generate recap", Modifier.size(18.dp)) }

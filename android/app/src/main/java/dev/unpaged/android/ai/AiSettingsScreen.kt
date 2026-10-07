@@ -6,6 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
@@ -27,8 +28,8 @@ fun AiSettingsScreen(ai: AiCoordinator, preferences: UnpagedPreferences, dismiss
     val model by ai.models.state.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
-    var consent by remember { mutableStateOf(false) }
-    var delete by remember { mutableStateOf(false) }
+    var consent by rememberSaveable { mutableStateOf(false) }
+    var delete by rememberSaveable { mutableStateOf(false) }
     var systemBytes by remember { mutableLongStateOf(0) }
     var systemJob by remember { mutableStateOf<Job?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -57,7 +58,8 @@ fun AiSettingsScreen(ai: AiCoordinator, preferences: UnpagedPreferences, dismiss
                     } }, modifier = Modifier.testTag("ai.systemDownload")) { Text("Download system model") }
                 }
             } }
-            Surface(shape = UnpagedTheme.settingsShape) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Unsupported phones cannot use the model, so do not offer its 60 MB download.
+            if (status != GeneratorStatus.UNAVAILABLE) Surface(shape = UnpagedTheme.settingsShape) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Whisper multilingual base", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 Text("Speech model · 59.7 MB · MIT license", fontSize = 13.sp)
                 TextButton(onClick = { uri.openUri(SpeechModelStore.LICENSE) }, modifier = Modifier.testTag("ai.license")) { Text("View license") }

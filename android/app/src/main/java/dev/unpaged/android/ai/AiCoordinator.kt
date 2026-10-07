@@ -20,7 +20,9 @@ class AiCoordinator(private val context: Context) {
     suspend fun refresh() { mutableStatus.value = generator.status(); models.refresh() }
     suspend fun ready(): Boolean { refresh(); return status.value == GeneratorStatus.AVAILABLE && models.state.value.installed }
     suspend fun prewarm() { if (ready()) try { generator.prewarm() } catch (e: CancellationException) { throw e } catch (_: Exception) { /* Recheck at use. */ } }
-    fun reloadGenerator() { generator = GeneratorEnvironment.create(context) }
+    /** Memory pressure: drop the cached Whisper context (reloaded on next use). */
+    fun trimMemory() = transcriber.trim()
+    fun reloadGenerator() { val old = generator; generator = GeneratorEnvironment.create(context); old.close() }
     private fun audio(book: LibraryBook, track: Int): File {
         check(book.isDownloaded) { "Audio for this book isn't on this phone." }
         val name = book.tracks.getOrNull(track)?.storedName ?: error("No audio available for recap.")
@@ -30,7 +32,7 @@ class AiCoordinator(private val context: Context) {
     suspend fun moment(book: LibraryBook, draft: LibraryMoment, position: Long): LibraryMoment {
         check(ready()); val window = AiRules.smartWindow(position, book.tracks[draft.trackIndex].durationMs)
         val transcript = transcriber.transcribe(audio(book, draft.trackIndex), window.first, window.second)
-        return AiRules.moment(generateLocally(generator, transcript, AiPrompts.moment, book.title, 500), transcript, draft)
+        return AiRules.moment(generateLocally(generator, transcript, AiPrompts.moment, book.title, GenerationKind.MOMENT), transcript, draft)
     }
     suspend fun recap(book: LibraryBook, track: Int, position: Long, headline: Boolean): Recap {
         val file = audio(book, track)
@@ -38,7 +40,7 @@ class AiCoordinator(private val context: Context) {
         val window = AiRules.recapWindow(position)
         check(position > window.first) { "No audio available for recap." }
         val transcript = transcriber.transcribe(file, window.first, window.second)
-        return AiRules.recap(generateLocally(generator, transcript, AiPrompts.recap(headline), book.title, 300), headline)
+        return AiRules.recap(generateLocally(generator, transcript, AiPrompts.recap(headline), book.title, if (headline) GenerationKind.RECAP_WITH_HEADLINE else GenerationKind.RECAP), headline)
     }
 }
 

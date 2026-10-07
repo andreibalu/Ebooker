@@ -20,7 +20,7 @@ The complete typed request, including schema, is token-counted before use and mu
 
 Recap transcribes the previous 200 seconds of the current track, ending at saved playback position. Detail shows the iOS sparkle action, loading indicator, "Where Was I?" text and failure copy. Results persist in excluded local recap preferences, bound to exact book/track/position; a changed position invalidates them. No new moment columns were necessary, so SQLite stays at v4. Assigned schema v7 was not consumed.
 
-`MediaExtractor` reads already-decoded WAV PCM directly; compressed tracks pass through `MediaCodec`. Both paths decode the selected window to PCM, average channels and resample to 16 kHz mono. Native Whisper uses CPU inference with at most four threads, system language with automatic detection for unsupported languages or empty output, and a cancellation abort callback. Native contexts are freed after every transcription. The app logs only window duration and elapsed ASR milliseconds under `UnpagedASR`.
+`MediaExtractor` reads already-decoded WAV PCM directly; compressed tracks pass through `MediaCodec`. Both paths decode the selected window to PCM, average channels and resample to 16 kHz mono. Native Whisper uses CPU inference with at most four threads, automatic language detection (never the phone's locale, so an English book on a German phone is not forced into German), a no-speech threshold and a cancellation abort callback. The native context is cached between transcriptions under the transcription mutex and freed on model delete and on memory pressure (`onTrimMemory` at background level or above, `onLowMemory`). The app logs only window duration and elapsed ASR milliseconds under `UnpagedASR`.
 
 ## Pins and sources
 
@@ -74,6 +74,18 @@ PR #66 review fixes move recap text into the excluded `recap_cache.xml` store an
 On 2026-10-07, debug assembly and lint passed with zero lint issues, and all 171 host tests passed on the stacked branch. The focused `whisperConsentRealSpeechSmartPreviewRecapPersistAndDelete` journey passed on `emulator-5586`, `Unpaged_E2E_API35_D`. It generated a recap without a headline, enabled Short progress headline without moving playback, verified the generation action returned, regenerated the headline and verified it after force-stop. This uses real Whisper recognition and the debug fake generator, not Nano. The headline capture was visually reviewed. Local evidence is `/private/tmp/pr66-cache-fixes-e2e-retry/`, with the fresh host run at `/private/tmp/pr66-fresh-tests.log`.
 
 The first focused run failed in the new test's swipe toward the AI sheet's Done button, which dismissed the modal. The retry uses Android Back to dismiss the sheet and passed.
+
+### Second review pass
+
+- Whisper language is `auto`; the old locale-forced call was wrong for books whose language differs from the phone's.
+- Free-text fallback output is parsed leniently: code fences and prose are stripped, the first balanced `{…}` object is used, unknown keys are ignored, enums match case-insensitively and invalid categories or mood are dropped rather than failing the save. Name and note remain required.
+- Cancellation is reset in Kotlin before the watcher launches (`WhisperNative.reset()`), not on native entry. The model context is cached natively and released on delete or memory trim. Delete, startup partial cleanup, trim and inference share one mutex (`SpeechModelStore.lock`); a download waits for startup cleanup.
+- The ML Kit client is closed when `reloadGenerator` replaces it (`GenerativeModel.close()` exists in beta4). Requests carry an explicit `GenerationKind` (moment, recap, recap with headline) instead of inferring the schema from token counts or prompt text. The token guard requires input tokens plus the kind's output allowance to fit in min(model token limit, 4096).
+- Whisper markers (`[BLANK_AUDIO]`, `(music)`, `*applause*`, music notes) are stripped; fewer than three remaining words counts as no speech and takes the existing failure path.
+- `GenAiException.RESPONSE_GENERATION_ERROR` maps to `GenerationFailure.UNSAFE`, with copy mirroring iOS: "AI detected content likely to be unsafe and couldn't name this moment." and "On-device AI declined to summarize this passage." ML Kit 1.0.0-beta4 has no dedicated safety code, so this mapping is unverified on a real Nano device.
+- Unsupported phones keep the "On-device AI" Settings row (as iOS keeps its row) with the unsupported explanation, but the Whisper download card is hidden.
+- PCM resampling averages every input sample in each 16 kHz step (box filter, shared by the MediaCodec and raw WAV paths) instead of linear decimation.
+- A theme change recreates the activity; the library Settings, AI sheet, consent and delete dialogs all use `rememberSaveable`, so production state survives. The E2E failure was the test swiping toward Done before the restored sheet settled, which drags the sheet closed; `scrollAI` now settles first. Consent and delete dialog flags are saveable too.
 
 ## Remaining qualification
 

@@ -45,8 +45,44 @@ class AiRulesTest {
     private fun json(category: String = "reflection", mood: String = "peaceful") = """{"momentName":"A long title with seven full words","categories":["$category"],"mood":"$mood","characters":["Alice"," Bob ","","C","D","E","F","G"],"quoteLine":"$quote","momentNote":"${"word ".repeat(50)}end. More words."}"""
     @Test fun quoteWordCaps() { val quote = "word ".repeat(21).trim() + "."; assertNull(AiRules.verifiedQuote(quote, quote + "more ".repeat(100))); assertNull(AiRules.verifiedQuote("Short quote.", "Short quote. " + "text ".repeat(100))) }
     @Test fun outputCapsAndMetadata() { val m = AiRules.moment(json(), transcript, LibraryMoment("m", "b", 0, 10, "")); assertEquals(5, AiRules.words(m.label).size); assertTrue(AiRules.words(m.notes).size <= 40); assertEquals(quote, m.quoteLine); assertEquals(6, org.json.JSONArray(m.charactersJson).length()) }
-    @Test fun strictEnumValidation() { assertThrows(Exception::class.java) { AiRules.moment(json("fiction"), transcript, LibraryMoment("m", "b", 0, 10, "")) }; assertThrows(Exception::class.java) { AiRules.moment(json(mood = "happy"), transcript, LibraryMoment("m", "b", 0, 10, "")) } }
-    @Test fun strictJsonRejectsExtraFieldsAndWrongTypes() { for (json in listOf("{}", "```json {} ```", "{\"recap\":3}", "{\"recap\":\"hello\",\"extra\":true}")) assertThrows(Exception::class.java) { AiRules.recap(json, false) } }
+    private val draft = LibraryMoment("m", "b", 0, 10, "")
+    @Test fun invalidEnumsAreDroppedNotFatal() { val m = AiRules.moment(json("fiction", "happy"), transcript, draft); assertEquals("[]", m.categoriesJson); assertNull(m.mood) }
+    @Test fun enumMatchIsCaseInsensitive() { val m = AiRules.moment(json("PlotTwist", "Peaceful"), transcript, draft); assertEquals("[\"plotTwist\"]", m.categoriesJson); assertEquals("peaceful", m.mood) }
+    @Test fun momentParsesFencedOutputWithExtraKeys() {
+        val raw = "```json\n{\"momentName\":\"Night Storm\",\"extra\":[1],\"categories\":[\"Tension\",\"bogus\"],\"mood\":\"TENSE\",\"momentNote\":\"A storm breaks. Nobody sleeps.\"}\n```"
+        val m = AiRules.moment(raw, transcript, draft)
+        assertEquals("Night Storm", m.label); assertEquals("[\"tension\"]", m.categoriesJson); assertEquals("tense", m.mood); assertEquals("[]", m.charactersJson); assertNull(m.quoteLine)
+    }
+    @Test fun momentStillNeedsNameAndNote() { assertThrows(Exception::class.java) { AiRules.moment("{\"mood\":\"tense\"}", transcript, draft) } }
+    @Test fun speechMarkersAndHallucinationsRemoved() {
+        assertEquals("", SpeechText.clean(" [BLANK_AUDIO] ")); assertEquals("", SpeechText.clean("[Music] (music) ♪")); assertEquals("", SpeechText.clean("Thank you."))
+        assertEquals("It was a long night.", SpeechText.clean("[Music] It was a long night. (door creaks) *applause*"))
+    }
+    @Test fun resamplerAveragesInsteadOfDecimating() {
+        // 48 kHz alternating +1/-1 is pure Nyquist noise; naive decimation would alias it, a box filter cancels it.
+        val r = BoxResampler(0, 100); for (i in 0 until 4800) r.add(i * 1_000_000.0 / 48_000, if (i % 2 == 0) 1f else -1f)
+        val out = r.finish(); assertTrue(out.size in 1590..1600); assertTrue(out.take(1500).all { kotlin.math.abs(it) < .4f })
+    }
+    @Test fun resamplerHonorsBoundsAndInterpolatesUpsampling() {
+        val r = BoxResampler(10, 20); for (i in 0 until 400) r.add(i * 1000.0, i.toFloat())
+        val out = r.finish(); assertTrue(out.size in 140..160); assertEquals(10f, out[0], .01f); assertTrue(out.toList().zipWithNext().all { (a, b) -> b >= a })
+    }
+    @Test fun contextBudgetIncludesOutputAllowance() { assertTrue(fitsContext(3596, GenerationKind.MOMENT)); assertFalse(fitsContext(3597, GenerationKind.MOMENT)); assertFalse(fitsContext(3797, GenerationKind.RECAP)); assertTrue(fitsContext(3796, GenerationKind.RECAP)) }
+    @Test fun errorCodesMapToFailures() {
+        assertEquals(GenerationFailure.UNSAFE, failureFor(com.google.mlkit.genai.common.GenAiException.ErrorCode.RESPONSE_GENERATION_ERROR))
+        assertEquals(GenerationFailure.BUSY, failureFor(com.google.mlkit.genai.common.GenAiException.ErrorCode.BUSY))
+        assertEquals(GenerationFailure.CONTEXT, failureFor(com.google.mlkit.genai.common.GenAiException.ErrorCode.REQUEST_TOO_LARGE))
+        assertEquals(GenerationFailure.FAILED, failureFor(com.google.mlkit.genai.common.GenAiException.ErrorCode.NOT_AVAILABLE))
+    }
+    @Test fun unsafeCopyMirrorsIos() {
+        val unsafe = LocalGenerationException(GenerationFailure.UNSAFE)
+        assertEquals("AI detected content likely to be unsafe and couldn't name this moment.", AiMessages.momentFailure(unsafe)); assertEquals("Couldn't analyze this moment.", AiMessages.momentFailure(IllegalStateException()))
+        assertEquals("On-device AI declined to summarize this passage.", AiMessages.recapFailure(unsafe, true)); assertEquals("Couldn't generate a recap. Please try again.", AiMessages.recapFailure(IllegalStateException(), true))
+    }
+    @Test fun unsafeDoesNotRetry() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.UNSAFE)); try { generateLocally(g, transcript, "i", "t", GenerationKind.RECAP); fail() } catch (e: LocalGenerationException) { assertEquals(GenerationFailure.UNSAFE, e.reason); assertEquals(1, g.prompts.size) } }
+    @Test fun recapRejectsMissingOrWrongTypedText() { for (json in listOf("{}", "```json {} ```", "{\"recap\":3}", "no json")) assertThrows(Exception::class.java) { AiRules.recap(json, false) } }
+    @Test fun recapToleratesFencesProseAndExtraKeys() { assertEquals("A complete sentence here.", AiRules.recap("Sure!\n```json\n{\"recap\":\"A complete sentence here.\",\"extra\":true}\n```", false).text) }
+    @Test fun extractObjectHandlesBracesInStrings() { assertEquals("a } b", AiRules.extractObject("x {\"k\":\"a } b\"} tail {\"z\":1}").getString("k")) }
     @Test fun recapHeadlineFirstAndSanitized() { assertTrue(AiPrompts.recap(true).indexOf("progressHeadline") < AiPrompts.recap(true).indexOf("recap (")); val r = AiRules.recap("""{"progressHeadline":"One two three four five.","recap":"A complete sentence here. A second complete sentence here. An unfinished"}""", true); assertEquals("One two three four", r.headline); assertEquals("A complete sentence here. A second complete sentence here.", r.text) }
     @Test fun modelRejectsShortAndCorruptedFile() { val f = File.createTempFile("model", ".bin"); try { f.writeText("invalid"); assertFalse(SpeechModelStore.verified(f)) } finally { f.delete() } }
     @Test fun recapPersistenceAndAnchorInvalidation() { val b = LibraryBook("ai", "Title", "Author", listOf(LibraryTrack("track", "file", "file", 300_000, "sha")), currentPositionMs = 10_000); RecapCache(RuntimeEnvironment.getApplication()).save(b, Recap("Recap.", "Headline")); assertEquals(Recap("Recap.", "Headline"), RecapCache(RuntimeEnvironment.getApplication()).read(b)); assertNull(RecapCache(RuntimeEnvironment.getApplication()).read(b.copy(currentPositionMs = 20_000))) }
@@ -74,9 +110,9 @@ class AiRulesTest {
         override suspend fun status() = GeneratorStatus.AVAILABLE
         override suspend fun prewarm() = Unit
         override suspend fun download(progress: (Long) -> Unit) = Unit
-        override suspend fun generate(prompt: String, maxTokens: Int): String { prompts += prompt; if (failures.isNotEmpty()) throw LocalGenerationException(failures.removeAt(0)); return "ok" }
+        override suspend fun generate(prompt: String, kind: GenerationKind): String { prompts += prompt; if (failures.isNotEmpty()) throw LocalGenerationException(failures.removeAt(0)); return "ok" }
     }
-    @Test fun overflowRetriesOnlyTranscriptTail() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.CONTEXT)); assertEquals("ok", generateLocally(g, "abcdefgh", "instruction", "title", 500)); assertEquals(2, g.prompts.size); assertTrue(g.prompts[1].contains("\nefgh\n")) }
-    @Test fun busyRetriesOriginalOnce() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.BUSY)); generateLocally(g, transcript, "instruction", "title", 500); assertEquals(g.prompts[0], g.prompts[1]) }
-    @Test fun terminalFailureDoesNotRetry() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.FAILED)); try { generateLocally(g, transcript, "instruction", "title", 500); fail() } catch (_: LocalGenerationException) { assertEquals(1, g.prompts.size) } }
+    @Test fun overflowRetriesOnlyTranscriptTail() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.CONTEXT)); assertEquals("ok", generateLocally(g, "abcdefgh", "instruction", "title", GenerationKind.MOMENT)); assertEquals(2, g.prompts.size); assertTrue(g.prompts[1].contains("\nefgh\n")) }
+    @Test fun busyRetriesOriginalOnce() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.BUSY)); generateLocally(g, transcript, "instruction", "title", GenerationKind.MOMENT); assertEquals(g.prompts[0], g.prompts[1]) }
+    @Test fun terminalFailureDoesNotRetry() = runBlocking { val g = Generator(mutableListOf(GenerationFailure.FAILED)); try { generateLocally(g, transcript, "instruction", "title", GenerationKind.MOMENT); fail() } catch (_: LocalGenerationException) { assertEquals(1, g.prompts.size) } }
 }

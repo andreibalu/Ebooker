@@ -1679,6 +1679,8 @@ class LibraryE2ETest {
         selectLibraryTab()
     }
     private fun scrollAI(id: String, downward: Boolean = true) {
+        // After a uimode change the activity is recreated; a swipe sent before the restored sheet settles drags it closed.
+        settleLayout()
         repeat(10) {
             val bounds = visible(By.res("ai.scroll")).visibleBounds
             val target = device.findObject(By.res(id))?.visibleBounds
@@ -1692,7 +1694,7 @@ class LibraryE2ETest {
         tapDescription("Settings")
         scrollTo("settings.ai")
         field("settings.ai").click()
-        field("ai.modelStatus")
+        field("ai.systemStatus")
     }
     @Test fun onDeviceAiUnavailableKeepsManualMomentsAndConsentIsCancellable() {
         launchAI("unavailable")
@@ -1704,10 +1706,9 @@ class LibraryE2ETest {
         device.executeShellCommand("cmd uimode night yes")
         screenshot("ai-unavailable-dark")
         device.executeShellCommand("cmd uimode night no")
-        field("ai.download").click()
-        visible(By.text("Download speech model?"))
-        device.pressBack()
-        assertFalse(device.hasObject(By.res("ai.progress")))
+        // Unsupported phones are not offered the speech-model download.
+        assertFalse(device.hasObject(By.res("ai.download")))
+        assertFalse(device.hasObject(By.res("ai.modelStatus")))
         scrollAI("ai.done", downward = false)
         field("ai.done").click(); tapText("Done")
         tapText("AI Local Book"); field("book.play").click(); dismissNotificationPrompt()
@@ -1720,6 +1721,9 @@ class LibraryE2ETest {
         launchAI("available")
         saveBook("AI Spoken Story", "Fixture Author", "AI Speech.wav")
         openAISettings()
+        field("ai.download").click(); visible(By.text("Download speech model?"))
+        device.pressBack()
+        assertFalse(device.hasObject(By.res("ai.progress")))
         field("ai.download").click(); field("ai.consent").click()
         field("ai.cancel").click(); field("ai.download")
         field("ai.download").click(); field("ai.consent").click()
@@ -1775,7 +1779,7 @@ class LibraryE2ETest {
         assertEquals(quote, field("moment.quote").text); tapText("Cancel")
         device.pressBack()
         launchAI("unavailable"); openAISettings()
-        visible(By.text("Installed · Verified"))
+        assertFalse(device.hasObject(By.res("ai.modelStatus")))
         assertFalse(device.hasObject(By.res("ai.useLocalAIFeatures")))
         scrollAI("ai.done", downward = false); field("ai.done").click(); tapText("Done")
         tapText("AI Spoken Story"); assertFalse(device.hasObject(By.res("recap.generate")))

@@ -195,7 +195,7 @@ fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
                                 val position = state.positionMs
                                 try { momentDraft = ai.moment(book, draft, position); aiGenerated = true }
                                 catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                                catch (_: Exception) { aiError = "Couldn't analyze this moment."; momentDraft = draft }
+                                catch (e: Exception) { aiError = dev.unpaged.android.ai.AiMessages.momentFailure(e); momentDraft = draft }
                                 finally { analyzing = false }
                             } else { aiGenerated = false; aiError = null; momentDraft = draft }
                         }

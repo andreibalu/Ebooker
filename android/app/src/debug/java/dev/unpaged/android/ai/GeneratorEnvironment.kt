@@ -20,7 +20,7 @@ class FakeLocalGenerator(private val capability: GeneratorStatus) : LocalGenerat
     override suspend fun status() = capability
     override suspend fun prewarm() = Unit
     override suspend fun download(progress: (Long) -> Unit) = Unit
-    override suspend fun generate(prompt: String, maxTokens: Int): String {
+    override suspend fun generate(prompt: String, kind: GenerationKind): String {
         check(capability == GeneratorStatus.AVAILABLE)
         val transcript = prompt.substringAfter("<transcript>\n").substringBefore("\n</transcript>")
         val sentence = if (AiRules.matchKey(transcript).contains("ask what you can do for your country")) "Ask what you can do for your country."
@@ -28,11 +28,11 @@ class FakeLocalGenerator(private val capability: GeneratorStatus) : LocalGenerat
                 // Whisper often joins sentences with commas; quote a clause like the real model would.
                 ?: transcript.split(',', ';').map { it.trim() }.firstOrNull { AiRules.words(it).size in 5..20 }?.let { "$it." }
                 ?: ""
-        return if (maxTokens == 500) JSONObject().put("momentName", "A Journey Begins Here").put("categories", JSONArray(listOf("reflection")))
+        return if (kind == GenerationKind.MOMENT) JSONObject().put("momentName", "A Journey Begins Here").put("categories", JSONArray(listOf("reflection")))
             .put("mood", "peaceful").put("characters", JSONArray()).put("quoteLine", sentence)
             .put("momentNote", "The listener hears a new story. A journey begins with a memorable passage.").toString()
         else JSONObject().apply {
-            if (prompt.contains("progressHeadline (")) put("progressHeadline", "A New Journey Begins")
+            if (kind == GenerationKind.RECAP_WITH_HEADLINE) put("progressHeadline", "A New Journey Begins")
             put("recap", "The story opens with a memorable passage. The listener follows the beginning of a journey.")
         }.toString()
     }

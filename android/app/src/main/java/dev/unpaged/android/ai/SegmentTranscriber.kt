@@ -10,16 +10,33 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import java.nio.ByteOrder
-import java.util.Locale
 
-interface SegmentTranscriber { suspend fun transcribe(file: File, startMs: Long, endMs: Long): String }
+interface SegmentTranscriber {
+    suspend fun transcribe(file: File, startMs: Long, endMs: Long): String
+    /** Frees any cached native speech context. No-op while a transcription is running. */
+    fun trim() = Unit
+}
 object WhisperNative {
     init { System.loadLibrary("unpaged_whisper") }
     external fun transcribe(model: String, samples: FloatArray, language: String): String
     external fun cancel()
+    /** Clears a previous cancel request; call before launching the watcher for a new run. */
+    external fun reset()
+    /** Frees the cached model context. Callers must hold the transcription mutex. */
+    external fun release()
+}
+/** Removes whisper markers/hallucinations such as [BLANK_AUDIO], (music), *applause*. Fewer than 3 words is treated as no speech. */
+object SpeechText {
+    private val markers = Regex("""\[[^\]]*]|\([^)]*\)|\*[^*]*\*|[♪♫]+""")
+    fun clean(raw: String): String {
+        val text = markers.replace(raw, " ").replace(Regex("\\s+"), " ").trim()
+        return if (AiRules.words(text).size < 3) "" else text
+    }
 }
 class WhisperTranscriber(private val models: SpeechModelStore) : SegmentTranscriber {
-    private val mutex = Mutex()
+    init { models.onRelease = { WhisperNative.release() } }
+    private val mutex get() = models.lock
+    override fun trim() { if (mutex.tryLock()) try { WhisperNative.release() } finally { mutex.unlock() } }
     override suspend fun transcribe(file: File, startMs: Long, endMs: Long): String = mutex.withLock {
         withContext(Dispatchers.IO) {
             require(endMs > startMs && endMs - startMs <= 200_000)
@@ -29,9 +46,11 @@ class WhisperTranscriber(private val models: SpeechModelStore) : SegmentTranscri
             val caller = currentCoroutineContext()[Job]
             val text = withContext(Dispatchers.Default) {
                 withContext(NonCancellable) {
+                    // Reset before the watcher exists so a cancel can never be lost between launch and native entry.
+                    WhisperNative.reset()
                     // The cancellation watcher aborts native inference; joining keeps buffers alive until it returns.
                     val watcher = CoroutineScope(Dispatchers.IO).launch { while (caller?.isActive != false) delay(50); WhisperNative.cancel() }
-                    try { WhisperNative.transcribe(models.model.path, pcm, Locale.getDefault().language).trim() }
+                    try { SpeechText.clean(WhisperNative.transcribe(models.model.path, pcm, "auto")) }
                     finally { watcher.cancel() }
                 }
             }
@@ -40,6 +59,35 @@ class WhisperTranscriber(private val models: SpeechModelStore) : SegmentTranscri
             check(text.isNotEmpty()) { "Could not transcribe audio." }; text
         }
     }
+}
+
+/** Box-filters decoded mono samples into 16 kHz output steps (average of every input sample inside each step). */
+internal class BoxResampler(startMs: Long, private val endMs: Long) {
+    private val startUs = startMs * 1000.0
+    private val endUs = endMs * 1000.0
+    private val sink = FloatSink()
+    private var bin = -1L
+    private var sum = 0.0
+    private var count = 0
+    private var last = 0f
+    val size get() = sink.size
+    fun add(timeUs: Double, sample: Float) {
+        if (timeUs < startUs || timeUs >= endUs) return
+        val index = ((timeUs - startUs) / STEP_US).toLong()
+        if (bin < 0) bin = index
+        if (index != bin) {
+            flush()
+            val mean = sample
+            // Upsampled sources skip bins; interpolate toward the next sample instead of leaving holes.
+            val gap = (index - bin).toInt()
+            for (k in 1 until gap) sink.add(last + (mean - last) * k / gap)
+            bin = index
+        }
+        sum += sample; count++
+    }
+    private fun flush() { if (count > 0) { last = (sum / count).toFloat(); sink.add(last) }; sum = 0.0; count = 0 }
+    fun finish(): FloatArray { flush(); return sink.toFloatArray() }
+    private companion object { const val STEP_US = 62.5 }
 }
 
 /** Decode only the requested range, average channels, then resample to 16 kHz mono. */
@@ -60,11 +108,8 @@ object PcmDecoder {
             codec = decoder; decoder.configure(format, null, null, 0); decoder.start()
             extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val info = MediaCodec.BufferInfo()
-            val output = FloatSink()
+            val output = BoxResampler(startMs, endMs)
             var inputEnded = false; var outputEnded = false
-            var nextTime = startMs * 1000.0
-            var previous = 0f
-            var previousTime = Double.NaN
             while (!outputEnded) {
                 currentCoroutineContext().ensureActive()
                 if (!inputEnded) {
@@ -90,21 +135,13 @@ object PcmDecoder {
                         val time = info.presentationTimeUs + frame * 1_000_000.0 / rate
                         var mono = 0f
                         repeat(channels) { mono += if (sampleBytes == 4) buffer.float else buffer.short.toFloat() / 32768f }; mono /= channels
-                        if (previousTime.isNaN()) { previous = mono; previousTime = time }
-                        while (nextTime <= time && nextTime < endMs * 1000) {
-                            if (nextTime >= previousTime) {
-                                val fraction = if (time == previousTime) 1.0 else (nextTime - previousTime) / (time - previousTime)
-                                output.add((previous + (mono - previous) * fraction).toFloat())
-                            }
-                            nextTime += 62.5
-                        }
-                        previous = mono; previousTime = time
+                        output.add(time, mono)
                     }
                     outputEnded = info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0
                     decoder.releaseOutputBuffer(index, false)
                 }
             }
-            check(output.size > 0); return output.toFloatArray()
+            val samples = output.finish(); check(samples.isNotEmpty()); return samples
         } finally { codec?.runCatching { stop(); release() }; extractor.release() }
     }
     // WAV's PCM track is already decoded; Android has no required audio/raw MediaCodec.
@@ -116,10 +153,7 @@ object PcmDecoder {
         check(encoding == AudioFormat.ENCODING_PCM_16BIT || encoding == AudioFormat.ENCODING_PCM_FLOAT)
         val bytes = if (encoding == AudioFormat.ENCODING_PCM_FLOAT) 4 else 2
         val buffer = java.nio.ByteBuffer.allocate(1024 * 1024).order(ByteOrder.LITTLE_ENDIAN)
-        val output = FloatSink()
-        var nextTime = startMs * 1000.0
-        var previous = 0f
-        var previousTime = Double.NaN
+        val output = BoxResampler(startMs, endMs)
         extractor.seekTo(startMs * 1000, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
         while (extractor.sampleTime >= 0 && extractor.sampleTime < endMs * 1000) {
             currentCoroutineContext().ensureActive()
@@ -132,19 +166,11 @@ object PcmDecoder {
                 val time = baseTime + frame * 1_000_000.0 / rate
                 var mono = 0f
                 repeat(channels) { mono += if (bytes == 4) buffer.float else buffer.short.toFloat() / 32768f }; mono /= channels
-                if (previousTime.isNaN()) { previous = mono; previousTime = time }
-                while (nextTime <= time && nextTime < endMs * 1000) {
-                    if (nextTime >= previousTime) {
-                        val fraction = if (time == previousTime) 1.0 else (nextTime - previousTime) / (time - previousTime)
-                        output.add((previous + (mono - previous) * fraction).toFloat())
-                    }
-                    nextTime += 62.5
-                }
-                previous = mono; previousTime = time
+                output.add(time, mono)
             }
             extractor.advance()
         }
-        check(output.size > 0); return output.toFloatArray()
+        val samples = output.finish(); check(samples.isNotEmpty()); return samples
     }
 
 }

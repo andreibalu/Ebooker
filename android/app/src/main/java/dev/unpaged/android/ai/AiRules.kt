@@ -47,30 +47,47 @@ object AiRules {
             .map { it to matchKey(it).split(" ").toSet().intersect(words).size.toDouble() / words.size }
             .maxByOrNull { it.second }?.takeIf { it.second >= .7 }?.first
     }
-    private fun strict(json: String, keys: Set<String>): JSONObject {
-        require(json.trim().startsWith("{") && json.trim().endsWith("}"))
-        return JSONObject(json).also { require(it.keys().asSequence().toSet() == keys) }
+    /** Strips code fences/prose and returns the first balanced `{…}` object. Unknown keys are the caller's to ignore. */
+    fun extractObject(text: String): JSONObject {
+        val start = text.indexOf('{')
+        require(start >= 0) { "No JSON object" }
+        var depth = 0; var inString = false; var escaped = false
+        for (i in start until text.length) {
+            val c = text[i]
+            if (inString) { if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') inString = false; continue }
+            when (c) { '"' -> inString = true; '{' -> depth++; '}' -> if (--depth == 0) return JSONObject(text.substring(start, i + 1)) }
+        }
+        error("Unterminated JSON object")
     }
-    private fun string(json: JSONObject, key: String) = (json.get(key) as? String) ?: error("Invalid $key")
-    private fun strings(json: JSONObject, key: String): List<String> {
-        val array = json.get(key) as? JSONArray ?: error("Invalid $key")
-        return List(array.length()) { array.get(it) as? String ?: error("Invalid $key") }
+    private fun string(json: JSONObject, key: String) = (json.opt(key) as? String) ?: error("Invalid $key")
+    private fun optionalStrings(json: JSONObject, key: String): List<String> {
+        val array = json.opt(key) as? JSONArray ?: return emptyList()
+        return List(array.length()) { array.opt(it) as? String }.filterNotNull()
     }
     fun moment(json: String, transcript: String, draft: LibraryMoment): LibraryMoment {
-        val obj = strict(json, setOf("momentName", "categories", "mood", "characters", "quoteLine", "momentNote"))
-        val categories = strings(obj, "categories").distinct()
-        require(categories.size in 1..3 && categories.all { tag -> MomentCategory.entries.any { it.name == tag } })
-        val mood = string(obj, "mood").trim()
-        require(MomentMood.entries.any { it.name == mood })
+        val obj = extractObject(json)
+        val categories = optionalStrings(obj, "categories").mapNotNull { tag -> MomentCategory.entries.firstOrNull { it.name.equals(tag.trim(), ignoreCase = true) }?.name }.distinct().take(3)
+        val mood = (obj.opt("mood") as? String)?.trim()?.let { raw -> MomentMood.entries.firstOrNull { it.name.equals(raw, ignoreCase = true) }?.name }
         return draft.copy(label = cap(string(obj, "momentName"), 5).ifBlank { "Saved Moment" },
             notes = prose(string(obj, "momentNote"), 40), categoriesJson = JSONArray(categories).toString(),
-            mood = mood, charactersJson = JSONArray(strings(obj, "characters").map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(6)).toString(),
-            quoteLine = verifiedQuote(string(obj, "quoteLine"), transcript))
+            mood = mood, charactersJson = JSONArray(optionalStrings(obj, "characters").map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(6)).toString(),
+            quoteLine = (obj.opt("quoteLine") as? String)?.let { verifiedQuote(it, transcript) })
     }
     fun recap(json: String, headline: Boolean): Recap {
-        val obj = strict(json, if (headline) setOf("progressHeadline", "recap") else setOf("recap"))
+        val obj = extractObject(json)
         return Recap(prose(string(obj, "recap"), 80).also { require(it.isNotBlank()) },
-            if (headline) cap(string(obj, "progressHeadline"), 4).trimEnd('.', '!', '?').ifBlank { null } else null)
+            if (headline) (obj.opt("progressHeadline") as? String)?.let { cap(it, 4).trimEnd('.', '!', '?').ifBlank { null } } else null)
     }
 }
 data class Recap(val text: String, val headline: String?)
+
+/** User-facing failure copy, mirroring the iOS unsafe-content and generic-failure messages. */
+object AiMessages {
+    private fun unsafe(e: Throwable) = (e as? LocalGenerationException)?.reason == GenerationFailure.UNSAFE
+    fun momentFailure(e: Throwable) = if (unsafe(e)) "AI detected content likely to be unsafe and couldn't name this moment." else "Couldn't analyze this moment."
+    fun recapFailure(e: Throwable, downloaded: Boolean) = when {
+        !downloaded -> "Audio for this book isn't on this phone."
+        unsafe(e) -> "On-device AI declined to summarize this passage."
+        else -> "Couldn't generate a recap. Please try again."
+    }
+}
