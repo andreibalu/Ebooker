@@ -123,3 +123,19 @@ delete semantics and AI/recaps. Payments and Plus/tips stay excluded.
   `chpl` accepts ffmpeg's four reserved bytes as well as none. Chapter cache titles
   are truncated to the `writeUTF` limit and the temp file is removed on failure.
 - "Remove cover" is hidden for Audiobookshelf books (the server cover is the only copy).
+### Review round 3
+
+- Confirmed that Android Auto stages chapter markers separately and configures the
+  book, markers and EQ only when its matching queue is applied. Added host
+  regressions for disconnect and timeout with different or absent incoming
+  markers, including recomputation of the current book's chapters.
+- Extended the existing controller/generation/book gate to normal and moment
+  playback. Bound car requests to their book before asynchronous preparation.
+  Removal invalidates matching incoming requests, cancels phone preparation and
+  clears pending attachment actions; late preparation and staged queues cannot
+  replace the current book. Host regressions cover all three preparation paths,
+  staged car removal, unrelated removal and moment removal before attachment.
+
+Validation on 2026-10-08: app and E2E debug APK assembly, production lint and
+all 162 host tests passed with zero lint issues. No emulator or physical-device
+execution was performed for this review round.
