@@ -186,16 +186,20 @@ fun LibraryScreen(preferences: UnpagedPreferences, model: LibraryViewModel = vie
         title = { Text("Playback unavailable") }, text = { Text(message) },
         confirmButton = { TextButton(onClick = player::dismissError) { Text("OK") } }) }
     if (absConnect) dev.unpaged.android.abs.ABSConnect(absClient, { absConnect = false }) { preferences.setShelvesSource("audiobookshelf"); absConnect = false }
-    if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } }, onOpenBackup = { backupLibrary = true }) { settings = false }
-    if (backupLibrary) dev.unpaged.android.backup.BackedUpLibrary(state.books, state.moments, preferences.backupEnabled(),
-        onLocate = { locateId = it.id; picker.launch(arrayOf("*/*")) }, onStream = model::restoreFree,
-        onDelete = { player.removed(it.id); model.remove(it, permanent = true) }, absConnected = absSummary != null) { backupLibrary = false }
-    state.restoreMatch?.let { book ->
-        dev.unpaged.android.backup.RestoreMatchSheet(book, state.moments[book.id].orEmpty().size, state.busy,
-            state.restoreMismatch,
-            { model.restore(allowMismatch = state.restoreMismatch) },
-            if (state.locateTarget != null || state.restoreMismatch) model::discard else model::addAsNew, model::discard)
+    val backupSheets: @Composable () -> Unit = {
+        if (backupLibrary) dev.unpaged.android.backup.BackedUpLibrary(state.books, state.moments, preferences.backupEnabled(),
+            onLocate = { locateId = it.id; picker.launch(arrayOf("*/*")) }, onStream = model::restoreFree,
+            onDelete = { player.removed(it.id); model.remove(it, permanent = true) }, absConnected = absSummary != null) { backupLibrary = false }
+        state.restoreMatch?.let { book ->
+            dev.unpaged.android.backup.RestoreMatchSheet(book, state.moments[book.id].orEmpty().size, state.busy,
+                state.restoreMismatch,
+                { model.restore(allowMismatch = state.restoreMismatch) },
+                if (state.locateTarget != null || state.restoreMismatch) model::discard else model::addAsNew, model::discard)
+        }
     }
+    if (settings) SettingsScreen(preferences, onOpenShelves = { scope.launch { pager.scrollToPage(tabs.indexOf("Shelves")) } },
+        onOpenBackup = { backupLibrary = true }, childSheets = backupSheets) { settings = false }
+    else backupSheets()
     state.pending?.takeIf { state.restoreMatch == null }?.let { ImportReview(it, state.busy, { title, author -> model.save(title, author); scope.launch { pager.scrollToPage(tabs.indexOf("Library")) } }, model::discard) }
     state.books.firstOrNull { it.id == renameId }?.let { book ->
         AlertDialog(modifier = Modifier.semantics { testTagsAsResourceId = true }, onDismissRequest = { renameId = null }, title = { Text("Rename Audiobook") },

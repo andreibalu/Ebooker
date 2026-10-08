@@ -44,7 +44,7 @@ private val listeningPreferences = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)? = null, onOpenBackup: (() -> Unit)? = null, onDone: () -> Unit) {
+fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)? = null, onOpenBackup: (() -> Unit)? = null, childSheets: @Composable () -> Unit = {}, onDone: () -> Unit) {
     preferenceRevision(preferences)
     var expanded by rememberSaveable { mutableStateOf<String?>(null) }
     var resetConfirmation by rememberSaveable { mutableStateOf(false) }
@@ -171,15 +171,18 @@ fun SettingsScreen(preferences: UnpagedPreferences, onOpenShelves: (() -> Unit)?
                 }
             }
         }
+        // Keep child windows in the dialog composition so recreation shows them above Settings.
+        if (resetConfirmation) AlertDialog(onDismissRequest = { resetConfirmation = false }, modifier = Modifier.semantics { testTagsAsResourceId = true },
+            title = { Text("Reset Onboarding?") },
+            text = { Text("The onboarding walkthrough will start again from the beginning.") },
+            confirmButton = { TextButton(onClick = { resetConfirmation = false; onDone(); preferences.setOnboardingComplete(false) },
+                modifier = Modifier.testTag("settings.confirmReset")) { Text("Reset") } },
+            dismissButton = { TextButton(onClick = { resetConfirmation = false }) { Text("Cancel") } })
+        if (aiSettings) dev.unpaged.android.ai.AiSettingsScreen((androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).ai, preferences) { aiSettings = false }
+        if (absSettings) dev.unpaged.android.abs.ABSServerSettings(absClient, preferences, onOpenShelves = { absSettings = false; onDone(); onOpenShelves?.invoke() }) { absSettings = false }
+        childSheets()
     }
-    if (resetConfirmation) AlertDialog(onDismissRequest = { resetConfirmation = false }, modifier = Modifier.semantics { testTagsAsResourceId = true },
-        title = { Text("Reset Onboarding?") },
-        text = { Text("The onboarding walkthrough will start again from the beginning.") },
-        confirmButton = { TextButton(onClick = { resetConfirmation = false; onDone(); preferences.setOnboardingComplete(false) },
-            modifier = Modifier.testTag("settings.confirmReset")) { Text("Reset") } },
-        dismissButton = { TextButton(onClick = { resetConfirmation = false }) { Text("Cancel") } })
-    if (aiSettings) dev.unpaged.android.ai.AiSettingsScreen((androidx.compose.ui.platform.LocalContext.current.applicationContext as UnpagedApplication).ai, preferences) { aiSettings = false }
-    if (absSettings) dev.unpaged.android.abs.ABSServerSettings(absClient, preferences, onOpenShelves = { absSettings = false; onDone(); onOpenShelves?.invoke() }) { absSettings = false }
+
 }
 
 @Composable
