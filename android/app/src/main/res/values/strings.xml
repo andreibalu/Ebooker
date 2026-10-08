@@ -24,4 +24,5 @@
     <string name="title">Title</string>
     <string name="author">Author</string>
     <string name="add_to_library">Save</string>
+    <string name="play_latest_book">Play Latest Book</string>
 </resources>

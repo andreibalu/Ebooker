@@ -37,6 +37,9 @@ class SQLiteCatalogStore(context: Context) : SQLiteOpenHelper(context, "librivox
             while (rows.moveToNext()) add(LibriVoxClient.decodeBook(JSONObject(rows.getString(0))))
         }
     }
+    fun title(id: String): String? = readableDatabase.rawQuery("SELECT json FROM catalog WHERE id = ?", arrayOf(id)).use {
+        if (it.moveToFirst()) LibriVoxClient.decodeBook(JSONObject(it.getString(0))).title else null
+    }
     override fun count(): Int = readableDatabase.rawQuery("SELECT COUNT(*) FROM catalog", null).use { it.moveToFirst(); it.getInt(0) }
     override fun cursor(): SyncCursor = readableDatabase.rawQuery("SELECT offset,since,started,completed,ready FROM sync WHERE singleton=1", null).use {
         check(it.moveToFirst()); SyncCursor(it.getInt(0), it.getLong(1), it.getLong(2), it.getLong(3), it.getInt(4) == 1)
@@ -53,13 +56,17 @@ class SQLiteCatalogStore(context: Context) : SQLiteOpenHelper(context, "librivox
             }, SQLiteDatabase.CONFLICT_REPLACE)
         }
     }
-    override fun seed(books: List<CatalogBook>) { writableDatabase.transaction { write(this, books) } }
+    override fun seed(books: List<CatalogBook>) {
+        writableDatabase.transaction { write(this, books) }
+        if (books.isNotEmpty()) dev.unpaged.android.library.LibraryContentChanges.committed()
+    }
     override fun commit(books: List<CatalogBook>, cursor: SyncCursor) {
         writableDatabase.transaction {
             write(this, books)
             execSQL("UPDATE sync SET offset=?,since=?,started=?,completed=?,ready=? WHERE singleton=1",
                 arrayOf<Any>(cursor.offset, cursor.since, cursor.started, cursor.completed, if (cursor.ready) 1 else 0))
         }
+        if (books.isNotEmpty()) dev.unpaged.android.library.LibraryContentChanges.committed()
     }
 }
 

@@ -66,6 +66,122 @@ class LibraryE2ETest {
         }
     }
 
+    private fun <T> onMediaMain(operation: () -> T): T {
+        val value = java.util.concurrent.atomic.AtomicReference<T>()
+        instrumentation.runOnMainSync { value.set(operation()) }
+        return value.get()
+    }
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    private fun browser(listener: androidx.media3.session.MediaBrowser.Listener? = null): androidx.media3.session.MediaBrowser {
+        val context = instrumentation.context
+        val future = onMediaMain {
+            androidx.media3.session.MediaBrowser.Builder(context, androidx.media3.session.SessionToken(context,
+                android.content.ComponentName(app, "dev.unpaged.android.playback.PlaybackService")))
+                .apply { if (listener != null) setListener(listener) }.buildAsync()
+        }
+        return future.get(15, java.util.concurrent.TimeUnit.SECONDS)
+    }
+    private fun <T> mediaResult(future: com.google.common.util.concurrent.ListenableFuture<T>): T =
+        future.get(15, java.util.concurrent.TimeUnit.SECONDS)
+
+    @Test @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    fun carBrowserTreePlaybackCommandsOfflineErrorAndMomentPersistence() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 1.wav", "E2E Chapter 2.wav")
+        tapDescription("Add favorite")
+        val error = java.util.concurrent.atomic.AtomicReference<androidx.media3.session.SessionError>()
+        val browser = browser(object : androidx.media3.session.MediaBrowser.Listener {
+            override fun onError(controller: androidx.media3.session.MediaController, sessionError: androidx.media3.session.SessionError) { error.set(sessionError) }
+        })
+        try {
+            val root = mediaResult(onMediaMain { browser.getLibraryRoot(null) })
+            assertEquals(0, root.resultCode); assertEquals("root", root.value!!.mediaId)
+            val tabs = mediaResult(onMediaMain { browser.getChildren("root", 0, 10, null) }).value!!
+            assertEquals(listOf("Favorites", "Library", "Shelves"), tabs.map { it.mediaId })
+            val rows = mediaResult(onMediaMain { browser.getChildren("Library", 0, 10, null) }).value!!
+            assertEquals("E2E The Listening Book", rows.single().mediaMetadata.title.toString())
+            val cover = instrumentation.context.contentResolver.openInputStream(rows.single().mediaMetadata.artworkUri!!)!!.use { it.readBytes() }
+            assertTrue(cover.take(4).toByteArray().contentEquals(byteArrayOf(0x89.toByte(), 0x50, 0x4e, 0x47)))
+            assertEquals(rows.single().mediaId, mediaResult(onMediaMain { browser.getChildren("Favorites", 0, 10, null) }).value!!.single().mediaId)
+            val classics = mediaResult(onMediaMain { browser.getChildren("Shelves", 0, 30, null) }).value!!
+            assertTrue(classics.isNotEmpty())
+            onMediaMain { browser.setMediaItem(rows.single()); browser.prepare(); browser.play() }
+            visible(By.res("miniPlayer.title").text("E2E The Listening Book"))
+            field("miniPlayer").click(); field("player.title"); waitForElapsed { it >= 2 }
+            onMediaMain { browser.pause(); browser.seekTo(35000) }
+            waitForElapsed { it == 35 }
+            fun command(action: String): androidx.media3.session.SessionResult = mediaResult(onMediaMain {
+                browser.sendCustomCommand(androidx.media3.session.SessionCommand("dev.unpaged.$action", android.os.Bundle.EMPTY), android.os.Bundle.EMPTY)
+            })
+            assertEquals(0, command("SAVE_MOMENT").resultCode)
+            assertEquals(0, command("MARK_PROGRESS").resultCode)
+            assertEquals(0, command("CYCLE_SPEED").resultCode)
+            visible(By.text("1.25x"))
+            assertEquals(listOf("Favorites", "Library", "Shelves", "chapters"),
+                mediaResult(onMediaMain { browser.getChildren("root", 0, 10, null) }).value!!.map { it.mediaId })
+            val chapters = mediaResult(onMediaMain { browser.getChildren("chapters", 0, 30, null) }).value!!
+            assertEquals(2, chapters.size)
+            screenshot("auto-player-light")
+            device.executeShellCommand("cmd uimode night yes"); field("player.title"); screenshot("auto-player-dark")
+            device.executeShellCommand("cmd uimode night no"); field("player.close").click()
+            tapText("E2E The Listening Book"); field("book.moments").click()
+            visible(By.text("CarPlay 1")); visible(By.text("00:35"))
+            screenshot("auto-moments-light")
+            device.executeShellCommand("cmd uimode night yes"); visible(By.text("CarPlay 1")); screenshot("auto-moments-dark")
+            device.executeShellCommand("cmd uimode night no")
+            onMediaMain { browser.setMediaItem(chapters[1]); browser.prepare(); browser.play() }
+            field("miniPlayer").click(); visible(By.res("player.title").text("E2E Chapter 2"))
+            waitForElapsed { it in 0..5 }; field("player.close").click()
+            onMediaMain { browser.setMediaItem(classics.first()); browser.prepare(); browser.play() }
+            val deadline = android.os.SystemClock.elapsedRealtime() + 15000
+            while (error.get() == null && android.os.SystemClock.elapsedRealtime() < deadline) android.os.SystemClock.sleep(100)
+            assertEquals("No internet connection", error.get()?.message)
+        } finally { onMediaMain { browser.release() } }
+        relaunch(); tapText("E2E The Listening Book"); field("book.moments").click()
+        visible(By.text("CarPlay 1")); visible(By.text("00:35")); visible(By.text("1 moment"))
+    }
+
+    @Test fun launcherShortcutPlaysLatestAndIsConsumedAcrossRotationAndRelaunch() {
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 1.wav", "E2E Chapter 2.wav")
+        tapText("E2E The Listening Book"); field("book.play").click(); dismissNotificationPrompt()
+        waitForElapsed { it >= 2 }; field("player.playPause").click(); field("player.close").click(); device.pressBack()
+        saveBook("Unplayed newer import", "Other Author", "Another.wav")
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.MainActivity -a dev.unpaged.android.PLAY_LATEST_BOOK")
+        visible(By.res("miniPlayer.title").text("E2E The Listening Book")); visible(By.desc("Pause playback"))
+        field("miniPlayer.playPause").click(); visible(By.desc("Play playback"))
+        device.setOrientationLeft(); visible(By.desc("Play playback")); device.setOrientationNatural()
+        selectLibraryTab()
+        screenshot("auto-shortcut-light")
+        device.executeShellCommand("cmd uimode night yes"); visible(By.desc("Play playback")); screenshot("auto-shortcut-dark")
+        relaunch(); assertFalse(device.hasObject(By.res("miniPlayer")))
+    }
+
+    @Test @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    fun voiceIntentAndBrowserSearchChooseLibraryFirstAndEmptyQueryResumesLatest() {
+        saveBook("Jane Eyre", "Charlotte Bronte", "Another.wav")
+        saveBook("E2E The Listening Book", "Fixture Author", "E2E Chapter 1.wav", "E2E Chapter 2.wav")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.MainActivity -a android.media.action.MEDIA_PLAY_FROM_SEARCH --es query Eyre") // No shell here: a quoted space would split the argument.
+        visible(By.res("miniPlayer.title").text("Jane Eyre")); visible(By.desc("Pause playback"))
+        field("miniPlayer.playPause").click(); visible(By.desc("Play playback"))
+        val browser = browser()
+        try {
+            assertEquals(0, mediaResult(onMediaMain { browser.search("Eyre", null) }).resultCode)
+            val results = mediaResult(onMediaMain { browser.getSearchResult("Eyre", 0, 30, null) }).value!!
+            assertEquals(1, results.size); assertTrue(results.single().mediaId.startsWith("book:"))
+            val request = androidx.media3.common.MediaItem.Builder().setRequestMetadata(
+                androidx.media3.common.MediaItem.RequestMetadata.Builder().setSearchQuery("Listening").build()).build()
+            onMediaMain { browser.setMediaItem(request); browser.prepare(); browser.play() }
+            visible(By.res("miniPlayer.title").text("E2E The Listening Book")); visible(By.desc("Pause playback"))
+            field("miniPlayer.playPause").click(); visible(By.desc("Play playback"))
+        } finally { onMediaMain { browser.release() } }
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.MainActivity -a android.media.action.MEDIA_PLAY_FROM_SEARCH")
+        visible(By.res("miniPlayer.title").text("E2E The Listening Book")); visible(By.desc("Pause playback"))
+        selectLibraryTab()
+        screenshot("auto-voice-light")
+        device.executeShellCommand("cmd uimode night yes"); visible(By.res("miniPlayer.title")); screenshot("auto-voice-dark")
+    }
+
     @Test fun onboardingFirstLaunchPersistsAndResetShowsWelcomeAgain() {
         device.executeShellCommand("am force-stop $app")
         device.executeShellCommand("pm clear $app")

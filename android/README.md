@@ -1,6 +1,6 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`, built in five merged slices and the current ABS slice:
+Native Kotlin/Compose application under `android/app/`, built in six merged slices and the current Android Auto slice:
 
 - [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
   import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
@@ -20,8 +20,12 @@ Native Kotlin/Compose application under `android/app/`, built in five merged sli
   encrypted login/API-key credentials, server browsing and authenticated streaming,
   server progress and card heart/shadow fixes.
 
+- [Slice 7](../docs/android/slice-7-android-auto.md): MediaLibraryService browse tree,
+  car commands, voice search and Play Latest Book shortcut. Assigned-emulator E2E
+  verification is pending; real Android Auto rendering is unverified.
+
 SQLite is at schema v4 via additive, tested migrations. AI,
-Android Auto, payments and cloud sync are absent. Self-hosted ABS permits HTTP
+payments and cloud sync are absent. Self-hosted ABS permits HTTP
 through the network security configuration, with a public-host warning before
 credentials are sent. Credentials use Android Keystore AES/GCM encryption in
 app-private storage excluded from backups. The
