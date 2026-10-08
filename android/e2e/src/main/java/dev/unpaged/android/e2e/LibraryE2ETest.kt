@@ -203,7 +203,7 @@ class LibraryE2ETest {
         visible(By.text("Imagine your year."))
         captureOnboardingPage("year")
         field("onboarding.page.4").click()
-        visible(By.text("Timestamps are saved on your phone. Automatic naming and AI recaps are not available."))
+        visible(By.text("On-device AI can name moments and recap local books on supported phones. Set it up in Settings → On-device AI."))
         captureOnboardingPage("moments")
         field("onboarding.page.5").click()
         visible(By.text("Android can back up your library metadata when Backup by Google is on. Audio files stay on this phone and need re-importing after restore."))
@@ -999,16 +999,21 @@ class LibraryE2ETest {
 
     // edgeSwipe keeps the gesture off content that consumes vertical drags (EQ band sliders).
     private fun scrollTo(id: String, downward: Boolean = true, scrollId: String = "settings.scroll", edgeSwipe: Boolean = false) {
+        // A swipe can fling past a short row. Search back the other way before failing.
+        if (!scrollSearch(id, downward, scrollId, edgeSwipe)) scrollSearch(id, !downward, scrollId, edgeSwipe)
+        field(id)
+    }
+    private fun scrollSearch(id: String, downward: Boolean, scrollId: String, edgeSwipe: Boolean): Boolean {
         repeat(8) {
             val bounds = visible(By.res(scrollId)).visibleBounds
             val target = device.findObject(By.res(id))?.visibleBounds
-            if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return
+            if (target != null && target.height() >= 60 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return true
             val top = bounds.top + bounds.height() / 5
             val bottom = bounds.bottom - bounds.height() / 5
             val x = if (edgeSwipe) bounds.left + 30 else bounds.centerX()
             device.swipe(x, if (downward) bottom else top, x, if (downward) top else bottom, 30)
         }
-        field(id)
+        return false
     }
 
     private fun saveBook(title: String, author: String, vararg files: String) {
@@ -1666,6 +1671,127 @@ class LibraryE2ETest {
             assertFalse("Returning from player keeps pushed detail", device.hasObject(By.res("tab.Shelves")))
             field("abs.back").click(); field("abs.browse")
         } finally { absRequest("_test/reset", "POST") }
+    }
+
+    private fun launchAI(status: String) {
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.ai.AiFixtureActivity --es generator $status")
+        selectLibraryTab()
+    }
+    private fun scrollAI(id: String, downward: Boolean = true) {
+        // After a uimode change the activity is recreated; a swipe sent before the restored sheet settles drags it closed.
+        settleLayout()
+        repeat(10) {
+            val bounds = visible(By.res("ai.scroll")).visibleBounds
+            val target = device.findObject(By.res(id))?.visibleBounds
+            if (target != null && target.height() > 0 && target.top >= bounds.top + 8 && target.bottom < bounds.bottom - 8) return
+            device.swipe(bounds.centerX(), if (downward) bounds.bottom - 60 else bounds.top + 60,
+                bounds.centerX(), if (downward) bounds.top + 60 else bounds.bottom - 60, 25)
+        }
+        field(id)
+    }
+    private fun openAISettings() {
+        tapDescription("Settings")
+        scrollTo("settings.ai")
+        field("settings.ai").click()
+        field("ai.systemStatus")
+    }
+    @Test fun onDeviceAiUnavailableKeepsManualMomentsAndConsentIsCancellable() {
+        launchAI("unavailable")
+        saveBook("AI Local Book", "Fixture Author", "AI Speech.wav")
+        openAISettings()
+        visible(By.text("On-device AI isn't supported on this phone."))
+        assertFalse(device.hasObject(By.res("ai.useSmartMomentNaming")))
+        screenshot("ai-unavailable-light")
+        device.executeShellCommand("cmd uimode night yes")
+        screenshot("ai-unavailable-dark")
+        device.executeShellCommand("cmd uimode night no")
+        // Unsupported phones are not offered the speech-model download.
+        assertFalse(device.hasObject(By.res("ai.download")))
+        assertFalse(device.hasObject(By.res("ai.modelStatus")))
+        scrollAI("ai.done", downward = false)
+        field("ai.done").click(); tapText("Done")
+        tapText("AI Local Book"); field("book.play").click(); dismissNotificationPrompt()
+        waitForPillLabel("player.saveMoment", "Save Moment")
+        field("player.saveMoment").click(); field("moment.name").setText("Manual passage"); field("moment.done").click()
+        field("player.close").click()
+        relaunch(); tapText("AI Local Book"); field("book.moments").click(); visible(By.text("Manual passage"))
+    }
+    @Test fun whisperConsentRealSpeechSmartPreviewRecapPersistAndDelete() {
+        launchAI("available")
+        saveBook("AI Spoken Story", "Fixture Author", "AI Speech.wav")
+        openAISettings()
+        field("ai.download").click(); visible(By.text("Download speech model?"))
+        device.pressBack()
+        assertFalse(device.hasObject(By.res("ai.progress")))
+        field("ai.download").click(); field("ai.consent").click()
+        field("ai.cancel").click(); field("ai.download")
+        field("ai.download").click(); field("ai.consent").click()
+        assertTrue("Real model download and checksum verification", device.wait(Until.hasObject(By.text("Installed · Verified")), 240_000))
+        scrollAI("ai.useLocalAIFeatures")
+        field("ai.useLocalAIFeatures").click()
+        scrollAI("ai.useSmartMomentNaming"); field("ai.useSmartMomentNaming").click()
+        scrollAI("ai.useSmartSummary"); field("ai.useSmartSummary").click()
+        screenshot("ai-options-light")
+        device.executeShellCommand("cmd uimode night yes"); screenshot("ai-options-dark")
+        device.executeShellCommand("cmd uimode night no")
+        scrollAI("ai.done", downward = false)
+        screenshot("ai-settings-light")
+        device.executeShellCommand("cmd uimode night yes"); screenshot("ai-settings-dark")
+        device.executeShellCommand("cmd uimode night no")
+        scrollAI("ai.done", downward = false)
+        field("ai.done").click(); tapText("Done")
+        tapText("AI Spoken Story"); field("book.play").click(); dismissNotificationPrompt()
+        android.os.SystemClock.sleep(8000)
+        field("player.playPause").click()
+        waitForPillLabel("player.saveMoment", "Smart Save Moment")
+        screenshot("ai-player-light")
+        device.executeShellCommand("cmd uimode night yes"); screenshot("ai-player-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("player.saveMoment").click()
+        assertTrue("Whisper inference completes", device.wait(Until.hasObject(By.res("moment.editor")), 240_000))
+        assertEquals("A Journey Begins Here", field("moment.name").text)
+        val quote = field("moment.quote").text
+        assertTrue("Real transcript-backed speech quote: $quote", quote == "Ask what you can do for your country." || quote == "The old garden was quiet in the morning.")
+        screenshot("ai-moment-light")
+        device.executeShellCommand("cmd uimode night yes"); screenshot("ai-moment-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("moment.name").setText("My edited smart moment"); field("moment.done").click()
+        field("player.close").click()
+        field("recap.generate").click()
+        assertTrue("Real Whisper recap window completes", device.wait(Until.hasObject(By.res("recap.result")), 240_000))
+        screenshot("ai-recap-light")
+        device.executeShellCommand("cmd uimode night yes"); screenshot("ai-recap-dark")
+        device.executeShellCommand("cmd uimode night no")
+        relaunch(); tapText("AI Spoken Story"); field("recap.result")
+        assertFalse("Cached recap without headline hides generation before mode changes", device.hasObject(By.res("recap.generate")))
+        device.pressBack(); openAISettings()
+        scrollAI("ai.shortenSummary"); field("ai.shortenSummary").click()
+        device.pressBack(); tapText("Done")
+        tapText("AI Spoken Story"); field("recap.generate")
+        assertFalse("Headline mode rejects the old headline-less cache", device.hasObject(By.res("recap.result")))
+        field("recap.generate").click()
+        assertTrue("Regenerated headline recap completes", device.wait(Until.hasObject(By.res("recap.result")), 240_000))
+        visible(By.text("A New Journey Begins")); screenshot("ai-recap-headline-light")
+        relaunch(); tapText("AI Spoken Story"); visible(By.text("A New Journey Begins")); field("recap.result")
+        field("book.moments").click(); visible(By.text("My edited smart moment"))
+        tapDescription("Edit moment"); scrollTo("moment.quote", scrollId = "moment.scroll")
+        assertEquals(quote, field("moment.quote").text); tapText("Cancel")
+        device.pressBack()
+        launchAI("unavailable"); openAISettings()
+        assertFalse(device.hasObject(By.res("ai.modelStatus")))
+        assertFalse(device.hasObject(By.res("ai.useLocalAIFeatures")))
+        scrollAI("ai.done", downward = false); field("ai.done").click(); tapText("Done")
+        tapText("AI Spoken Story"); assertFalse(device.hasObject(By.res("recap.generate")))
+        field("book.play").click(); waitForPillLabel("player.saveMoment", "Save Moment"); field("player.close").click()
+        launchAI("available"); openAISettings(); field("ai.delete").click(); field("ai.confirmDelete").click()
+        field("ai.download")
+        scrollAI("ai.done", downward = false)
+        field("ai.done").click(); tapText("Done")
+        tapText("AI Spoken Story"); field("book.play").click()
+        waitForPillLabel("player.saveMoment", "Save Moment")
+        field("player.close").click()
+        relaunch(); openAISettings(); visible(By.text("Download once to transcribe local audiobook passages."))
     }
 
     private fun launch() {

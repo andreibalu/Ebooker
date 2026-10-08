@@ -1,11 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<data-extraction-rules>
+<data-extraction-rules xmlns:tools="http://schemas.android.com/tools">
     <cloud-backup>
         <include domain="database" path="library-backup.db" />
         <include domain="sharedpref" path="unpaged.xml" />
+        <!-- Redundant with the allowlist; keep the explicit safeguard if includes expand. -->
+        <exclude domain="sharedpref" path="recap_cache.xml" tools:ignore="FullBackupContent" />
     </cloud-backup>
     <device-transfer>
         <include domain="database" path="library-backup.db" />
         <include domain="sharedpref" path="unpaged.xml" />
+        <!-- Redundant with the allowlist; keep the explicit safeguard if includes expand. -->
+        <exclude domain="sharedpref" path="recap_cache.xml" tools:ignore="FullBackupContent" />
     </device-transfer>
 </data-extraction-rules>

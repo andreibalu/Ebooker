@@ -1,6 +1,12 @@
 package dev.unpaged.android.equalizer
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import dev.unpaged.android.MediumLargeSheet
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -23,26 +29,26 @@ import androidx.compose.ui.unit.sp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EqualizerSheet(config: EqualizerConfiguration, update: (EqualizerConfiguration) -> Unit, dismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.background,
+    MediumLargeSheet(onDismissRequest = dismiss,
         modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("equalizer")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.width(60.dp))
             Text("Equalizer", Modifier.weight(1f), fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            TextButton(onClick = dismiss, modifier = Modifier.testTag("equalizer.done")) { Text("Done") }
+            SheetDoneButton(onClick = dismiss, modifier = Modifier.testTag("equalizer.done"))
         }
-        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("equalizer.scroll").navigationBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).testTag("equalizer.scroll").navigationBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             EqCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { EqTitle("Equalizer"); EqSubtitle("Adjust tone and boost quiet books") }
-                    Switch(config.isEnabled, { update(config.copy(isEnabled = it)) }, Modifier.testTag("equalizer.enabled"), colors = SwitchDefaults.colors(checkedThumbColor = androidx.compose.ui.graphics.Color.White, checkedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f), uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant, uncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f), uncheckedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f)))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) { EqTitle("Equalizer"); EqSubtitle("Adjust tone and boost quiet books") }
+                    Switch(config.isEnabled, { update(config.copy(isEnabled = it)) }, Modifier.height(31.dp).testTag("equalizer.enabled"), colors = SwitchDefaults.colors(checkedThumbColor = androidx.compose.ui.graphics.Color.White, checkedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f), uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant, uncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .4f), uncheckedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f)))
                 }
             }
             EqCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { EqTitle("Volume Boost"); EqSubtitle("Override the max volume for quiet books") }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) { EqTitle("Volume Boost"); EqSubtitle("Override the max volume for quiet books") }
                     Text("+${config.preampDB.toInt()} dB", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 }
-                Slider(config.preampDB.toFloat(), { update(config.copy(preampDB = it.toDouble())) }, valueRange = 0f..12f, steps = 11, modifier = Modifier.testTag("equalizer.preamp"), colors = eqSliderColors())
+                PlainEqSlider(config.preampDB.toFloat(), { update(config.copy(preampDB = it.toDouble())) }, valueRange = 0f..12f, steps = 11, modifier = Modifier.height(28.dp).testTag("equalizer.preamp"))
                 if (config.preampDB > 9) Text("⚠ High boost may distort very quiet passages.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
             }
             EqCard(config.isEnabled) {
@@ -51,8 +57,8 @@ fun EqualizerSheet(config: EqualizerConfiguration, update: (EqualizerConfigurati
                     EqualizerPreset.entries.forEach { preset ->
                         FilterChip(selected = config.preset == preset, onClick = { update(config.apply(preset)) }, enabled = config.isEnabled,
                             colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .1f), selectedLabelColor = MaterialTheme.colorScheme.onSurface),
-                            label = { Text(preset.title, fontSize = 14.sp) }, shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.testTag("equalizer.preset.${preset.name}"))
+                            label = { Text(preset.title, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium) }, shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.height(36.dp).testTag("equalizer.preset.${preset.name}"))
                     }
                 }
             }
@@ -62,8 +68,8 @@ fun EqualizerSheet(config: EqualizerConfiguration, update: (EqualizerConfigurati
                     config.bandGainsDB.forEachIndexed { index, gain ->
                         Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(if (gain > 0) "+${gain.toInt()}" else "${gain.toInt()}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Slider(gain.toFloat(), { update(config.band(index, it.toDouble())) }, enabled = config.isEnabled, valueRange = -12f..12f, steps = 23,
-                                colors = eqSliderColors(), modifier = Modifier.testTag("equalizer.band.$index")
+                            PlainEqSlider(gain.toFloat(), { update(config.band(index, it.toDouble())) }, enabled = config.isEnabled, valueRange = -12f..12f, steps = 23,
+                                modifier = Modifier.testTag("equalizer.band.$index")
                                     .size(40.dp, 180.dp)
                                     .graphicsLayer { rotationZ = -90f }
                                     .layout { measurable, constraints ->
@@ -87,8 +93,8 @@ private fun EqCard(enabled: Boolean = true, content: @Composable ColumnScope.() 
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
     }
 }
-@Composable private fun EqTitle(text: String) { Text(text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
-@Composable private fun EqSubtitle(text: String) { Text(text, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+@Composable private fun EqTitle(text: String) { Text(text, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold) }
+@Composable private fun EqSubtitle(text: String) { Text(text, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 @Composable private fun eqSliderColors() = SliderDefaults.colors(
     activeTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .7f),
     inactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f),
@@ -99,3 +105,21 @@ private fun EqCard(enabled: Boolean = true, content: @Composable ColumnScope.() 
     disabledInactiveTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f),
     disabledActiveTickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .2f),
     disabledInactiveTickColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .08f))
+
+/** Keep Slider's snapping, gestures and progress semantics, but remove Material ticks/stops. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlainEqSlider(value: Float, onValueChange: (Float) -> Unit, valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Slider(value = value, onValueChange = onValueChange, valueRange = valueRange, steps = steps,
+        modifier = modifier, enabled = enabled, colors = eqSliderColors(),
+        thumb = {
+            Box(Modifier.size(36.dp, 24.dp).shadow(if (enabled) 4.dp else 0.dp, CircleShape)
+                .background(Color.White, CircleShape))
+        },
+        track = { state ->
+            SliderDefaults.Track(sliderState = state, modifier = Modifier.height(4.dp), enabled = enabled,
+                colors = eqSliderColors(), drawStopIndicator = null, drawTick = { _, _ -> },
+                thumbTrackGapSize = 0.dp, trackInsideCornerSize = 2.dp)
+        })
+}

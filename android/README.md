@@ -1,6 +1,6 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`, built in six merged slices plus the Android Auto, media/parity and backup slices:
+Native Kotlin/Compose application under `android/app/`. Slices 1–6 are merged. Slices 7–10 and parallel-emulator E2E are in review as stacked PRs #62–#66:
 
 - [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
   import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
@@ -21,17 +21,23 @@ Native Kotlin/Compose application under `android/app/`, built in six merged slic
   server progress and card heart/shadow fixes.
 
 - [Slice 7](../docs/android/slice-7-android-auto.md): MediaLibraryService browse tree,
-  car commands, voice search and Play Latest Book shortcut.
+  car commands, voice search and Play Latest Book shortcut (PR #63).
   Real Android Auto rendering is unverified.
-- [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
-  WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
-  parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md).
 - [Slice 8](../docs/android/slice-8-library-backup-restore.md): Android's Auto Backup
   of library metadata, missing-audio detection, in-place re-import, archived free
-  books and Backed-up Library.
+  books and Backed-up Library (PR #65).
+- [Slice 9](../docs/android/slice-9-on-device-ai.md): Gemini Nano smart moments,
+  recaps and optional downloaded Whisper transcription (PR #66). Physical Nano
+  qualification remains open.
+- [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
+  WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
+  parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md) (PR #64).
 
-SQLite is at schema v5 via additive, tested migrations. AI,
-payments and live cloud sync are absent. Self-hosted ABS permits HTTP
+PR #62 covers parallel-emulator E2E.
+
+SQLite is at schema v5 via additive migrations. Payments and Plus/tips remain
+excluded. Android Auto Backup covers library metadata and preferences when enabled,
+but there is no live multi-device or cross-platform sync. Self-hosted ABS permits HTTP
 through the network security configuration, with a public-host warning before
 credentials are sent. Credentials use Android Keystore AES/GCM encryption in
 app-private storage excluded from backups. The
@@ -50,8 +56,9 @@ export ANDROID_HOME="$HOME/Library/Android/sdk"
 ```
 
 These exports affect only the current shell. Other machines should substitute
-local JDK/SDK paths. Android Studio and an emulator are optional; global Gradle,
-NDK and shell-profile edits are unnecessary. First build downloads Gradle and
+local JDK/SDK paths. Android Studio is optional. Use the assigned emulator for
+runtime checks. Global Gradle and shell-profile edits are unnecessary. AGP installs
+the pinned NDK/CMake for the Whisper native build. First build downloads Gradle and
 Maven dependencies into the user's Gradle cache and creates the normal local
 Android debug signing key if absent. Never commit that key. SDK license terms
 must be accepted by the developer before SDK installation (already accepted by
@@ -71,8 +78,9 @@ and its RSA prompt accepted:
 "$ANDROID_HOME/platform-tools/adb" shell am start -n dev.unpaged.android.development/dev.unpaged.android.MainActivity
 ```
 
-Assembly/lint alone do not verify launch, layout, accessibility or runtime behavior.
-The original foundation had build/lint evidence only. The local-library follow-up adds emulator E2E coverage below; physical-device qualification is still pending.
+Assembly and lint alone do not verify launch, layout, accessibility or runtime behavior.
+Selected journeys run on dedicated API35 emulators. They do not qualify Gemini Nano,
+Android Auto head units, Google Drive backup timing or OEM device transfer on physical devices.
 
 ## Pinned tooling
 
@@ -83,6 +91,10 @@ The original foundation had build/lint evidence only. The local-library follow-u
 | Kotlin and Compose compiler plugin | 2.3.21 |
 | Compose BOM | 2025.10.01 |
 | Activity Compose | 1.11.0 |
+| WorkManager | 2.10.5 |
+| ExifInterface | 1.3.6 |
+| ML Kit GenAI Prompt API | 1.0.0-beta4 |
+| ML Kit GenAI schema compiler (KSP) | 1.0.0-alpha1 |
 | compile/target SDK; build tools | 36; 36.0.0 |
 | Java/Kotlin bytecode target | 17 (build host JDK 21) |
 
@@ -143,8 +155,9 @@ fingerprints, duplicate multiplicity, cancelled/failed copies, commit failure,
 removal and restart cleanup. Robolectric tests exercise SQLite reopen, track
 ordering, cascade removal and atomic rollback. Robolectric downloads its API28
 framework fixture on the first test run; these are host tests, not device tests.
-Additional pinned dependencies: Material Icons Extended 1.7.8, Lifecycle 2.9.4, coroutines 1.10.2, WorkManager 2.10.5, JUnit 4.13.2,
-Robolectric 4.16. See [slice details](../docs/android/local-library.md).
+Other pinned dependencies: Material Icons Extended 1.7.8, Lifecycle 2.9.4,
+coroutines 1.10.2, JUnit 4.13.2 and Robolectric 4.16. See
+[slice details](../docs/android/local-library.md).
 
 
 ## Android end-to-end tests

@@ -26,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
@@ -212,7 +213,7 @@ fun ABSServerSettings(client: ABSClient, preferences: UnpagedPreferences, onOpen
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onClose, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(18.dp)); Text("Settings") }
                 Text("Audiobookshelf", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = onClose) { Text("Done") }
+                SheetDoneButton(onClick = onClose, filled = true)
             }
             Surface(shape = UnpagedTheme.settingsShape, shadowElevation = UnpagedTheme.cardShadow) {
                 Column(Modifier.fillMaxWidth()) {

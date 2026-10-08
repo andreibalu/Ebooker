@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -57,7 +58,7 @@ fun BackedUpLibrary(books: List<LibraryBook>, moments: Map<String, List<LibraryM
         Column(Modifier.fillMaxHeight(.95f).semantics { testTagsAsResourceId = true }) {
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Backed-up Library", Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = onDone, modifier = Modifier.testTag("backup.library.done")) { Text("Done") }
+                SheetDoneButton(onClick = onDone, modifier = Modifier.testTag("backup.library.done"))
             }
             LazyColumn(Modifier.fillMaxWidth().testTag("backup.library"), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {

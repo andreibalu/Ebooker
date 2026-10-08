@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -22,7 +23,7 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (LibraryMoment) -> Unit, onCancel: () -> Unit) {
+fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, aiGenerated: Boolean = false, warning: String? = null, onSave: (LibraryMoment) -> Unit, onCancel: () -> Unit) {
     var name by rememberSaveable(moment.id) { mutableStateOf(moment.label) }
     var note by rememberSaveable(moment.id) { mutableStateOf(moment.notes) }
     var quote by rememberSaveable(moment.id) { mutableStateOf(moment.quoteLine.orEmpty()) }
@@ -35,15 +36,16 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (Li
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onCancel) { Text("Cancel") }
             Text(if (editing) "Edit Moment" else "Name this Moment", Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            TextButton(enabled = name.trim().isNotEmpty(), modifier = Modifier.testTag("moment.done"), onClick = {
+            SheetDoneButton(enabled = name.trim().isNotEmpty(), modifier = Modifier.testTag("moment.done"), onClick = {
                 onSave(moment.copy(label = name.trim(), notes = note, quoteLine = quote.takeIf { it.isNotEmpty() },
                     categoriesJson = JSONArray(categories).toString(), charactersJson = JSONArray(characters).toString(), mood = mood))
-            }) { Text("Done") }
+            })
         }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("moment.scroll").navigationBarsPadding().padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            warning?.let { Text(it, Modifier.testTag("moment.warning"), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             MomentSection("Name") { TextField(name, { name = it }, Modifier.fillMaxWidth().testTag("moment.name"), colors = momentFieldColors(), placeholder = { Text("Moment name") }, singleLine = true) }
-            MomentSection("Note") { TextField(note, { note = it }, Modifier.fillMaxWidth().testTag("moment.note"), colors = momentFieldColors(), placeholder = { Text("Add a note (optional)") }, minLines = 4, maxLines = 8) }
-            MomentSection("Quote") { TextField(quote, { quote = it }, Modifier.fillMaxWidth().testTag("moment.quote"), colors = momentFieldColors(), placeholder = { Text("Add a quote (optional)") }, minLines = 2, maxLines = 6, textStyle = LocalTextStyle.current.copy(fontStyle = FontStyle.Italic, fontSize = 14.sp)) }
+            MomentSection("Note", badge = if (aiGenerated) "AI generated" else null) { TextField(note, { note = it }, Modifier.fillMaxWidth().testTag("moment.note"), colors = momentFieldColors(), placeholder = { Text("Add a note (optional)") }, minLines = 4, maxLines = 8) }
+            MomentSection("Quote") { TextField(quote, { quote = it }, Modifier.fillMaxWidth().testTag("moment.quote"), colors = momentFieldColors(), placeholder = { Text(if (aiGenerated) "On-device AI couldn't extract a quote from this sequence" else "Add a quote (optional)") }, minLines = 2, maxLines = 6, textStyle = LocalTextStyle.current.copy(fontStyle = FontStyle.Italic, fontSize = 14.sp)) }
             MomentSection("Categories") {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     categories.forEach { key -> MomentChip(MomentCategory.valueOf(key).title) { categories = ArrayList(categories - key) } }
@@ -68,9 +70,12 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, onSave: (Li
 }
 
 @Composable
-private fun MomentSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun MomentSection(title: String, badge: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title.uppercase(Locale.ROOT), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth()) {
+            Text(title.uppercase(Locale.ROOT), Modifier.weight(1f), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            badge?.let { Text(it, Modifier.testTag("moment.aiGenerated"), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
         Surface(shape = RoundedCornerShape(12.dp)) { Column(Modifier.fillMaxWidth().padding(8.dp), content = content) }
     }
 }
@@ -93,7 +98,7 @@ fun MomentFilterSheet(moments: List<LibraryMoment>, filters: MomentFilters, chan
         containerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moment.filters")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Filter Moments", Modifier.weight(1f)); TextButton(onClick = dismiss) { Text("Done") }
+            Text("Filter Moments", Modifier.weight(1f)); SheetDoneButton(onClick = dismiss)
         }
         Column(Modifier.verticalScroll(rememberScrollState()).testTag("moment.filterScroll").navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val categories = moments.flatMap { it.categories }.distinct().sortedBy { it.name }

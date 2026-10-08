@@ -246,7 +246,7 @@ All purchases are StoreKit-owned. `PlusEntitlementStore.shared` owns AI and iClo
 
 ### Equalizer (per-book)
 
-- `EqualizerSettings` — 5 bands (60Hz/250Hz/1kHz/4kHz/14kHz), presets (flat, voiceBoost, bassBoost, trebleBoost, podcast, custom), preamp 0–12 dB, band gain ±12 dB
+- `EqualizerSettings` — 5 bands (60Hz/230Hz/910Hz/3.6kHz/14kHz), presets (flat, voiceBoost, bassBoost, trebleBoost, podcast, custom), preamp 0–12 dB, band gain ±12 dB
 - `EqualizerTap` — C-level `MTAudioProcessingTap`: biquad filters + soft limiter on the realtime audio thread; coefficients updated under `os_unfair_lock`
 - `AudioEqualizerService` (ObservableObject) — live `@Published` state, persists to `Audiobook.equalizerConfiguration`, builds the `AVAudioMix` injected into each `AVPlayerItem`
 - `EqualizerSheet` — UI; reads/writes via `@EnvironmentObject AudioEqualizerService`
