@@ -15,6 +15,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -84,11 +87,14 @@ fun EditableBookCover(book: LibraryBook, onSave: (Bitmap?) -> Unit) {
     // An Audiobookshelf cover is the downloaded server file; removing it could not be undone.
     val removable = book.coverRevision > 0 && book.absItemID == null
     Box {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            LibraryBookCover(book, Modifier.size(130.dp).combinedClickable(
-                onClick = { picker.launch(arrayOf("image/*")) }, onLongClick = { if (removable) menu = true }).testTag("book.cover"), cornerRadius = 20)
-            Text("Change cover", Modifier.padding(top = 5.dp), style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Box(Modifier.size(130.dp).combinedClickable(
+            onClick = { picker.launch(arrayOf("image/*")) },
+            onLongClick = { if (removable) menu = true }).testTag("book.cover")) {
+            LibraryBookCover(book, Modifier.matchParentSize(), cornerRadius = 20)
+            Text("Change cover", Modifier.align(Alignment.BottomCenter).padding(8.dp)
+                .background(Color.White.copy(alpha = .35f), CircleShape)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+                fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
         }
         DropdownMenu(menu, { menu = false }, modifier = Modifier.semantics { testTagsAsResourceId = true }) {
             if (removable) DropdownMenuItem(text = { Text("Remove cover") }, onClick = { menu = false; onSave(null) },

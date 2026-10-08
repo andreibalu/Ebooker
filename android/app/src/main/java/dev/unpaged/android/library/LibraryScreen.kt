@@ -285,7 +285,7 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                             Text(book.title, fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 3)
                             Text(book.author.ifBlank { stringResource(R.string.unknown_author) }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Default.Storage, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(DriveIcon, null, Modifier.size(10.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text(if (book.isAudioMissing) "Audio Missing" else if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text("at ${trackDuration(book.currentPositionMs)}", Modifier.testTag("book.position"), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -322,18 +322,20 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
                 }
             }
         }
-        item { dev.unpaged.android.ai.RecapCard(book) }
         item {
-            Surface(shape = UnpagedTheme.disclosureShape, shadowElevation = UnpagedTheme.cardShadow) {
-                Column {
-                    MomentList(book.id, moments, momentsExpanded, { momentsExpanded = !momentsExpanded }, onMoment, onSaveMoment, onDeleteMoment)
+            Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                dev.unpaged.android.ai.RecapCard(book)
+                Surface(shape = UnpagedTheme.disclosureShape, shadowElevation = UnpagedTheme.cardShadow) {
+                    Column {
+                        MomentList(book.id, moments, momentsExpanded, { momentsExpanded = !momentsExpanded }, onMoment, onSaveMoment, onDeleteMoment)
+                    }
                 }
             }
         }
         item {
             Surface(shape = UnpagedTheme.disclosureShape, shadowElevation = UnpagedTheme.cardShadow) {
                 Column {
-                    DisclosureRow("${book.tracks.size} tracks", "book.tracks", Icons.AutoMirrored.Filled.FormatListBulleted, tracksExpanded) { tracksExpanded = !tracksExpanded }
+                    DisclosureRow("${book.tracks.size} ${if (book.tracks.size == 1) "track" else "tracks"}", "book.tracks", Icons.AutoMirrored.Filled.FormatListBulleted, tracksExpanded) { tracksExpanded = !tracksExpanded }
                     if (tracksExpanded) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         book.tracks.forEachIndexed { index, track ->
                             Surface(shape = RoundedCornerShape(16.dp), shadowElevation = 1.dp) {
@@ -362,11 +364,11 @@ fun BookDetails(book: LibraryBook, moments: List<LibraryMoment>,
 
 @Composable
 private fun DisclosureRow(label: String, tag: String, icon: androidx.compose.ui.graphics.vector.ImageVector, expanded: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).testTag(tag).padding(horizontal = 16.dp, vertical = 20.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Icon(icon, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(label, Modifier.weight(1f), fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Icon(if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp))
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).testTag(tag).padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Icon(icon, null, Modifier.size(12.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .25f))
+        Text(label, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f))
     }
 }
 

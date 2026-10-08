@@ -54,7 +54,7 @@ object PlaybackRules {
         if (chapters.size <= 1) return null
         val i = chapterIndex(chapters, track, position)
         val current = chapters[i]
-        return if (position - current.startMs > 5000) current else chapters.getOrNull(i - 1)
+        return if (track != current.trackIndex || position - current.startMs > 5000) current else chapters.getOrNull(i - 1)
     }
     fun skipBackward(position: Long, seconds: Int) = (position - seconds * 1000L).coerceAtLeast(0)
     fun momentTime(position: Long, seconds: Int) = (position - seconds * 1000L).coerceAtLeast(0)

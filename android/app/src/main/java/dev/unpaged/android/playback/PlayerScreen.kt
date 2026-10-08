@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import dev.unpaged.android.moments.MomentSaver
 import androidx.compose.ui.Alignment
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.scale
@@ -270,10 +271,7 @@ private fun ChaptersSheet(state: PlayerState, controller: PlayerController, dism
         Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).semantics { testTagsAsResourceId = true }.testTag("chapters")) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 12.dp)) {
                 Text("Chapters", Modifier.align(Alignment.Center), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                Surface(onClick = dismiss, modifier = Modifier.align(Alignment.CenterEnd).testTag("chapters.done"), shape = CircleShape,
-                    border = BorderStroke(.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = .15f))) {
-                    Text("Done", Modifier.padding(horizontal = 16.dp, vertical = 10.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                }
+                SheetDoneButton(onClick = dismiss, modifier = Modifier.align(Alignment.CenterEnd).testTag("chapters.done"))
             }
             val list = rememberLazyListState(initialFirstVisibleItemIndex = state.chapterIndex)
             LazyColumn(state = list) {

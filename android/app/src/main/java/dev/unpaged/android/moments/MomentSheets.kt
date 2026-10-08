@@ -8,6 +8,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
@@ -35,10 +36,10 @@ fun MomentEditSheet(moment: LibraryMoment, editing: Boolean = false, aiGenerated
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onCancel) { Text("Cancel") }
             Text(if (editing) "Edit Moment" else "Name this Moment", Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            TextButton(enabled = name.trim().isNotEmpty(), modifier = Modifier.testTag("moment.done"), onClick = {
+            SheetDoneButton(enabled = name.trim().isNotEmpty(), modifier = Modifier.testTag("moment.done"), onClick = {
                 onSave(moment.copy(label = name.trim(), notes = note, quoteLine = quote.takeIf { it.isNotEmpty() },
                     categoriesJson = JSONArray(categories).toString(), charactersJson = JSONArray(characters).toString(), mood = mood))
-            }) { Text("Done") }
+            })
         }
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("moment.scroll").navigationBarsPadding().padding(20.dp).imePadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             warning?.let { Text(it, Modifier.testTag("moment.warning"), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -97,7 +98,7 @@ fun MomentFilterSheet(moments: List<LibraryMoment>, filters: MomentFilters, chan
         containerColor = MaterialTheme.colorScheme.background,
         modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("moment.filters")) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Filter Moments", Modifier.weight(1f)); TextButton(onClick = dismiss) { Text("Done") }
+            Text("Filter Moments", Modifier.weight(1f)); SheetDoneButton(onClick = dismiss)
         }
         Column(Modifier.verticalScroll(rememberScrollState()).testTag("moment.filterScroll").navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val categories = moments.flatMap { it.categories }.distinct().sortedBy { it.name }

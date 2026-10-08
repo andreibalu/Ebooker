@@ -8,6 +8,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,17 +32,17 @@ fun MomentList(bookId: String, moments: List<LibraryMoment>, expanded: Boolean, 
     var filters by rememberSaveable(bookId, stateSaver = MomentFiltersSaver) { mutableStateOf(MomentFilters()) }
     var filterSheet by rememberSaveable(bookId) { mutableStateOf(false) }
     val filtered = filters.apply(moments)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).clickable(onClick = expand).testTag("book.moments"), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Bookmark, null, Modifier.size(18.dp)); Spacer(Modifier.width(10.dp))
-            Text("${filtered.size} ${if (filtered.size == 1) "moment" else "moments"}${if (filters.active) " · filtered" else ""}", fontSize = 15.sp)
-            Spacer(Modifier.width(8.dp)); Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, null)
+            Icon(Icons.Default.Bookmark, null, Modifier.size(12.dp)); Spacer(Modifier.width(8.dp))
+            Text("${filtered.size} ${if (filtered.size == 1) "moment" else "moments"}${if (filters.active) " · filtered" else ""}", Modifier.weight(1f), fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium)
+            if (moments.isNotEmpty() && filtered.isNotEmpty()) Icon(if (expanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface.copy(alpha = .55f))
         }
-        if (moments.any { it.categories.isNotEmpty() || it.mood != null || it.characters.isNotEmpty() }) {
+        if ((expanded || filtered.isEmpty()) && moments.any { it.categories.isNotEmpty() || it.mood != null || it.characters.isNotEmpty() }) {
             TextButton(onClick = { filterSheet = true }, modifier = Modifier.testTag("moment.filter")) { Icon(Icons.Default.FilterList, null, Modifier.size(16.dp)); Text("Filter", fontSize = 12.sp) }
         }
     }
-    if (expanded || moments.isEmpty()) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (expanded || filtered.isEmpty()) Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (filtered.isEmpty()) Text(if (filters.active) "No moments match your filters" else "Tap the bookmark in the player to save a moment", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (filters.active) TextButton(onClick = { filters = MomentFilters() }) { Text("Clear Filters") }
         filtered.forEach { moment ->

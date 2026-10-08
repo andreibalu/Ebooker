@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import dev.unpaged.android.SheetDoneButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
@@ -38,7 +39,7 @@ fun AiSettingsScreen(ai: AiCoordinator, preferences: UnpagedPreferences, dismiss
     ModalBottomSheet(onDismissRequest = dismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.background, modifier = Modifier.semantics { testTagsAsResourceId = true }.testTag("ai.settings")) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("ai.scroll").padding(20.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row { Text("On-device AI", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.Bold); TextButton(onClick = dismiss, modifier = Modifier.testTag("ai.done")) { Text("Done") } }
+            Row { Text("On-device AI", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.Bold); SheetDoneButton(onClick = dismiss, modifier = Modifier.testTag("ai.done"), filled = true) }
             Text("Smart moments and recaps run on your phone. Audio, transcripts and generated text stay on this device.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Surface(shape = UnpagedTheme.settingsShape) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Gemini Nano", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
