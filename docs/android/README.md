@@ -1,6 +1,6 @@
 # Unpaged Android planning
 
-The Android Wayfinder map on GitHub Issues is the canonical decision index. Start here: [Unpaged Android: plan the mirror app](https://github.com/andreibalu/Ebooker/issues/49). Its native sub-issues show open decisions and link resolved answers. The Android app mirrors the core iPhone app without payments or Apple-specific sync. Slices 1–6 are merged, and slices 7–10 are in review. Product and architecture decisions remain open in the issue map.
+The Android Wayfinder map on GitHub Issues is the canonical decision index. Start here: [Unpaged Android: plan the mirror app](https://github.com/andreibalu/Ebooker/issues/49). Its native sub-issues show open decisions and link resolved answers. The Android app mirrors the core iPhone app without payments or Apple-specific sync. All ten slices are merged. Physical-device testing is next: see the [physical test checklist](physical-test-checklist.md).
 
 Keep Android implementation under `android/`. Define scoped Android instructions before scaffolding. Existing `Pageless/` code describes iOS behavior; iOS plans and Xcode commands are not Android implementation instructions. Keep Android durable specs here and research in `docs/research/`.
 
@@ -30,8 +30,9 @@ remain open in the issue map.
 ## Current stage
 
 The 2026-10-06 shared parity brief authorizes the native mirror build in slices.
-Each slice records its architecture decisions. Slices 1–6 are merged. Slices 7–10
-and parallel-emulator E2E are in review as stacked PRs #62–#66:
+Each slice records its architecture decisions. All ten slices and parallel-emulator
+E2E are merged (PRs #62–#66, merged 2026-10-08). The app now goes to physical-device
+testing with the [physical test checklist](physical-test-checklist.md):
 
 1. [Shell, library and settings](slice-1-shell-library-settings.md): app shell,
    local library/card/detail parity, persistent settings and schema v2.
@@ -59,7 +60,8 @@ and parallel-emulator E2E are in review as stacked PRs #62–#66:
    The [45-view audit](parity-audit-2026-10-07.md) identifies slices 7–9 ownership
    separately. This slice does not change the schema (PR #64).
 
-PR #62 covers parallel-emulator E2E.
+PR #62 covers parallel-emulator E2E. The [visual parity fixes](visual-parity-fixes-2026-10-08.md)
+record the final pass against iOS screenshots.
 
 SQLite schema v3 combines slice 4's moment pin column and slice 5's
 `reading_sessions` table in one additive migration. Slice 6 advances it to v4 with nullable ABS identity
