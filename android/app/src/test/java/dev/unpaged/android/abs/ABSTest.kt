@@ -272,7 +272,7 @@ class ABSTest {
         }
         val store = SQLiteLibraryStore(context)
         try {
-            assertEquals(4, store.readableDatabase.version)
+            assertEquals(5, store.readableDatabase.version)
             val book = store.books().single(); assertEquals("existing", book.id); assertTrue(book.isFavorite); assertEquals(5000L, book.currentPositionMs)
             assertNull(book.absItemID); assertEquals("fingerprint", book.tracks.single().fingerprint); assertTrue(store.moments(book.id).single().isPinned)
             store.insert(LibraryBook("abs", "Server", "Author", listOf(LibraryTrack("Track", "", "", 10000, "", "http://nas/a")), isDownloaded = false, absItemID = "item", absChaptersJson = "[]"))

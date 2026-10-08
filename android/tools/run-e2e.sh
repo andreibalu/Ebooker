@@ -6,6 +6,9 @@ cd "$(dirname "$0")/.."
 : "${ANDROID_SERIAL:?Select the dedicated Unpaged_E2E emulator explicitly}"
 adb="$ANDROID_HOME/platform-tools/adb"
 case "$ANDROID_SERIAL" in emulator-*) ;; *) echo 'Use a dedicated emulator, not a physical/user device.' >&2; exit 1;; esac
+[[ "$("$adb" -s "$ANDROID_SERIAL" get-state 2>/dev/null || true)" == device ]] || {
+  echo "Assigned emulator $ANDROID_SERIAL is unavailable. No tests ran; start it through the task orchestrator." >&2; exit 1;
+}
 name="$("$adb" -s "$ANDROID_SERIAL" emu avd name | tr -d '\r' | head -1)"
 case "$name" in Unpaged_E2E_*) ;; *) echo "Refusing unrelated AVD: $name" >&2; exit 1;; esac
 # Other attached devices are allowed only when they are dedicated Unpaged_E2E emulators,

@@ -40,6 +40,17 @@ class SessionQueueRegressionTest {
         assertFalse(gate.consume(current, "A"))
         assertTrue(gate.consume(current, "B"))
     }
+    @Test fun removalInvalidatesBoundPreparationAndCannotRetargetItsGeneration() {
+        val gate = SessionQueueGate()
+        val token = gate.begin("X")
+        assertTrue(gate.stage(token, "B"))
+        assertFalse(gate.stage(token, "C"))
+        assertFalse(gate.remove("C"))
+        assertTrue(gate.current(token))
+        assertTrue(gate.remove("B"))
+        assertFalse(gate.stage(token, "B"))
+        assertFalse(gate.consume(token, "B"))
+    }
     @Test fun sameBookSelectionAndResumptionReuseOnlyUnfinishedPlayback() {
         assertTrue(CarResumePolicy.reuse(finished = false, ended = false))
         assertFalse(CarResumePolicy.reuse(finished = true, ended = false))

@@ -47,7 +47,7 @@ fun MiniPlayer(state: PlayerState, controller: PlayerController, onOpen: () -> U
             BookProgress(book.progress, 2)
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                GeneratedBookCover(book.title, Modifier.size(48.dp), cornerRadius = 0)
+                dev.unpaged.android.library.LibraryBookCover(book, Modifier.size(48.dp), cornerRadius = 0)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(book.title, Modifier.testTag("miniPlayer.title"), fontSize = 15.sp, lineHeight = 18.sp,
                         fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -71,10 +71,10 @@ fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
     var momentDraft by rememberSaveable(stateSaver = MomentSaver) { mutableStateOf<LibraryMoment?>(null) }
     var showEqualizer by rememberSaveable { mutableStateOf(false) }
     val equalizer by controller.equalizer.collectAsStateWithLifecycle()
-    var chapters by remember { mutableStateOf(false) }
-    var speedMenu by remember { mutableStateOf(false) }
-    var sleepMenu by remember { mutableStateOf(false) }
-    var markConfirmation by remember { mutableStateOf(false) }
+    var chapters by rememberSaveable { mutableStateOf(false) }
+    var speedMenu by rememberSaveable { mutableStateOf(false) }
+    var sleepMenu by rememberSaveable { mutableStateOf(false) }
+    var markConfirmation by rememberSaveable { mutableStateOf(false) }
     var marked by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf(false) }
     var scrub by remember { mutableFloatStateOf(state.positionMs.toFloat()) }
@@ -103,7 +103,7 @@ fun FullPlayer(controller: PlayerController, onDismiss: () -> Unit) {
                     }
                 }
                 Spacer(Modifier.height(if (compact) 8.dp else 22.dp))
-                GeneratedBookCover(book.title, Modifier.size(if (compact) 100.dp else 140.dp)
+                dev.unpaged.android.library.LibraryBookCover(book, Modifier.size(if (compact) 100.dp else 140.dp)
                     .shadow(16.dp, RoundedCornerShape(22.dp)), cornerRadius = 22)
                 Spacer(Modifier.height(16.dp))
                 Text(PlaybackRules.title(book, state.trackIndex), Modifier.padding(horizontal = 28.dp).testTag("player.title"),
@@ -258,7 +258,7 @@ private fun ChaptersSheet(state: PlayerState, controller: PlayerController, dism
                         HorizontalDivider(Modifier.padding(horizontal = 24.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = .12f), thickness = .5.dp)
                         Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
                             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                            Text("${chapter.index + 1}", Modifier.width(14.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("${chapter.index + 1}", Modifier.widthIn(min = 24.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(chapter.title, Modifier.weight(1f), fontSize = 15.sp, fontWeight = if (current) FontWeight.SemiBold else FontWeight.Normal)
                             if (current) Icon(Icons.Default.GraphicEq, null, Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
                             Text(trackDuration(chapter.durationMs), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)

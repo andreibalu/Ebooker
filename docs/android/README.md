@@ -31,7 +31,7 @@ broader architecture decisions by assumption.
 ## Current stage
 
 The 2026-10-06 shared parity brief authorizes the native mirror build in slices.
-Each slice records its architecture decisions. Slices 1–6 are merged; slice 7 is being verified:
+Each slice records its architecture decisions. Slices 1 through 6 are merged; slices 7, 8 and 10 follow:
 
 1. [Shell, library and settings](slice-1-shell-library-settings.md): app shell,
    local library/card/detail parity, persistent settings and schema v2.
@@ -47,8 +47,15 @@ Each slice records its architecture decisions. Slices 1–6 are merged; slice 7 
    library browsing, authenticated streaming, server progress and library-card fixes.
 
 7. [Android Auto and system integration](slice-7-android-auto.md): MediaLibraryService,
-   car browsing/commands, voice search and launcher shortcut. Assigned-emulator E2E
-   and visual verification are pending.
+   car browsing/commands, voice search and launcher shortcut.
+   Real Android Auto rendering is unverified.
+8. [Library backup and restore](slice-8-library-backup-restore.md): schema v5,
+   Auto Backup metadata allowlist, missing-audio recovery, restore match,
+   free-book archival and Backed-up Library.
+10. [Media gaps and parity review](slice-10-media-parity.md): embedded MP4 chapters,
+    durable LibriVox downloads, cover editing, card/rename/settings/report fixes.
+    The [45-view audit](parity-audit-2026-10-07.md) identifies slices 7–9 ownership
+    separately. This slice does not change schema v4.
 
 SQLite schema v3 combines slice 4's moment pin column and slice 5's
 `reading_sessions` table in one additive migration. Slice 6 advances it to v4 with nullable ABS identity

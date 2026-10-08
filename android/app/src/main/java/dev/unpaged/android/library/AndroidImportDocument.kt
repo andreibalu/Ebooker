@@ -32,6 +32,18 @@ class AndroidAudioMetadataReader : AudioMetadataReader {
             val reader = MediaMetadataRetriever()
             try {
                 reader.setDataSource(file.absolutePath)
+                if (!File(file.parentFile, "cover.png").exists()) reader.embeddedPicture?.let { bytes ->
+                    val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                    options.inJustDecodeBounds = false
+                    var sample = 1
+                    while (maxOf(options.outWidth, options.outHeight) / sample > 2048) sample *= 2
+                    options.inSampleSize = sample
+                    val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                    if (bitmap != null) java.io.FileOutputStream(File(file.parentFile, "cover.png")).use { output ->
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output); output.fd.sync()
+                    }
+                }
                 fun text(key: Int) = reader.extractMetadata(key)
                 return AudioMetadata(
                     text(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0,

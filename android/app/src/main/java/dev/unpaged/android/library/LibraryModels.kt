@@ -37,7 +37,12 @@ data class LibraryBook(
     val dateAdded: Long = System.currentTimeMillis(),
     val absItemID: String? = null,
     val absChaptersJson: String? = null,
+    val coverRevision: Long = 0,
+    val isArchived: Boolean = false,
 ) {
+    val isAudioMissing: Boolean get() = !isDownloaded && !isFreeBook && absItemID == null
+    val isStreamingOnly: Boolean get() = !isDownloaded && (isFreeBook || absItemID != null) && !isArchived
+    val isInActiveLibrary: Boolean get() = !isArchived && !isAudioMissing
     val durationMs: Long get() = tracks.sumOf { it.durationMs }
     val globalPositionMs: Long get() = tracks.take(currentTrackIndex).sumOf { it.durationMs } + currentPositionMs
     val progress: Float get() = if (durationMs > 0) (globalPositionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
@@ -114,6 +119,13 @@ object TrackIdentity {
                 .putLong(size).putLong(durationMs).array())
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** Consume each repeated fingerprint once, in its imported order. */
+    fun orderedLike(imported: List<LibraryTrack>, original: List<LibraryTrack>): List<LibraryTrack> {
+        require(matches(imported, original))
+        val remaining = imported.groupBy { it.fingerprint }.mapValues { (_, tracks) -> ArrayDeque(tracks) }
+        return original.map { remaining.getValue(it.fingerprint).removeFirst() }
     }
 
     fun matches(a: List<LibraryTrack>, b: List<LibraryTrack>): Boolean =

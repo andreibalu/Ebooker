@@ -217,7 +217,20 @@ class ABSClient(private val credentials: ABSCredentialStore, private val transpo
         request("api/me/progress/${segment(id)}", "PATCH", ABSRules.progressPayload(book))
     }
     suspend fun add(item: ABSItem, store: LibraryStore): LibraryBook = withContext(Dispatchers.IO) {
-        store.books().firstOrNull { it.absItemID == item.id }?.let { return@withContext it }
+        store.books().firstOrNull { it.absItemID == item.id }?.let { existing ->
+            // Metadata restores without cover files. A connected detail/play action repairs
+            // the disposable image cache without replacing progress or library identity.
+            val folder = coverRoot?.let { java.io.File(it, existing.id) }
+            if (item.hasCover && folder != null && !java.io.File(folder, "cover.png").isFile) {
+                cover(item.id)?.let { bitmap ->
+                    runCatching {
+                        check(folder.mkdirs() || folder.isDirectory)
+                        java.io.File(folder, "cover.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    }
+                }
+            }
+            return@withContext existing
+        }
         val connection = required()
         if (item.tracks.isEmpty()) throw ABSException(ABSFailure.INVALID_MEDIA_URL)
         var offset = 0L

@@ -206,7 +206,7 @@ class LibraryE2ETest {
         visible(By.text("Timestamps are saved on your phone. Automatic naming and AI recaps are not available."))
         captureOnboardingPage("moments")
         field("onboarding.page.5").click()
-        visible(By.text("Cloud sync is not available. Uninstalling Unpaged removes its local library and activity."))
+        visible(By.text("Android can back up your library metadata when Backup by Google is on. Audio files stay on this phone and need re-importing after restore."))
         captureOnboardingPage("storage")
         field("onboarding.page.6").click()
         visible(By.text("Skip forward: 45s"))
@@ -219,6 +219,8 @@ class LibraryE2ETest {
         tapDescription("Settings")
         scrollTo("settings.resetOnboarding")
         field("settings.resetOnboarding").click()
+        visible(By.text("Reset Onboarding?"))
+        field("settings.confirmReset").click()
         field("onboarding.choice.My books")
         device.executeShellCommand("am force-stop $app")
         launch()
@@ -247,6 +249,11 @@ class LibraryE2ETest {
         for (section in listOf("your_best_day", "you_read_most_in_the", "the_book_you_stayed_with", "on_a_roll", "the_shape_of_it", "public_domain,_private_joy")) {
             // UiScrollable stops early on the animated LazyColumn; step with the driver's own swipes.
             scrollTo("stats.eyebrow.$section", scrollId = "reading.stats.scroll")
+            screenshot("stats-$section-light")
+            device.executeShellCommand("cmd uimode night yes")
+            field("reading.stats")
+            screenshot("stats-$section-dark")
+            device.executeShellCommand("cmd uimode night no")
         }
         screenshot("stats-sections-light")
         scrollTo("reading.stats.backToLibrary", scrollId = "reading.stats.scroll")
@@ -327,7 +334,7 @@ class LibraryE2ETest {
 
     @Test fun invalidAudioLeavesNoPartialBook() {
         openPicker("Invalid.mp3")
-        visible(By.text("Could not complete this step"))
+        visible(By.text("Something Went Wrong"))
         visible(By.text("Choose readable audiobook files with a valid audio track and duration. Try MP3, M4A, M4B, AAC, WAV, OGG, Opus or FLAC."))
         tapText("OK")
         relaunch()
@@ -335,6 +342,8 @@ class LibraryE2ETest {
     }
 
     @Test fun removalRequiresConfirmationAndPreservesProviderOriginal() {
+        tapDescription("Settings"); expandSettings()
+        scrollTo("settings.backup.enabled"); field("settings.backup.enabled").click(); tapText("Done")
         saveBook("Removal Fixture", "Fixture Author", "Another.wav")
         text("Removal Fixture").longClick()
         tapText("Delete")
@@ -342,7 +351,7 @@ class LibraryE2ETest {
         visible(By.text("Fixture Author"))
         text("Removal Fixture").longClick()
         tapText("Delete")
-        tapText("Also Delete Files")
+        tapText("Remove from Library")
         visible(By.text("Your Library Is Empty"))
         relaunch()
         visible(By.text("Your Library Is Empty"))
@@ -376,10 +385,10 @@ class LibraryE2ETest {
         visible(By.text("0% · 10m remaining"))
         visible(By.text("0 moments"))
         field("book.moments").click()
-        visible(By.text("No saved moments yet"))
+        visible(By.text("Tap the bookmark in the player to save a moment"))
         screenshot("detail-moments-empty-light")
         field("book.moments").click()
-        assertTrue(device.wait(Until.gone(By.text("No saved moments yet")), 15_000))
+        visible(By.text("Tap the bookmark in the player to save a moment"))
         settleLayout()
         expandTracks("Chapter 1")
         screenshot("detail-expanded-light")
@@ -475,9 +484,7 @@ class LibraryE2ETest {
         field("settings.picker.Skip Forward").click()
         scrollTo("settings.option.skipForwardSeconds.15")
         field("settings.option.skipForwardSeconds.15").click()
-        scrollTo("settings.appearance.Dark")
-        field("settings.appearance.Dark").click()
-        assertTheme(dark = true)
+        chooseAppearance("Dark", dark = true)
         screenshot("settings-preferences-dark")
         tapText("Done")
         device.executeShellCommand("am force-stop $app")
@@ -492,9 +499,7 @@ class LibraryE2ETest {
         visible(By.text("45 seconds"))
         scrollTo("settings.picker.Skip Forward")
         visible(By.text("15 seconds"))
-        scrollTo("settings.appearance.Light")
-        field("settings.appearance.Light").click()
-        assertTheme(dark = false)
+        chooseAppearance("Light", dark = false)
         screenshot("appearance-light-overrides-system")
         scrollTo("settings.home.Shelves", downward = false)
         field("settings.home.Shelves").click()
@@ -695,7 +700,7 @@ class LibraryE2ETest {
         relaunch()
         tapText("E2E The Listening Book")
         field("book.moments").click()
-        visible(By.text("A turning point")); visible(By.text("A memorable passage")); visible(By.text("Action"))
+        visible(By.text("A turning point")); visible(By.text("A memorable passage")) // Rows omit categories, as on iOS.
         screenshot("moments-light")
         field("moment.filter").click(); screenshot("moment-filters-light"); tapText("Dramatic"); tapText("Done")
         visible(By.text("1 moment · filtered"))
@@ -707,6 +712,7 @@ class LibraryE2ETest {
         tapDescription("Edit moment")
         scrollTo("moment.quote", scrollId = "moment.scroll")
         assertEquals("The story begins", field("moment.quote").text)
+        scrollTo("moment.addCategory", scrollId = "moment.scroll"); visible(By.text("Action"))
         scrollTo("moment.name", downward = false, scrollId = "moment.scroll")
         field("moment.name").setText("Edited turning point")
         field("moment.done").click()
@@ -724,9 +730,9 @@ class LibraryE2ETest {
         val rowBounds = visible(By.res(java.util.regex.Pattern.compile("moment\\.row\\..*"))).visibleBounds
         device.swipe(rowBounds.right - 20, rowBounds.centerY(), rowBounds.right - rowBounds.width() / 3, rowBounds.centerY(), 25)
         tapText("Delete")
-        visible(By.text("No saved moments yet"))
+        visible(By.text("Tap the bookmark in the player to save a moment"))
         relaunch(); tapText("E2E The Listening Book"); field("book.moments").click()
-        visible(By.text("No saved moments yet"))
+        visible(By.text("Tap the bookmark in the player to save a moment"))
     }
 
     @Test fun momentOffsetClampsAndCancelledOrBlankEditsDoNotSave() {
@@ -785,6 +791,156 @@ class LibraryE2ETest {
         assertTrue(visible(By.res("equalizer.preset.flat")).wait(Until.checked(true), 5_000))
     }
 
+    private fun openBackupLibrary() {
+        tapDescription("Settings"); expandSettings()
+        scrollTo("settings.legal.Backed-up Library")
+        field("settings.legal.Backed-up Library").click()
+        // A tap right after relaunch can land while the settings list is still settling.
+        if (!device.wait(Until.hasObject(By.res("backup.library")), 5_000)) field("settings.legal.Backed-up Library").click()
+        field("backup.library")
+    }
+
+    private fun closeBackupLibrary() {
+        field("backup.library.done").click(); tapText("Done")
+        visible(By.text("My Library"))
+    }
+
+    /** [expectData] false: the agent writes nothing, and the local transport rejects an empty package. */
+    private fun backupLocally(expectData: Boolean = true): String {
+        device.executeShellCommand("bmgr enable true")
+        val transports = device.executeShellCommand("bmgr list transports")
+        assertTrue("Local transport is required: $transports", transports.contains("com.android.localtransport/.LocalTransport"))
+        device.executeShellCommand("bmgr transport com.android.localtransport/.LocalTransport")
+        device.executeShellCommand("bmgr wipe com.android.localtransport/.LocalTransport $app")
+        device.pressHome()
+        settleLayout() // Allow background/pause persistence before the OS stops the app for backup.
+        // The overall line says Success even when the transport rejects the package, so check
+        // the package's own result. The local transport rejects transiently; retry a few times.
+        var result = ""
+        for (attempt in 1..4) {
+            result = device.executeShellCommand("bmgr backupnow $app")
+            File(captureDirectory(), "backup-transport.txt").apply { appendText(result + "\n") }.also(::persistCapture)
+            if (!expectData || result.contains("Package $app with result: Success")) break
+            android.os.SystemClock.sleep(3_000)
+        }
+        assertTrue("Backup failed: $result", if (expectData) result.contains("Package $app with result: Success") else result.contains("Backup finished with result: Success"))
+        val sets = device.executeShellCommand("bmgr list sets")
+        return Regex("(?m)^\\s*([0-9a-fA-F]+)\\s*:").find(sets)?.groupValues?.get(1)
+            ?: throw AssertionError("No local restore set: $sets")
+    }
+
+    private fun restoreLocally(token: String) {
+        assertTrue(device.executeShellCommand("pm clear $app").contains("Success"))
+        val result = device.executeShellCommand("bmgr restore $token $app")
+        File(captureDirectory(), "backup-transport.txt").apply { appendText(result + "\n") }.also(::persistCapture)
+        assertTrue("Restore failed: $result", result.contains("restoreFinished: 0"))
+        launch(); completeOnboarding(); selectLibraryTab()
+    }
+
+    @Test fun realAutoBackupRestoreMissingAudioAndInPlaceReimport() {
+        saveBook("Backup Fixture", "Fixture Author", "E2E Chapter 1.wav")
+        tapDescription("Add favorite")
+        val originalId = visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*"))).resourceName.removePrefix("book.card.")
+        tapText("Backup Fixture"); field("book.play").click(); dismissNotificationPrompt()
+        waitForElapsed { it >= 2 }; field("player.playPause").click()
+        field("player.skipForward").click()
+        field("player.saveMoment").click(); field("moment.name").setText("Backup moment"); field("moment.done").click()
+        visible(By.text("Saved!")); field("player.close").click()
+        val savedPosition = field("book.position").text
+        device.pressBack()
+        val token = backupLocally()
+        restoreLocally(token)
+        visible(By.text("Your Library Is Empty"))
+        openBackupLibrary()
+        field("backup.bucket.MISSING")
+        field("backup.row.$originalId")
+        val restoredSeconds = savedPosition.removePrefix("at ").split(":").map { it.toInt() }.fold(0) { total, part -> total * 60 + part }
+        val restoredPercent = kotlin.math.round(restoredSeconds / 3f).toInt()
+        visible(By.text("1 moment · $restoredPercent%"))
+        screenshot("backup-library-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-library-dark")
+        device.executeShellCommand("cmd uimode night no")
+        closeBackupLibrary()
+        openPicker("E2E Chapter 1.wav")
+        field("backup.restore"); field("backup.match.moments").text.let { assertEquals("1 moment", it) }
+        screenshot("backup-match-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-match-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("backup.restore").click()
+        field("book.card.$originalId")
+        tapText("Backup Fixture"); assertEquals(savedPosition, field("book.position").text)
+        field("book.moments").click(); visible(By.text("Backup moment"))
+        device.pressBack(); field("tab.Favorites").click(); visible(By.text("Backup Fixture"))
+        relaunch(); field("book.card.$originalId")
+        openBackupLibrary(); field("backup.bucket.PHONE"); field("backup.row.$originalId")
+        assertFalse(device.hasObject(By.res("backup.bucket.MISSING")))
+        closeBackupLibrary()
+    }
+
+    @Test fun backupToggleOffWritesNoLibraryAndUsesPermanentRemovalCopy() {
+        saveBook("Excluded Backup", "Fixture Author", "Another.wav")
+        tapDescription("Settings"); expandSettings(); scrollTo("settings.backup.enabled")
+        assertTrue(field("settings.backup.enabled").isChecked)
+        screenshot("backup-settings-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-settings-dark")
+        device.executeShellCommand("cmd uimode night no")
+        scrollTo("settings.legal.System Backup Settings"); field("settings.legal.System Backup Settings").click()
+        visible(By.pkg("com.android.settings")); device.pressBack(); visible(By.text("Settings"))
+        scrollTo("settings.backup.enabled", downward = false)
+        field("settings.backup.enabled").click(); tapText("Done")
+        relaunch(); tapDescription("Settings"); expandSettings(); scrollTo("settings.backup.enabled")
+        assertFalse(field("settings.backup.enabled").isChecked); tapText("Done")
+        text("Excluded Backup").longClick(); tapText("Delete")
+        visible(By.text("Remove from Library")); visible(By.textContains("original files on your phone are not touched"))
+        assertFalse(device.hasObject(By.text("Also Delete Files"))); assertFalse(device.hasObject(By.text("Remove from App")))
+        screenshot("backup-remove-off-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-remove-off-dark")
+        device.executeShellCommand("cmd uimode night no"); tapText("Cancel")
+        val token = backupLocally(expectData = false); restoreLocally(token)
+        visible(By.text("Your Library Is Empty"))
+        openBackupLibrary(); assertFalse(device.hasObject(By.text("Excluded Backup")))
+        closeBackupLibrary()
+    }
+
+    @Test fun backupRemovalLocateAddNewArchiveStreamAndSwipeDeletion() {
+        saveBook("Removed Local", "Fixture Author", "Another.wav")
+        val originalId = visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*"))).resourceName.removePrefix("book.card.")
+        text("Removed Local").longClick(); tapText("Delete"); visible(By.text("Remove from This Phone"))
+        screenshot("backup-remove-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-remove-dark")
+        device.executeShellCommand("cmd uimode night no")
+        tapText("Remove from This Phone"); visible(By.text("Your Library Is Empty"))
+        openPicker("Another.wav"); field("backup.addNew").click()
+        field("import.title").setText("New Copy"); tapText("Save"); visible(By.text("New Copy"))
+        openBackupLibrary(); field("backup.bucket.PHONE"); field("backup.bucket.MISSING")
+        field("backup.locate.$originalId").click(); selectPickerFiles("Chapter 10.wav")
+        visible(By.text("These files do not match the backup copy")); field("backup.addNew").click()
+        assertTrue(device.wait(Until.gone(By.res("backup.restore")), 5000))
+        field("backup.row.$originalId")
+        closeBackupLibrary()
+        selectTab("Shelves"); field("shelves.search").setText("Pride and Prejudice"); dismissKeyboard(); field("shelves.book.253").click(); field("shelves.add").click()
+        visible(By.text("Added to Your Library")); device.pressBack(); selectLibraryTab()
+        text("Pride and Prejudice").longClick(); tapText("Remove from Library"); tapText("Remove from Library")
+        selectTab("Shelves"); field("shelves.search").setText("Adventures of Sherlock Holmes"); dismissKeyboard()
+        field("shelves.book.314").click(); field("shelves.add").click(); visible(By.text("Added to Your Library"))
+        device.pressBack(); selectLibraryTab()
+        openBackupLibrary(); field("backup.bucket.PHONE"); field("backup.bucket.STREAMING"); field("backup.bucket.MISSING"); field("backup.bucket.REMOVED")
+        val stream = visible(By.res(java.util.regex.Pattern.compile("backup\\.stream\\..*"))).resourceName
+        screenshot("backup-buckets-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout(); screenshot("backup-buckets-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field(stream).click(); field("backup.bucket.STREAMING"); visible(By.text("Pride and Prejudice")) // Night mode recreates the screen, so look the row up again.
+        closeBackupLibrary(); relaunch(); visible(By.text("Pride and Prejudice"))
+        openBackupLibrary()
+        val bounds = field("backup.row.$originalId").visibleBounds
+        device.swipe(bounds.right - 10, bounds.centerY(), bounds.left + 10, bounds.centerY(), 25)
+        field("backup.delete").click()
+        assertTrue(device.wait(Until.gone(By.res("backup.row.$originalId")), 5000))
+        closeBackupLibrary(); relaunch(); openBackupLibrary()
+        assertFalse(device.hasObject(By.res("backup.row.$originalId")))
+        closeBackupLibrary()
+    }
+
     private fun dismissNotificationPrompt() {
         val deny = device.wait(Until.findObject(By.res("com.android.permissioncontroller:id/permission_deny_button")), 2000)
         deny?.click()
@@ -813,14 +969,32 @@ class LibraryE2ETest {
     }
 
     private fun assertTheme(dark: Boolean) {
+        var brightness = renderedBrightness()
+        val deadline = android.os.SystemClock.uptimeMillis() + 3_000
+        while (!themeMatches(brightness, dark) && android.os.SystemClock.uptimeMillis() < deadline) {
+            android.os.SystemClock.sleep(250); brightness = renderedBrightness()
+        }
+        assertTrue("Rendered background brightness $brightness, expected dark=$dark", themeMatches(brightness, dark))
+    }
+
+    private fun themeMatches(brightness: Int, dark: Boolean) = if (dark) brightness < 70 else brightness > 160
+
+    private fun renderedBrightness(): Int {
         device.waitForIdle(500)
         val capture = File(captureDirectory(), "theme-check.png")
         assertTrue(device.takeScreenshot(capture))
         val bitmap = android.graphics.BitmapFactory.decodeFile(capture.absolutePath)
         val pixel = bitmap.getPixel(8, bitmap.height / 2)
-        val brightness = (android.graphics.Color.red(pixel) + android.graphics.Color.green(pixel) + android.graphics.Color.blue(pixel)) / 3
         bitmap.recycle()
-        assertTrue("Rendered background brightness $brightness, expected dark=$dark", if (dark) brightness < 70 else brightness > 160)
+        return (android.graphics.Color.red(pixel) + android.graphics.Color.green(pixel) + android.graphics.Color.blue(pixel)) / 3
+    }
+
+    /** A tap can land while the settings list is still settling from a scroll; tap again if the theme did not change. */
+    private fun chooseAppearance(name: String, dark: Boolean) {
+        scrollTo("settings.appearance.$name"); settleLayout()
+        field("settings.appearance.$name").click()
+        if (!themeMatches(renderedBrightness(), dark)) { settleLayout(); field("settings.appearance.$name").click() }
+        assertTheme(dark)
     }
 
     // edgeSwipe keeps the gesture off content that consumes vertical drags (EQ band sliders).
@@ -883,6 +1057,10 @@ class LibraryE2ETest {
 
     private fun openPicker(vararg names: String) {
         tapDescription("Import Audiobook")
+        selectPickerFiles(*names)
+    }
+
+    private fun selectPickerFiles(vararg names: String) {
         visible(By.pkg("com.android.documentsui"))
         settleLayout()
         tapDescription("Show roots")
@@ -995,6 +1173,215 @@ class LibraryE2ETest {
         visible(By.pkg(app).depth(0))
     }
 
+    @Test fun embeddedM4bChaptersSurviveRelaunchAndNavigate() {
+        saveBook("Embedded Book", "Fixture Author", "Embedded Chapters.m4b")
+        tapText("Embedded Book")
+        field("book.play").click()
+        dismissNotificationPrompt()
+        field("player.chapters").click()
+        visible(By.text("Opening"))
+        visible(By.text("The Journey"))
+        visible(By.text("Home Again"))
+        screenshot("embedded-chapters-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("chapters.row.2")
+        screenshot("embedded-chapters-dark")
+        field("chapters.row.2").click()
+        waitForElapsed { it >= 60 }
+        field("player.playPause").click()
+        field("player.saveMoment").click()
+        field("moment.name").setText("Embedded chapter moment")
+        dismissKeyboard()
+        field("moment.done").click()
+        visible(By.text("Saved!"))
+        relaunch()
+        tapText("Embedded Book")
+        field("book.moments").click()
+        tapDescription("Play from this moment")
+        field("player.chapters").click()
+        visible(By.text("Home Again"))
+        assertEquals(3, device.findObjects(By.res(java.util.regex.Pattern.compile("chapters.row.[0-9]+"))).size)
+    }
+
+    @Test fun renameContextMenuActionsAndResetCancellationPersist() {
+        saveBook("Rename Me", "Fixture Author", "Another.wav")
+        device.findObject(By.text("Rename Me")).longClick()
+        field("book.menu.rename")
+        screenshot("book-menu-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("book.menu.rename")
+        screenshot("book-menu-dark")
+        field("book.menu.rename").click()
+        field("book.rename.title").setText("Renamed Book")
+        screenshot("rename-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("book.rename.title")
+        screenshot("rename-light")
+        field("book.rename.save").click()
+        relaunch()
+        visible(By.text("Renamed Book"))
+        assertFalse(device.hasObject(By.text("Rename Me")))
+        device.findObject(By.text("Renamed Book")).longClick()
+        field("book.menu.favorite").click()
+        field("tab.Favorites").click()
+        visible(By.text("Renamed Book"))
+        device.findObject(By.text("Renamed Book")).longClick()
+        field("book.menu.resume").click()
+        dismissNotificationPrompt()
+        field("player.playPause")
+        tapDescription("Close player")
+        visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*"))).longClick()
+        field("book.menu.rename").click()
+        field("book.rename.title").setText("Active Renamed Book")
+        field("book.rename.save").click()
+        visible(By.res("miniPlayer.title").text("Active Renamed Book"))
+        field("miniPlayer").click()
+        visible(By.res("player.title").text("Active Renamed Book"))
+        field("player.close").click()
+        tapDescription("Settings")
+        scrollTo("settings.resetOnboarding")
+        field("settings.resetOnboarding").click()
+        visible(By.text("Reset Onboarding?"))
+        screenshot("reset-confirmation-light")
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("Reset Onboarding?"))
+        screenshot("reset-confirmation-dark")
+        tapText("Cancel")
+        assertFalse(device.hasObject(By.res("onboarding")))
+        scrollTo("settings.resetOnboarding"); field("settings.resetOnboarding") // Night mode recreates the sheet at half height.
+    }
+
+    @Test fun coverPhotoCropCancelPersistAndRemove() {
+        saveBook("Cover Book", "Fixture Author", "Another.wav")
+        tapText("Cover Book")
+        field("book.cover").click()
+        selectPickerFiles("Cover.png")
+        field("cover.confirm")
+        screenshot("cover-crop-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("cover.crop")
+        screenshot("cover-crop-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("cover.cancel").click()
+        field("book.cover")
+        assertFalse(device.hasObject(By.res("cover.crop")))
+        field("book.cover").click()
+        selectPickerFiles("Cover.png")
+        field("cover.crop").swipeLeft(5)
+        field("cover.confirm").click()
+        settleLayout()
+        screenshot("cover-detail-light")
+        device.executeShellCommand("cmd uimode night yes")
+        field("book.cover")
+        screenshot("cover-detail-dark")
+        relaunch()
+        tapText("Cover Book")
+        field("book.cover").longClick()
+        field("book.cover.remove")
+        screenshot("cover-remove-dark")
+        device.executeShellCommand("cmd uimode night no")
+        field("book.cover.remove")
+        screenshot("cover-remove-light")
+        field("book.cover.remove").click()
+        settleLayout()
+        field("book.cover").longClick()
+        assertFalse(device.hasObject(By.res("book.cover.remove")))
+        device.pressBack()
+        relaunch()
+        tapText("Cover Book")
+        field("book.cover").longClick()
+        assertFalse(device.hasObject(By.res("book.cover.remove")))
+    }
+
+    @Test fun removingDownloadingFreeBookStaysRemovedAfterRelaunch() {
+        absRequest("/_test/reset", "POST")
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true --ez e2e-download-fixture true")
+        field("tab.Shelves").click()
+        field("shelves.book.133").click()
+        scrollTo("shelves.download", scrollId = "shelves.detail")
+        field("shelves.download").click()
+        visible(By.text("Cancel Download"))
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (absRequest("/_test/state").getJSONArray("download_ranges").length() == 0 &&
+            android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(100)
+        assertTrue(absRequest("/_test/state").getJSONArray("download_ranges").length() > 0)
+        device.pressBack(); selectLibraryTab()
+        val card = visible(By.res(java.util.regex.Pattern.compile("book\\.card\\..*")))
+        val bounds = card.visibleBounds
+        device.swipe(bounds.centerX(), bounds.centerY(), bounds.centerX(), bounds.centerY(), 200)
+        // A held zero-distance swipe is a long press that survives list refreshes from download progress.
+        visible(By.text("Remove from Library"))
+        tapText("Remove from Library"); visible(By.text("Remove from Library?")); tapText("Remove from Library")
+        visible(By.text("Your Library Is Empty"))
+        openBackupLibrary(); field("backup.bucket.REMOVED"); visible(By.text("Jane Eyre"))
+        screenshot("download-removed-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout()
+        screenshot("download-removed-dark")
+        closeBackupLibrary()
+        // The fixture streams ~22s of audio. A cancelled worker stops pulling bytes; an uncancelled one
+        // would finish and revive the book. Watch the live process for longer than the whole download.
+        val removedRequests = absRequest("/_test/state").getJSONArray("download_ranges").length()
+        assertStays("Removed download must not revive in the live process", 30_000) {
+            device.hasObject(By.text("Your Library Is Empty")) &&
+                absRequest("/_test/state").getJSONArray("download_ranges").length() == removedRequests
+        }
+        relaunch(); visible(By.text("Your Library Is Empty"))
+        // WorkManager reschedules persisted work shortly after process start; a removed book must not restart.
+        assertStays("Removed download must not restart after relaunch", 8_000) {
+            device.hasObject(By.text("Your Library Is Empty")) &&
+                absRequest("/_test/state").getJSONArray("download_ranges").length() == removedRequests
+        }
+        openBackupLibrary(); field("backup.bucket.REMOVED"); visible(By.text("Jane Eyre"))
+        assertFalse(device.hasObject(By.res("backup.bucket.PHONE")))
+        closeBackupLibrary()
+    }
+
+    @Test fun durableDownloadResumesPartialFileAfterForceStop() {
+        absRequest("/_test/reset", "POST")
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true --ez e2e-download-fixture true")
+        field("tab.Shelves").click()
+        field("shelves.book.133").click()
+        scrollTo("shelves.download", scrollId = "shelves.detail")
+        field("shelves.download").click()
+        visible(By.text("Cancel Download"))
+        android.os.SystemClock.sleep(1800)
+        screenshot("download-light")
+        device.executeShellCommand("cmd uimode night yes")
+        visible(By.text("Cancel Download"))
+        screenshot("download-dark")
+        device.executeShellCommand("am force-stop $app")
+        launch()
+        field("tab.Shelves").click()
+        field("shelves.book.133").click()
+        val deadline = android.os.SystemClock.uptimeMillis() + 100_000
+        do {
+            val ranges = absRequest("/_test/state").getJSONArray("download_ranges")
+            if (ranges.length() >= 2 && ranges.getLong(ranges.length() - 1) > 0) break
+            android.os.SystemClock.sleep(300)
+        } while (android.os.SystemClock.uptimeMillis() < deadline)
+        val ranges = absRequest("/_test/state").getJSONArray("download_ranges")
+        assertTrue("Relaunch must issue a nonzero HTTP Range", (0 until ranges.length()).any { ranges.getLong(it) > 0 })
+        do {
+            refreshAccessibility()
+            if (!device.hasObject(By.text("Cancel Download"))) break
+            android.os.SystemClock.sleep(500)
+        } while (android.os.SystemClock.uptimeMillis() < deadline)
+        assertFalse("Download should finish", device.hasObject(By.text("Cancel Download")))
+        tapText("View in Library")
+        field("book.play")
+        assertFalse(device.hasObject(By.text("Streaming")))
+        screenshot("download-complete-dark")
+        device.executeShellCommand("cmd uimode night no")
+        screenshot("download-complete-light")
+        relaunch()
+        tapText("Jane Eyre")
+        field("book.play").click()
+        dismissNotificationPrompt()
+        waitForElapsed { it >= 1 }
+    }
+
     @Test fun shelvesFixtureRendersHeroCollectionsAndClassics() {
         saveBook("E2E The Listening Book", "Fixture Author", "Chapter 1.wav", "Chapter 2.wav")
         tapDescription("Add favorite")
@@ -1035,15 +1422,15 @@ class LibraryE2ETest {
         tapMenuText("< 1 hr")
         visible(By.text("Nothing on this shelf."))
         field("shelves.filter.LENGTH").click()
-        tapMenuText("All length")
+        tapMenuText("Any Length")
         field("shelves.book.1203")
         field("shelves.filter.LANGUAGE").click()
-        tapMenuText("All language")
+        tapMenuText("All Languages")
         field("shelves.filter.GENRE").click()
         tapMenuText("Romance")
         field("shelves.book.133")
         field("shelves.filter.GENRE").click()
-        tapMenuText("All genre")
+        tapMenuText("All Genres")
         repeat(8) {
             refreshAccessibility()
             if (!device.hasObject(By.res("shelves.hero"))) {
@@ -1095,7 +1482,7 @@ class LibraryE2ETest {
             refreshAccessibility()
             val list = field("shelves.detail").visibleBounds
             val row = device.findObject(By.res("shelves.book.2531"))?.visibleBounds
-            if (row != null && row.height() >= 100 && row.bottom < list.bottom - 20) return@repeat
+            if (row != null && row.height() >= 44 && row.bottom < list.bottom - 20) return@repeat
             device.swipe(list.centerX(), list.bottom - 120, list.centerX(), list.top + 120, 30)
             settleLayout()
         }
@@ -1305,6 +1692,16 @@ class LibraryE2ETest {
         device.executeShellCommand("mkdir -p $destination")
         device.executeShellCommand("cp ${file.absolutePath} $destination/${file.name}")
         assertEquals("Capture copy failed", "", device.executeShellCommand("test -s $destination/${file.name} || echo missing").trim())
+    }
+
+    /** Negative assertion: [condition] must hold on every poll for the whole window. */
+    private fun assertStays(message: String, windowMs: Long, condition: () -> Boolean) {
+        val end = android.os.SystemClock.uptimeMillis() + windowMs
+        do {
+            refreshAccessibility()
+            assertTrue(message, condition())
+            android.os.SystemClock.sleep(500)
+        } while (android.os.SystemClock.uptimeMillis() < end)
     }
 
     private fun refreshAccessibility() {

@@ -7,3 +7,4 @@
 *.jks
 *.keystore
 /captures/
+__pycache__/

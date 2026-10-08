@@ -10,6 +10,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('android_captures', type=Path)
 parser.add_argument('ios_captures', type=Path)
 parser.add_argument('output', type=Path)
+parser.add_argument('--backup-only', action='store_true', help='Review backup light/dark captures against SwiftUI source; no iOS backup captures exist')
 parser.add_argument('--playback-only', action='store_true', help='Require the four playback light captures; include dark captures as source-derived galleries')
 parser.add_argument("--cases", nargs="+", help="Generate a focused report, e.g. --cases shelves-light shelves-dark")
 args = parser.parse_args()
@@ -39,7 +40,10 @@ parity_references = {
     'settings-dark': '25-settings-dark.png',
     'detail-dark': '26-detail-dark.png',
 }
-if (args.ios_captures / 'ios-abs-browse-light.png').is_file():
+if args.backup_only:
+    cases = [f'backup-{screen}-{theme}' for screen in ['settings', 'library', 'match', 'buckets', 'remove', 'remove-off'] for theme in ['light', 'dark']] + ['onboarding-storage-light', 'onboarding-storage-dark']
+    sources = [('android', case, args.android_captures / f'{case}.png') for case in cases]
+elif (args.ios_captures / 'ios-abs-browse-light.png').is_file():
     cases = [f'abs-{screen}-{theme}' for screen in ['source-menu', 'connect', 'browse', 'detail', 'settings'] for theme in ['light', 'dark']]
     sources = [(platform, case, root / (f'ios-{case}.png' if platform == 'ios' else f'{case}.png'))
                for case in cases for platform, root in [('ios', args.ios_captures), ('android', args.android_captures)]]
@@ -80,8 +84,9 @@ duplicate_dark_reference = (
 )
 sections = []
 for case in cases:
-    figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in ['ios', 'android'])
-    note = '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
+    figures = ''.join(f'<figure><figcaption>{platform}</figcaption><a href="{platform}-{case}.png"><img src="{platform}-{case}.png" alt="{platform} {case}" loading="lazy"></a></figure>' for platform in (['android'] if args.backup_only else ['ios', 'android']))
+    note = '<p>Compared against CloudLibraryView.swift, RestoreMatchSheet.swift and SettingsDesign.swift. No iOS capture exists for this Android backup state. Light and dark captures are separate evidence, not pixel-diff verification.</p>' if args.backup_only else ''
+    note += '<p>Supplied 26-detail-dark.png is identical to 21-library-dark.png and shows Library. A matching iOS dark-detail reference is unavailable; this pair is not a detail parity verification.</p>' if case == 'detail-dark' and duplicate_dark_reference else ''
     if case.startswith('auto-'):
         note += '<p>This captures the phone after a system command, not an Android Auto head unit. Fixture counts and playback state differ from the iOS reference. Compare the player or library structure and use source review for the car command behavior.</p>'
     if case.startswith('abs-source-menu'):
@@ -91,13 +96,13 @@ for case in cases:
     if case.startswith('abs-') and case.endswith('-dark'):
         note += '<p>The supplied iOS capture rendered in light appearance. Android shows actual dark appearance. Compare structure here and colors against the related light pair.</p>'
     sections.append(f'<section><h2>{case.replace("-", " ").title()}</h2>{note}<div class="pair">{figures}</div></section>')
-for case in ['auto-player-dark', 'auto-shortcut-dark', 'auto-voice-dark', 'auto-moments-light', 'auto-moments-dark', 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
+for case in ['auto-player-dark', 'auto-shortcut-dark', 'auto-voice-dark', 'auto-moments-light', 'auto-moments-dark', *[f'{screen}-{theme}' for screen in ['embedded-chapters', 'book-menu', 'rename', 'reset-confirmation', 'cover-crop', 'cover-detail', 'cover-remove', 'download', 'download-complete'] for theme in ['light', 'dark']], 'player-dark', 'chapters-dark', 'detail-miniplayer-dark', 'library-miniplayer-dark',
              *[f'abs-{screen}-{theme}' for screen in ['connect', 'browse', 'detail', 'detail-added', 'library', 'server-settings'] for theme in ['light', 'dark']],
              'shelves-detail-light', 'shelves-detail-dark', 'shelves-collection-light', 'shelves-collection-dark',
              'review-light', 'review-dark', 'empty-light', 'empty-dark', 'detail-moments-empty-light',
              'moment-filters-light', 'moment-filters-dark', 'eq-dark', 'moments-light', 'moments-dark',
              'save-moment-light', 'edit-moment-dark',
-             'onboarding-dark', 'stats-light', 'stats-dark', 'stats-sections-light',
+             'onboarding-dark', 'stats-light', 'stats-dark', 'stats-sections-light', *[f'stats-{section}-{theme}' for section in ['your_best_day', 'you_read_most_in_the', 'the_book_you_stayed_with', 'on_a_roll', 'the_shape_of_it', 'public_domain,_private_joy'] for theme in ['light', 'dark']],
              *[f'onboarding-{page}-{theme}' for page in ['permissions', 'playback', 'year', 'moments', 'storage', 'done'] for theme in ['light', 'dark']]]:
     if (args.ios_captures / 'ios-abs-browse-light.png').is_file() and not case.startswith('abs-'):
         continue

@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,8 +88,8 @@ internal fun GeneratedBookCover(title: String, modifier: Modifier = Modifier, co
 internal fun LibraryBookCover(book: LibraryBook, modifier: Modifier, cornerRadius: Int = 16, onCoverColor: (Color) -> Unit = {}) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var bitmap by remember(book.id) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(book.id, book.absItemID) {
-        if (book.absItemID != null) bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    LaunchedEffect(book.id, book.coverRevision) {
+        bitmap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             android.graphics.BitmapFactory.decodeFile(java.io.File(context.filesDir, "audiobooks/${book.id}/cover.png").absolutePath)
         }
         bitmap?.let { onCoverColor(Color(it[it.width / 2, it.height / 2])) }
@@ -119,8 +121,8 @@ private fun HeaderButton(description: String, onClick: () -> Unit, enabled: Bool
 }
 
 @Composable
-internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove: () -> Unit, playing: Boolean = false, onOpen: () -> Unit) {
-    var menu by remember { mutableStateOf(false) }
+internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove: () -> Unit, playing: Boolean = false, onResume: () -> Unit = {}, onRename: () -> Unit = {}, onOpen: () -> Unit) {
+    var menu by rememberSaveable { mutableStateOf(false) }
     var coverColor by remember(book.id) { mutableStateOf(CoverPalette.background(book.title)) }
     Surface(Modifier.fillMaxWidth().shadow(12.dp, UnpagedTheme.cardShape, ambientColor = Color.Black.copy(alpha = .12f), spotColor = Color.Black.copy(alpha = .12f)).combinedClickable(onClick = onOpen, onLongClick = { menu = true }).testTag("book.card.${book.id}"),
         shape = UnpagedTheme.cardShape, shadowElevation = 0.dp) {
@@ -154,14 +156,20 @@ internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Schedule, null, Modifier.size(10.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("${shortDuration(book.durationMs)} · ${if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB"}", fontSize = 11.sp, lineHeight = 14.sp,
+                    Text("${shortDuration(book.durationMs)} · ${if (book.isAudioMissing) "Audio Missing" else if (!book.isDownloaded) "Streaming" else "${book.storageBytes / (1024 * 1024)} MB"}", fontSize = 11.sp, lineHeight = 14.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             CatalogDownloadBadge(book.catalogId)
             Box {
-                DropdownMenu(menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onRemove() },
+                DropdownMenu(menu, onDismissRequest = { menu = false }, modifier = Modifier.semantics { testTagsAsResourceId = true }) {
+                    DropdownMenuItem(text = { Text("Resume") }, onClick = { menu = false; onResume() },
+                        leadingIcon = { Icon(Icons.Default.PlayArrow, null) }, modifier = Modifier.testTag("book.menu.resume"))
+                    DropdownMenuItem(text = { Text(if (book.isFavorite) "Unfavorite" else "Favorite") }, onClick = { menu = false; onFavorite() },
+                        leadingIcon = { Icon(Icons.Default.FavoriteBorder, null) }, modifier = Modifier.testTag("book.menu.favorite"))
+                    if (!book.isFreeBook) DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) }, modifier = Modifier.testTag("book.menu.rename"))
+                    DropdownMenuItem(text = { Text(if (!book.isDownloaded) "Remove from Library" else if (book.isFreeBook) "Remove Download" else "Delete") }, onClick = { menu = false; onRemove() },
                         leadingIcon = { Icon(Icons.Default.DeleteOutline, null) })
                 }
                 BookProgress(book.progress, 4)

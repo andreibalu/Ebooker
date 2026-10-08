@@ -1,6 +1,6 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`, built in six merged slices and the current Android Auto slice:
+Native Kotlin/Compose application under `android/app/`, built in six merged slices plus the Android Auto, media/parity and backup slices:
 
 - [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
   import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
@@ -9,7 +9,7 @@ Native Kotlin/Compose application under `android/app/`, built in six merged slic
   full and mini player, chapters, speed, sleep, progress and manual moment saves.
 - [Slice 3](../docs/android/slice-3-librivox-shelves.md): a separately cached
   LibriVox catalog with collections, search/filters, samples, streaming addition
-  and session-owned downloads.
+  and shared downloads, now persisted through WorkManager in slice 10.
 - [Slice 4](../docs/android/slice-4-moments-equalizer.md): manual moment
   editing/filtering/pinning and per-book five-band Media3 EQ.
 - [Slice 5](../docs/android/slice-5-reading-onboarding.md): reading sessions,
@@ -21,11 +21,17 @@ Native Kotlin/Compose application under `android/app/`, built in six merged slic
   server progress and card heart/shadow fixes.
 
 - [Slice 7](../docs/android/slice-7-android-auto.md): MediaLibraryService browse tree,
-  car commands, voice search and Play Latest Book shortcut. Assigned-emulator E2E
-  verification is pending; real Android Auto rendering is unverified.
+  car commands, voice search and Play Latest Book shortcut.
+  Real Android Auto rendering is unverified.
+- [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
+  WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
+  parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md).
+- [Slice 8](../docs/android/slice-8-library-backup-restore.md): Android's Auto Backup
+  of library metadata, missing-audio detection, in-place re-import, archived free
+  books and Backed-up Library.
 
-SQLite is at schema v4 via additive, tested migrations. AI,
-payments and cloud sync are absent. Self-hosted ABS permits HTTP
+SQLite is at schema v5 via additive, tested migrations. AI,
+payments and live cloud sync are absent. Self-hosted ABS permits HTTP
 through the network security configuration, with a public-host warning before
 credentials are sent. Credentials use Android Keystore AES/GCM encryption in
 app-private storage excluded from backups. The
@@ -111,8 +117,10 @@ Playback declares INTERNET and foreground media-playback permissions; ACCESS_NET
 supports LibriVox offline detection. API33+ notification permission is optional and
 denial never blocks playback. Local imports use the system document
 picker and copy audio into private storage; source files are never deleted.
-The private SQLite index and owned audio are excluded from backup; uninstalling
-Unpaged removes these copies. Import progress survives rotation, but process
+The library SQLite index and user preferences are included in Android Auto Backup
+when Back Up Library and Backup by Google are on. Owned audio, covers, catalog
+cache, staging and credentials are excluded. Uninstalling removes owned audio;
+restored metadata needs the original files or streaming source. Import progress survives rotation, but process
 death abandons an uncommitted import and startup removes its staging files. No public iOS documentation or App
 Store metadata changes belong in this foundation.
 
@@ -126,15 +134,16 @@ validated before review. Codec/container support still depends on Android's
 media stack and needs device fixtures. Import is foreground work: keep Unpaged
 open during the copy. Review/edit title and author, then **Save**.
 Tap a book to inspect its ordered files; long-press a card → **Delete** confirms removal
-of the app's copies, preserving the selected originals. Embedded chapters and
-cover artwork extraction are not included in this slice.
+of the app's copies, preserving the selected originals. MP4 chapter markers and embedded artwork are read during import. Existing local
+books lazily read their MP4 chapter markers before playback. Cover photos can be
+changed, cropped or removed from book detail.
 
 Host tests exercise real temporary-file IO, ordering, iOS-compatible sampled
 fingerprints, duplicate multiplicity, cancelled/failed copies, commit failure,
 removal and restart cleanup. Robolectric tests exercise SQLite reopen, track
 ordering, cascade removal and atomic rollback. Robolectric downloads its API28
 framework fixture on the first test run; these are host tests, not device tests.
-Additional pinned dependencies: Material Icons Extended 1.7.8, Lifecycle 2.9.4, coroutines 1.10.2, JUnit 4.13.2,
+Additional pinned dependencies: Material Icons Extended 1.7.8, Lifecycle 2.9.4, coroutines 1.10.2, WorkManager 2.10.5, JUnit 4.13.2,
 Robolectric 4.16. See [slice details](../docs/android/local-library.md).
 
 
