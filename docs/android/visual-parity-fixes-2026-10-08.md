@@ -36,12 +36,14 @@ SwiftUI views. iOS files are unchanged.
 
 ## Validation boundary
 
-Passed checks: `:app:assembleDebug`, `:app:lintDebug`,
-`:app:testDebugUnitTest`, `:e2e:assembleDebug`. Final run completed successfully
-in 33 seconds, with zero lint issues and 212 host tests passing (before the two reverts above).
-`git diff --check` passed.
+Passed checks on `91871f5`: `:app:assembleDebug`, `:app:lintDebug` with zero
+issues, `:app:testDebugUnitTest` with 231 host tests, `:e2e:assembleDebug`, and
+the release AI check. The full E2E suite passed 39 of 39 journeys across four
+API 35 emulator shards.
 
-No emulator was started and no device/E2E journey was run. The supplied captures
-were inspected as references; these changes still need the maintainer's fresh
-screenshots and runtime checks, especially sheet dragging, system insets,
-slider gestures and retained E2E selectors.
+The first E2E run after this pass failed five journeys. The Settings dialog
+window covered the backup and AI sheets it opened. Settings now hosts those child
+sheets inside its own dialog, and fresh screenshots show them above Settings.
+
+Remaining difference: the Settings Done capsule is black on Android and grey on
+iOS.
