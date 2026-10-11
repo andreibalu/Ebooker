@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B20000000000000000000001 /* Pageless/AppIntents/PlayLatestBookIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* Pageless/AppIntents/PlayLatestBookIntent.swift */; };
 		A10000000000000000000001 /* PagelessDownloadActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* PagelessDownloadActivity.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000002 /* Pageless/Downloads/DownloadActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* Pageless/Downloads/DownloadActivityAttributes.swift */; };
 		BC744B342F83D03C0007E60E /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BC744B332F83D03C0007E60E /* StoreKit.framework */; };
@@ -51,6 +52,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B20000000000000000000002 /* Pageless/AppIntents/PlayLatestBookIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pageless/AppIntents/PlayLatestBookIntent.swift; sourceTree = SOURCE_ROOT; };
 		A10000000000000000000004 /* PagelessDownloadActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PagelessDownloadActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000005 /* Pageless/Downloads/DownloadActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pageless/Downloads/DownloadActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
 		BC744B332F83D03C0007E60E /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
@@ -64,6 +66,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
+				PagelessDownloadActivity.entitlements,
 			);
 			target = A10000000000000000000009 /* PagelessDownloadActivity */;
 		};
@@ -342,6 +345,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000002 /* Pageless/Downloads/DownloadActivityAttributes.swift in Sources */,
+				B20000000000000000000001 /* Pageless/AppIntents/PlayLatestBookIntent.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -397,6 +401,7 @@
 				DEVELOPMENT_TEAM = WR23UX8DY4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PagelessDownloadActivity/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = PagelessDownloadActivity/PagelessDownloadActivity.entitlements;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -426,6 +431,7 @@
 				DEVELOPMENT_TEAM = WR23UX8DY4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PagelessDownloadActivity/Info.plist;
+				CODE_SIGN_ENTITLEMENTS = PagelessDownloadActivity/PagelessDownloadActivity.entitlements;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

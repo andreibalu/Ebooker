@@ -16,7 +16,7 @@ Everything you create or import in Unpaged stays on your device unless you expli
 - If you connect an Audiobookshelf server: its address, your username, and the sign-in token or API key, stored in the iOS Keychain on this iPhone (your password itself is not stored)
 - In-app purchase entitlement state for Unpaged Plus and recognized legacy purchases. Apple processes subscription and introductory-offer eligibility; the optional coffee tip is a consumable purchase and does not create an app entitlement.
 
-This data is stored in the app's private container on your iPhone. Unpaged does not upload it to any server controlled by the developer. Deleting the app removes the local copy; data previously synced to your private iCloud database remains there until you delete it through Apple's iCloud controls.
+This data is stored in the app's private container on your iPhone. The Continue Listening widget also keeps the last played book’s title, author, identifier, progress, time left, last-played date, and a small cover image in an on-device App Group container shared only with Unpaged’s widget extension. Unpaged does not upload it to any server controlled by the developer. Deleting the app removes the local copy; data previously synced to your private iCloud database remains there until you delete it through Apple's iCloud controls.
 
 ## Permissions Unpaged requests
 

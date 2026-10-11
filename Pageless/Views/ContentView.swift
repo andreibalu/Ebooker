@@ -372,7 +372,7 @@ struct ContentView: View {
             player.playerErrorMessage = nil
         }
         .onChange(of: router.pendingRoute) { _, route in
-            guard route == .downloads else { return }
+            guard route == .downloads || route == .library else { return }
             playerTeardownTask?.cancel()
             playerTeardownTask = nil
             playerDismissGeneration &+= 1
@@ -384,8 +384,8 @@ struct ContentView: View {
             selectedLibraryDownloadBook = nil
             navigationStackID &+= 1
             selectedTab = .allBooks
-            isDownloadScrollPending = true
-            router.consume(.downloads)
+            isDownloadScrollPending = route == .downloads
+            if let route { router.consume(route) }
         }
     }
 

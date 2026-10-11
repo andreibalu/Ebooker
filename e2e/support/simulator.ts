@@ -123,3 +123,15 @@ export function appDefaultExists(key: string): boolean {
   }
   return false;
 }
+
+/** Shared on-device snapshot container used by the Continue Listening widget. */
+export function appGroupPath(): string {
+  // `get_app_container <bundle> <group id>` rejects the identifier on this simctl; the `groups`
+  // listing ("<group id>\t<path>" per line) works.
+  const group = 'group.andreibaludev.Pageless';
+  const line = simctl('get_app_container', udid(), bundle, 'groups')
+    .split('\n')
+    .find((entry) => entry.startsWith(`${group}\t`));
+  if (!line) throw new Error(`${group} container not found`);
+  return line.slice(group.length + 1).trim();
+}

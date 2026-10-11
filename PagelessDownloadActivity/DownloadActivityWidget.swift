@@ -11,6 +11,7 @@ import WidgetKit
 struct DownloadActivityWidgetBundle: WidgetBundle {
     var body: some Widget {
         DownloadActivityWidget()
+        ContinueListeningWidget()
     }
 }
 
