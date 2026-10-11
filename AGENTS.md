@@ -169,6 +169,7 @@ ObservableObject; single source of truth for all playback state, injected via `@
 - Delegates persistence to `PlaybackPersistence` (progress saves, high-water mark, seek penalty) and remote commands to `NowPlayingUpdater` (Control Center, headphones, CarPlay)
 - 1-second periodic time observer feeds `ReadingSessionRecorder.tick(...)`; flushes the recorder on pause, track change, audiobook change, app background, and book finish so partial chunks aren't lost
 - **Chapters** — `PlaybackChapter` is computed, never synced: embedded M4B/M4A/MP3 markers (`EmbeddedChapterReader`, including the `und` locale), ABS book-wide markers mapped to track offsets, or one chapter per track. `ChapterListSheet`, player previous/next, and CarPlay use the same list. Navigation steps from pending targets; pause invalidates queued jumps, and timer readings cannot overwrite a pending seek. Track ordering uses `Audiobook.sortedTracks` consistently.
+- **Chapter sleep timer** — `SleepTimerOption.endOfChapter` uses raw value `-1`, preserving minute values. `AudioPlayerManager` sets `AVPlayerItem.forwardPlaybackEndTime` from the shared chapter list and handles the end notification before track advance. Seeks, chapter metadata refreshes and track commits retarget it; manual pause keeps it armed, expiry/cancellation/book finish clear it. ABS chapters spanning files use book-global end times. The DEBUG seconds override applies only to minute timers.
 
 ## ViewModels
 

@@ -1,9 +1,12 @@
 import { expect, type Screen } from 'e2e';
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, tapVisibleCenter } from './native-actions.js';
 import { appDataPath, bundle } from '../support/simulator.js';
+import { createAgentDeviceClient } from 'agent-device';
+import { NATIVE_WORKER_SESSION } from '../session.js';
+import { setTimeout as delay } from 'node:timers/promises';
 
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
 
@@ -167,4 +170,83 @@ test('an imported M4B shows its embedded chapters and plays from the chosen one'
   await screen.getByTestId('chapters.row.1').tap();
   await expect(screen.getByTestId('player.currentChapter')).toHaveAccessibleName('Chapter: The Middle');
   await expect(screen.getByTestId('player.title')).toHaveText('E2E Chaptered Book');
+});
+
+async function saveChapterSleepEvidence(name: string) {
+  const directory = fileURLToPath(new URL('../.e2e/chapter-sleep/', import.meta.url));
+  mkdirSync(directory, { recursive: true });
+  const snapshot = await createAgentDeviceClient({ session: NATIVE_WORKER_SESSION }).capture.snapshot();
+  writeFileSync(join(directory, `${name}.json`), JSON.stringify(snapshot, null, 2));
+}
+
+async function openChapteredSleepBook(device: { openApp: (bundle: string, options: { relaunch: boolean; launchArguments: string[] }) => Promise<unknown> }, screen: Screen) {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  copyFileSync(fileURLToPath(new URL('../../PagelessTests/Fixtures/chaptered.m4b', import.meta.url)),
+    join(appDataPath(), 'Library', 'Application Support', 'E2EFixtures', 'chaptered.m4b'));
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-import', '-e2e-import-file', 'chaptered.m4b', '-skipForwardSeconds', '2'] });
+  await screen.getByTestId('importButton').tap();
+  await screen.getByPlaceholder('Title').fill('E2E Chapter Sleep');
+  await screen.getByRole('button', 'Save').tap();
+  await screen.getByTestId('libraryTab').tap();
+  await tapVisibleCenter(screen.getByText('E2E Chapter Sleep').first());
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await screen.getByTestId('player.chapters').tap();
+  await expect(screen.getByTestId('chapters.row.2')).toHaveAccessibleName('Chapter 3, Ending');
+  await screen.getByTestId('chapters.row.0').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await screen.getByLabel('Skip backward').first().tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:00 of 00:12$/);
+}
+
+async function armChapterSleep(screen: Screen) {
+  await screen.getByTestId('player.sleep').tap();
+  await screen.getByTestId('player.sleep.endOfChapter').tap();
+  await expect(screen.getByTestId('player.sleep')).toContainText('End of chapter');
+}
+
+test('chapter sleep stops at the embedded chapter boundary', async ({ device, screen }) => {
+  await openChapteredSleepBook(device, screen);
+  await screen.getByLabel('Skip forward').first().tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[2-3] of 00:12$/);
+  await armChapterSleep(screen);
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Play playback', { timeout: 15_000 });
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[3-5] of 00:12$/);
+  await expect(screen.getByTestId('player.sleep')).toContainText('Sleep Timer');
+  await delay(1_500);
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[3-5] of 00:12$/);
+  await saveChapterSleepEvidence('embedded-boundary');
+});
+
+test('chapter sleep retargets after a chapter jump', async ({ device, screen }) => {
+  await openChapteredSleepBook(device, screen);
+  await armChapterSleep(screen);
+  await screen.getByTestId('player.chapters').tap();
+  await screen.getByTestId('chapters.row.1').tap();
+  await expect(screen.getByTestId('player.currentChapter')).toHaveAccessibleName('Chapter: The Middle');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.sleep')).toContainText('End of chapter');
+  await screen.getByLabel('Skip forward').first().tap();
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Play playback', { timeout: 15_000 });
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:(08|09|10) of 00:12$/);
+  await saveChapterSleepEvidence('retargeted-boundary');
+});
+
+test('chapter sleep stops at a track end without advancing', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture', '-skipForwardSeconds', '15'] });
+  await openListeningBookPaused(screen);
+  for (let i = 0; i < 19; i++) await screen.getByLabel('Skip forward').first().tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^04:4[5-9] of 05:00$/);
+  await armChapterSleep(screen);
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Play playback', { timeout: 25_000 });
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^(04:59|05:00) of 05:00$/);
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 1');
+  await screen.getByTestId('player.chapters').tap();
+  await expect(screen.getByTestId('chapters.row.0')).toBeSelected();
+  await saveChapterSleepEvidence('track-boundary');
 });

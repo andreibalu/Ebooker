@@ -44,6 +44,10 @@ Removing an Audiobookshelf book from your Library only removes it from Unpaged; 
 
 Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata requires a reachable server.
 
+### Can playback stop at the end of a chapter?
+
+Open the player's **Sleep Timer** menu and choose **End of chapter**, or a 5, 15, 30, or 60 minute timer. The chapter option shows the time remaining and pauses at the current chapter's end without starting the next chapter. Seeking or jumping to another chapter moves the timer to that chapter's end. Pausing manually keeps it armed; choose **Off** to cancel. It works with downloaded and streaming books, including while the app is in the background.
+
 ### How do I change the app's appearance?
 
 Open **Settings → Appearance** and choose **System**, **Light**, or **Dark**. Light and Dark apply regardless of your iPhone's appearance setting; System follows it. The choice also applies to sheets and onboarding and is remembered across launches.

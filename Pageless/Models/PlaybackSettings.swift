@@ -94,6 +94,7 @@ enum SleepTimerOption: Double, CaseIterable, Identifiable {
     case fifteenMinutes = 900
     case thirtyMinutes = 1800
     case sixtyMinutes = 3600
+    case endOfChapter = -1
 
     var id: Double { rawValue }
 
@@ -107,6 +108,8 @@ enum SleepTimerOption: Double, CaseIterable, Identifiable {
             "30 minutes"
         case .sixtyMinutes:
             "60 minutes"
+        case .endOfChapter:
+            "End of chapter"
         }
     }
 }
