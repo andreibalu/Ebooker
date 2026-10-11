@@ -40,6 +40,10 @@ Yes. If you run [Audiobookshelf](https://www.audiobookshelf.org) (or someone sha
 
 Removing an Audiobookshelf book from your Library only removes it from Unpaged; it stays on your server and you can add it again from Shelves.
 
+### Can I resume from a widget?
+
+Add Unpaged’s **Continue Listening** widget from the Home Screen or Lock Screen widget gallery. It shows your last played book and listening progress. Tap it to open Unpaged and resume; the medium Home Screen widget also has a **Play** button. After removing that book, the widget shows your next most recently played book. Before you play a book, it opens your library.
+
 ### How do I navigate chapters?
 
 Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata requires a reachable server.

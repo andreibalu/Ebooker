@@ -263,6 +263,7 @@ enum LibraryImportService {
                 modelContext.delete(audiobook)
                 try mutationEnvironment.save(modelContext)
             }
+            ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
             do {
                 try transaction.commit()
             } catch {
@@ -303,6 +304,7 @@ enum LibraryImportService {
             try transaction.backupExistingFolder(at: folderURL)
             audiobook.isDownloaded = false
             try mutationEnvironment.save(modelContext)
+            ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
             do {
                 try transaction.commit()
             } catch {
@@ -341,6 +343,7 @@ enum LibraryImportService {
             audiobook.isDownloaded = false
             audiobook.isArchived = true
             try mutationEnvironment.save(modelContext)
+            ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
             do {
                 try transaction.commit()
             } catch {

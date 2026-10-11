@@ -5,7 +5,11 @@ import SwiftData
 /// Opt-in fixtures for the dedicated E2E simulator. Shipping builds contain no launch hooks.
 @MainActor
 enum E2EFixtures {
-    static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("-e2e-fixture") }
+    /// `e2e.stickyFixture` lets a test launch the app cold from a URL, which carries no launch arguments.
+    static var enabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("-e2e-fixture")
+            || UserDefaults.standard.bool(forKey: "e2e.stickyFixture")
+    }
 
     static func argument(_ key: String) -> String? {
         let args = ProcessInfo.processInfo.arguments

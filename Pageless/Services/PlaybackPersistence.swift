@@ -57,6 +57,7 @@ final class PlaybackPersistence {
         do {
             try context?.save()
             lastPersistedTime = audiobook.currentTime
+            ContinueListeningSnapshotWriter.shared.write(audiobook, force: force)
         } catch {
             // Error handled by caller via playerErrorMessage
         }
@@ -80,6 +81,7 @@ final class PlaybackPersistence {
         do {
             try context?.save()
             lastPersistedTime = audiobook.currentTime
+            ContinueListeningSnapshotWriter.shared.write(audiobook, force: true)
         } catch {
             // Error handled by caller via playerErrorMessage
         }

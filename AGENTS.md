@@ -113,6 +113,7 @@ Useful extras: `simctl ui <udid> appearance dark|light`, `simctl status_bar <udi
 ## Info.plist / Target Settings (App Store relevant)
 
 - `ITSAppUsesNonExemptEncryption: false`; `UIBackgroundModes: audio`; `NSSupportsLiveActivities: true` (download Live Activity)
+- App and widget extension share `group.andreibaludev.Pageless` via `com.apple.security.application-groups`.
 - URL scheme `unpaged` — `unpaged://library/downloads` routes to the pinned downloads (`UnpagedRoute`)
 - Mic + speech usage descriptions (CarPlay voice search; transcription + AI moment naming)
 - Two scene roles: `UIWindowScene` (default) + `CPTemplateApplicationScene` → `CarPlaySceneDelegate`
@@ -311,6 +312,10 @@ Library metadata, progress, moments, EQ config, reading sessions sync via CloudK
 - `CarPlayVoiceSearch` — hands-free dictation (Speech framework), auto-stops on silence
 - `VoiceSearchPermissions.status` — synchronous mic + speech authorization check for the CarPlay path; voice search refuses with an info alert when not granted, because permission prompts **cannot** appear on the CarPlay screen. The onboarding Permissions scene is the only proactive request point (launch-time priming removed). Don't add permission requests that can fire only on CarPlay.
 - `AppDelegate` — background URL session handler + CarPlay scene registration
+
+### Widgets
+
+Continue Listening lives in `PagelessDownloadActivity/` alongside the download Live Activity. Small/medium Home Screen and rectangular/circular Lock Screen widgets read only `continue-listening.json` and a ≤300px cover JPEG from `group.andreibaludev.Pageless`, never SwiftData. `ContinueListeningSnapshotWriter` writes at playback saves, pause/book change/finish and library removal, throttling periodic writes and timeline reloads to 30 seconds. Generated artwork comes from `GeneratedCoverView.renderImage` in the app. `unpaged://resume` and the medium `PlayLatestBookIntent` use the app’s pending-intent playback path; empty widgets open `unpaged://library`. DEBUG previews cover all four families.
 
 ### Siri / App Intents
 
