@@ -8,6 +8,16 @@ This matrix covers every iOS feature except Apple Intelligence and iCloud sync, 
 - `support/fake-audiobookshelf.ts` serves an Audiobookshelf server on localhost.
 - The local `Products.storekit` configuration stands in for the App Store.
 
+## Validation, 2026-10-11 (wave 1 features)
+
+Native suite on the dedicated `Unpaged e2e integration` simulator (iPhone 18 Pro, iOS 27.0) at `555d580`, 103 tests in 14 files. The full run passed 102, with `live-catalog.e2e.ts` skipped because it is opt-in. The run before it, at `a358666`, passed 100 of 101. Its one failure was a test fault: `local playback advances chapters and creates a persisted manual moment` tapped the moment sheet's Done button before SwiftUI enabled it, and failed about one run in three. The test now waits for Done to be enabled, and passed 5 of 5 on its own.
+
+A code review of the merged branch found three app bugs, fixed before the final run:
+
+- A queued offline progress report overwrote a newer position that another device had sent to the server. Covered by `ABS durable progress drops a queued stale position after newer server progress`.
+- Resuming after adopting a newer server position reported the old local position back to the server. Covered by `ABS durable progress resumes from a newer server position five minutes ahead`.
+- Cancelling an Audiobookshelf download could delete the manifest of a download restarted during the cancel. No E2E test drives that race.
+
 ## Historical validation, 2026-10-07 (before test pruning)
 
 These results and test counts predate the test pruning.
