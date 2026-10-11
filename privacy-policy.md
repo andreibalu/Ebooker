@@ -11,7 +11,7 @@ Everything you create or import in Unpaged stays on your device unless you expli
 - Audiobook files you import from Files or iCloud Drive
 - Your library, favorites, playback progress, and finished/unfinished status
 - Bookmarks ("moments"), notes, transcripts, AI-generated names and recaps
-- Playback preferences (sort order, skip intervals, sleep timer, equalizer settings)
+- Playback preferences (sort order, skip intervals, sleep timer, equalizer settings), including the welcome-back recap setting and device-local dismissal date for each book
 - Free-book downloads from LibriVox and the bundled catalog
 - If you connect an Audiobookshelf server: its address, your username, and the sign-in token or API key, stored in the iOS Keychain on this iPhone (your password itself is not stored)
 - In-app purchase entitlement state for Unpaged Plus and recognized legacy purchases. Apple processes subscription and introductory-offer eligibility; the optional coffee tip is a consumable purchase and does not create an app entitlement.

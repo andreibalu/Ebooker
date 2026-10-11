@@ -169,3 +169,7 @@ Email [andrei.baluta@yahoo.com](mailto:andrei.baluta@yahoo.com) with:
 - Screenshots or a screen recording if relevant
 
 Thanks for using Unpaged.
+
+### Welcome-back recaps
+
+With Unpaged Plus and local AI enabled on an Apple Intelligence-compatible iPhone running iOS 26 or later, opening a downloaded book after at least three days away can offer a recap above its playback controls. The book needs at least three minutes of saved progress and must be unfinished. The recap uses only audio before your saved listening point. Resume starts from saved progress with your configured resume offset; Not now hides the offer until a later listening session and another qualifying break. Turn off Welcome-back recaps in Settings → AI Features. Recaps run on-device and playback remains available while a recap loads. If a recap cannot be prepared, the offer disappears silently.

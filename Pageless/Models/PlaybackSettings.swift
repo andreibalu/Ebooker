@@ -110,3 +110,7 @@ enum SleepTimerOption: Double, CaseIterable, Identifiable {
         }
     }
 }
+
+enum AISettingsKey: String {
+    case welcomeBackRecaps
+}

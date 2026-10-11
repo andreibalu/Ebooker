@@ -97,6 +97,7 @@ struct AudiobookDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                WelcomeBackRecapCard(audiobook: audiobook, openPlayer: openPlayer)
                 header
                 // Offline download is a LibriVox feature; Audiobookshelf books always stream.
                 if (audiobook.isStreamingOnly && !audiobook.isAudiobookshelfBook) || downloadEntry != nil {
