@@ -25,6 +25,7 @@ final class NetworkMonitor {
         monitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
                 self?.isConnected = (path.status == .satisfied)
+                if path.status == .satisfied { ABSProgressReporter.flush() }
             }
         }
         monitor.start(queue: queue)

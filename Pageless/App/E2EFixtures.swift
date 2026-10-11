@@ -24,7 +24,7 @@ enum E2EFixtures {
             try? ABSKeychainCredentialStore().clear()
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
-                        "absSelectedLibraryID"] {
+                        "absSelectedLibraryID", "abs.progressOutbox"] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }

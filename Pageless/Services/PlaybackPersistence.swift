@@ -54,6 +54,7 @@ final class PlaybackPersistence {
 
         guard force || abs(audiobook.currentTime - lastPersistedTime) >= 5 else { return }
 
+        if audiobook.isAudiobookshelfBook { audiobook.absProgressWrittenAt = .now }
         do {
             try context?.save()
             lastPersistedTime = audiobook.currentTime
@@ -77,6 +78,7 @@ final class PlaybackPersistence {
         audiobook.progressTime = duration
         audiobook.progressUpdatedAt = .now
 
+        if audiobook.isAudiobookshelfBook { audiobook.absProgressWrittenAt = .now }
         do {
             try context?.save()
             lastPersistedTime = audiobook.currentTime
