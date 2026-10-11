@@ -1,47 +1,11 @@
 # Unpaged Android development
 
-Native Kotlin/Compose application under `android/app/`. Slices 1–6 are merged. Slices 7–10 and parallel-emulator E2E are in review as stacked PRs #62–#66:
-
-- [Slice 1](../docs/android/slice-1-shell-library-settings.md): local audiobook
-  import, metadata review, Favorites/Library/Shelves pager, per-tab sort menus,
-  favorite hearts, detail disclosures and persisted listening/appearance settings.
-- [Slice 2](../docs/android/slice-2-playback.md): Media3 local/remote playback,
-  full and mini player, chapters, speed, sleep, progress and manual moment saves.
-- [Slice 3](../docs/android/slice-3-librivox-shelves.md): a separately cached
-  LibriVox catalog with collections, search/filters, samples, streaming addition
-  and shared downloads, now persisted through WorkManager in slice 10.
-- [Slice 4](../docs/android/slice-4-moments-equalizer.md): manual moment
-  editing/filtering/pinning and per-book five-band Media3 EQ.
-- [Slice 5](../docs/android/slice-5-reading-onboarding.md): reading sessions,
-  Favorites activity/stats and seven-page onboarding, using notification
-  permission, manual moments and local-library pages in place of Apple-only features.
-
-- [Slice 6](../docs/android/slice-6-audiobookshelf.md): Audiobookshelf source,
-  encrypted login/API-key credentials, server browsing and authenticated streaming,
-  server progress and card heart/shadow fixes.
-
-- [Slice 7](../docs/android/slice-7-android-auto.md): MediaLibraryService browse tree,
-  car commands, voice search and Play Latest Book shortcut (PR #63).
-  Real Android Auto rendering is unverified.
-- [Slice 8](../docs/android/slice-8-library-backup-restore.md): Android's Auto Backup
-  of library metadata, missing-audio detection, in-place re-import, archived free
-  books and Backed-up Library (PR #65).
-- [Slice 9](../docs/android/slice-9-on-device-ai.md): Gemini Nano smart moments,
-  recaps and optional downloaded Whisper transcription (PR #66). Physical Nano
-  qualification remains open.
-- [Slice 10](../docs/android/slice-10-media-parity.md): embedded M4B/M4A chapters,
-  WorkManager downloads with byte-range recovery, cover editing, card-menu/rename
-  parity and the [Swift-view audit](../docs/android/parity-audit-2026-10-07.md) (PR #64).
-
-PR #62 covers parallel-emulator E2E.
-
-SQLite is at schema v5 via additive migrations. Payments and Plus/tips remain
-excluded. Android Auto Backup covers library metadata and preferences when enabled,
-but there is no live multi-device or cross-platform sync. Self-hosted ABS permits HTTP
-through the network security configuration, with a public-host warning before
-credentials are sent. Credentials use Android Keystore AES/GCM encryption in
-app-private storage excluded from backups. The
-[Android map](https://github.com/andreibalu/Ebooker/issues/49) remains the
+Native Kotlin/Compose application under `android/app/`, with a separate UI
+Automator driver in `android/e2e/`. All ten implementation slices and the
+parallel-emulator E2E suite are merged. Architecture, rules and known gaps are
+in [AGENTS.md](AGENTS.md); what only a real phone or car can prove is in the
+[physical test checklist](../docs/android/physical-test-checklist.md). The
+[Android map](https://github.com/andreibalu/Ebooker/issues/49) is the
 product/architecture decision index.
 
 ## Build and lint
@@ -93,8 +57,12 @@ Android Auto head units, Google Drive backup timing or OEM device transfer on ph
 | Activity Compose | 1.11.0 |
 | WorkManager | 2.10.5 |
 | ExifInterface | 1.3.6 |
+| Media3 ExoPlayer / session; MediaRouter | 1.8.0; 1.8.1 |
 | ML Kit GenAI Prompt API | 1.0.0-beta4 |
 | ML Kit GenAI schema compiler (KSP) | 1.0.0-alpha1 |
+| KSP | 2.3.6 |
+| whisper.cpp (source archive) | v1.9.5 |
+| NDK; CMake | 28.2.13676358; 3.22.1 |
 | compile/target SDK; build tools | 36; 36.0.0 |
 | Java/Kotlin bytecode target | 17 (build host JDK 21) |
 
@@ -120,10 +88,10 @@ by the wrapper when fetching Gradle. Wrapper scripts/JAR come from the official
 ## Provisional choices
 
 `dev.unpaged.android.development` is a development application ID. Version
-`0.0.1-dev`, minSdk 26, the two-bar placeholder icon and this empty-screen layout
-are scaffolding choices. Minimum phone support, final application identity,
-release UI and broader feature architecture remain unresolved Wayfinder
-decisions. SDK level alone never establishes local-AI availability.
+`0.0.1-dev`, minSdk 26 and the two-bar placeholder icon are scaffolding choices.
+Minimum phone support, final application identity and Play release gates remain
+open Wayfinder decisions. SDK level alone never establishes local-AI availability.
+The native build emits arm64-v8a and x86_64 libraries only.
 
 Playback declares INTERNET and foreground media-playback permissions; ACCESS_NETWORK_STATE
 supports LibriVox offline detection. API33+ notification permission is optional and
@@ -133,8 +101,7 @@ The library SQLite index and user preferences are included in Android Auto Backu
 when Back Up Library and Backup by Google are on. Owned audio, covers, catalog
 cache, staging and credentials are excluded. Uninstalling removes owned audio;
 restored metadata needs the original files or streaming source. Import progress survives rotation, but process
-death abandons an uncommitted import and startup removes its staging files. No public iOS documentation or App
-Store metadata changes belong in this foundation.
+death abandons an uncommitted import and startup removes its staging files.
 
 
 ## Local library
@@ -156,8 +123,7 @@ removal and restart cleanup. Robolectric tests exercise SQLite reopen, track
 ordering, cascade removal and atomic rollback. Robolectric downloads its API28
 framework fixture on the first test run; these are host tests, not device tests.
 Other pinned dependencies: Material Icons Extended 1.7.8, Lifecycle 2.9.4,
-coroutines 1.10.2, JUnit 4.13.2 and Robolectric 4.16. See
-[slice details](../docs/android/local-library.md).
+coroutines 1.10.2, JUnit 4.13.2 and Robolectric 4.16.
 
 
 ## Android end-to-end tests
@@ -169,8 +135,6 @@ points. Onboarding is completed through visible controls, including in test setu
 corrupt MP3, selected through Android's actual Storage Access Framework UI.
 Assertions use visible app/picker controls, never database or repository calls.
 The Shelves driver uses bundled debug metadata and forced saved-only browsing.
-Merged slice runtime checks are recorded in
-[the E2E validation log](../docs/android/e2e-visual-validation-2026-10-06.md).
 
 Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
 Boot it and specify its serial explicitly. Other attached devices are allowed only
@@ -200,5 +164,12 @@ the screen and accessibility hierarchy. Override `E2E_EVIDENCE_DIR` to retain a
 specific output directory. Capture files are evidence for human review, not an
 automatically passing pixel-diff gate.
 
-See [E2E and visual evidence](../docs/android/e2e-visual-validation-2026-10-06.md)
-for executed journeys, screenshot comparisons and remaining parity gaps.
+To pair captures with the iOS references for that review:
+
+```sh
+python3 tools/make-visual-report.py <captures> ../docs/android/visual-evidence/ios-reference-1.4.1 <report-dir>
+```
+
+Pass `../docs/android/visual-evidence/ios-reference-abs` instead for the
+Audiobookshelf screens. `--cases`, `--playback-only` and `--backup-only` narrow
+the report.

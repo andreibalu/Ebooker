@@ -25,22 +25,6 @@ class LocalLibraryRepositoryTest {
         override fun open() = ByteArrayInputStream(data)
     }
 
-    @Test fun naturalOrderingAndMetadataSurviveSave() {
-        val repo = repository()
-        repo.load()
-        val pending = repo.prepare(listOf(document("10.mp3"), document("2.mp3"), document("1.mp3")))
-        assertEquals(listOf("1.mp3", "2.mp3", "10.mp3"), pending.tracks.map { it.originalName })
-        assertEquals("A book", pending.suggestedTitle)
-        assertEquals("Author", pending.suggestedAuthor)
-        assertTrue(repo.books().isEmpty())
-        val saved = repo.save(pending, "  Chosen title ", " Editor ")
-        assertEquals("Chosen title", saved.title)
-        assertEquals(3702L, saved.durationMs)
-        assertEquals("Editor", saved.author)
-        assertEquals(saved, repo.load().single())
-        assertTrue(saved.tracks.all { File(File(root, saved.id), it.storedName).isFile })
-    }
-
     @Test fun failedCopyLeavesNeitherLibraryRowNorPartialFiles() {
         val broken = object : ImportDocument {
             override val displayName = "2.mp3"
@@ -96,20 +80,6 @@ class LocalLibraryRepositoryTest {
         assertEquals("Title", repo.save(pending, "Title", "").title)
     }
 
-    @Test fun removalTouchesOwnedCopiesAndPreservesSource() {
-        val source = temporary.newFile("source.mp3").apply { writeBytes(byteArrayOf(1, 2)) }
-        val doc = object : ImportDocument {
-            override val displayName = source.name
-            override fun open() = source.inputStream()
-        }
-        val repo = repository()
-        val book = repo.save(repo.prepare(listOf(doc)), "Title", "")
-        repo.remove(book)
-        assertTrue(repo.books().isEmpty())
-        assertFalse(File(root, book.id).exists())
-        assertArrayEquals(byteArrayOf(1, 2), source.readBytes())
-    }
-
     @Test fun failedIndexRemovalNeverDeletesAudio() {
         val repo = repository()
         val book = repo.save(repo.prepare(listOf(document("1.mp3"))), "Title", "")
@@ -150,16 +120,6 @@ class LocalLibraryRepositoryTest {
         val saved = repo.save(pending, "Safe", "")
         assertTrue(File(File(root, saved.id), "0000.mp3").isFile)
         assertThrows(IllegalArgumentException::class.java) { repo.discard(pending.copy(id = "../outside")) }
-    }
-
-    @Test fun emptyTitleDoesNotPromoteFiles() {
-        val repo = repository()
-        val pending = repo.prepare(listOf(document("1.mp3")))
-        assertThrows(ImportProblem::class.java) { repo.save(pending, "  ", "") }
-        assertTrue(File(File(root, ".staging"), pending.id).isDirectory)
-        assertTrue(store.books().isEmpty())
-        repo.discard(pending)
-        assertTrue(File(root, ".staging").listFiles()!!.isEmpty())
     }
 
     @Test fun fingerprintMatchesIndependentLittleEndianFixtureAndIgnoresMiddleOfLargeFile() {

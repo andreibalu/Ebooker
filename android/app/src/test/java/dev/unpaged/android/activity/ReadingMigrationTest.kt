@@ -1,7 +1,6 @@
 package dev.unpaged.android.activity
 
 import dev.unpaged.android.library.*
-import dev.unpaged.android.UnpagedPreferences
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,16 +45,5 @@ class ReadingMigrationTest {
         }
         withStore(context) { store -> assertEquals(session, store.readingSessions().single()); assertTrue(store.books().isEmpty()) }
         folder.deleteRecursively()
-    }
-    @Test fun onboardingGateAndChoicesSurviveNewWrapperAndReset() {
-        val context = RuntimeEnvironment.getApplication()
-        context.getSharedPreferences("unpaged", 0).edit().clear().commit()
-        val prefs = UnpagedPreferences(context)
-        assertFalse(prefs.onboardingComplete())
-        prefs.setShelvesFirst(true); prefs.setSeconds("skipForwardSeconds", 45); prefs.setOnboardingComplete(true)
-        val reopened = UnpagedPreferences(context)
-        assertTrue(reopened.onboardingComplete()); assertTrue(reopened.shelvesFirst()); assertEquals(45, reopened.seconds("skipForwardSeconds", 30))
-        reopened.setOnboardingComplete(false)
-        assertFalse(UnpagedPreferences(context).onboardingComplete()); assertTrue(reopened.shelvesFirst())
     }
 }

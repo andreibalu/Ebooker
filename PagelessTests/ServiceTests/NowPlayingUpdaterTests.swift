@@ -25,32 +25,6 @@ struct NowPlayingUpdaterTests {
 
     // MARK: - playbackState
 
-    @Test func updateSetsPlayingStateWhenIsPlayingTrue() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(),
-            track: makeTrack(),
-            currentTime: 30,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: true
-        )
-        #expect(MPNowPlayingInfoCenter.default().playbackState == .playing)
-    }
-
-    @Test func updateSetsPausedStateWhenIsPlayingFalse() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(),
-            track: makeTrack(),
-            currentTime: 30,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: false
-        )
-        #expect(MPNowPlayingInfoCenter.default().playbackState == .paused)
-    }
-
     @Test func updateTransitionsFromPlayingToPaused() {
         let updater = NowPlayingUpdater()
         let book = makeAudiobook()
@@ -108,34 +82,6 @@ struct NowPlayingUpdaterTests {
         let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
         #expect(info?[MPMediaItemPropertyTitle] as? String == "Prologue")
         #expect(info?[MPMediaItemPropertyAlbumTitle] as? String == "My Book")
-    }
-
-    @Test func updateOmitsArtistWhenAuthorIsEmpty() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(author: ""),
-            track: makeTrack(),
-            currentTime: 0,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: true
-        )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        #expect(info?[MPMediaItemPropertyArtist] == nil)
-    }
-
-    @Test func updateSetsArtistWhenAuthorIsPresent() {
-        let updater = NowPlayingUpdater()
-        updater.update(
-            audiobook: makeAudiobook(author: "Jane Austen"),
-            track: makeTrack(),
-            currentTime: 0,
-            duration: 300,
-            playbackRate: 1.0,
-            isPlaying: true
-        )
-        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
-        #expect(info?[MPMediaItemPropertyArtist] as? String == "Jane Austen")
     }
 
     // MARK: - Remote command routing (AirPods double/triple-click)

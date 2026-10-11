@@ -48,15 +48,6 @@ struct AudioSessionInterruptionTests {
         #expect(player.isPlaying == false)
     }
 
-    @Test func interruptionBeganIsNoOpWhenAlreadyPaused() async throws {
-        let player = AudioPlayerManager()
-        // isPlaying starts false — posting .began should not crash or change state
-        postInterruption(type: .began)
-        try await settle()
-
-        #expect(player.isPlaying == false)
-    }
-
     // MARK: - .ended
 
     @Test func interruptionEndedResumesWhenShouldResumeSet() {

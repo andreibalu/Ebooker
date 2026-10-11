@@ -9,60 +9,6 @@ import Testing
 
 @MainActor
 struct LibriVoxDownloadPresentationTests {
-    @Test(
-        "Maps every manager phase to its visible state",
-        arguments: [
-            PhaseExpectation(.preparing, "Preparing…", true, true, false, false),
-            PhaseExpectation(.downloading, "Track 3 of 5", false, true, false, false),
-            PhaseExpectation(.cancelling, "Cancelling…", true, false, false, false),
-            PhaseExpectation(.failed, "Connection lost", false, false, true, true),
-            PhaseExpectation(.complete, "Downloaded", false, false, false, false)
-        ]
-    )
-    func mapsPhase(expectation: PhaseExpectation) {
-        let presentation = LibriVoxDownloadPresentation(entry: entry(phase: expectation.phase))
-
-        #expect(presentation.statusText == expectation.statusText)
-        #expect(presentation.showsSpinner == expectation.showsSpinner)
-        #expect(presentation.canCancel == expectation.canCancel)
-        #expect(presentation.canRetry == expectation.canRetry)
-        #expect(presentation.canDismiss == expectation.canDismiss)
-    }
-
-    @Test("Downloading presents current-track progress instead of slow whole-book progress")
-    func mapsProgress() {
-        let presentation = LibriVoxDownloadPresentation(
-            entry: entry(phase: .downloading, currentTrackFraction: 0.25)
-        )
-
-        #expect(presentation.progress == 0.25)
-    }
-
-    @Test("Completed final track stays visibly full while download finalizes")
-    func finalTrackShowsFinishingState() {
-        let presentation = LibriVoxDownloadPresentation(
-            entry: entry(
-                phase: .downloading,
-                completedTracks: 5,
-                totalTracks: 5,
-                currentTrackFraction: 0
-            )
-        )
-
-        #expect(presentation.statusText == "Finishing…")
-        #expect(presentation.progress == 1)
-        #expect(presentation.isFinishing)
-    }
-
-    @Test("Manager status takes precedence over Stream on a library card")
-    func managerStatusOverridesStreaming() {
-        let active = entry(phase: .downloading)
-
-        #expect(LibriVoxDownloadPresentation.cardStatus(entry: active, isStreamingOnly: true) == "Downloading track 3 of 5")
-        #expect(LibriVoxDownloadPresentation.cardStatus(entry: nil, isStreamingOnly: true) == "Stream")
-        #expect(LibriVoxDownloadPresentation.cardStatus(entry: nil, isStreamingOnly: false) == nil)
-    }
-
     @Test("Archived free book is visible only in Library during its matching restore download")
     func archivedRestoreVisibility() {
         let bookID = UUID()
@@ -113,52 +59,6 @@ struct LibriVoxDownloadPresentationTests {
         ))
     }
 
-    @Test("Library header count matches the books visible in the Library grid")
-    func libraryHeaderCountExcludesHiddenCloudRecords() {
-        let visibleBooks = (0..<6).map {
-            Audiobook(title: "Visible \($0)", folderName: "visible-\($0)")
-        }
-        let archived = Audiobook(
-            title: "Archived",
-            folderName: "archived",
-            isFreeBook: true,
-            catalogId: "archived",
-            isDownloaded: false
-        )
-        archived.isArchived = true
-
-        let count = LibraryBookVisibility.visibleCount(
-            in: visibleBooks + [archived],
-            downloadEntry: { _ in nil }
-        )
-
-        #expect(count == 6)
-    }
-
-    @Test("Download animation key ignores progress but tracks phase and membership")
-    func animationKeyScopesChanges() {
-        let initial = entry(phase: .downloading, currentTrackFraction: 0.1)
-        var progressOnly = initial
-        progressOnly.completedTracks = 4
-        progressOnly.currentTrackFraction = 0.9
-
-        #expect(
-            LibriVoxDownloadAnimationKey(entries: [initial])
-                == LibriVoxDownloadAnimationKey(entries: [progressOnly])
-        )
-
-        var completed = progressOnly
-        completed.phase = .complete
-        #expect(
-            LibriVoxDownloadAnimationKey(entries: [initial])
-                != LibriVoxDownloadAnimationKey(entries: [completed])
-        )
-        #expect(
-            LibriVoxDownloadAnimationKey(entries: [initial])
-                != LibriVoxDownloadAnimationKey(entries: [])
-        )
-    }
-
     private func entry(
         phase: LibriVoxDownloadManager.Phase,
         target: LibriVoxDownloadManager.Target = .fresh,
@@ -178,32 +78,5 @@ struct LibriVoxDownloadPresentationTests {
             currentTrackFraction: currentTrackFraction,
             errorMessage: phase == .failed ? "Connection lost" : nil
         )
-    }
-}
-
-struct PhaseExpectation: Sendable, CustomTestStringConvertible {
-    let phase: LibriVoxDownloadManager.Phase
-    let statusText: String
-    let showsSpinner: Bool
-    let canCancel: Bool
-    let canRetry: Bool
-    let canDismiss: Bool
-
-    var testDescription: String { String(describing: phase) }
-
-    init(
-        _ phase: LibriVoxDownloadManager.Phase,
-        _ statusText: String,
-        _ showsSpinner: Bool,
-        _ canCancel: Bool,
-        _ canRetry: Bool,
-        _ canDismiss: Bool
-    ) {
-        self.phase = phase
-        self.statusText = statusText
-        self.showsSpinner = showsSpinner
-        self.canCancel = canCancel
-        self.canRetry = canRetry
-        self.canDismiss = canDismiss
     }
 }

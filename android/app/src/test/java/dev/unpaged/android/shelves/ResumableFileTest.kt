@@ -2,7 +2,6 @@ package dev.unpaged.android.shelves
 
 import java.net.ServerSocket
 import kotlin.concurrent.thread
-import java.net.InetSocketAddress
 import java.io.File
 import java.io.IOException
 import org.junit.Assert.*

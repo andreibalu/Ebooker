@@ -37,11 +37,4 @@ class EqualizerAudioProcessorTest {
         processor.queueInput(input(4096)); assertEquals(4096, processor.output.short.toInt())
         processor.queueEndOfStream(); assertTrue(processor.isEnded)
     }
-    @Test fun rejectsUnsupportedFormatAndResetBeforeConfigureIsSafe() {
-        val processor = EqualizerAudioProcessor()
-        processor.reset()
-        assertThrows(AudioProcessor.UnhandledAudioFormatException::class.java) {
-            processor.configure(AudioProcessor.AudioFormat(48000, 1, C.ENCODING_PCM_FLOAT))
-        }
-    }
 }

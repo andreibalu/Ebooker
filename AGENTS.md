@@ -13,7 +13,7 @@ Three names = intentional historical layers — no "fix". New user-facing copy s
 
 ## Android
 
-The native Kotlin/Compose app lives in `android/`. For Android work, read `android/AGENTS.md` and `docs/android/README.md` first; `android/README.md` has the build/lint commands and `docs/android/` holds the planning context. The iOS build and release instructions below apply to the Apple app, not the Android subtree; use `Pageless/` as a behavior reference for Android.
+The native Kotlin/Compose app lives in `android/`. For Android work, read `android/AGENTS.md` first (rules, architecture, known gaps); `android/README.md` has the build/lint/E2E commands and `docs/android/physical-test-checklist.md` the open device qualification. The iOS build and release instructions below apply to the Apple app, not the Android subtree; use `Pageless/` as a behavior reference for Android.
 
 ## External-facing docs
 
@@ -31,7 +31,7 @@ After editing, update the matching public Gist mirror(s).
 
 `site/` is a zero-dependency static site: `node site/build.mjs` writes `site/dist/`; preview with `node site/tools/serve.mjs`. `.github/workflows/pages.yml` deploys on pushes to `main`. Home and 404 pages have English, German, Spanish, French, Italian, and Brazilian Portuguese versions; locale strings live in `site/src/i18n/`. `store-listing/` holds localized App Store drafts for the next version, not the submitted version.
 
-`docs/superpowers/plans/` and `docs/superpowers/specs/` are temporary implementation artifacts. Keep only active work there; delete a plan and its design spec once implementation is complete.
+Implementation plans, design specs, handoff notes and validation logs (e.g. `docs/superpowers/plans/`, `docs/superpowers/specs/`) are temporary. Keep only active work in the repo; once the work merges, fold any durable decision into `AGENTS.md` / `android/AGENTS.md` and delete the artifact. Run evidence belongs in the PR. `docs/research/` holds dated research that is still actionable; delete a note once its recommendation ships or is dropped.
 
 ## App Store Connect Analytics
 
@@ -49,7 +49,11 @@ Releases go out from the CLI, not Xcode's Organizer. **This repo is public — n
 
 The App Store Connect web UI is a slow SPA that often renders blank in a narrow browser pane; the REST API is faster and scriptable for the last mile — `PATCH /v1/appStoreVersions/{id}/relationships/build`, adding the version to the open `reviewSubmission`, and flipping `submitted: true`. An IAP and the app version submitted together each become a `reviewSubmissionItem` on one submission.
 
+Screenshot display types through the API: the 6.9" set (1320×2868) uploads as `APP_IPHONE_67`, because the API rejects `APP_IPHONE_69` as invalid. The 6.5" set is `APP_IPHONE_65`.
+
 **Python here has no `jwt` or `cryptography` module**, so every off-the-shelf ASC snippet fails. Sign the ES256 JWT by piping the `header.payload` through `openssl dgst -sha256 -sign` and converting the DER `SEQUENCE{INTEGER r, INTEGER s}` to raw `r||s` (32 bytes each).
+
+**Xcode Cloud also builds every push to `main` and uploads it**: `ci_scripts/ci_post_clone.sh` takes the marketing version from `VERSION` and the build number from `CI_BUILD_NUMBER`. Once a version is approved, bump `VERSION` and the pbxproj right away, or every `main` push fails upload with ITMS-90186 / ITMS-90062.
 
 Release checklist beyond the build: IAP review screenshot + review notes must match the *shipping* UI (a stale screenshot showing removed copy is a review risk), external docs pushed to their Gists (see above), and release notes saved on the version.
 
@@ -78,29 +82,38 @@ Always pass `-derivedDataPath` into the scratch directory so runs don't fight ov
 the shared DerivedData. Run builds in the background and tail the log — a clean
 build is several minutes.
 
-### Simulator (headless)
+### Simulator
 
-**`Simulator.app` is not installed on this Mac** (`.../Xcode.app/Contents/Developer/Applications/` does not exist), so there is no simulator *window* and the Claude Code iOS Simulator MCP fails with a misleading "Xcode is installed but not selected" error. `xcode-select -p` is already correct — **never** suggest `sudo xcode-select -s` for this.
+Check your toolset before planning a run. Codex has XcodeBuildMCP (`screenshot`, `snapshot_ui`, taps). Claude Code has `mcp__Claude_Code_iOS_Simulator__control` (`attach`, `screenshot`, `tap`, `swipe`, `text`). `xcrun simctl` works in both. Don't try to load a tool that isn't in your toolset, and don't treat its absence as a blocker.
 
-Everything still works headlessly via `simctl`, including visual verification:
+`Simulator.app` is not installed, so there is no Simulator window. The Claude Code Simulator MCP works without it (tested 2026-10-08 on Xcode 27). `xcode-select -p` is correct, so never suggest `sudo xcode-select -s`.
 
 ```bash
-xcrun simctl list devices available          # pick a udid
-xcrun simctl boot <udid>                     # ~10-15s to settle
+xcrun simctl list devices available          # pick a udid every run
+xcrun simctl boot <udid>
+xcrun simctl bootstatus <udid> -b            # wait until booted
 xcrun simctl install <udid> <path>/Pageless.app
 xcrun simctl launch  <udid> andreibaludev.Pageless
-xcrun simctl io <udid> screenshot shot.png   # then read the png
+xcrun simctl io <udid> screenshot shot.png   # then open the png
 ```
+
+- Look up the UDID each run. Don't copy one from an old log.
+- Claude Code: call `attach` first, before building. It opens the panel for the owner and fails harmlessly when nothing is booted. Pass the `udid` on every action. Coordinates are device points from the top left.
+- Each new device raises an access request the owner must answer. With nobody there, Simulator MCP calls on that device fail, so capture with `simctl io` instead.
+- Take a fresh screenshot after every action. Transitions animate, so wait at least 1 second between an action and a capture. A frame showing two screens blended is a missing wait, not a bug. Capture again.
+- With two devices booted, never use `booted` as a selector. `simctl` picks one of them silently.
+- Open and look at the image before calling it visual proof.
 
 Useful extras: `simctl ui <udid> appearance dark|light`, `simctl status_bar <udid> override --time 9:41`, `simctl privacy <udid> grant microphone andreibaludev.Pageless`, `simctl uninstall` for a clean-install/onboarding run. Installed runtimes: iOS 18.0, 26.5, 27.0 — use an 18.0 device to exercise the `Unavailable…` AI fallbacks and a 26.5/27.0 device for the real `FoundationModels` path.
 
 **Device-only cases**: background audio behavior, CarPlay, StoreKit against a real sandbox account, and anything needing on-device Apple Intelligence hardware. `FoundationModels` on a simulator depends on the host Mac having Apple Intelligence enabled; if it can't run, treat that pass as non-AI regression coverage only.
 
-**External packages: none.** Native Apple frameworks only (AVFoundation, MediaToolbox, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI, StoreKit, Intents, CarPlay, Network). RevenueCat was removed — see "In-App Purchases".
+**External packages: none.** Native Apple frameworks only (AVFoundation, MediaToolbox, SwiftData, Speech, FoundationModels, MediaPlayer, PhotosUI, StoreKit, AppIntents, CarPlay, ActivityKit/WidgetKit, Network). RevenueCat was removed — see "In-App Purchases".
 
 ## Info.plist / Target Settings (App Store relevant)
 
-- `ITSAppUsesNonExemptEncryption: false`; `UIBackgroundModes: audio`
+- `ITSAppUsesNonExemptEncryption: false`; `UIBackgroundModes: audio`; `NSSupportsLiveActivities: true` (download Live Activity)
+- URL scheme `unpaged` — `unpaged://library/downloads` routes to the pinned downloads (`UnpagedRoute`)
 - Mic + speech usage descriptions (CarPlay voice search; transcription + AI moment naming)
 - Two scene roles: `UIWindowScene` (default) + `CPTemplateApplicationScene` → `CarPlaySceneDelegate`
 - `IPHONEOS_DEPLOYMENT_TARGET = 18.0`, `TARGETED_DEVICE_FAMILY = 1` (iPhone-only). AI features gated `@available(iOS 26, *)` + runtime-checked, so the binary installs and runs on iOS 18+ with AI surfaces auto-hidden below iOS 26.
@@ -113,23 +126,30 @@ Useful extras: `simctl ui <udid> appearance dark|light`, `simctl status_bar <udi
 Pageless/
 ├── App/             PagelessApp (@main; scene wiring, Siri handoff),
 │                    AppDelegate (ModelContainer; re-runs orphan detection on CloudKit import batches),
-│                    CarPlaySceneDelegate
+│                    CarPlaySceneDelegate, UnpagedRoute (`unpaged://` links),
+│                    E2EFixtures (`#if DEBUG` launch hooks for `e2e/`)
 ├── AppIntents/      AudiobookIntents — `PlayLatestBookIntent` + `UnpagedAppShortcuts`
-├── Configuration/   AIProductID (AI + iCloud ids), CoffeeTipProductID, Products.storekit
+├── Configuration/   PlusProductID, AIProductID (legacy AI + iCloud ids), CoffeeTipProductID, Products.storekit
 │                    (local StoreKit test config, wired into the scheme)
+├── Downloads/       LibriVox background URLSession coordinator, on-disk job manifests,
+│                    download Live Activity controller (see Free Books → Download)
 ├── Models/          SwiftData models + settings/stats enums (see Data Layer)
-├── ViewModels/      six ViewModels (see table)
+├── ViewModels/      see table; ABS view models live together in ABSViewModels.swift
 ├── Views/           ContentView (root tabs + per-tab sort + header Plus button), player /
 │                    detail / settings / cloud / moment views; subfolders FreeBooks/,
-│                    ReadingStats/, Onboarding/
+│                    ReadingStats/, Onboarding/, Shelves/Audiobookshelf/
 ├── Services/        playback, import/AI, stats, EQ, LibriVox, CarPlay, IAP, iCloud sync
 │   └── Protocols/   TranscriptionProviding, SegmentTranscribing, MomentAnalyzing,
-│                    AudioExtracting, RecapProviding, FreeBookDownloading
+│                    AudioExtracting, RecapProviding, FreeBookDownloading, ABSCredentialStoring
 │                    (iOS<26 `Unavailable…` fallbacks live here too)
-└── Utilities/       TimeFormatter, BookDescriptionFormatting, Color+Theme (`amber` accent)
+└── Utilities/       TimeFormatter, BookDescriptionFormatting, Color+Theme (`amber` accent),
+                     AppMotion, LegalURLs
+PagelessDownloadActivity/   widget extension rendering the download Live Activity
+e2e/                 native simulator E2E suite (see Testing)
+screenshots/         App Store screenshot generator (Bun/Next.js; see its README)
 ```
 
-`PagelessTests/` — Swift Testing: Mocks/ (one per protocol service), ModelTests/, ServiceTests/, ViewModelTests/; SchemaCompatibilityTests validates CloudKit constraints. `PagelessUITests/` — launch + UI tests.
+`PagelessTests/` — retained isolated regressions with shared mocks and media fixtures; SchemaCompatibilityTests validates CloudKit constraints. `PagelessUITests/` — launch + UI tests.
 
 ## Data Layer (SwiftData)
 
@@ -162,6 +182,7 @@ All `@MainActor @Observable`; views create them with `@State`. Initializer injec
 | `BrowseLibriVoxViewModel` | search, `syncState`, `featuredBooks`, language/genre/duration filters | `LibriVoxAPIClient`, `LibriVoxCatalogSync` (via SwiftData) |
 | `LibriVoxBookDetailViewModel` | persisted identity, `addToLibraryState`, shared-manager request routing | `FreeBookIdentityService`, `StreamingLibraryService` |
 | `LibriVoxCollectionViewModel` | collection `state`, locally ordered `books` | `LibriVoxAPIClient`, `LibriVoxCatalogSync` (via SwiftData) |
+| `ABSConnectViewModel` / `ABSBrowseViewModel` / `ABSBookDetailViewModel` | connect form + insecure-host warning, library/sections/search, item detail + add/play | `AudiobookshelfClient`, `ABSAccount`, `AudiobookshelfLibraryService` |
 
 ## Services
 
@@ -180,7 +201,7 @@ Protocol implementations typically `struct`. `LibraryImportService` and catalog/
 
 - `MomentNamingService` — moment analysis: name, note, categories, quoteLine, characters, mood. `RecapService` — `RecapGenerationResult` (recap text + optional `progressHeadline`). Both `@available(iOS 26, *)`.
 - **Transcription is two-tier.** Primary: `SpeechAnalyzerTranscriptionService` (`SegmentTranscribing`, iOS 26 `SpeechAnalyzer`/`SpeechTranscriber`) reads the audio file's frame range directly — no export, no temp file, no length cap, punctuated output, **no speech-recognition permission**. Any throw falls back silently to the legacy path: `AudioExtractionService` export + `TranscriptionService` (SFSpeechRecognizer, `addsPunctuation`, on-device when supported, en-US locale fallback) — the only path that requests speech authorization. Don't add an up-front auth gate to smart save/recap; auth belongs to the fallback alone.
-- **Generation hardening (both services).** `SystemLanguageModel(guardrails: .permissiveContentTransformations)` — default guardrails false-positive on fiction (violence/romance); these are built for transforming the user's own content. Greedy sampling + `maximumResponseTokens` for deterministic, latency-bounded extraction. Mood/categories use `@Guide(.anyOf…)` constrained decoding; guide literals are duplicated (macro args), so `categoryGuideValues`/`moodGuideValues` + unit tests guard drift against `MomentEnums`. `FoundationModelGeneration.run` maps `LanguageModelSession.GenerationError` → `unsafeContent`/`failed` and retries once (context-window overflow → retry with transcript tail; rate-limit/concurrent → delayed retry). Catch `MomentNamingError.unsafeContent`/`RecapError.unsafeContent` — never string-match error descriptions.
+- **Generation hardening (both services).** `SystemLanguageModel(guardrails: .permissiveContentTransformations)` — default guardrails false-positive on fiction (violence/romance); these are built for transforming the user's own content. Greedy sampling + `maximumResponseTokens` for deterministic, latency-bounded extraction. Mood/categories use `@Guide(.anyOf…)` constrained decoding; guide literals are duplicated (macro args), so keep the actual `@Guide` values aligned with `MomentEnums` when changing categories or moods. `FoundationModelGeneration.run` maps `LanguageModelSession.GenerationError` → `unsafeContent`/`failed` and retries once (context-window overflow → retry with transcript tail; rate-limit/concurrent → delayed retry). Catch `MomentNamingError.unsafeContent`/`RecapError.unsafeContent` — never string-match error descriptions.
 - **Verified-verbatim quotes.** `MomentNamingService.verifiedQuote` keeps the model's quote only if the transcript contains it (case/diacritics/punctuation-folded), snaps near-misses to the best-matching transcript sentence (≥70% word overlap), drops fabrications.
 - **Prewarm.** `MomentAnalyzing.prewarm()` (default no-op) loads the model ahead of the first analysis; `PlayerView` calls `viewModel.prewarmSmartSave()` on appear/when smart save flips on. The prewarmed session (`PrewarmedMomentSession`) is consumed by exactly one analysis — sessions are multi-turn, never reuse across analyses.
 - `AppleIntelligenceCapability` — runtime detection gating AI UI visibility; iOS-18-safe (internal `if #available(iOS 26, *)` branches). `isSmartNamingAvailable` gates on model availability only (SFSpeechRecognizer is no longer a hard requirement). AI is isolated behind protocols; the app works fully without Apple Intelligence.
@@ -210,10 +231,10 @@ All purchases are StoreKit-owned. `PlusEntitlementStore.shared` owns AI and iClo
 
 ### Free Books — two parallel systems (by design)
 
-1. **LibriVox catalog (primary, iPhone)** — 20,000+ books, cached in `LibriVoxBook` via `LibriVoxCatalogSync` (24h incremental sync). UI: "Free Books" tab → `BrowseLibriVoxView` → `LibriVoxBookDetailView`.
+1. **LibriVox catalog (primary, iPhone)** — 20,000+ books, cached in `LibriVoxBook` via `LibriVoxCatalogSync` (24h incremental sync). UI: "Shelves" tab (internal `LibraryTab.freeBooks`, LibriVox source) → `BrowseLibriVoxView` → `LibriVoxBookDetailView`.
    - **Browse design ("Open Shelf" editorial).** `BrowseLibriVoxView` types through a private 4-size `FBType` scale (eyebrow 10 / body 12 / title 15 / headline 19) — serif (`design: .serif`) titles/authors/blurbs, small-caps `FBEyebrow` metadata, numbered chart rows. Section headers ("Collections", "Popular Classics", …) keep the app's classic voice: `.subheadline.weight(.semibold)` + `.primary` + hairline rule — don't re-grow them or swap them to eyebrows. Filter labels (`LANGUAGE/GENRE/LENGTH`) always `.primary`; selection = 2pt amber underline, not color. **Daily hero**: `todaysPick` resolved by `loadTodaysPick` (deterministic `curatedClassicIDs[dayOfYear % count]`, local cache only); `chartBooks` excludes it so hero and chart never duplicate.
    - **Add to Library (streaming)** — `StreamingLibraryService` creates an `Audiobook` with `isDownloaded == false` + remote URLs per `AudioTrack`. No files written; needs network at playback.
-   - **Download** — session-wide `LibriVoxDownloadManager` owns task lifetime and shared progress, cancellation, retry, failure, and completion state. `LibriVoxDownloadService` fetches all tracks; tags `isFreeBook = true`, `catalogId = book.id`, keeps each track's `remoteURLString`, and promotes streaming/archived entries in place. Free Books and Library show the same pinned download state; detail routes observe/request work without owning it.
+   - **Download** — session-wide `LibriVoxDownloadManager` (built by `LibriVoxDownloadRuntime`) owns shared progress, cancellation, retry, failure, and completion state. Transfers run on a background `URLSession` through `LibriVoxBackgroundDownloadCoordinator`, with per-job manifests on disk (`LibriVoxDownloadManifestStore`) so work survives suspension and relaunch; `AppDelegate` routes background-session events. `DownloadLiveActivityController` mirrors progress into a Live Activity rendered by the `PagelessDownloadActivity` extension. `LibriVoxDownloadService` fetches all tracks; tags `isFreeBook = true`, `catalogId = book.id`, keeps each track's `remoteURLString`, and promotes streaming/archived entries in place. Shelves and Library show the same pinned download state; detail routes observe/request work without owning it.
    - **Sample** — `SamplePlayer`, 20s preview starting 30s into the first track; inline icon = shared `LibriVoxSampleButton` (in `LibriVoxBookRow.swift`). `LibriVoxBookDetailView.fetchSampleURL` resolves the track URL itself (browseViewModel → `book.cachedTracks` → audiotracks feed) because pushes from the alternatives section carry no `browseViewModel` — don't make sample playback depend on the VM being present. **Network gating** — check `NetworkMonitor.shared.isConnected` before sample play, sync, streaming.
    - **Covers intentionally not fetched** (LibriVox cover URLs unreliable): both services set `coverArtData = nil`; `GeneratedCoverView` renders the letter template. Don't reintroduce remote cover fetches here.
    - **Classics-first load order.** `BrowseLibriVoxViewModel.triggerSyncIfNeeded` awaits `performPreload` (curated `curatedClassicIDs` via `LibriVoxAPIClient.fetchBooks(ids:)` → `LibriVoxCatalogSync.seed`) **before** kicking off the full `performSync`. Search and filters stay interactive throughout, with a non-blocking preparation banner (`isLoadingFullCatalog`).
@@ -221,7 +242,7 @@ All purchases are StoreKit-owned. `PlusEntitlementStore.shared` owns AI and iClo
    - **Search during preparation.** Text/genre requests use the live feed and merge matching cached rows. The feed has no language or duration query parameter: those filters narrow results locally, with a partial-results notice for an incomplete cache. Saved-page updates refresh cached results and filter menus at most every two seconds; sync completion reruns the active query locally. `extended=1` is required for genres, and query values must escape `&`, `=`, and `+`.
    - **Hardened API client — never surface raw `DecodingError`.** The feed returns `{"error":"…"}` with HTTP 200 (no match) or HTML (server hiccup); `fetchData` validates status (→ `LibriVoxAPIError.serverUnavailable`), the lenient `decode` helper maps error-envelope/empty to `[]` and unparseable to `.unreadableResponse`. `URLError` deliberately **not** wrapped so `isNetworkUnavailable` offline classification still works. `LibriVoxCatalogSync.fetchPageWithRetry` retries transient page failures (3 attempts, linear backoff).
    - **Offline/empty states** (`BrowseLibriVoxView`): `isOfflineWithNoData` / `isOfflineWithCachedData` / `loadFailedWithNoData`, all featured-aware (cached classics count as "has data").
-   - **Collections** — `LibriVoxCollection.all`: hand-curated static shelves (struct + bundled LibriVox project IDs, no backend), horizontal card rail atop `featuredBooksList` → `LibriVoxCollectionView`. `LibriVoxCollectionViewModel.load` resolves local-first from the `LibriVoxBook` cache, fetches only missing IDs via `LibriVoxAPIClient.fetchBooks(ids:)` and seeds through `LibriVoxCatalogSync.seed` (so the full sync dedupes by `id`); curated ID order preserved; offline-with-partial-cache degrades to cached subset. IDs must be verified against the live feed API before adding.
+   - **Collections** — `LibriVoxCollection.all`: hand-curated static shelves (struct + bundled LibriVox project IDs, no backend), horizontal card rail atop the browse chart (`collectionsRail` in `browseContent`) → `LibriVoxCollectionView`. `LibriVoxCollectionViewModel.load` resolves local-first from the `LibriVoxBook` cache, fetches only missing IDs via `LibriVoxAPIClient.fetchBooks(ids:)` and seeds through `LibriVoxCatalogSync.seed` (so the full sync dedupes by `id`); curated ID order preserved; offline-with-partial-cache degrades to cached subset. IDs must be verified against the live feed API before adding.
    - **Other Recordings** — `LibriVoxAlternativesFinder`: groups re-recordings of the same text from the local cache (zero network). Normalized title key strips only *known* LibriVox suffixes — `(version N)`, `(dramatic reading)`, `(version N dramatic reading)`, `(abridged)`, `(unabridged)`, `(solo)`, `(group)`, stacked OK — then folds case/diacritics; unknown parentheticals (translations) never merge. Match = same `language` + same `authorDisplay` (#Predicate) + equal key, excluding self; sort original → versions ascending → other readings. `LibriVoxAlternativesSection` (rows: version badge / duration / inline 20s sample / push to detail) shared by `LibriVoxBookDetailView` (bottom) and `AudiobookDetailView` (free books, resolved via `catalogId`). **Empty state must render a zero-height anchor, not nothing** — a structurally absent view never fires the `.task` that loads alternatives.
 
 2. **Legacy seed catalog (CarPlay)** — `FreeBookCatalogService`: 5 hand-picked Internet Archive classics, downloaded via `FreeBookDownloadService` (background URLSession; published progress/errors). Consumed only by `CarPlayCoordinator` + `LibraryViewModel`. **Don't extend this path for new iPhone features — use the LibriVox path.**
@@ -257,19 +278,19 @@ Standalone welcome flow, shown once on first launch (and via Settings → "Reset
 
 - **`OnboardingManager`** — completion gate only: `isComplete` (persisted as `onboardingComplete`), `complete()`, `reset()`. Init migrates legacy users (old `onboardingPhase == 3` counts as complete). `ContentView` presents `OnboardingFlowView` via `.fullScreenCover` while `!isComplete`.
 - **`OnboardingFlowView`** — paged vertical `ScrollView` (`.scrollTargetBehavior(.paging)` + `.scrollPosition(id:)`), seven full-screen scenes (Choice → Permissions → Playback → Stats → Apple Intelligence → iCloud → Done), right-edge progress-dot rail. The active scene index drives reveal/count-up/stagger animations — `.onAppear` is wrong here (paged rows instantiate before they center).
-- **Preference controls bind live to existing `@AppStorage` keys** (`resumeBacktrackSeconds`, `skipBackSeconds`, `skipForwardSeconds`, `momentBacktrackSeconds`) — persistence automatic, final-scene summary shares one source of truth. "Open Library" calls `complete()` and routes to the chosen home tab. **"Free books" choice persists** via `@AppStorage("startOnFreeBooks")`: when true the app lands on Free Books on **every** launch (one-time `.onAppear` guard in `ContentView` applies it for relaunched users) and tab order becomes Favorites / Free Books / Library (`tabOrder` computed property drives both `tabPicker` and the swipeable `libraryContent`). "My books" + all legacy users: false — Favorites first, order Favorites / Library / Free Books. Internal `.allBooks` symbols and stored keys remain unchanged.
+- **Preference controls bind live to existing `@AppStorage` keys** (`resumeBacktrackSeconds`, `skipBackSeconds`, `skipForwardSeconds`, `momentBacktrackSeconds`) — persistence automatic, final-scene summary shares one source of truth. "Open Library" calls `complete()` and routes to the chosen home tab. **"Shelves" choice persists** via `@AppStorage("startOnFreeBooks")`: when true the app lands on Shelves on **every** launch (one-time `.onAppear` guard in `ContentView` applies it for relaunched users) and tab order becomes Favorites / Shelves / Library (`LibraryTab.order`; it drives both `tabPicker` and the swipeable `libraryContent`). "My books" + all legacy users: false — order Favorites / Library / Shelves. Internal `.allBooks`/`.freeBooks` symbols and stored keys remain unchanged.
 - **Scene 2 (Permissions) is the app's only proactive permission request point** — `OBPermissionsScene`: two cards (Microphone via `AVAudioApplication.requestRecordPermission`, Speech Recognition via `SFSpeechRecognizer.requestAuthorization`); buttons animate to "Allowed" only when the system grants. `.denied`/`.restricted` taps open the app's Settings page — no extra error UI. Cards seed from live authorization status (re-seeded on `scenePhase == .active` to catch Settings grants). Skippable — never block scrolling; both-granted auto-advances after ~0.8s only if still on the scene. The Done summary's "Voice access" row (Allowed / Mic only / Speech only / Skipped) reads the same root state. Launch-time priming was removed; the lazy speech-auth request in `TranscriptionService` stays as the safety net.
 - **Scenes 5 (Apple Intelligence) and 6 (iCloud Sync) are informational only** — no paywall, no toggles; don't wire purchase/sync state into them.
-- **`OnboardingScenes`** = seven scenes + widgets (choice cards, permission cards, `OBRulerPicker`, chip rows, stepper, `OBHeatmap`, moment-naming card, `OBSyncGraphic`, summary). **`OnboardingTheme`** = tokens (`OB.*` colors, `OBMotion`), type primitives (`OBEyebrow`/`OBHeadline`/`OBSub`/`obSerif`), `obReveal`/`obParallax` modifiers.
+- **`OnboardingScenes`** = seven scenes + widgets (choice cards, permission cards, `OBResumeSlider`, chip rows, stepper, `OBHeatmap`, moment-naming card, `OBSyncGraphic`, summary). **`OnboardingTheme`** = tokens (`OB.*` colors, `OBMotion`), type primitives (`OBEyebrow`/`OBHeadline`/`OBSub`/`obSerif`), `obReveal`/`obParallax` modifiers.
 - **Must render identically on every device/iOS version**: fixed point sizes, fixed 402pt centered content column, `.dynamicTypeSize(.large)` clamp at root (never Dynamic Type), app's own Appearance choice applied at the window (see Settings & Preferences). All animations honor Reduce Motion.
 
 ### iCloud Sync (paid feature)
 
-Library metadata, progress, moments, EQ config, reading sessions sync via CloudKit private DB (container `iCloud.andreibaludev.Pageless`). Audio files are **not** synced — re-acquired per device. Gated by the monthly subscription (see In-App Purchases).
+Library metadata, progress, moments, EQ config, reading sessions sync via CloudKit private DB (container `iCloud.andreibaludev.Pageless`). Audio files are **not** synced — re-acquired per device. Gated by Unpaged Plus or an active legacy iCloud Sync subscription (see In-App Purchases).
 
 - **`IcloudSyncGate`** — single decision point: active subscription (`PlusEntitlementStore.isSubscribedAtLaunch()`) AND `iCloudSyncEnabled` UserDefaults toggle AND `FileManager.ubiquityIdentityToken`. If any is false, `AppDelegate` builds the container with `.none` database.
 - **Orphan detection** — `OrphanDetectionService` runs at launch and after every `NSPersistentCloudKitContainer.eventChangedNotification` import. A book marked `isDownloaded = true` whose storage folder is absent gets flipped to `isDownloaded = false` (recoverable orphan).
-- **Fingerprinting** — `LibraryImportService` computes a SHA-256 fingerprint (first 16 bytes of audio data) per imported track → `AudioTrack.contentFingerprint`. `FingerprintBackfillService` backfills existing tracks on first launch after upgrade.
+- **Fingerprinting** — `LibraryImportService.fingerprint` hashes SHA-256 over the first + last 1 MB (whole file if ≤ 2 MB) + little-endian file size + duration in ms, per imported track → `AudioTrack.contentFingerprint`. Android's backup restore uses the same algorithm; keep them in step. `FingerprintBackfillService` backfills existing tracks on first launch after upgrade.
 - **Restore on re-import (own books)** — importing on a new device, `LibraryViewModel` calls `OrphanRestoreService.findMatch` (fingerprint vs orphan candidates). Match → `RestoreMatchSheet` ("Restore from iCloud" / "Add as new"). `adopt` rewrites the orphan's `AudioTrack` records in place, preserving moments/progress/EQ.
 - **Match by id (free books)** — free books match on `catalogId`, not fingerprint. `FreeBookIdentityService` resolves downloaded, streaming, or archived matches deterministically. Add/download/legacy CarPlay paths reuse that row; archived rows reactivate in place, preserving progress, moments, favorites, and EQ. No "Add as New" path exists for a matched free book. Removing a free book with sync on calls `LibraryImportService.archiveFreeBook` (drops files, sets `isArchived = true`, keeps the synced record + remote URLs). `isArchived` = free-book analogue of an own book's `!isDownloaded` orphan state — needed because free `!isDownloaded` alone is ambiguous (active streaming vs removed).
 - **`CloudLibraryView`** — the full iCloud Library (every book ever added, so the backup is visibly verifiable), not just orphans. Reachable via the library-header Plus button → `PlusHubView` → "iCloud Library" (row shown only when `IcloudSyncGate.isEnabled()`), and via Settings → iCloud Sync → iCloud Library. (The header button was the iCloud button, which had replaced the old header sort button — sort moved to per-tab chevron menus.) Four mutually exclusive buckets: **On this iPhone** (`isDownloaded && !isArchived`), **Streaming** (`!isDownloaded && isFreeBook && !isArchived`, status-only), **In iCloud only** (`!isDownloaded && !isFreeBook`, "Locate…" picker), **Removed free books** (`isArchived && isFreeBook`, "Stream"). Swipe-to-delete on own rows = the **only** permanent cloud-delete path.
@@ -307,8 +328,17 @@ Library metadata, progress, moments, EQ config, reading sessions sync via CloudK
 
 ## Testing
 
-Swift Testing (`import Testing`). Codex: `mcp__XcodeBuildMCP__test_sim` (or `test_device`) with `extraArgs: ["-parallel-testing-enabled", "NO"]`. Claude Code: the `xcodebuild … test -parallel-testing-enabled NO` form from "Build & Run". Full suite is ~492 unit tests across 59 suites plus 6 UI tests; run it on the simulator before any release build.
+These rules apply to both iOS and Android:
 
-- Mocks in `PagelessTests/Mocks/`: `MockTranscriptionService`, `MockSegmentTranscriber`, `MockMomentAnalyzer`, `MockRecapService`, `MockAudioExtractor`, `MockFreeBookDownloadService` — one per protocol service. LibriVox-path code is tested integration-style against in-memory SwiftData containers; if you add a protocol there, add a matching mock.
+- Never write unit tests after you write code.
+- Highly prefer E2E tests as the sole testing mechanism. Use them to verify complex features work. At the end of E2E tests, produce a verifiable and repeatable artifact.
+- If you must test a system in isolation, first write down all the ways it could fail, then write the code. Write the isolated tests before the implementation, using that failure analysis.
+- Keep an isolated test only when it catches a concrete bug the E2E assertions miss. Name that failure and the E2E coverage gap. Assertions that only repeat constructor defaults, getters, copied constants, mock-call bookkeeping or behavior already asserted by E2E do not justify a unit test.
+- E2E evidence must include the exact rerun command, source revision and working-tree patch, device/runtime, fixture setup and machine-readable results. Include screenshots, recordings or exported state when needed to verify the feature's outcome. Preserve evidence outside Git and link it in the handoff or PR.
+
+Run the native E2E suite and any retained isolated regression tests before a release build. For retained Swift Testing tests (`import Testing`), Codex uses `mcp__XcodeBuildMCP__test_sim` (or `test_device`) with `extraArgs: ["-parallel-testing-enabled", "NO"]`; Claude Code uses the `xcodebuild … test -parallel-testing-enabled NO` form from "Build & Run". `e2e/COVERAGE.md` records E2E scope and qualification boundaries.
+
+- Reuse helpers in `PagelessTests/Mocks/` only for retained isolated regressions. Adding a protocol does not require adding a mock or a unit-test suite.
 - **In-memory test containers: always pass `cloudKitDatabase: .none`** to `ModelConfiguration`. The default `.automatic` picks up the host app's CloudKit entitlement and fails CloudKit-shape validation. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one intentional `.private(...)` validation, via a file-backed temp store.
 - **Hold the container in a local**: `let container = try makeContainer(); let context = container.mainContext` — never `try makeContainer().mainContext` (container deallocates; first fetch crashes the host app).
+- **Native E2E (`e2e/`)** — tester-army/e2e suite driving the real app on a dedicated `Unpaged e2e` simulator, with fake LibriVox/Audiobookshelf servers and the local StoreKit config. DEBUG-only launch hooks live in `App/E2EFixtures.swift`. Setup, hooks and the iOS 18 smoke filter: `e2e/README.md`; flow matrix and latest run: `e2e/COVERAGE.md`.

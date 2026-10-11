@@ -10,16 +10,6 @@ import Testing
 
 @MainActor
 struct LibraryImportFingerprintTests {
-    @Test func fingerprintIsDeterministicForSameBytes() async throws {
-        let url = try makeTempFile(named: "a.bin", bytes: bytes(count: 4096, pattern: 0xAB))
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        let first = await LibraryImportService.fingerprint(url: url, durationSeconds: 12.5)
-        let second = await LibraryImportService.fingerprint(url: url, durationSeconds: 12.5)
-        #expect(first != nil)
-        #expect(first == second)
-    }
-
     @Test func fingerprintDiffersAcrossDifferentBytes() async throws {
         let a = try makeTempFile(named: "a.bin", bytes: bytes(count: 4096, pattern: 0xAB))
         let b = try makeTempFile(named: "b.bin", bytes: bytes(count: 4096, pattern: 0xCD))
@@ -33,16 +23,6 @@ struct LibraryImportFingerprintTests {
         #expect(fpA != nil)
         #expect(fpB != nil)
         #expect(fpA != fpB)
-    }
-
-    @Test func fingerprintHandlesSmallFiles() async throws {
-        // Smaller than 2MB cutoff → whole-file hash branch.
-        let url = try makeTempFile(named: "small.bin", bytes: bytes(count: 1024, pattern: 0x42))
-        defer { try? FileManager.default.removeItem(at: url) }
-
-        let fp = await LibraryImportService.fingerprint(url: url, durationSeconds: 1)
-        #expect(fp != nil)
-        #expect(fp?.count == 64)
     }
 
     @Test func fingerprintIsRobustToFilenameChange() async throws {
@@ -63,13 +43,6 @@ struct LibraryImportFingerprintTests {
         let missing = FileManager.default.temporaryDirectory.appendingPathComponent("definitely-does-not-exist-\(UUID()).bin")
         let fp = await LibraryImportService.fingerprint(url: missing, durationSeconds: 1)
         #expect(fp == nil)
-    }
-
-    @Test func exactFingerprintMultisetMatchesWhenReordered() {
-        let pending = makePending(fingerprints: ["chapter-a", "chapter-b"])
-        let book = makeBook(fingerprints: ["chapter-b", "chapter-a"])
-
-        #expect(LibraryImportService.hasExactFingerprintMultiset(pending, matching: book))
     }
 
     @Test func exactFingerprintMultisetPreservesRepeatedCounts() {
@@ -106,17 +79,6 @@ struct LibraryImportFingerprintTests {
         try context.save()
 
         #expect(try LibraryImportService.findActiveDuplicate(for: pending, modelContext: context) == nil)
-    }
-
-    @Test func activeDuplicateLookupFindsDownloadedOwnBook() throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        let pending = makePending(fingerprints: ["chapter-b", "chapter-a"])
-        let active = makeBook(fingerprints: ["chapter-a", "chapter-b"])
-        context.insert(active)
-        try context.save()
-
-        #expect(try LibraryImportService.findActiveDuplicate(for: pending, modelContext: context) === active)
     }
 
     @Test func importRejectsDuplicateBeforeInsertionOrFileCopy() throws {

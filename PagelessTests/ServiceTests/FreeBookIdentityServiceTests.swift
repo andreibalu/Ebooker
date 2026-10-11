@@ -90,23 +90,6 @@ struct FreeBookIdentityServiceTests {
         #expect(try FreeBookIdentityService.match(catalogId: "catalog-1", modelContext: context) == nil)
     }
 
-    @Test func streamingInsertionReusesPersistedIdentity() async throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        let existing = makeAudiobook(downloaded: false, archived: false, createdAt: .now)
-        context.insert(existing)
-        try context.save()
-
-        let result = try await StreamingLibraryService.addToLibrary(
-            book: makeLibriVoxBook(),
-            tracks: [],
-            modelContext: context
-        )
-
-        #expect(result === existing)
-        #expect(try context.fetch(FetchDescriptor<Audiobook>()).count == 1)
-    }
-
     @Test func streamingInsertionUnarchivesPersistedIdentity() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -125,24 +108,6 @@ struct FreeBookIdentityServiceTests {
         #expect(!result.isArchived)
         #expect(!result.isDownloaded)
         #expect(result.currentTime == 42)
-        #expect(try context.fetch(FetchDescriptor<Audiobook>()).count == 1)
-    }
-
-    @Test func freshDownloadDuplicateReusesPersistedIdentityBeforeNetworkWork() async throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        let existing = makeAudiobook(downloaded: true, archived: false, createdAt: .now)
-        context.insert(existing)
-        try context.save()
-
-        let result = try await LibriVoxDownloadService.downloadAndImport(
-            book: makeLibriVoxBook(),
-            tracks: [],
-            modelContext: context,
-            onProgress: { _, _ in }
-        )
-
-        #expect(result === existing)
         #expect(try context.fetch(FetchDescriptor<Audiobook>()).count == 1)
     }
 

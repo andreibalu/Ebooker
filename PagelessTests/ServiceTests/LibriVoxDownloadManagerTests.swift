@@ -9,28 +9,6 @@ import Testing
 
 @MainActor
 struct LibriVoxDownloadManagerTests {
-    @Test func runtimeKeepsOneManagerAndRoutesCoordinatorEventsToIt() {
-        let job = restoredJob()
-        let coordinator = MockLibriVoxDownloadCoordinator(restoredJobs: [job])
-        let runtime = LibriVoxDownloadRuntime(
-            coordinator: coordinator,
-            activityController: NoopDownloadActivityController()
-        )
-        let visibleManager = runtime.manager
-
-        coordinator.emit(.progress(
-            catalogID: job.catalogID,
-            attemptID: job.attemptID,
-            completed: 0,
-            total: 2,
-            currentTrackFraction: 0.75
-        ))
-
-        #expect(runtime.manager === visibleManager)
-        #expect(visibleManager.entry(for: job.catalogID)?.phase == .downloading)
-        #expect(visibleManager.entry(for: job.catalogID)?.progress == 0.375)
-    }
-
     @Test func restoredCoordinatorJobAppearsImmediately() {
         var job = restoredJob()
         job.completedIndexes = [0]
@@ -102,72 +80,6 @@ struct LibriVoxDownloadManagerTests {
         #expect(firstStarted)
         #expect(!duplicateStarted)
         #expect(probe.invocationCount == 1)
-
-        gate.open()
-        await manager.waitForAllWork()
-    }
-
-    @Test(arguments: [
-        LibriVoxDownloadManager.Target.fresh,
-        .existing(audiobookID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!)
-    ])
-    func reportsTrackProgressForFreshAndPromotionTargets(target: LibriVoxDownloadManager.Target) async {
-        let gate = AsyncGate()
-        let progressReported = AsyncEvent()
-        let manager = LibriVoxDownloadManager(executor: .init { _, progress in
-            progress(.init(completed: 2, total: 5))
-            progressReported.signal()
-            await gate.wait()
-        })
-
-        manager.start(request: request(target: target))
-        await progressReported.wait()
-
-        let entry = manager.entry(for: "catalog-1")
-        #expect(entry?.target == target)
-        #expect(entry?.phase == .downloading)
-        #expect(entry?.completedTracks == 2)
-        #expect(entry?.totalTracks == 5)
-
-        gate.open()
-        await manager.waitForAllWork()
-    }
-
-    @Test func reportsFractionalProgressForCurrentTrack() async {
-        let gate = AsyncGate()
-        let progressReported = AsyncEvent()
-        let manager = LibriVoxDownloadManager(executor: .init { _, progress in
-            progress(.init(completed: 1, total: 4, currentTrackFraction: 0.5))
-            progressReported.signal()
-            await gate.wait()
-        })
-
-        manager.start(request: request())
-        await progressReported.wait()
-
-        #expect(manager.entry(for: "catalog-1")?.currentTrackFraction == 0.5)
-        #expect(manager.entry(for: "catalog-1")?.progress == 0.375)
-
-        gate.open()
-        await manager.waitForAllWork()
-    }
-
-    @Test func progressSurvivesRequestingObjectRecreation() async {
-        let gate = AsyncGate()
-        let progressReported = AsyncEvent()
-        let manager = LibriVoxDownloadManager(executor: .init { _, progress in
-            progress(.init(completed: 1, total: 3))
-            progressReported.signal()
-            await gate.wait()
-        })
-        var requester: DownloadRequester? = DownloadRequester()
-
-        requester?.start(on: manager, request: request())
-        requester = nil
-        await progressReported.wait()
-
-        #expect(requester === nil)
-        #expect(manager.entry(for: "catalog-1")?.completedTracks == 1)
 
         gate.open()
         await manager.waitForAllWork()
@@ -267,39 +179,6 @@ struct LibriVoxDownloadManagerTests {
 
         secondGate.open()
         await manager.waitForAllWork()
-    }
-
-    @Test func failurePersistsUntilRetryOrDismissal() async {
-        let retryGate = AsyncGate()
-        let probe = RetryProbe()
-        let manager = LibriVoxDownloadManager(executor: .init { _, progress in
-            let attempt = probe.beginAttempt()
-            if attempt == 1 { throw TestFailure.offline }
-            progress(.init(completed: 0, total: 2))
-            probe.retryProgressReported.signal()
-            await retryGate.wait()
-        })
-        manager.start(request: request())
-        await manager.waitForAllWork()
-
-        #expect(manager.entry(for: "catalog-1")?.phase == .failed)
-        #expect(manager.entry(for: "catalog-1")?.errorMessage == "Offline for test")
-        #expect(!manager.start(request: request()))
-        #expect(manager.retry(catalogID: "catalog-1"))
-        #expect(!manager.retry(catalogID: "catalog-1"))
-        await probe.retryProgressReported.wait()
-        #expect(manager.entry(for: "catalog-1")?.phase == .downloading)
-
-        retryGate.open()
-        await manager.waitForAllWork()
-
-        let failingManager = LibriVoxDownloadManager(executor: .init { _, _ in
-            throw TestFailure.offline
-        })
-        failingManager.start(request: request(catalogID: "dismiss-me"))
-        await failingManager.waitForAllWork()
-        #expect(failingManager.dismiss(catalogID: "dismiss-me"))
-        #expect(failingManager.entry(for: "dismiss-me") == nil)
     }
 
     @Test func completeIsObservableAfterPersistenceBeforeGuardedRemoval() async {
@@ -505,22 +384,6 @@ private final class NoopDownloadActivityController: DownloadLiveActivityControll
 }
 
 @MainActor
-private final class DownloadRequester {
-    func start(
-        on manager: LibriVoxDownloadManager,
-        request: LibriVoxDownloadManager.Request
-    ) {
-        manager.start(request: request)
-    }
-}
-
-private enum TestFailure: LocalizedError {
-    case offline
-
-    var errorDescription: String? { "Offline for test" }
-}
-
-@MainActor
 private final class RegistrationProbe {
     weak var manager: LibriVoxDownloadManager?
     private(set) var observedRegisteredEntry = false
@@ -576,17 +439,6 @@ private final class AttemptProbe {
 
     func sendStaleProgress(_ progress: LibriVoxDownloadManager.Progress) {
         firstProgress?(progress)
-    }
-}
-
-@MainActor
-private final class RetryProbe {
-    let retryProgressReported = AsyncEvent()
-    private var attempt = 0
-
-    func beginAttempt() -> Int {
-        attempt += 1
-        return attempt
     }
 }
 

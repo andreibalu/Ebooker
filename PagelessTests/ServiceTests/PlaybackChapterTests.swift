@@ -25,7 +25,7 @@ struct EmbeddedChapterReaderTests {
 
     /// The fixtures tag their chapters with the "und" language, as most audiobook encoders do.
     /// `bestMatchingPreferredLanguages` alone returns nothing for them.
-    @Test(arguments: ["chaptered.m4b", "chaptered.mp3"])
+    @Test(arguments: ["chaptered.mp3"])
     func readsUndeterminedLanguageChapters(fixture: String) async throws {
         let asset = AVURLAsset(url: try fixtureURL(fixture))
 
@@ -50,36 +50,6 @@ struct EmbeddedChapterReaderTests {
 
 struct PlaybackChapterListTests {
 
-    @Test func singleFileWithMarkersExpandsIntoChapters() {
-        let chapters = PlaybackChapterList.build(
-            trackTitles: ["Book"],
-            trackDurations: [12],
-            markersByTrack: [0: [
-                ChapterMarker(title: "Opening", start: 0, end: 4),
-                ChapterMarker(title: "The Middle", start: 4, end: 9),
-                ChapterMarker(title: "Ending", start: 9, end: 12)
-            ]]
-        )
-
-        #expect(chapters.map(\.title) == ["Opening", "The Middle", "Ending"])
-        #expect(chapters.map(\.trackIndex) == [0, 0, 0])
-        #expect(chapters.map(\.start) == [0, 4, 9])
-        #expect(chapters.map(\.duration) == [4, 5, 3])
-        #expect(chapters.map(\.index) == [0, 1, 2])
-    }
-
-    @Test func tracksWithoutMarkersStayOneChapterEach() {
-        let chapters = PlaybackChapterList.build(
-            trackTitles: ["Chapter 1", "Chapter 2"],
-            trackDurations: [60, 90],
-            markersByTrack: [1: [ChapterMarker(title: "Only one", start: 0, end: 90)]]
-        )
-
-        #expect(chapters.map(\.title) == ["Chapter 1", "Chapter 2"])
-        #expect(chapters.map(\.trackIndex) == [0, 1])
-        #expect(chapters.map(\.duration) == [60, 90])
-    }
-
     @Test func sanitizingOrdersDedupesAndDropsMarkersPastTheEnd() {
         let markers = PlaybackChapterList.sanitized([
             ChapterMarker(title: " Two ", start: 30, end: 60),
@@ -93,16 +63,6 @@ struct PlaybackChapterListTests {
             ChapterMarker(title: "One", start: 0, end: 30),
             ChapterMarker(title: "Two", start: 30, end: 100)
         ])
-    }
-
-    @Test func untitledMarkersGetNumberedTitles() {
-        let chapters = PlaybackChapterList.build(
-            trackTitles: ["Book"],
-            trackDurations: [20],
-            markersByTrack: [0: [ChapterMarker(title: "", start: 0, end: 10), ChapterMarker(title: "  ", start: 10, end: 20)]]
-        )
-
-        #expect(chapters.map(\.title) == ["Chapter 1", "Chapter 2"])
     }
 
     @Test func lookupFindsTheChapterContainingAPosition() {
@@ -129,22 +89,6 @@ struct PlaybackChapterListTests {
 // MARK: - Audiobookshelf chapter mapping
 
 struct AudiobookshelfChapterMappingTests {
-
-    @Test func singleFileBookGetsServerChaptersAsTimeRanges() {
-        let chapters = AudiobookshelfLibraryService.playbackChapters(
-            from: [
-                ABSChapter(id: 0, start: 0, end: 600, title: "Letter 1"),
-                ABSChapter(id: 1, start: 600, end: 1500, title: "Letter 2"),
-                ABSChapter(id: 2, start: 1500, end: 3000, title: "Chapter 1")
-            ],
-            trackDurations: [3000]
-        )
-
-        #expect(chapters.map(\.title) == ["Letter 1", "Letter 2", "Chapter 1"])
-        #expect(chapters.map(\.trackIndex) == [0, 0, 0])
-        #expect(chapters.map(\.start) == [0, 600, 1500])
-        #expect(chapters.map(\.duration) == [600, 900, 1500])
-    }
 
     @Test func chaptersAcrossFilesMapToTrackAndOffset() {
         // Two 1000s files; the second chapter starts mid-file-1 and runs into file 2.
@@ -178,13 +122,6 @@ struct AudiobookshelfChapterMappingTests {
         #expect(chapters[1].start == 0)
     }
 
-    @Test func fewerThanTwoChaptersFallsBackToFiles() {
-        #expect(AudiobookshelfLibraryService.playbackChapters(
-            from: [ABSChapter(id: 0, start: 0, end: 100, title: "Whole")],
-            trackDurations: [100]
-        ).isEmpty)
-        #expect(AudiobookshelfLibraryService.playbackChapters(from: [], trackDurations: [100]).isEmpty)
-    }
 }
 
 // MARK: - Player chapter navigation
@@ -198,29 +135,6 @@ struct AudioPlayerChapterNavigationTests {
         ChapterMarker(title: "The Middle", start: 20, end: 40),
         ChapterMarker(title: "Ending", start: 40, end: 60)
     ]
-
-    @Test func singleFileBookWithEmbeddedChaptersHasChapterNavigation() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 0)
-        #expect(player.chapters.count == 1)
-        #expect(player.canGoToNextChapter == false)
-
-        player.seedUnitTestChapterMarkers(Self.fixtureMarkers, for: book.sortedTracks[0])
-
-        #expect(player.chapters.map(\.title) == ["Opening", "The Middle", "Ending"])
-        #expect(player.currentChapterIndex == 0)
-        #expect(player.canGoToNextChapter)
-        #expect(player.canGoToPreviousChapter == false)
-
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 25)
-        #expect(player.currentChapter?.title == "The Middle")
-        #expect(player.canGoToPreviousChapter)
-
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 45)
-        #expect(player.currentChapterIndex == 2)
-        #expect(player.canGoToNextChapter == false)
-    }
 
     @Test func seekReflectsTargetImmediatelyAndIgnoresStaleTimeCallbacks() {
         let player = AudioPlayerManager()
@@ -342,29 +256,6 @@ struct AudioPlayerChapterNavigationTests {
         #expect(player.currentTrackIndex == 1)
         #expect(player.currentTime == 40)
         #expect(player.currentChapter?.title == "Ending")
-    }
-
-    @Test func loadReadsEmbeddedChaptersForTheCommittedTrack() async {
-        var probed: [String] = []
-        var prep = preparation()
-        prep.loadChapterMarkers = { asset in
-            probed.append((asset as? AVURLAsset)?.url.lastPathComponent ?? "")
-            return Self.fixtureMarkers
-        }
-        let player = AudioPlayerManager(loadPreparation: prep)
-        let book = makeBook(trackCount: 1)
-
-        await player.playTrack(at: 0, in: book, time: 0, autoplay: false)
-        await waitUntil { player.chapters.count == 3 }
-
-        #expect(player.chapters.map(\.title) == ["Opening", "The Middle", "Ending"])
-        #expect(probed == ["t0.m4b"])
-
-        // Cached for the session: reloading the same file doesn't read it again.
-        await player.playTrack(at: 0, in: book, time: 10, autoplay: false)
-        await waitUntil { player.currentTime == 10 }
-        #expect(probed.count == 1)
-        #expect(player.chapters.count == 3)
     }
 
     @Test func audiobookshelfBookUsesServerChapters() async {

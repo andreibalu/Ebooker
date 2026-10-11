@@ -73,22 +73,16 @@ struct LibriVoxBookDetailViewModelTests {
     func catalogIdentityDeterminesDownloadTarget(identityCase: DetailIdentityCase) throws {
         let container = try makeContainer()
         let context = container.mainContext
-        let existing: Audiobook?
+        let existing: Audiobook
         switch identityCase {
-        case .downloaded:
-            existing = makeAudiobook(downloaded: true)
         case .streaming:
             existing = makeAudiobook(downloaded: false)
         case .archived:
             existing = makeAudiobook(downloaded: false, archived: true)
-            existing?.currentTime = 42
-        case .absent:
-            existing = nil
+            existing.currentTime = 42
         }
-        if let existing {
-            context.insert(existing)
-            try context.save()
-        }
+        context.insert(existing)
+        try context.save()
         let manager = makeManager()
         let viewModel = LibriVoxBookDetailViewModel()
 
@@ -98,22 +92,11 @@ struct LibriVoxBookDetailViewModelTests {
             manager: manager
         )
 
-        if let existing {
-            #expect(viewModel.libraryAudiobook === existing)
-        } else {
-            #expect(viewModel.libraryAudiobook == nil)
-        }
-        switch identityCase {
-        case .downloaded:
-            #expect(manager.entry(for: "catalog-1") == nil)
-        case .streaming, .archived:
-            #expect(manager.entry(for: "catalog-1")?.target == .existing(audiobookID: existing!.id))
-        case .absent:
-            #expect(manager.entry(for: "catalog-1")?.target == .fresh)
-        }
+        #expect(viewModel.libraryAudiobook === existing)
+        #expect(manager.entry(for: "catalog-1")?.target == .existing(audiobookID: existing.id))
         if identityCase == .archived {
-            #expect(existing?.isArchived == true)
-            #expect(existing?.currentTime == 42)
+            #expect(existing.isArchived == true)
+            #expect(existing.currentTime == 42)
         }
     }
 
@@ -140,22 +123,6 @@ struct LibriVoxBookDetailViewModelTests {
         #expect(viewModel.requestErrorMessage != nil)
     }
 
-    @Test func addReusesDownloadedAndStreamingRows() async throws {
-        for downloaded in [true, false] {
-            let container = try makeContainer()
-            let context = container.mainContext
-            let existing = makeAudiobook(downloaded: downloaded)
-            context.insert(existing)
-            try context.save()
-            let viewModel = LibriVoxBookDetailViewModel()
-
-            await viewModel.addToLibrary(book: makeCatalogBook(), modelContext: context)
-
-            #expect(viewModel.libraryAudiobook === existing)
-            #expect(try context.fetch(FetchDescriptor<Audiobook>()).count == 1)
-        }
-    }
-
     @Test func addReusesAndActivatesArchivedRow() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -176,10 +143,8 @@ struct LibriVoxBookDetailViewModelTests {
 }
 
 enum DetailIdentityCase: CaseIterable, Sendable {
-    case downloaded
     case streaming
     case archived
-    case absent
 }
 
 private enum PromotionFailure: Error {

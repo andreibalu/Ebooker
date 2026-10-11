@@ -2,22 +2,22 @@
 #
 # Run one bounded Codex implementation slice in an isolated git worktree.
 #
-# The openai/codex-plugin-cc plugin (/codex:rescue, /codex:review) works in the
-# current checkout and handles the single-slice case. Use this script only for
-# parallel fan-out, where two or more slices must not collide on edits.
+# Use this script only for parallel fan-out, where two or more slices must not
+# collide on edits. A single slice runs with `codex exec` in the current checkout.
 #
-#   scripts/codex-agent.sh plus docs/superpowers/plans/010-unpaged-plus.md
-#   scripts/codex-agent.sh abs docs/superpowers/plans/020-audiobookshelf.md --model gpt-6-sol --effort medium
-#   scripts/codex-agent.sh plus --cleanup
+#   scripts/codex-agent.sh <slice> <spec-file>                 # gpt-6.1-sol, medium
+#   scripts/codex-agent.sh <slice> <spec-file> --effort low
+#   scripts/codex-agent.sh <slice> --cleanup
 #
 # Every run names its model and effort explicitly, so nothing is inherited
-# implicitly from ~/.codex/config.toml or .codex/config.toml.
+# implicitly from ~/.codex/config.toml or .codex/config.toml. The model policy
+# lives in ~/.claude/CLAUDE.md; update ALLOWED_MODELS when it changes.
 
 set -euo pipefail
 
-DEFAULT_MODEL="gpt-6-luna"
-MAX_EFFORT_MODEL="gpt-6-luna"
-FALLBACK_EFFORT="medium"
+DEFAULT_MODEL="gpt-6.1-sol"
+DEFAULT_EFFORT="medium"
+ALLOWED_MODELS="gpt-6.1-sol"
 
 usage() {
   cat <<'USAGE'
@@ -29,9 +29,8 @@ Arguments:
   <spec-file>    Path to the specification Codex should implement
 
 Options:
-  --model <m>    Codex model (default: gpt-6-luna)
-  --effort <e>   none|minimal|low|medium|high|xhigh|max
-                 Defaults to max for gpt-6-luna, medium for anything larger.
+  --model <m>    Codex model (default and only allowed: gpt-6.1-sol)
+  --effort <e>   none|minimal|low|medium|high|xhigh|max (default: medium)
   --base <ref>   Branch the worktree from this ref (default: HEAD)
   --cleanup      Remove the worktree and its branch, then exit
   -h, --help     Show this message
@@ -73,22 +72,13 @@ fi
 
 MODEL="${MODEL:-$DEFAULT_MODEL}"
 
-# Terra has no role in this repo: Luna covers the default, Sol covers escalation.
-if [ "$MODEL" = "gpt-6-terra" ]; then
-  echo "error: gpt-6-terra is not used in this repo. Use gpt-6-luna, or gpt-6-sol to escalate." >&2
-  exit 2
-fi
+case " $ALLOWED_MODELS " in
+  *" $MODEL "*) ;;
+  *) echo "error: $MODEL is not used here. Allowed: $ALLOWED_MODELS (policy in ~/.claude/CLAUDE.md)." >&2
+     exit 2 ;;
+esac
 
-# Policy: max effort is for the default model only. A larger model that did not
-# name an effort drops to the fallback rather than silently inheriting max.
-if [ -z "$EFFORT" ]; then
-  if [ "$MODEL" = "$MAX_EFFORT_MODEL" ]; then
-    EFFORT="max"
-  else
-    EFFORT="$FALLBACK_EFFORT"
-    echo "note: $MODEL did not name an effort; using '$EFFORT' (max is reserved for $MAX_EFFORT_MODEL)." >&2
-  fi
-fi
+EFFORT="${EFFORT:-$DEFAULT_EFFORT}"
 
 mkdir -p "$RUNS"
 if [ ! -d "$WORKTREE" ]; then

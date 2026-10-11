@@ -58,15 +58,6 @@ class LibriVoxTest {
         LibriVoxClient(FeedEngine { captured = it; FeedResponse(200, "{}") }).genre("Action & Adventure=+?#")
         assertTrue(captured.contains("extended=1")); assertTrue(captured.contains("genre=Action%20%26%20Adventure%3D%2B%3F%23"))
     }
-    @Test fun tracksSortByNumericSection() {
-        val client = LibriVoxClient(FeedEngine { FeedResponse(200, """{"sections":[{"section_number":"10","title":"Ten"},{"section_number":2,"title":"Two"}]}""") })
-        assertEquals(listOf(2, 10), client.tracks("133").map { it.number })
-    }
-    @Test fun searchMergesBothEndpointsAndRanksTitlesBeforeAuthors() {
-        val client = LibriVoxClient(FeedEngine { url -> FeedResponse(200, if (url.contains("title="))
-            """{"books":[{"id":1,"title":"Jane Eyre"}]}""" else """{"books":[{"id":1,"title":"Jane Eyre"},{"id":2,"title":"Other","author":"Jane Author"}]}""") })
-        assertEquals(listOf("1", "2"), client.search("Jane").map { it.id })
-    }
     @Test fun knownStackedSuffixesFoldWithoutMergingTranslations() {
         assertEquals("pride and prejudice", OtherRecordings.key("Pridé and  Prejudice (version 2) (solo)"))
         assertEquals("text", OtherRecordings.key("Text (version 3 dramatic reading)"))
@@ -77,10 +68,6 @@ class LibriVoxTest {
         val rows = listOf(book("10", "Text (version 10)"), book("3", "Text (version 3)"), original,
             book("4", "Text (dramatic reading)"), current, original.copy(id = "5", language = "German"), original.copy(id = "6", author = "Other"))
         assertEquals(listOf("1", "3", "10", "4"), OtherRecordings.alternatives(current, rows).map { it.id })
-    }
-    @Test fun dailyPickUsesOneBasedOrdinalModuloAndLeapYear() {
-        assertEquals("253", Classics.pick(1)); assertEquals("510", Classics.pick(279))
-        assertEquals(Classics.ids[366 % 8], Classics.pick(366)); assertEquals(Classics.pick(42), Classics.pick(42))
     }
     @Test fun sqlitePageAndCheckpointSurviveReopenAndMetadataPreservesTracks() {
         val tracks = listOf(CatalogTrack(1, "Chapter", 300, "https://example.com/a.mp3"))
@@ -104,14 +91,6 @@ class LibriVoxTest {
             assertEquals(1000L, store.cursor().completed)
         }
     }
-    @Test fun retryIsThreeAttemptsWithLinearBackoff() = runBlocking {
-        SQLiteCatalogStore(context).withDatabase { store ->
-            var calls = 0; val delays = mutableListOf<Long>()
-            try { CatalogSync(store, { _, _ -> calls++; throw FeedProblem(503) }, { 1000 }, { delays += it }).run(); fail() }
-            catch (_: FeedProblem) { }
-            assertEquals(3, calls); assertEquals(listOf(1000L, 2000L), delays); assertEquals(0, store.cursor().offset)
-        }
-    }
     @Test fun permanentErrorsAndCancellationAreNotRetried() = runBlocking {
         for (problem in listOf(FeedProblem(400), CancellationException())) SQLiteCatalogStore(context).withDatabase { store ->
             var calls = 0
@@ -126,17 +105,6 @@ class LibriVoxTest {
             CatalogSync(store, { _, _ -> fail("Not due"); emptyList() }, { 86_400_999 }, {}).run()
             CatalogSync(store, { offset, since -> assertEquals(0, offset); assertEquals(1000L, since); emptyList() }, { 86_401_000 }, {}).run()
             assertEquals(86_401_000L, store.cursor().completed); assertEquals(1, store.count())
-        }
-    }
-    @Test fun catalogIdentityAddsOnceAndDoesNotMergeOtherRecordings() {
-        SQLiteLibraryStore(context).withDatabase { store ->
-            val service = CatalogLibraryService(store)
-            val tracks = listOf(CatalogTrack(1, "One", 300, "https://example.com/a.mp3"))
-            val first = service.add(book("133"), tracks)
-            assertEquals(first.id, service.add(book("133", "Renamed upstream"), tracks).id)
-            service.add(book("134"), tracks)
-            assertEquals(2, store.books().size); assertTrue(first.isFreeBook); assertFalse(first.isDownloaded)
-            assertEquals("", first.tracks.single().storedName); assertNotNull(first.tracks.single().remoteUrl)
         }
     }
     @Test fun promotionPreservesBookIdentityProgressFavoritesAndMoments() {

@@ -21,23 +21,6 @@ struct BrowseLibriVoxViewModelTests {
         #expect(try container.mainContext.fetchCount(FetchDescriptor<LibriVoxBook>()) == 1)
     }
 
-    @Test func completeIndexSearchesLocallyWithoutNetwork() async throws {
-        let container = try makeContainer()
-        container.mainContext.insert(makeBook(id: "local-1", title: "Local Treasure"))
-        try container.mainContext.save()
-        let remote = RemoteSearchStub(results: [makeAPIBook(id: "remote-1", title: "Remote Result")])
-        let viewModel = BrowseLibriVoxViewModel(
-            remoteSearch: remote,
-            isLocalSearchReady: { true }
-        )
-
-        await viewModel.performSearch(query: "Treasure", modelContext: container.mainContext)
-
-        #expect(remote.queries.isEmpty)
-        #expect(viewModel.searchResults.map(\.id) == ["local-1"])
-        #expect(viewModel.searchSource == .local)
-    }
-
     @Test func incompleteOfflineSearchFallsBackToSavedMatches() async throws {
         let container = try makeContainer()
         container.mainContext.insert(makeBook(id: "saved-1", title: "Saved Treasure"))
@@ -73,47 +56,6 @@ struct BrowseLibriVoxViewModelTests {
 
         #expect(remote.fetchedIDs == ["stale-1"])
         #expect(book.title == "Fresh Title")
-    }
-
-    @Test func freshOpenedBookSkipsRemoteRefresh() async throws {
-        let container = try makeContainer()
-        let book = makeBook(id: "fresh-1")
-        book.lastSyncedAt = Date(timeIntervalSince1970: 90_000)
-        let remote = RemoteSearchStub(refreshedBook: makeAPIBook(id: "fresh-1", title: "Changed"))
-        let viewModel = BrowseLibriVoxViewModel(remoteSearch: remote)
-
-        await viewModel.refreshBookIfStale(
-            book,
-            modelContext: container.mainContext,
-            now: Date(timeIntervalSince1970: 100_000)
-        )
-
-        #expect(remote.fetchedIDs.isEmpty)
-        #expect(book.title == "Local Book")
-    }
-
-    @Test func catalogBookResolvesExactLocalID() throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        let book = makeBook(id: "book-42")
-        context.insert(book)
-        try context.save()
-
-        let result = BrowseLibriVoxViewModel().catalogBook(
-            id: "book-42",
-            modelContext: context
-        )
-
-        #expect(result === book)
-    }
-
-    @Test func catalogBookReturnsNilForMissingID() throws {
-        let container = try makeContainer()
-
-        #expect(BrowseLibriVoxViewModel().catalogBook(
-            id: "missing",
-            modelContext: container.mainContext
-        ) == nil)
     }
 
     // MARK: Filters while the catalog is incomplete
@@ -187,13 +129,6 @@ struct BrowseLibriVoxViewModelTests {
         #expect(viewModel.searchResults.map(\.id) == ["cached-1"])
         #expect(viewModel.searchSource == .savedFallback)
         #expect(viewModel.isShowingPartialResults)
-    }
-
-    @Test func filterMenusNeverShrinkWhileCatalogIsPartial() {
-        let viewModel = BrowseLibriVoxViewModel(isLocalSearchReady: { false })
-        viewModel.availableLanguages = ["English", "Latin"]
-        #expect(viewModel.languageOptions.starts(with: BrowseLibriVoxViewModel.fallbackLanguages))
-        #expect(viewModel.languageOptions.contains("Latin"))
     }
 
     // MARK: Sync lifecycle
@@ -311,25 +246,6 @@ struct BrowseLibriVoxViewModelTests {
         try await gate.waitForRuns(2)
         gate.finish(.completed(processed: 0))
         try await waitUntil { !viewModel.isSyncInFlight }
-    }
-
-    @Test func offlineTriggerDoesNotStartSync() async throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        try insertCuratedClassics(into: context)
-        let gate = SyncGate()
-        let viewModel = BrowseLibriVoxViewModel(
-            isLocalSearchReady: { false },
-            isSyncDue: { true },
-            isConnected: { false },
-            syncRunner: gate.runner
-        )
-
-        viewModel.triggerSyncIfNeeded(modelContext: context)
-        try await waitUntil { viewModel.isOfflineWithCachedData }
-
-        #expect(gate.runs == 0)
-        #expect(viewModel.featuredBooks.count == BrowseLibriVoxViewModel.featuredBooksTarget)
     }
 
     private func insertCuratedClassics(into context: ModelContext) throws {

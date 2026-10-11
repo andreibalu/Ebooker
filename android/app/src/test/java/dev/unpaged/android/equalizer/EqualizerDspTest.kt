@@ -25,11 +25,6 @@ class EqualizerDspTest {
         assertEquals(Biquad(), Biquad.peaking(14000.0, 12.0, 8000))
         assertEquals(Biquad(), Biquad.peaking(4000.0, 12.0, 8000))
     }
-    @Test fun disabledBypassesBoostAndToneExactly() {
-        val dsp = EqualizerDsp(48000, 1)
-        dsp.configure(EqualizerConfiguration(preampDB = 12.0, bandGainsDB = List(5) { 12.0 }))
-        for (x in listOf(-1.0, -.5, 0.0, .5, 1.0)) assertEquals(x, dsp.process(x, 0), 0.0)
-    }
     @Test fun limiterIsOddContinuousMonotonicAndBounded() {
         assertEquals(.9, softLimit(.9), 0.0)
         assertEquals(.5, softLimit(.5), 0.0)

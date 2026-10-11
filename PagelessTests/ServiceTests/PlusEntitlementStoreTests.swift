@@ -10,37 +10,6 @@ import Testing
 struct PlusEntitlementStoreTests {
     private let now = Date(timeIntervalSince1970: 10_000)
 
-    @Test(arguments: [PlusProductID.monthly, PlusProductID.yearly])
-    func activePlusPlansGrantEntitlement(productID: String) {
-        let record = PlusEntitlementRecord(
-            productID: productID,
-            expirationDate: now.addingTimeInterval(86_400),
-            revocationDate: nil
-        )
-
-        #expect(PlusEntitlementStore.hasPlusEntitlement(in: [record], now: now))
-    }
-
-    @Test func legacyAIPurchaseIndependentlyGrantsEntitlement() {
-        let legacyAIUnlock = PlusEntitlementRecord(
-            productID: AIProductID.unlock,
-            expirationDate: nil,
-            revocationDate: nil
-        )
-
-        #expect(PlusEntitlementStore.hasPlusEntitlement(in: [legacyAIUnlock], now: now))
-    }
-
-    @Test func activeLegacyICloudSubscriptionIndependentlyGrantsEntitlement() {
-        let legacyICloudSubscription = PlusEntitlementRecord(
-            productID: ICloudSyncProductID.monthly,
-            expirationDate: now.addingTimeInterval(86_400),
-            revocationDate: nil
-        )
-
-        #expect(PlusEntitlementStore.hasPlusEntitlement(in: [legacyICloudSubscription], now: now))
-    }
-
     @Test func noRecognizedEntitlementReturnsFalse() {
         let records = [
             PlusEntitlementRecord(

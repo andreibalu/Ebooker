@@ -1,9 +1,9 @@
 # Physical test checklist
 
-The emulator suite (39 E2E journeys, 231 host tests) covers everything an
-emulator can run. This list covers what only a real phone, car or Google account
-can prove. Record each result next to its item, with the phone model and Android
-version.
+The emulator E2E suite covers the app's main journeys. Retained host regressions
+cover failures its assertions do not exercise. This list covers what only a real
+phone, car or Google account can prove. Record each result next to its item,
+with the phone model and Android version.
 
 ## Install
 

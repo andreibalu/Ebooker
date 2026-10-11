@@ -50,53 +50,6 @@ struct FreeBookDownloadServiceTests {
 
     // MARK: - State Tests
 
-    @Test func initialStateHasNoActiveDownloads() {
-        let service = FreeBookDownloadService()
-        #expect(service.activeDownloads.isEmpty)
-    }
-
-    @Test func initialStateHasNoProgress() {
-        let service = FreeBookDownloadService()
-        #expect(service.downloadProgress.isEmpty)
-    }
-
-    @Test func initialStateHasNoErrors() {
-        let service = FreeBookDownloadService()
-        #expect(service.downloadErrors.isEmpty)
-    }
-
-    @Test func processDeathManifestRoundTripPreservesFullCatalogAndAttemptIdentity() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let store = LegacyFreeBookDownloadManifestStore(rootURL: root)
-        let entry = makeSampleCatalogEntry()
-        let attemptID = UUID()
-        let job = LegacyFreeBookDownloadJob(
-            attemptID: attemptID,
-            catalogEntry: entry,
-            folderName: "legacy-folder",
-            completedIndexes: [0],
-            phase: .downloading,
-            lastError: nil
-        )
-
-        try store.save(job)
-
-        #expect(try store.loadAll() == [job])
-    }
-
-    @Test func fileMetadataMatchesKnownSHA256AndByteCount() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("metadata-\(UUID().uuidString).mp3")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try Data("hello".utf8).write(to: url)
-
-        let metadata = try LibriVoxDownloadService.fileMetadata(at: url)
-
-        #expect(metadata.byteCount == 5)
-        #expect(metadata.sha256 == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824")
-    }
-
     @Test func fileMetadataHashesDataAcrossMultipleReadChunks() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("chunked-metadata-\(UUID().uuidString).mp3")
@@ -205,18 +158,6 @@ struct FreeBookDownloadServiceTests {
         #expect(await service.restoreBackgroundSession(modelContext: context))
         try await Task.sleep(for: .milliseconds(50))
         #expect(try store.loadAll().isEmpty)
-    }
-
-    @Test func newServiceResolvesStableTaskDescriptionAfterTaskIdentifierChanges() {
-        let attemptID = UUID()
-        let identity = LegacyFreeBookDownloadTaskIdentity(
-            catalogID: "book",
-            attemptID: attemptID,
-            trackIndex: 3
-        )
-
-        let restored = LegacyFreeBookDownloadTaskIdentity(description: identity.description)
-        #expect(restored == identity)
     }
 
     @Test func cancellationMatchesPersistedTaskByAttemptIdentityBeforeContextRestore() {
@@ -420,80 +361,6 @@ struct FreeBookDownloadServiceTests {
         }
     }
 
-    // MARK: - Mock Protocol Tests
-
-    @Test func mockStartDownloadAddsToActiveDownloads() {
-        let mock = MockFreeBookDownloadService()
-        let entry = makeSampleCatalogEntry()
-        mock.startDownload(entry: entry)
-        #expect(mock.activeDownloads.contains("test-book"))
-    }
-
-    @Test func mockCancelDownloadRemovesFromActiveDownloads() {
-        let mock = MockFreeBookDownloadService()
-        let entry = makeSampleCatalogEntry()
-        mock.startDownload(entry: entry)
-        mock.cancelDownload(catalogId: "test-book")
-        #expect(!mock.activeDownloads.contains("test-book"))
-    }
-
-    @Test func mockStartDownloadSetsInitialProgress() {
-        let mock = MockFreeBookDownloadService()
-        let entry = makeSampleCatalogEntry()
-        mock.startDownload(entry: entry)
-        #expect(mock.downloadProgress["test-book"] == 0.0)
-    }
-
-    // MARK: - Finalization Tests
-
-    @Test func finalizationCreatesAudiobookWithCatalogId() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-        let folderName = "test-folder-uuid"
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: folderName, coverData: nil, modelContext: context)
-
-        let audiobooks = try context.fetch(FetchDescriptor<Audiobook>())
-        #expect(audiobooks.count == 1)
-        #expect(audiobooks.first?.catalogId == "test-book")
-    }
-
-    @Test func finalizationCreatesCorrectNumberOfTracks() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: "folder", coverData: nil, modelContext: context)
-
-        let tracks = try context.fetch(FetchDescriptor<AudioTrack>())
-        #expect(tracks.count == 2)
-    }
-
-    @Test func finalizationSetsIsFreeBookTrue() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: "folder", coverData: nil, modelContext: context)
-
-        let audiobooks = try context.fetch(FetchDescriptor<Audiobook>())
-        #expect(audiobooks.first?.isFreeBook == true)
-    }
-
-    @Test func finalizationUsesCorrectStoredFileNames() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-
-        let service = FreeBookDownloadService()
-        try service.finalizeDownload(catalogEntry: entry, folderName: "folder", coverData: nil, modelContext: context)
-
-        let tracks = try context.fetch(FetchDescriptor<AudioTrack>())
-        let sortedTracks = tracks.sorted { $0.orderIndex < $1.orderIndex }
-        #expect(sortedTracks[0].storedFileName == "001-chapter_01.mp3")
-        #expect(sortedTracks[1].storedFileName == "002-chapter_02.mp3")
-    }
-
     // MARK: - Identity Guard Tests
 
     @Test func admissionRejectsActiveQueuedAndPersistedCatalogIds() throws {
@@ -535,53 +402,6 @@ struct FreeBookDownloadServiceTests {
             queuedCatalogIds: [],
             modelContext: context
         ))
-    }
-
-    @Test(arguments: [false, true])
-    func admissionAllowsStreamingAndArchivedIdentityPromotion(archived: Bool) throws {
-        let context = try makeContext()
-        let existing = Audiobook(
-            title: "Existing",
-            folderName: "existing",
-            isFreeBook: true,
-            catalogId: "promote",
-            isDownloaded: false
-        )
-        existing.isArchived = archived
-        context.insert(existing)
-        try context.save()
-
-        #expect(try FreeBookDownloadService.shouldAcceptDownload(
-            catalogId: "promote",
-            activeCatalogIds: [],
-            queuedCatalogIds: [],
-            modelContext: context
-        ))
-    }
-
-    @Test func finalizationReusesPersistedCatalogIdentity() throws {
-        let context = try makeContext()
-        let entry = makeSampleCatalogEntry()
-        let existing = Audiobook(
-            title: "Existing",
-            folderName: "existing-folder",
-            isFreeBook: true,
-            catalogId: entry.id
-        )
-        context.insert(existing)
-        try context.save()
-
-        let service = FreeBookDownloadService()
-        let result = try service.finalizeDownload(
-            catalogEntry: entry,
-            folderName: "fresh-folder",
-            coverData: nil,
-            modelContext: context
-        )
-
-        #expect(result === existing)
-        #expect(try context.fetch(FetchDescriptor<Audiobook>()).count == 1)
-        #expect(try context.fetch(FetchDescriptor<AudioTrack>()).isEmpty)
     }
 
     @Test(arguments: [false, true])

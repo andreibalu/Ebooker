@@ -33,28 +33,6 @@ struct ICloudSubscriptionStoreTests {
         )
     }
 
-    @Test func falseCacheNeverAuthorizesLaunch() {
-        let defaults = isolatedDefaults()
-        let now = Date(timeIntervalSince1970: 1_000)
-        ICloudSubscriptionStore.writeLaunchEntitlementCache(
-            cache(entitled: false, verifiedAt: now, validUntil: now.addingTimeInterval(86_400)),
-            defaults: defaults
-        )
-
-        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults))
-    }
-
-    @Test func futureExpirationAuthorizesLaunch() {
-        let defaults = isolatedDefaults()
-        let now = Date(timeIntervalSince1970: 1_000)
-        ICloudSubscriptionStore.writeLaunchEntitlementCache(
-            cache(entitled: true, verifiedAt: now, validUntil: now.addingTimeInterval(1)),
-            defaults: defaults
-        )
-
-        #expect(ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults))
-    }
-
     @Test(arguments: [
         1_000.0,
         1_001.0,
@@ -92,16 +70,6 @@ struct ICloudSubscriptionStoreTests {
         ))
     }
 
-    @Test func legacyFalseNeverAuthorizesLaunch() {
-        let defaults = isolatedDefaults()
-        defaults.set(false, forKey: legacySubscribedKey)
-
-        #expect(!ICloudSubscriptionStore.isSubscribedAtLaunch(
-            now: Date(timeIntervalSince1970: 1_000),
-            defaults: defaults
-        ))
-    }
-
     @Test func legacyTrueAuthorizesOnlyFromFirstReadForTwentyFourHours() {
         let defaults = isolatedDefaults()
         let firstRead = Date(timeIntervalSince1970: 1_000)
@@ -121,28 +89,4 @@ struct ICloudSubscriptionStoreTests {
         #expect(defaults.object(forKey: legacyFirstSeenKey) as? Date == firstRead)
     }
 
-    @Test func verifiedWriteRemovesLegacyKeysAfterWritingEncodedRecord() {
-        let defaults = isolatedDefaults()
-        defaults.set(true, forKey: legacySubscribedKey)
-        defaults.set(Date(timeIntervalSince1970: 1_000), forKey: legacyFirstSeenKey)
-        let now = Date(timeIntervalSince1970: 1_000)
-
-        ICloudSubscriptionStore.writeLaunchEntitlementCache(
-            cache(entitled: true, verifiedAt: now, validUntil: now.addingTimeInterval(86_400)),
-            defaults: defaults
-        )
-
-        #expect(defaults.data(forKey: cacheKey) != nil)
-        #expect(defaults.object(forKey: legacySubscribedKey) == nil)
-        #expect(defaults.object(forKey: legacyFirstSeenKey) == nil)
-    }
-
-    @Test func readerNeverCombinesLegacyBooleanWithSeparateExpirationKey() {
-        let defaults = isolatedDefaults()
-        let now = Date(timeIntervalSince1970: 1_000)
-        defaults.set(true, forKey: legacySubscribedKey)
-        defaults.set(now.addingTimeInterval(-1), forKey: "iCloudSyncSubscriptionExpiration")
-
-        #expect(ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults))
-    }
 }

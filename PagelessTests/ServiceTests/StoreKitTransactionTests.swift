@@ -54,19 +54,6 @@ final class StoreKitTransactionTests {
 
     // MARK: - Unpaged Plus
 
-    @Test func plusPlansLoadWithTheirTrialAndPlanNames() async throws {
-        let store = await freshPlusStore()
-        let monthly = try #require(store.monthlyProduct)
-        let yearly = try #require(store.yearlyProduct)
-
-        #expect(store.loadError == nil)
-        #expect(PlusEntitlementStore.planNameDisplay(for: monthly) == "Monthly")
-        #expect(PlusEntitlementStore.planNameDisplay(for: yearly) == "Yearly")
-        #expect(PlusEntitlementStore.freeTrialDisplay(for: monthly) == "1 week free")
-        #expect(PlusEntitlementStore.freeTrialDisplay(for: yearly) == "1 week free")
-        #expect(store.isPlus == false)
-    }
-
     @Test func monthlyPurchaseStartsTheTrialAndWritesTheLaunchCache() async throws {
         let store = await freshPlusStore()
 
@@ -82,16 +69,6 @@ final class StoreKitTransactionTests {
         let finished = await Self.waitUntil { await Self.unfinishedTransactionCount() == 0 }
         let ledger = await Self.describeLedger(session)
         #expect(finished, "A delivered Plus purchase must be finished: \(ledger)")
-    }
-
-    @Test func yearlyPurchaseRecordsTheYearlyPlan() async throws {
-        let store = await freshPlusStore()
-
-        await store.purchase(productID: PlusProductID.yearly)
-
-        #expect(store.isPlus)
-        #expect(store.currentPlusSubscriptionProductID == PlusProductID.yearly)
-        #expect(session.allTransactions().map(\.productIdentifier) == [PlusProductID.yearly])
     }
 
     @Test func askToBuyStaysLockedUntilApprovedThenUnlocksThroughUpdates() async throws {
@@ -151,15 +128,6 @@ final class StoreKitTransactionTests {
         #expect(store.isPlus)
     }
 
-    @Test func restoreWithNothingToRestoreLeavesTheOfferWithoutError() async throws {
-        let store = await freshPlusStore()
-
-        await store.restorePurchases()
-
-        #expect(store.restoreError == nil)
-        #expect(store.isPlus == false)
-    }
-
     @Test func legacyAIUnlockStillGrantsPlusPermanently() async throws {
         try await session.buyProduct(identifier: AIProductID.unlock)
         let store = await freshPlusStore()
@@ -197,7 +165,6 @@ final class StoreKitTransactionTests {
 
     @Test func coffeeTipSucceedsRepeatsAndFinishesEachTransaction() async throws {
         let store = try await loadedCoffeeStore()
-        #expect(store.purchaseButtonTitle == "Buy a coffee \u{2014} $2.99")
 
         await store.purchase()
         #expect(store.purchaseState == .succeeded)

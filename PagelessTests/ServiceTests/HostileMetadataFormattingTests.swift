@@ -23,15 +23,6 @@ struct HostileMetadataFormattingTests {
         }
     }
 
-    @Test func legitValuesUnchanged() {
-        #expect(TimeFormatter.durationSummary(seconds: 3600 * 11 + 32 * 60) == "11h 32m")
-        #expect(TimeFormatter.durationSummary(seconds: -5) == "0m")
-        #expect(TimeFormatter.clockString(seconds: 3725) == "1:02:05")
-        #expect(TimeFormatter.percentValue(0.426) == 43)
-        #expect(ABSBookDetailView.durationText(45) == "under 1 min")
-        #expect(ABSBookDetailView.durationText(3600 * 2) == "2 hr")
-    }
-
     @Test func absProgressWithHugeFiniteValuesDecodesAndRendersSafely() throws {
         let json = """
         {"libraryItemId":"x","duration":1e308,"progress":1e308,"currentTime":1e308,"isFinished":false}

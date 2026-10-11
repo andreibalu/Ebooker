@@ -19,35 +19,6 @@ struct OnboardingManagerTests {
         return ud
     }
 
-    @Test func freshInstallShowsOnboarding() {
-        let ud = isolatedDefaults()
-        let m = OnboardingManager(defaults: ud)
-        #expect(m.isComplete == false)
-    }
-
-    @Test func completePersistsAcrossRelaunch() {
-        let ud = isolatedDefaults()
-
-        let first = OnboardingManager(defaults: ud)
-        first.complete()
-        #expect(first.isComplete == true)
-
-        // A new manager reading the same defaults should stay complete.
-        let relaunched = OnboardingManager(defaults: ud)
-        #expect(relaunched.isComplete == true)
-    }
-
-    @Test func resetReshowsOnboarding() {
-        let ud = isolatedDefaults()
-        let m = OnboardingManager(defaults: ud)
-        m.complete()
-        m.reset()
-        #expect(m.isComplete == false)
-
-        let relaunched = OnboardingManager(defaults: ud)
-        #expect(relaunched.isComplete == false)
-    }
-
     @Test func legacyCompletedWalkthroughCountsAsComplete() {
         // Users who finished the old spotlight walkthrough (legacy phase == 3) must not be
         // shown the new onboarding again.

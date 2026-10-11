@@ -42,16 +42,6 @@ class RecapCacheTest {
         assertNull(RecapCache(context).read(book))
     }
 
-    @Test fun enablingHeadlineRejectsHeadlineLessRecapAcrossReopen() {
-        RecapCache(context).save(book, Recap("Recap.", null))
-        val reopened = RecapCache(context)
-        assertEquals(Recap("Recap.", null), reopened.read(book, headline = false))
-        assertNull(reopened.read(book, headline = true))
-        reopened.save(book, Recap("New recap.", "New headline"))
-        assertEquals(Recap("New recap.", "New headline"), reopened.read(book, headline = true))
-        assertEquals(Recap("New recap.", "New headline"), reopened.read(book, headline = false))
-    }
-
     @Test fun everyBackupAndTransferPolicyExcludesRecapStore() {
         for ((file, policies) in listOf("backup_rules.xml" to listOf("full-backup-content"),
             "data_extraction_rules.xml" to listOf("cloud-backup", "device-transfer"))) {

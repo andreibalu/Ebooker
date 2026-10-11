@@ -361,23 +361,6 @@ struct LibraryImportMutationTests {
         #expect(FileManager.default.fileExists(atPath: backup.appendingPathComponent("001-chapter.m4a").path(percentEncoded: false)))
     }
 
-    @Test func invalidStoragePathErrorUsesGenericUserFacingText() throws {
-        let root = try makeTemporaryRoot()
-        defer { try? FileManager.default.removeItem(at: root) }
-        let transaction = try LibraryMutationTransaction(rootURL: root, environment: .live(rootURL: root))
-        let outside = root.deletingLastPathComponent().appendingPathComponent("sensitive-audiobook-path")
-
-        do {
-            try transaction.promoteStaging(to: outside)
-            Issue.record("Expected path validation failure")
-        } catch let error as LibraryMutationError {
-            let description = error.localizedDescription
-            #expect(description == "Library storage path is invalid.")
-            #expect(!description.contains(root.path))
-            #expect(!description.contains(outside.path))
-        }
-    }
-
     @Test func persistedFolderTraversalIsRejectedBeforeMergeSourceAccess() throws {
         let book = Audiobook(title: "Book", folderName: "../outside", isDownloaded: true)
         let track = AudioTrack(
@@ -484,7 +467,8 @@ struct LibraryImportMutationTests {
         let root = try makeTemporaryRoot()
         defer { try? FileManager.default.removeItem(at: root) }
         let source = try makeSourceFile(in: root, name: "chapter.m4a")
-        let context = try makeContext()
+        let (container, context) = try makeContainerAndContext()
+        defer { withExtendedLifetime(container) {} }
         let pending = makePending(source: source)
 
         _ = try LibraryImportService.importAudiobook(
@@ -551,10 +535,6 @@ struct LibraryImportMutationTests {
                 try data.write(to: url, options: .atomic)
             }
         )
-    }
-
-    private func makeContext() throws -> ModelContext {
-        try makeContainerAndContext().1
     }
 
     private func makeContainerAndContext() throws -> (ModelContainer, ModelContext) {

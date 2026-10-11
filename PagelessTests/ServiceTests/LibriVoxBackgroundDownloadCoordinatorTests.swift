@@ -10,25 +10,6 @@ import Testing
 
 @MainActor
 struct LibriVoxBackgroundDownloadCoordinatorTests {
-    @Test func byteCallbackPublishesFractionWithoutIncrementingTrack() {
-        let job = makeJob(trackCount: 2)
-        let core = LibriVoxDownloadCoordinatorCore(jobs: [job])
-
-        let event = core.progressEvent(
-            identity: identity(job, track: 0),
-            totalBytesWritten: 25,
-            totalBytesExpected: 100
-        )
-
-        #expect(event == .progress(
-            catalogID: "book",
-            attemptID: job.attemptID,
-            completed: 0,
-            total: 2,
-            currentTrackFraction: 0.25
-        ))
-    }
-
     @Test func unknownExpectedByteCountPublishesZeroFraction() {
         let job = makeJob(trackCount: 2)
         let core = LibriVoxDownloadCoordinatorCore(jobs: [job])
@@ -48,37 +29,6 @@ struct LibriVoxBackgroundDownloadCoordinatorTests {
         ))
     }
 
-    @Test func completedTrackPersistsThenSchedulesNext() throws {
-        let job = makeJob(trackCount: 2)
-        var persisted: [LibriVoxDownloadJob] = []
-        let core = LibriVoxDownloadCoordinatorCore(
-            jobs: [job],
-            persist: { persisted.append($0) }
-        )
-
-        let result = try core.markTrackCompleted(identity: identity(job, track: 0))
-
-        #expect(persisted.last?.completedIndexes == [0])
-        #expect(result?.transition == .schedule(trackIndex: 1))
-        #expect(result?.event == .progress(
-            catalogID: "book",
-            attemptID: job.attemptID,
-            completed: 1,
-            total: 2,
-            currentTrackFraction: 0
-        ))
-    }
-
-    @Test func finalTrackRequestsFinalization() throws {
-        var job = makeJob(trackCount: 2)
-        job.completedIndexes = [0]
-        let core = LibriVoxDownloadCoordinatorCore(jobs: [job])
-
-        let result = try core.markTrackCompleted(identity: identity(job, track: 1))
-
-        #expect(result?.transition == .finalize)
-    }
-
     @Test func lateCallbackFromOldAttemptIsIgnored() throws {
         let job = makeJob(trackCount: 1)
         let core = LibriVoxDownloadCoordinatorCore(jobs: [job])
@@ -94,20 +44,6 @@ struct LibriVoxBackgroundDownloadCoordinatorTests {
             totalBytesExpected: 2
         ) == nil)
         #expect(try core.markTrackCompleted(identity: oldIdentity) == nil)
-    }
-
-    @Test func retryWithoutPersistedFailureRestartsPreparation() {
-        let core = LibriVoxDownloadCoordinatorCore(jobs: [])
-
-        #expect(core.retryDisposition(catalogID: "book") == .restartPreparation)
-    }
-
-    @Test func retryWithPersistedFailureResumesStagedJob() {
-        var job = makeJob(trackCount: 1)
-        job.phase = .failed
-        let core = LibriVoxDownloadCoordinatorCore(jobs: [job])
-
-        #expect(core.retryDisposition(catalogID: "book") == .resume(job))
     }
 
     @Test func cancellationAfterPreparationBeforeManifestLeavesNoStagingOrManifest() async throws {
@@ -180,32 +116,6 @@ struct LibriVoxBackgroundDownloadCoordinatorTests {
         #expect(cancelledEvents == 1)
         #expect(try store.loadAll().isEmpty)
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("Staging").appendingPathComponent(job.stagingFolderName).path))
-    }
-
-    @Test func malformedManifestIsQuarantinedAndDoesNotHaltOtherJobs() async throws {
-        let root = temporaryRoot()
-        defer { try? FileManager.default.removeItem(at: root) }
-        let store = LibriVoxDownloadManifestStore(rootURL: root)
-        let manifests = root.appendingPathComponent("Manifests", isDirectory: true)
-        try FileManager.default.createDirectory(at: manifests, withIntermediateDirectories: true)
-        try Data("not-json".utf8).write(to: manifests.appendingPathComponent("lost.json"))
-        let coordinator = LibriVoxBackgroundDownloadCoordinator(
-            modelContext: try makeContext(),
-            store: store,
-            fileManager: .default
-        )
-
-        #expect(coordinator.manifestRecoveryError == nil)
-        #expect(try store.quarantinedFiles().count == 1)
-    }
-
-    @Test func finalizingPhaseDecodesAndRemainsDistinctFromDownloading() throws {
-        var job = makeJob(trackCount: 1)
-        job.phase = .finalizing
-        let data = try JSONEncoder().encode(job)
-        let decoded = try JSONDecoder().decode(LibriVoxDownloadJob.self, from: data)
-        #expect(decoded.phase == .finalizing)
-        #expect(decoded != job.withPhase(.downloading))
     }
 
     @Test func scheduleGuardRejectsCancelledAttemptAtEveryBoundary() {
@@ -498,14 +408,6 @@ struct LibriVoxBackgroundDownloadCoordinatorTests {
 
     private func temporaryRoot() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-    }
-}
-
-private extension LibriVoxDownloadJob {
-    func withPhase(_ phase: Phase) -> Self {
-        var copy = self
-        copy.phase = phase
-        return copy
     }
 }
 

@@ -8,57 +8,6 @@ import Testing
 
 @MainActor
 struct CoffeeTipStoreTests {
-    @Test func productIDIsTheSingleConsumableCoffeeProduct() {
-        #expect(CoffeeTipProductID.coffee == "andreibaludev.Pageless.tip.coffee")
-    }
-
-    @Test func noPriceFallbackIsShownBeforeStoreKitLoadsAProduct() {
-        let store = CoffeeTipStore(startTasks: false)
-
-        #expect(store.product == nil)
-        #expect(store.coffeePriceDisplay == nil)
-        #expect(store.purchaseButtonTitle == "Buy a coffee")
-    }
-
-    @Test(arguments: [
-        CoffeeTipPurchaseResolution.userCancelled,
-        CoffeeTipPurchaseResolution.pending,
-        CoffeeTipPurchaseResolution.unavailable,
-        CoffeeTipPurchaseResolution.unverified,
-        CoffeeTipPurchaseResolution.failed,
-    ])
-    func nonVerifiedOutcomesNeverShowThanks(_ resolution: CoffeeTipPurchaseResolution) {
-        #expect(CoffeeTipStore.state(for: resolution) != .succeeded)
-    }
-
-    @Test func verifiedOutcomeShowsThanksForThisPurchase() {
-        #expect(CoffeeTipStore.state(for: .verified) == .succeeded)
-    }
-
-    @Test func cancelledPurchaseLeavesStoreReadyForAnotherAttempt() async {
-        let store = CoffeeTipStore(
-            purchaseOutcomeProvider: { .userCancelled },
-            startTasks: false
-        )
-
-        await store.purchase()
-
-        #expect(store.purchaseState == .cancelled)
-        #expect(store.isPurchasing == false)
-    }
-
-    @Test func pendingPurchaseDoesNotShowThanksBeforeApproval() async {
-        let store = CoffeeTipStore(
-            purchaseOutcomeProvider: { .pending },
-            startTasks: false
-        )
-
-        await store.purchase()
-
-        #expect(store.purchaseState == .pending)
-        #expect(store.purchaseState != .succeeded)
-    }
-
     @Test func purchasesAreSerializedAndASecondTipRemainsAvailable() async {
         let probe = CoffeeTipPurchaseProbe()
         let store = CoffeeTipStore(

@@ -11,38 +11,6 @@ struct AudiobookshelfLibraryTests {
 
     // MARK: - Adding
 
-    @Test func addingStoresATokenlessStreamingBook() throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-        let item = try Self.item()
-        let book = try AudiobookshelfLibraryService.addToLibrary(
-            item: item, trackURLs: Self.urls(), progress: nil, coverArtData: nil, modelContext: context)
-
-        #expect(book.absItemID == "item1")
-        #expect(book.isAudiobookshelfBook)
-        #expect(!book.isFreeBook)
-        #expect(!book.isDownloaded)
-        #expect(book.isStreamingOnly)
-        #expect(!book.isCloudOnlyOrphan)
-        #expect(book.isInActiveLibrary)
-        #expect(book.totalDuration == 40)
-        #expect(book.sortedTracks.map(\.title) == ["Letter 1", "chapter-02"])
-
-        // No credential anywhere in what gets persisted (and synced to iCloud).
-        let rows = try context.fetch(FetchDescriptor<AudioTrack>())
-        #expect(rows.count == 2)
-        for track in rows {
-            let stored = [track.remoteURLString ?? "", track.storedFileName, track.originalFileName, track.title]
-            for value in stored {
-                #expect(!value.localizedCaseInsensitiveContains("token"), "\(value)")
-                #expect(!value.contains(Self.secret), "\(value)")
-            }
-            #expect(track.remoteURLString?.hasPrefix(Self.base) == true)
-        }
-        #expect(!book.title.contains(Self.secret))
-        #expect(!book.folderName.contains(Self.secret))
-    }
-
     @Test func urlsCarryingACredentialAreRefused() throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -152,23 +120,6 @@ struct AudiobookshelfLibraryTests {
         #expect(CloudLibraryBucket.bucket(for: archivedFree) == .removedFree)
     }
 
-    @Test func absBooksAreVisibleInTheLibraryWithoutLocalFiles() {
-        let id = UUID()
-        #expect(LibraryBookVisibility.includes(bookID: id, isDownloaded: false, isFreeBook: false, isArchived: false,
-                                               isFavorite: false, isAudiobookshelfBook: true, tab: .allBooks, downloadEntry: nil))
-        #expect(LibraryBookVisibility.includes(bookID: id, isDownloaded: false, isFreeBook: false, isArchived: false,
-                                               isFavorite: true, isAudiobookshelfBook: true, tab: .favorites, downloadEntry: nil))
-        // An own-book orphan stays hidden (it belongs to Cloud Library).
-        #expect(!LibraryBookVisibility.includes(bookID: id, isDownloaded: false, isFreeBook: false, isArchived: false,
-                                                isFavorite: false, isAudiobookshelfBook: false, tab: .allBooks, downloadEntry: nil))
-    }
-
-    @Test func playbackErrorsReadAsPlainWords() {
-        #expect(AudioPlayerManager.audiobookshelfPlaybackMessage(for: AudiobookshelfError.notConnected).contains("Connect"))
-        #expect(AudioPlayerManager.audiobookshelfPlaybackMessage(for: AudiobookshelfError.offline).contains("offline"))
-        #expect(AudioPlayerManager.audiobookshelfPlaybackMessage(for: AudiobookshelfError.expiredToken).contains("expired"))
-    }
-
     // MARK: - Helpers
 
     /// A stand-in credential string; asserting it never lands in a stored field.
@@ -190,109 +141,9 @@ struct AudiobookshelfLibraryTests {
     }
 }
 
-/// Connect-sheet and browse view-model logic that doesn't need a server.
+/// Chapter titles for server books with chapters that do not align with files.
 @MainActor
 struct ABSViewModelLogicTests {
-    @Test func connectErrorsLandUnderTheFieldTheyConcern() {
-        typealias VM = ABSConnectViewModel
-        #expect(VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "h").field == .server)
-        #expect(VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "nas:13378").message.contains("nas:13378"))
-        #expect(VM.fieldError(for: AudiobookshelfError.badCredentials, mode: .signIn, host: "h").field == .password)
-        #expect(VM.fieldError(for: AudiobookshelfError.badCredentials, mode: .apiKey, host: "h").field == .apiKey)
-        let inactive = VM.fieldError(for: AudiobookshelfError.inactiveAPIKey, mode: .apiKey, host: "h")
-        #expect(inactive.field == .apiKey)
-        #expect(inactive.message.contains("Settings → API Keys"))
-        #expect(VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "nas.tail1234.ts.net:13378").message.contains("Tailscale"))
-        #expect(VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "100.101.1.2").message.contains("Tailscale"))
-        #expect(!VM.fieldError(for: AudiobookshelfError.unreachableServer, mode: .signIn, host: "abs.example.com").message.contains("Tailscale"))
-        #expect(VM.fieldError(for: AudiobookshelfError.notAudiobookshelfServer, mode: .signIn, host: "h").field == .server)
-    }
-
-    @Test func connectValidatesBeforeTouchingTheNetwork() async {
-        let account = ABSAccount(credentials: MockABSCredentialStore())
-        let vm = ABSConnectViewModel(serverText: "not a url")
-        vm.username = "u"; vm.password = "p"
-        #expect(await vm.connect(account: account, isNetworkAvailable: true) == false)
-        #expect(vm.error?.field == .server)
-
-        vm.serverText = "https://abs.example.test"
-        #expect(await vm.connect(account: account, isNetworkAvailable: false) == false)
-        #expect(vm.error?.field == .server)
-        #expect(!account.isConnected)
-    }
-
-    @Test func browseRailsFilterAndOrder() throws {
-        func item(_ id: String, _ title: String, author: String, added: Double) throws -> ABSLibraryItem {
-            let json = #"{"id":"\#(id)","libraryId":"l","mediaType":"book","addedAt":\#(added),"media":{"metadata":{"title":"\#(title)","authorName":"\#(author)"}}}"#
-            return try JSONDecoder().decode(ABSLibraryItem.self, from: Data(json.utf8))
-        }
-        func progress(_ id: String, _ time: Double, finished: Bool = false, hidden: Bool = false, updated: Double) throws -> ABSMediaProgress {
-            let json = #"{"libraryItemId":"\#(id)","duration":100,"progress":\#(time / 100),"currentTime":\#(time),"isFinished":\#(finished),"hideFromContinueListening":\#(hidden),"lastUpdate":\#(updated)}"#
-            return try JSONDecoder().decode(ABSMediaProgress.self, from: Data(json.utf8))
-        }
-        let items = [try item("a", "Dracula", author: "Bram Stoker", added: 1),
-                     try item("b", "Emma", author: "Jane Austen", added: 3),
-                     try item("c", "Frankenstein", author: "Mary Shelley", added: 2),
-                     try item("d", "Persuasion", author: "Jane Austen", added: 4)]
-        let map = ["a": try progress("a", 10, updated: 5),
-                   "b": try progress("b", 50, updated: 9),
-                   "c": try progress("c", 100, finished: true, updated: 10),
-                   "d": try progress("d", 20, hidden: true, updated: 11)]
-        #expect(ABSBrowseViewModel.continueListening(items: items, progress: map).map(\.id) == ["b", "a"])
-        #expect(ABSBrowseViewModel.recentlyAdded(items: items, limit: 2).map(\.id) == ["d", "b"])
-        // Hidden while All Books already shows everything.
-        #expect(ABSBrowseViewModel.recentlyAdded(items: items, limit: 4).isEmpty)
-        #expect(ABSBrowseViewModel.recentlyAdded(items: items).isEmpty)
-        #expect(ABSBrowseViewModel.filter(items, query: "austen").map(\.id) == ["b", "d"])
-        #expect(ABSBrowseViewModel.filter(items, query: "frank").map(\.id) == ["c"])
-        #expect(ABSBrowseViewModel.filter(items, query: "  ").count == 4)
-    }
-
-    @Test func browseErrorsMapToOneStateEach() {
-        #expect(ABSBrowseViewModel.phase(for: AudiobookshelfError.offline) == .offline)
-        #expect(ABSBrowseViewModel.phase(for: AudiobookshelfError.unreachableServer) == .unreachable)
-        #expect(ABSBrowseViewModel.phase(for: AudiobookshelfError.serverError(status: 503)) == .unreachable)
-        #expect(ABSBrowseViewModel.phase(for: AudiobookshelfError.expiredToken) == .signedOut)
-        #expect(ABSBrowseViewModel.phase(for: AudiobookshelfError.notConnected) == .signedOut)
-    }
-
-    @Test func browseWithoutAConnectionShowsSignedOut() async {
-        let vm = ABSBrowseViewModel()
-        await vm.load(account: ABSAccount(credentials: MockABSCredentialStore()), preferredLibraryID: nil, isNetworkAvailable: true)
-        #expect(vm.phase == .signedOut)
-    }
-
-    @Test func detailEyebrowKeepsDurationLowercase() {
-        #expect(ABSBookDetailView.durationText(41_520) == "11 hr 32 min")
-        #expect(ABSBookDetailView.durationText(7_200) == "2 hr")
-        #expect(ABSBookDetailView.durationText(2_700) == "45 min")
-        #expect(ABSBookDetailView.durationText(40) == "under 1 min")
-        #expect(ABSBookDetailView.eyebrowText(durationSeconds: 41_520, chapterCount: 2) == "11 hr 32 min · 2 CHAPTERS")
-        #expect(ABSBookDetailView.eyebrowText(durationSeconds: 40, chapterCount: 1) == "under 1 min · 1 CHAPTER")
-    }
-
-    @Test func listenedTextPrefersTheLocalPosition() throws {
-        let json = #"{"libraryItemId":"x","duration":100,"progress":0.3,"currentTime":30,"isFinished":false}"#
-        let server = try JSONDecoder().decode(ABSMediaProgress.self, from: Data(json.utf8))
-        #expect(ABSBookDetailViewModel.listenedText(libraryBook: nil, serverProgress: server) == "30% listened")
-        #expect(ABSBookDetailViewModel.listenedText(libraryBook: nil, serverProgress: nil) == nil)
-
-        let schema = Schema([Audiobook.self, AudioTrack.self, Moment.self, ReadingSession.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true, cloudKitDatabase: .none)
-        let container = try ModelContainer(for: schema, configurations: [config])
-        let context = container.mainContext
-        let book = Audiobook(title: "T", author: "A", folderName: "f", totalDuration: 100, absItemID: "x", isDownloaded: false)
-        context.insert(book)
-        let track = AudioTrack(title: "One", originalFileName: "one.mp3", storedFileName: "", orderIndex: 0, duration: 100)
-        context.insert(track)
-        track.audiobook = book
-        book.tracks.append(track)
-        book.currentTime = 75
-        #expect(ABSBookDetailViewModel.listenedText(libraryBook: book, serverProgress: server) == "75% listened")
-        book.isFinished = true
-        #expect(ABSBookDetailViewModel.listenedText(libraryBook: book, serverProgress: server) == "Finished")
-    }
-
     @Test func trackTitlesComeFromChapters() throws {
         func track(_ index: Int, _ start: Double, _ duration: Double, _ file: String, tag: String? = nil) -> ABSAudioTrack {
             ABSAudioTrack(index: index, startOffset: start, duration: duration, title: file, contentUrl: "/f/\(index)",

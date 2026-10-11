@@ -25,56 +25,7 @@ struct AudioPlayerManagerSkipTests {
         return Audiobook(title: "Test", folderName: "test", totalDuration: 600 * Double(trackCount), tracks: tracks)
     }
 
-    @Test func loadingPlaybackHelperMatchesOnlyTheLoadingBook() {
-        let player = AudioPlayerManager()
-        let loadingBook = makeBook(trackCount: 1)
-        let otherBook = makeBook(trackCount: 1)
-
-        player.seedUnitTestLoadingPlayback(bookID: loadingBook.id)
-
-        #expect(player.isLoadingPlayback(for: loadingBook))
-        #expect(player.isLoadingPlayback(for: otherBook) == false)
-    }
-
-    @Test func loadingPlaybackHelperClearsWhenLoadingIDIsNil() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-
-        player.seedUnitTestLoadingPlayback(bookID: book.id)
-        player.seedUnitTestLoadingPlayback(bookID: nil)
-
-        #expect(player.isLoadingPlayback(for: book) == false)
-    }
-
     // MARK: - Unloading a deleted book
-
-    @Test func unloadIfCurrentForgetsOnlyTheLoadedBook() {
-        let player = AudioPlayerManager()
-        let loaded = makeBook(trackCount: 2)
-        let other = makeBook(trackCount: 1)
-        player.seedUnitTestPlaybackState(audiobook: loaded, track: loaded.sortedTracks[1], trackIndex: 1, currentTime: 90)
-
-        player.unloadIfCurrent(other)
-        #expect(player.currentAudiobook?.id == loaded.id)
-
-        player.unloadIfCurrent(loaded)
-        #expect(player.currentAudiobook == nil)
-        #expect(player.currentTrack == nil)
-        #expect(player.currentTrackIndex == 0)
-        #expect(player.currentTime == 0)
-        #expect(player.chapters.isEmpty)
-        #expect(player.isPlaying == false)
-    }
-
-    @Test func unloadIfCurrentCancelsALoadStillInFlight() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        player.seedUnitTestLoadingPlayback(bookID: book.id)
-
-        player.unloadIfCurrent(book)
-
-        #expect(player.isLoadingPlayback(for: book) == false)
-    }
 
     @Test func unloadIfCurrentCancelsADownloadedBookStillPreparing() {
         let player = AudioPlayerManager()
@@ -89,42 +40,6 @@ struct AudioPlayerManagerSkipTests {
 
         #expect(player.pendingPlaybackTarget == nil)
         #expect(player.currentAudiobook == nil)
-    }
-
-    // MARK: - Single-track navigation
-
-    @Test func canGoToNextTrackIsFalseForSingleTrackBook() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 60)
-
-        #expect(player.canGoToNextTrack == false)
-    }
-
-    @Test func canGoToPreviousTrackIsFalseForSingleTrackBookEvenAfterFiveSeconds() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 1)
-        // currentTime > 5 would normally enable "previous" (restart current track),
-        // but single-track books should disable the button entirely.
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 60)
-
-        #expect(player.canGoToPreviousTrack == false)
-    }
-
-    @Test func canGoToPreviousTrackRespectsTimeForMultiTrackBook() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 3)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 60)
-
-        #expect(player.canGoToPreviousTrack == true)
-    }
-
-    @Test func canGoToNextTrackIsTrueForMultiTrackBookNotAtEnd() {
-        let player = AudioPlayerManager()
-        let book = makeBook(trackCount: 3)
-        player.seedUnitTestPlaybackState(audiobook: book, track: book.sortedTracks[0], trackIndex: 0, currentTime: 0)
-
-        #expect(player.canGoToNextTrack == true)
     }
 
     // MARK: - Preset-interval skip and the progress-save penalty

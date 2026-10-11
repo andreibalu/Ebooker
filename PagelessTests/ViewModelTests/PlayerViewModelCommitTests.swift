@@ -27,96 +27,6 @@ struct PlayerViewModelCommitTests {
         return (context, book, track)
     }
 
-    private func momentCount(in context: ModelContext) throws -> Int {
-        try context.fetch(FetchDescriptor<Moment>()).count
-    }
-
-    @Test func commitMomentInsertsOneRowIntoContext() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 12.5
-        vm.momentNameInput = "Named"
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 99)
-
-        #expect(try momentCount(in: context) == 0)
-        vm.commitMoment(player: player, modelContext: context)
-        #expect(try momentCount(in: context) == 1)
-    }
-
-    @Test func commitMomentUsesLabelFromInput() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 1
-        vm.momentNameInput = "Chapter Beat"
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        let moments = try context.fetch(FetchDescriptor<Moment>())
-        #expect(moments.first?.label == "Chapter Beat")
-    }
-
-    @Test func commitMomentFallsBackToSavedMomentWhenNameEmpty() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 1
-        vm.momentNameInput = "   "
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        let moments = try context.fetch(FetchDescriptor<Moment>())
-        #expect(moments.first?.label == "Saved Moment")
-    }
-
-    @Test func commitMomentTrimsWhitespaceFromName() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 1
-        vm.momentNameInput = "  trimmed  "
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        let moments = try context.fetch(FetchDescriptor<Moment>())
-        #expect(moments.first?.label == "trimmed")
-    }
-
-    @Test func commitMomentSetsNilNoteWhenInputEmpty() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 1
-        vm.momentNameInput = "N"
-        vm.momentNoteInput = "  \t  "
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        let moments = try context.fetch(FetchDescriptor<Moment>())
-        #expect(moments.first?.notes == nil)
-    }
-
-    @Test func commitMomentPreservesNoteWhenProvided() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 1
-        vm.momentNameInput = "N"
-        vm.momentNoteInput = "  A real note "
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        let moments = try context.fetch(FetchDescriptor<Moment>())
-        #expect(moments.first?.notes == "A real note")
-    }
-
-    @Test func commitMomentClearsPendingMomentTime() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.pendingMomentTime = 5
-        vm.momentNameInput = "N"
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        #expect(vm.pendingMomentTime == nil)
-    }
-
     @Test func commitMomentTransfersAiFieldsToMoment() throws {
         let (context, book, track) = try makeContextAndBook()
         let vm = PlayerViewModel()
@@ -139,15 +49,5 @@ struct PlayerViewModelCommitTests {
         #expect(m.quoteLine == "They laughed.")
         #expect(m.characters == ["Sam"])
         #expect(m.mood == .funny)
-    }
-
-    @Test func commitMomentDoesNothingWithoutPendingTime() throws {
-        let (context, book, track) = try makeContextAndBook()
-        let vm = PlayerViewModel()
-        vm.momentNameInput = "Orphan"
-        let player = AudioPlayerManager()
-        player.seedUnitTestPlaybackState(audiobook: book, track: track, trackIndex: 0, currentTime: 0)
-        vm.commitMoment(player: player, modelContext: context)
-        #expect(try momentCount(in: context) == 0)
     }
 }

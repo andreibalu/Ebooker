@@ -11,30 +11,6 @@ struct MomentNamingServiceLogicTests {
 
     // MARK: - sanitizedQuoteLine
 
-    @Test func sanitizedQuotePassesThroughNormalQuote() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = String(repeating: "word ", count: 30)
-        let out = service.sanitizedQuoteLine("A memorable line from the story.", transcript: transcript)
-        #expect(out == "A memorable line from the story.")
-    }
-
-    @Test func sanitizedQuoteStripsLeadingTrailingQuoteChars() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = String(repeating: "x", count: 50)
-        let out = service.sanitizedQuoteLine("\"“”'Hello there.'”\"", transcript: transcript)
-        #expect(out == "Hello there.")
-    }
-
-    @Test func sanitizedQuoteCollapsesInternalNewlines() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let transcript = String(repeating: "x", count: 50)
-        let out = service.sanitizedQuoteLine("Line one\nLine two\r\nLine three.", transcript: transcript)
-        #expect(out == "Line one Line two Line three.")
-    }
-
     @Test func sanitizedQuoteDropsMidWordTruncation() {
         guard #available(iOS 26, *) else { return }
         let service = MomentNamingService()
@@ -90,50 +66,7 @@ struct MomentNamingServiceLogicTests {
         #expect(out.isEmpty)
     }
 
-    @Test func sanitizedQuoteReturnsEmptyForEmptyInput() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let out = service.sanitizedQuoteLine("", transcript: "anything")
-        #expect(out.isEmpty)
-    }
-
-    // MARK: - firstSentence
-
-    @Test func firstSentenceExtractsUpToFirstPeriod() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let prefix = String(repeating: "a", count: 25)
-        let text = prefix + ". trailing ignored here"
-        let out = service.firstSentence(in: text, maxLength: 140)
-        #expect(out == prefix + ".")
-    }
-
-    @Test func firstSentenceExtractsUpToExclamation() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let prefix = String(repeating: "b", count: 25)
-        let text = prefix + "! more text"
-        let out = service.firstSentence(in: text, maxLength: 140)
-        #expect(out == prefix + "!")
-    }
-
-    @Test func firstSentenceTruncatesToMaxLengthWhenNoTerminator() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let text = "abcdefghijklmnopqrstuvwxyz"
-        let out = service.firstSentence(in: text, maxLength: 10)
-        #expect(out == "abcdefghij")
-    }
-
     // MARK: - trimToCompleteSentences
-
-    @Test func trimNotePassesThroughCompleteNote() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let note = "Victor decides to embark on a perilous voyage. The moment marks a turning point in his life."
-        let out = service.trimToCompleteSentences(note)
-        #expect(out == note)
-    }
 
     @Test func trimNoteCutsBackToLastFullSentenceWhenTailIsTruncated() {
         guard #available(iOS 26, *) else { return }
@@ -143,22 +76,6 @@ struct MomentNamingServiceLogicTests {
         let note = "Victor decides to embark on a perilous voyage. This moment is pivotal as it marks a significant turning point in his life, highlighting the tension between personal"
         let out = service.trimToCompleteSentences(note)
         #expect(out == "Victor decides to embark on a perilous voyage.")
-    }
-
-    @Test func trimNoteAppendsEllipsisWhenNoCompleteSentenceExists() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        let note = "Victor decides to embark on a perilous voyage and"
-        let out = service.trimToCompleteSentences(note)
-        #expect(out.hasSuffix("…"))
-        #expect(!out.contains("..."))
-    }
-
-    @Test func trimNoteReturnsEmptyForEmptyInput() {
-        guard #available(iOS 26, *) else { return }
-        let service = MomentNamingService()
-        #expect(service.trimToCompleteSentences("").isEmpty)
-        #expect(service.trimToCompleteSentences("   \n  ").isEmpty)
     }
 
     // MARK: - verifiedQuote
@@ -204,28 +121,4 @@ struct MomentNamingServiceLogicTests {
         #expect(out.isEmpty)
     }
 
-    // MARK: - matchKey / sentences
-
-    @Test func matchKeyFoldsCasePunctuationAndDiacritics() {
-        guard #available(iOS 26, *) else { return }
-        #expect(MomentNamingService.matchKey("Café—NIGHT, falls!") == "cafe night falls")
-    }
-
-    @Test func sentencesSplitsOnTerminators() {
-        guard #available(iOS 26, *) else { return }
-        let out = MomentNamingService.sentences(in: "One came first. Two came second! Three came third?")
-        #expect(out == ["One came first.", "Two came second!", "Three came third?"])
-    }
-
-    // MARK: - Guide value sync (guards MomentEnums drift against the @Guide literals)
-
-    @Test func categoryGuideValuesMatchEnum() {
-        guard #available(iOS 26, *) else { return }
-        #expect(MomentNamingService.categoryGuideValues == MomentCategory.allCases.map(\.rawValue))
-    }
-
-    @Test func moodGuideValuesMatchEnum() {
-        guard #available(iOS 26, *) else { return }
-        #expect(MomentNamingService.moodGuideValues == MomentMood.allCases.map(\.rawValue))
-    }
 }

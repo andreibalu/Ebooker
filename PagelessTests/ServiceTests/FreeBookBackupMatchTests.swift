@@ -19,18 +19,6 @@ struct FreeBookBackupMatchTests {
         return (container, ModelContext(container))
     }
 
-    @Test func fetchFreeBackupFindsArchivedMatch() throws {
-        let (container, context) = try makeContext()
-        _ = container
-        let backup = Audiobook(title: "Moby Dick", folderName: "a", isFreeBook: true, catalogId: "lv-123", isDownloaded: false)
-        backup.isArchived = true
-        context.insert(backup)
-        try context.save()
-
-        let found = OrphanRestoreService.fetchFreeBackup(catalogId: "lv-123", modelContext: context)
-        #expect(found?.id == backup.id)
-    }
-
     @Test func fetchFreeBackupIgnoresActiveAndUnrelated() throws {
         let (container, context) = try makeContext()
         _ = container

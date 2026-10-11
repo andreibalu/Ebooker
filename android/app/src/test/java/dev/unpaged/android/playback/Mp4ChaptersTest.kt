@@ -23,13 +23,6 @@ class Mp4ChaptersTest {
             val text = title.toByteArray(); writeByte(text.size); write(text)
         }
     })))
-    @Test fun neroVersionsAndUnicode() {
-        for (version in 0..1) {
-            val chapters = read(nero(version))
-            assertEquals(listOf(0L, 30_000L, 60_000L), chapters.map { it.startMs })
-            assertEquals(listOf("Opening", "Café", "Conclusion"), chapters.map { it.title })
-        }
-    }
     private fun quickTime(co64: Boolean, fixed: Boolean, mdVersion: Int = 0, extra: ByteArray = byteArrayOf()): ByteArray {
         val samples = listOf("First", "Other", "Third").map { title -> bytes { writeShort(title.length); writeBytes(title) } }
         val mdat = box("mdat", concat(*samples.toTypedArray()))

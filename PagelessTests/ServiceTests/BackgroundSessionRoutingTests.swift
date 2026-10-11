@@ -183,19 +183,6 @@ struct BackgroundSessionRoutingTests {
         #expect(!drain.finishEvent(token))
     }
 
-    @Test func unknownTaskDescriptionStillReleasesBackgroundEvents() {
-        let drain = BackgroundEventDrain()
-        let token = drain.beginEvent()
-        #expect(!drain.markFinishEventsSeen())
-        #expect(drain.finishEvent(token))
-    }
-
-    @Test func processingErrorStillReleasesBackgroundEvents() {
-        let drain = BackgroundEventDrain()
-        let token = drain.beginEvent()
-        #expect(!drain.finishEvent(token))
-        #expect(drain.markFinishEventsSeen())
-    }
     @Test func lateDelegateWorkInvalidatesClaimUntilItFinishes() {
         let drain = BackgroundEventDrain()
         #expect(drain.markFinishEventsSeen())

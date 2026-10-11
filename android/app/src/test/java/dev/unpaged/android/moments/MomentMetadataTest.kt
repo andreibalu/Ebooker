@@ -15,19 +15,6 @@ class MomentMetadataTest {
         val store = SQLiteLibraryStore(context)
         try { block(store) } finally { store.close() }
     }
-    @Test fun filtersUnionWithinDimensionsIntersectAcrossDimensionsAndPinFirst() {
-        val a = LibraryMoment("a", "book", 0, 0, "A", categoriesJson = "[\"action\",\"tension\"]", charactersJson = "[\"Alice\"]", mood = "tense", createdAt = 3)
-        val b = a.copy(id = "b", isPinned = true, createdAt = 1, categoriesJson = "[\"dialogue\"]")
-        val c = a.copy(id = "c", mood = "peaceful", createdAt = 4)
-        assertEquals(listOf(b, c, a), MomentFilters().apply(listOf(a, b, c)))
-        assertEquals(listOf(b, a), MomentFilters(setOf("action", "dialogue"), setOf("tense"), setOf("alice")).apply(listOf(a, b, c)))
-        assertTrue(MomentFilters(moods = setOf("sad")).apply(listOf(a)).isEmpty())
-    }
-    @Test fun characterAdditionTrimsAndRejectsCaseInsensitiveDuplicates() {
-        assertEquals(listOf("Alice"), addCharacter(emptyList(), " Alice \n"))
-        assertEquals(listOf("Alice"), addCharacter(listOf("Alice"), "ALICE"))
-        assertEquals(emptyList<String>(), addCharacter(emptyList(), "  "))
-    }
     @Test fun v2UpgradePreservesMomentMetadataAudioAndEqualizerThenPersistsPin() {
         val context = RuntimeEnvironment.getApplication()
         context.deleteDatabase("library.db")

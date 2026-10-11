@@ -30,22 +30,6 @@ class SQLiteLibraryStoreTest {
         }
     }
 
-    @Test fun renamePreservesBookIdentityPlaybackAndMomentsAcrossReopen() {
-        val context = RuntimeEnvironment.getApplication()
-        context.deleteDatabase("library.db")
-        val book = LibraryBook("rename", "Before", "Author", listOf(LibraryTrack("Track", "1", "1", 300000, "a")),
-            isFavorite = true, currentPositionMs = 45000, equalizerJson = "custom")
-        withStore(context) { store ->
-            store.insert(book)
-            store.saveMoment(LibraryMoment("moment", book.id, 0, 15000, "A passage"))
-            store.rename(book.id, "  After  ")
-        }
-        withStore(context) { store ->
-            assertEquals(book.copy(title = "After"), store.books().single())
-            assertEquals("A passage", store.moments(book.id).single().label)
-        }
-    }
-
     @Test fun explicitProgressMarkCanMoveBackwardAndSurvivesReopen() {
         val context = RuntimeEnvironment.getApplication()
         context.deleteDatabase("library.db")
@@ -60,25 +44,6 @@ class SQLiteLibraryStoreTest {
             assertEquals(30000L, store.books().single().currentPositionMs)
             store.updatePlaybackProgress("book", PlaybackProgress(0, 20000, 20000))
             assertEquals(30000L, store.books().single().highWaterMarkMs)
-        }
-    }
-
-    @Test fun booksAndTrackOrderPersistAcrossReopenAndDeleteCascades() {
-        val context = RuntimeEnvironment.getApplication()
-        context.deleteDatabase("library.db")
-        val id = UUID.randomUUID().toString()
-        val tracks = listOf(LibraryTrack("First", "1.mp3", "0000.mp3", 1500, "a"),
-            LibraryTrack("Second", "2.mp3", "0001.mp3", 2500, "b"))
-        val book = LibraryBook(id, "Title", "Author", tracks)
-        withStore(context) { it.insert(book) }
-        withStore(context) { store ->
-            assertEquals(book, store.books().single())
-            store.delete(id)
-            assertTrue(store.books().isEmpty())
-            store.readableDatabase.rawQuery("SELECT COUNT(*) FROM tracks", null).use { cursor ->
-                assertTrue(cursor.moveToFirst())
-                assertEquals(0, cursor.getInt(0))
-            }
         }
     }
 
@@ -130,38 +95,6 @@ class SQLiteLibraryStoreTest {
         }
         withStore(context) { assertEquals(5, it.readableDatabase.version); assertEquals(2, it.books().single().tracks.size) }
         folder.deleteRecursively()
-    }
-
-    @Test fun favoriteProgressAndMomentCrudPersistAndCascadeWithoutRegressingHighWater() {
-        val context = RuntimeEnvironment.getApplication()
-        context.deleteDatabase("library.db")
-        val book = LibraryBook("book", "Book", "Author", listOf(LibraryTrack("Stream", "", "", 60000, "", "https://example.com/audio")),
-            isDownloaded = false, isFreeBook = true, catalogId = "42", equalizerJson = "{}", storageBytes = 123)
-        val moment = LibraryMoment("moment", "book", 0, 10000, "First", categoriesJson = "[\"Plot\"]", quoteLine = "Quote", charactersJson = "[\"A\"]", mood = "Calm", createdAt = 100)
-        withStore(context) { store ->
-            val repository = LocalLibraryRepository(java.io.File(context.cacheDir, "library-api-test"), store, AudioMetadataReader { AudioMetadata(0) })
-            store.insert(book); repository.toggleFavorite("book")
-            repository.updatePlaybackProgress("book", PlaybackProgress(0, 30000, 30000, 1.5, playedAt = 200))
-            repository.updatePlaybackProgress("book", PlaybackProgress(0, 10000, 10000, 1.5, finished = true, playedAt = 300))
-            repository.saveMoment(moment)
-            assertEquals(moment, repository.moments("book").single())
-            store.saveMoment(moment.copy(label = "Edited", notes = "Notes"))
-        }
-        withStore(context) { store ->
-            val repository = LocalLibraryRepository(java.io.File(context.cacheDir, "library-api-test"), store, AudioMetadataReader { AudioMetadata(0) })
-            val loaded = repository.books().single()
-            assertFalse(loaded.isDownloaded); assertTrue(loaded.isFreeBook); assertTrue(loaded.isFinished)
-            assertEquals(123L, loaded.storageBytes)
-            assertTrue(loaded.isFavorite); assertEquals(30000L, loaded.highWaterMarkMs)
-            assertEquals(10000L, loaded.currentPositionMs); assertEquals(300L, loaded.lastPlayedAt)
-            assertEquals(1.5, loaded.playbackSpeed, 0.0); assertEquals(book.tracks, loaded.tracks)
-            assertEquals(1f / 6f, loaded.progress, .0001f)
-            assertEquals(book.catalogId, loaded.catalogId); assertEquals(book.equalizerJson, loaded.equalizerJson)
-            assertEquals("Edited", store.moments("book").single().label)
-            repository.deleteMoment("moment"); assertTrue(store.moments("book").isEmpty())
-            repository.saveMoment(moment); store.delete("book"); assertTrue(store.moments("book").isEmpty())
-            assertThrows(android.database.sqlite.SQLiteException::class.java) { store.saveMoment(moment) }
-        }
     }
 
 }

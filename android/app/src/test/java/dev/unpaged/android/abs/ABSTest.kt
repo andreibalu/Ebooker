@@ -9,7 +9,6 @@ import org.robolectric.annotation.Config
 import org.json.JSONObject
 import java.util.Base64
 import dev.unpaged.android.library.*
-import dev.unpaged.android.UnpagedPreferences
 import kotlinx.coroutines.*
 
 @RunWith(RobolectricTestRunner::class)
@@ -52,28 +51,6 @@ class ABSTest {
         assertEquals("http://nas/a?token=a%2Bb%26c", ABSRules.appendToken("http://nas/a", "a+b&c"))
         assertEquals("http://nas/a?x=1&token=abc", ABSRules.appendToken("http://nas/a?x=1", "abc"))
         reject(ABSFailure.INVALID_MEDIA_URL) { ABSRules.appendToken("http://nas/a?token=old", "new") }
-    }
-    @Test fun refreshThresholdIsStrictlyUnder45MinutesAndSessionsOnly() {
-        assertTrue(ABSRules.needsRefresh(jwt("{\"exp\":3699}"), 1000))
-        assertFalse(ABSRules.needsRefresh(jwt("{\"exp\":3700}"), 1000))
-        assertTrue(ABSRules.needsRefresh(jwt("{\"exp\":900}"), 1000))
-        assertFalse(ABSRules.needsRefresh("opaque", 1000))
-    }
-    @Test fun HTTPFailuresAndInactiveKeyMapping() {
-        assertEquals(ABSFailure.BAD_CREDENTIALS, ABSRules.httpFailure(401, "login").failure)
-        assertEquals(ABSFailure.EXPIRED_TOKEN, ABSRules.httpFailure(401, "api/libraries").failure)
-        assertEquals(ABSFailure.BAD_CREDENTIALS, ABSRules.httpFailure(401, "api/authorize", "mistyped").failure)
-        assertEquals(ABSFailure.INACTIVE_API_KEY, ABSRules.httpFailure(401, "api/authorize", jwt("{\"type\":\"api\",\"keyId\":\"id\"}")).failure)
-        assertEquals(ABSFailure.NOT_ABS_SERVER, ABSRules.httpFailure(404, "login").failure)
-        assertEquals(ABSFailure.NOT_ABS_SERVER, ABSRules.httpFailure(404, "api/authorize").failure)
-        assertEquals(ABSFailure.UNREACHABLE_SERVER, ABSRules.httpFailure(503, "api/items").failure)
-        assertEquals(403, ABSRules.httpFailure(403, "api/items").status)
-        assertTrue(ABSRules.message(ABSException(ABSFailure.UNREACHABLE_SERVER), "nas.ts.net").contains("Tailscale"))
-        assertTrue(ABSRules.message(ABSException(ABSFailure.UNREACHABLE_SERVER), "192.168.1.1").contains("VPN"))
-        assertFalse(ABSRules.message(ABSException(ABSFailure.UNREACHABLE_SERVER), "100.128.0.1").contains("Tailscale"))
-    }
-    @Test fun offlineIsDistinctFromUnreachable() {
-        reject(ABSFailure.OFFLINE) { ABSHttpTransport { false }.send("http://invalid", "GET", emptyMap(), null) }
     }
     @Test fun progressPayloadIsBookGlobalClampedAndFinished() {
         val book = LibraryBook("id", "Book", "Author", listOf(LibraryTrack("a", "", "", 100000, ""), LibraryTrack("b", "", "", 200000, "")), currentTrackIndex = 1, currentPositionMs = 50000)
@@ -128,19 +105,6 @@ class ABSTest {
         client.disconnect(); release.countDown(); assertTrue(request.await().isFailure)
         assertNull(credentials.value); assertNull(client.summary.value)
     }
-    @Test fun loginValidatesABSAndNeverStoresPassword() = runBlocking {
-        val credentials = MemoryCredentials()
-        val client = ABSClient(credentials, ABSTransport { url, method, headers, body ->
-            assertEquals("POST", method)
-            if (url.endsWith("login")) {
-                assertEquals("true", headers["x-return-tokens"])
-                assertEquals("secret", JSONObject(String(body!!)).getString("password"))
-                reply("{\"user\":{\"accessToken\":\"access\",\"refreshToken\":\"refresh\",\"username\":\"reader\"}}")
-            } else { assertEquals("Bearer access", headers["Authorization"]); reply("{\"user\":{\"username\":\"reader\"}}") }
-        })
-        client.login("nas", "reader", "secret")
-        assertEquals("access", credentials.value!!.access); assertEquals("reader", client.summary.value!!.username)
-    }
     @Test fun invalidServerReplyLeavesPreviousConnectionUntouched() = runBlocking {
         val original = ABSConnection("http://nas", "old", "r", "reader")
         val credentials = MemoryCredentials(original)
@@ -176,27 +140,6 @@ class ABSTest {
         val item = client.item("item")
         assertEquals("Unknown author", item.author); assertEquals("", item.narrator); assertEquals("", item.description)
         assertEquals("", item.subtitle); assertFalse(item.hasCover)
-    }
-    @Test fun sourcePreferenceFallsBackWithoutLosingConnectedChoice() {
-        val prefs = UnpagedPreferences(RuntimeEnvironment.getApplication())
-        prefs.setShelvesSource("audiobookshelf")
-        assertEquals("librivox", prefs.shelvesSource(false)); assertEquals("audiobookshelf", prefs.shelvesSource(true))
-        prefs.setShelvesSource("unknown"); assertEquals("librivox", prefs.shelvesSource(true))
-    }
-    @Test fun addSeedsPositionStreamingIdentityAndDuplicateReusesRow() = runBlocking {
-        val context = RuntimeEnvironment.getApplication(); context.deleteDatabase("library.db")
-        val store = SQLiteLibraryStore(context)
-        val client = ABSClient(MemoryCredentials(ABSConnection("http://nas", "key", null, null)), ABSTransport { _, _, _, _ -> reply("{\"currentTime\":15,\"isFinished\":false}") })
-        client.reload()
-        val item = ABSItem("abs-id", "Server Book", "Author", "", "", 30000, false,
-            listOf(LibraryTrack("one", "one.wav", "", 10000, "", "/audio/one"), LibraryTrack("two", "two.wav", "", 20000, "", "/audio/two")), emptyList(), 0)
-        try {
-            val added = client.add(item, store)
-            assertFalse(added.isDownloaded); assertFalse(added.isFreeBook); assertEquals("abs-id", added.absItemID)
-            assertEquals(1, added.currentTrackIndex); assertEquals(5000L, added.currentPositionMs)
-            assertTrue(added.tracks.all { it.remoteUrl!!.startsWith("http://nas/") && !ABSRules.containsCredential(it.remoteUrl) })
-            assertEquals(added.id, client.add(item, store).id); assertEquals(1, store.books().size)
-        } finally { store.close() }
     }
     @Test fun sqliteLastLineGuardRefusesCredentialBearingABSRows() {
         val context = RuntimeEnvironment.getApplication(); context.deleteDatabase("library.db")

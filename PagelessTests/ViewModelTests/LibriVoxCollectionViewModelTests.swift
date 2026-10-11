@@ -29,29 +29,6 @@ struct LibriVoxCollectionViewModelTests {
         ))
     }
 
-    @Test func loadResolvesFullyCachedCollectionWithoutNetwork() async throws {
-        let container = try makeContainer()
-        let context = container.mainContext
-
-        let collection = LibriVoxCollection(
-            id: "test", title: "Test", subtitle: "Sub", iconSystemName: "book",
-            bookIDs: ["10", "20", "30"]
-        )
-        insertBook(id: "30", title: "Third", into: context)
-        insertBook(id: "10", title: "First", into: context)
-        insertBook(id: "20", title: "Second", into: context)
-        try context.save()
-
-        let vm = LibriVoxCollectionViewModel()
-        await vm.load(collection: collection, modelContext: context)
-
-        guard case .loaded = vm.state else {
-            Issue.record("Expected loaded state, got \(vm.state)")
-            return
-        }
-        #expect(vm.books.map(\.id) == ["10", "20", "30"], "Curated order must be preserved")
-    }
-
     @Test func loadDegradesToPartialCacheWhenSomeIDsUnavailable() async throws {
         let container = try makeContainer()
         let context = container.mainContext

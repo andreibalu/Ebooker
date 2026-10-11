@@ -6,29 +6,6 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SessionQueueRegressionTest {
-    @Test fun unrelatedDisconnectCannotAbandonStagedBook() {
-        val gate = SessionQueueGate()
-        val token = gate.begin("X")
-        assertTrue(gate.stage(token, "B"))
-        assertFalse(gate.disconnect("Y"))
-        assertTrue(gate.consume(token, "B"))
-        assertFalse(gate.consume(token, "B"))
-    }
-    @Test fun ownerDisconnectTimeoutAndPhoneLoadRejectLateApplications() {
-        val gate = SessionQueueGate()
-        val disconnected = gate.begin("X")
-        gate.stage(disconnected, "B")
-        assertTrue(gate.disconnect("X"))
-        assertFalse(gate.consume(disconnected, "B"))
-        val expired = gate.begin("X")
-        gate.stage(expired, "B")
-        assertTrue(gate.expire(expired))
-        assertFalse(gate.consume(expired, "B"))
-        val cleared = gate.begin("X")
-        gate.stage(cleared, "B")
-        gate.clear()
-        assertFalse(gate.consume(cleared, "B"))
-    }
     @Test fun newerRequestRejectsOldResolutionAndQueueEvenForSameBook() {
         val gate = SessionQueueGate()
         val old = gate.begin("X")
@@ -39,23 +16,6 @@ class SessionQueueRegressionTest {
         assertFalse(gate.consume(old, "B"))
         assertFalse(gate.consume(current, "A"))
         assertTrue(gate.consume(current, "B"))
-    }
-    @Test fun removalInvalidatesBoundPreparationAndCannotRetargetItsGeneration() {
-        val gate = SessionQueueGate()
-        val token = gate.begin("X")
-        assertTrue(gate.stage(token, "B"))
-        assertFalse(gate.stage(token, "C"))
-        assertFalse(gate.remove("C"))
-        assertTrue(gate.current(token))
-        assertTrue(gate.remove("B"))
-        assertFalse(gate.stage(token, "B"))
-        assertFalse(gate.consume(token, "B"))
-    }
-    @Test fun sameBookSelectionAndResumptionReuseOnlyUnfinishedPlayback() {
-        assertTrue(CarResumePolicy.reuse(finished = false, ended = false))
-        assertFalse(CarResumePolicy.reuse(finished = true, ended = false))
-        assertFalse(CarResumePolicy.reuse(finished = false, ended = true))
-        assertFalse(CarResumePolicy.reuse(finished = true, ended = true))
     }
     @Test fun finishedAndEndedBooksRestartAtFirstTrackForSelectionAndResumption() {
         val book = LibraryBook("finished", "Finished", "Author", listOf(

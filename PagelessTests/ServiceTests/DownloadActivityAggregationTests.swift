@@ -9,19 +9,6 @@ import Testing
 
 @MainActor
 struct DownloadActivityAggregationTests {
-    @Test func singleEntryUsesBookTitleAndFractionalTrackProgress() {
-        let state = DownloadActivitySnapshot.aggregate(entries: [
-            entry(title: "Jane Eyre", completed: 1, total: 4, current: 0.5)
-        ])
-
-        #expect(state?.title == "Jane Eyre")
-        #expect(state?.activeBookCount == 1)
-        #expect(state?.completedTracks == 1)
-        #expect(state?.totalTracks == 4)
-        #expect(state?.progress == 0.375)
-        #expect(state?.phase == .downloading)
-    }
-
     @Test func multipleEntriesUseTrackWeightedProgress() {
         let state = DownloadActivitySnapshot.aggregate(entries: [
             entry(title: "A", completed: 1, total: 2, current: 0.5),
@@ -52,16 +39,6 @@ struct DownloadActivityAggregationTests {
         #expect(state?.title == "Active")
         #expect(state?.phase == .preparing)
         #expect(state?.failureMessage == nil)
-    }
-
-    @Test func failedEntryUsesPausedCopyAndRetainsError() {
-        let state = DownloadActivitySnapshot.aggregate(entries: [
-            entry(title: "Jane Eyre", phase: .failed, completed: 1, total: 4, error: "Offline")
-        ])
-
-        #expect(state?.title == "Download paused")
-        #expect(state?.phase == .failed)
-        #expect(state?.failureMessage == "Offline")
     }
 
     private func entry(

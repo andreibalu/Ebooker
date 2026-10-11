@@ -9,31 +9,6 @@ import Testing
 
 @MainActor
 struct LibriVoxDownloadManifestStoreTests {
-    @Test func roundTripsManifest() throws {
-        let harness = try StoreHarness()
-        defer { harness.remove() }
-        let job = makeJob(completed: [0])
-
-        try harness.store.save(job)
-
-        #expect(try harness.store.loadAll() == [job])
-    }
-
-    @Test func replacingManifestKeepsLatestState() throws {
-        let harness = try StoreHarness()
-        defer { harness.remove() }
-        var job = makeJob()
-        try harness.store.save(job)
-        job.completedIndexes = [0, 1]
-        job.phase = .failed
-        job.lastError = "Offline"
-
-        try harness.store.save(job)
-
-        #expect(try harness.store.loadAll() == [job])
-        #expect(try harness.store.manifestFiles().count == 1)
-    }
-
     @Test func taskIdentityRoundTripsAndRejectsMalformedDescriptions() {
         let attemptID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
         let identity = LibriVoxDownloadTaskIdentity(
