@@ -216,6 +216,20 @@ final class ABSBrowseViewModel {
     private(set) var selectedLibraryID: String?
     private(set) var items: [ABSLibraryItem] = []
     private(set) var progressByItemID: [String: ABSMediaProgress] = [:]
+    enum ProgressFilter: String, CaseIterable, Identifiable {
+        case all, notStarted, inProgress, finished
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .all: "All"
+            case .notStarted: "Not started"
+            case .inProgress: "In progress"
+            case .finished: "Finished"
+            }
+        }
+    }
+    var progressFilter: ProgressFilter = .all
+
     var searchQuery = ""
     private(set) var isOffline = false
     private var loadedOnce = false
@@ -241,10 +255,18 @@ final class ABSBrowseViewModel {
     }
 
     var searchResults: [ABSLibraryItem] {
-        Self.filter(allBooks, query: searchQuery)
+        Self.filter(allBooks, query: searchQuery).filter { item in
+            let progress = progressByItemID[item.id]
+            switch progressFilter {
+            case .all: return true
+            case .notStarted: return progress?.isFinished != true && (progress?.currentTime ?? 0) <= 0 && (progress?.progress ?? 0) <= 0
+            case .inProgress: return progress?.isFinished != true && ((progress?.currentTime ?? 0) > 0 || (progress?.progress ?? 0) > 0)
+            case .finished: return progress?.isFinished == true
+            }
+        }
     }
 
-    var isSearching: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+    var isSearching: Bool { progressFilter != .all || !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
 
     func progress(for item: ABSLibraryItem) -> ABSMediaProgress? { progressByItemID[item.id] }
 
@@ -290,6 +312,7 @@ final class ABSBrowseViewModel {
         selectedLibraryID = id
         items = []
         searchQuery = ""
+        progressFilter = .all
         phase = .loading
         await load(account: account, preferredLibraryID: id)
     }
@@ -322,7 +345,42 @@ final class ABSBrowseViewModel {
         guard !trimmed.isEmpty else { return items }
         return items.filter {
             $0.media.metadata.title.localizedStandardContains(trimmed)
-                || ($0.media.metadata.authorName ?? "").localizedStandardContains(trimmed)
+                || $0.media.metadata.displayAuthor.localizedStandardContains(trimmed)
+        }
+    }
+}
+
+// MARK: - Series, collections and people
+
+@MainActor
+@Observable
+final class ABSBookGroupViewModel {
+    private(set) var phase: ABSBrowseViewModel.Phase = .loading
+    private(set) var groups: [ABSBookGroup] = []
+    private(set) var books: [ABSLibraryItem] = []
+    private(set) var isOffline = false
+
+    func load(libraryID: String, kind: String, groupID: String?, person: String?, account: ABSAccount) async {
+        phase = .loading
+        do {
+            if let person {
+                // URL-safe alphabet: a raw "+" would arrive as a space. ABS (Node) decodes both alphabets.
+                let encoded = Data(person.utf8).base64EncodedString()
+                    .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+                let filter = "\(kind).\(encoded)"
+                books = try await account.client.allLibraryItems(libraryID: libraryID, filter: filter)
+                    .filter { $0.mediaType == "book" }
+                    .sorted { $0.media.metadata.displayTitle.localizedStandardCompare($1.media.metadata.displayTitle) == .orderedAscending }
+            } else {
+                groups = try await account.client.bookGroups(libraryID: libraryID, kind: kind)
+                if let groupID, let group = groups.first(where: { $0.id == groupID }) {
+                    books = kind == "series" ? group.readingOrder : group.books
+                }
+            }
+            isOffline = await account.client.isUsingCachedResponses
+            phase = .loaded
+        } catch {
+            phase = ABSBrowseViewModel.phase(for: error)
         }
     }
 }

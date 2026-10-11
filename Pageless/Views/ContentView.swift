@@ -146,6 +146,12 @@ struct ContentView: View {
                             browseViewModel: browseViewModel
                         )
                     }
+                    // Registered on the stack, not in the paged tab content: destinations inside
+                    // the lazy pager are dropped, and view-destination links there pop on reuse.
+                    .navigationDestination(for: ABSGroupRoute.self) { route in
+                        ABSBookGroupView(libraryID: route.libraryID, kind: route.kind, title: route.title,
+                                         groupID: route.groupID, onOpenPlayer: openPlayer, account: absAccount)
+                    }
                 }
                 .id(navigationStackID)
 

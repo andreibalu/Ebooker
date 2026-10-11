@@ -373,3 +373,106 @@ test('ABS storage controls keep downloads on disconnect and remove all audio wit
     await app.screenshot('abs-all-downloads-removed');
   });
 });
+
+const seriesOrder = ['abs-series-one', 'abs-series-half', 'abs-series-two', 'abs-series-ten', 'abs-series-none'];
+
+test('ABS browse: series reading order', async ({ device, screen, nativeKeyboard, app }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await screen.getByTestId('abs.browse.series').tap();
+    await screen.getByTestId('abs.series.row.series-fixture').tap();
+    expect(server.requests.some((request) => request.includes('/series?page=1'))).toBe(true);
+    for (let index = 0; index < seriesOrder.length; index++) {
+      const row = screen.getByTestId(`abs.group.book.${seriesOrder[index]}`);
+      await screen.scrollUntilVisible(row);
+      await expect(row).toHaveAccessibleName(new RegExp(`^${index + 1},`));
+    }
+    await app.screenshot('abs-series-reading-order');
+    await screen.getByTestId('abs.group.book.abs-series-none').tap();
+    await expect(screen.getByTestId('abs.detail.title')).toHaveText('Unnumbered Tale');
+  });
+});
+
+test('ABS browse: collection order', async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await screen.getByTestId('abs.browse.collections').tap();
+    await screen.getByTestId('abs.collection.row.collection-fixture').tap();
+    await expect(screen.getByTestId('abs.group.book.abs-dune')).toHaveAccessibleName(/^1, Dune/);
+    await expect(screen.getByTestId('abs.group.book.abs-hobbit')).toHaveAccessibleName(/^2, The Fixture Hobbit/);
+  });
+});
+
+for (const kind of ['author', 'narrator'] as const) {
+  test(`ABS browse: ${kind} page`, async ({ device, screen, nativeKeyboard }) => {
+    await withServer(async (server) => {
+      await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+      await openConnectSheet(screen);
+      await signIn(screen, nativeKeyboard, server.serverURL);
+      await screen.scrollUntilVisible(screen.getByTestId('abs.book.abs-hobbit').first());
+      await tapVisibleCenter(screen.getByTestId('abs.book.abs-hobbit').first());
+      await screen.getByTestId(`abs.detail.${kind}`).first().tap();
+      await screen.scrollUntilVisible(screen.getByTestId('abs.group.book.abs-series-one'));
+      await expect(screen.getByTestId('abs.group.book.abs-series-one')).toBeVisible();
+      await screen.scrollUntilVisible(screen.getByTestId('abs.group.book.abs-hobbit'));
+      await expect(screen.getByTestId('abs.group.book.abs-hobbit')).toBeVisible();
+      await expect(screen.getByTestId('abs.group.book.abs-dune')).toBeHidden();
+      expect(server.requests.some((request) => request.includes(`filter=${kind}s.`))).toBe(true);
+    });
+  });
+}
+
+for (const [value, shown, hidden] of [
+  ['all', 'abs-hobbit', 'abs-poems'],
+  ['notStarted', 'abs-hobbit', 'abs-dune'],
+  ['inProgress', 'abs-dune', 'abs-hobbit'],
+  ['finished', 'abs-series-ten', 'abs-dune'],
+] as const) {
+  test(`ABS browse: progress ${value}`, async ({ device, screen, nativeKeyboard, app }) => {
+    await withServer(async (server) => {
+      await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+      await openConnectSheet(screen);
+      await signIn(screen, nativeKeyboard, server.serverURL);
+      await screen.getByTestId('abs.browse.progressFilter').tap();
+      await screen.getByTestId(`abs.browse.progress.${value}`).tap();
+      await screen.scrollUntilVisible(screen.getByTestId(`abs.book.${shown}`).first());
+      await expect(screen.getByTestId(`abs.book.${shown}`).first()).toBeVisible();
+      await expect(screen.getByTestId(`abs.book.${hidden}`).first()).toBeHidden();
+      await app.screenshot(`abs-progress-${value}-shelf`);
+      await screen.scrollUntilVisible(screen.getByTestId('abs.browse.search'));
+      await screen.getByTestId('abs.browse.search').fill(value === 'inProgress' ? 'Herbert' : 'Tolkien');
+      await screen.scrollUntilVisible(screen.getByTestId(`abs.book.${shown}`).first());
+      await expect(screen.getByTestId(`abs.book.${shown}`).first()).toBeVisible();
+      await screen.scrollUntilVisible(screen.getByTestId('abs.browse.search'));
+      await screen.getByTestId('abs.browse.search').fill('no such title');
+      await expect(screen.getByTestId(`abs.book.${shown}`).first()).toBeHidden();
+      await app.screenshot(`abs-progress-${value}-search`);
+    });
+  });
+}
+
+test('ABS browse: offline cached series', async ({ device, screen, nativeKeyboard, app }) => {
+  const server = await startFakeAudiobookshelf();
+  try {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await screen.getByTestId('abs.browse.series').tap();
+    await screen.getByTestId('abs.series.row.series-fixture').tap();
+    await expect(screen.getByTestId('abs.group.book.abs-series-one')).toBeVisible();
+    await server.close();
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    await screen.getByTestId('shelvesTab').tap();
+    await expect(screen.getByTestId('abs.browse.offline')).toBeVisible({ timeout: 45_000 });
+    await screen.getByTestId('abs.browse.series').tap();
+    await screen.getByTestId('abs.series.row.series-fixture').tap();
+    await expect(screen.getByTestId('abs.group.offline').last()).toBeVisible({ timeout: 45_000 });
+    await expect(screen.getByTestId('abs.group.book.abs-series-one')).toHaveAccessibleName(/^1,.*Book 1/);
+    await app.screenshot('abs-offline-series');
+    assertNoCachedTokens(join(appDataPath(), 'Library', 'Caches', 'Audiobookshelf'));
+  } finally { await server.close(); }
+});
