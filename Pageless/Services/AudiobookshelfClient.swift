@@ -218,7 +218,8 @@ actor AudiobookshelfClient {
             || path.starts(with: ["api", "items"]) || path.starts(with: ["api", "me", "progress"]))
         let cacheURL = ABSResponseCache.url(connection: connection, path: path, query: query)
         do {
-            let data = try await authenticatedRequest(path: path, method: method, body: body, query: query)
+            let data = try await authenticatedRequest(path: path, method: method, body: body, query: query,
+                                                      timeout: timeout, refreshOnUnauthorized: refreshOnUnauthorized)
             guard let active = try self.connection(), active.baseURL == connection.baseURL,
                   active.username == connection.username else { throw AudiobookshelfError.notConnected }
             if cacheable { ABSResponseCache.write(data, at: cacheURL) }
@@ -242,7 +243,8 @@ actor AudiobookshelfClient {
     }
 
     private func authenticatedRequest(path: [String], method: String, body: Data?,
-                                      query: [URLQueryItem]) async throws -> Data {
+                                      query: [URLQueryItem], timeout: TimeInterval,
+                                      refreshOnUnauthorized: Bool) async throws -> Data {
         let connection = try requiredConnection()
         do {
             return try await send(baseURL: connection.baseURL, path: path, method: method, body: body,
