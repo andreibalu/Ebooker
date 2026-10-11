@@ -97,23 +97,42 @@ actor AudiobookshelfClient {
         return response.libraries
     }
 
-    func libraryItems(libraryID: String, page: Int, limit: Int = 50) async throws -> ABSPage {
+    func libraryItems(libraryID: String, page: Int, limit: Int = 50, filter: String? = nil) async throws -> ABSPage {
         guard page >= 0, limit > 0 else { throw AudiobookshelfError.unreadableResponse }
-        let data = try await request(path: ["api", "libraries", libraryID, "items"],
-                                     query: [URLQueryItem(name: "page", value: String(page)),
-                                             URLQueryItem(name: "limit", value: String(limit)),
-                                             URLQueryItem(name: "collapseseries", value: "0")])
+        var query = [URLQueryItem(name: "page", value: String(page)),
+                     URLQueryItem(name: "limit", value: String(limit)),
+                     URLQueryItem(name: "collapseseries", value: "0")]
+        if let filter { query.append(URLQueryItem(name: "filter", value: filter)) }
+        let data = try await request(path: ["api", "libraries", libraryID, "items"], query: query)
         return try decode(data)
     }
 
-    func allLibraryItems(libraryID: String, limit: Int = 50) async throws -> [ABSLibraryItem] {
+    func allLibraryItems(libraryID: String, limit: Int = 50, filter: String? = nil) async throws -> [ABSLibraryItem] {
         var items: [ABSLibraryItem] = []
         var pageNumber = 0
         while true {
-            let page = try await libraryItems(libraryID: libraryID, page: pageNumber, limit: limit)
+            let page = try await libraryItems(libraryID: libraryID, page: pageNumber, limit: limit, filter: filter)
             guard page.page == pageNumber, page.limit == limit else { throw AudiobookshelfError.unreadableResponse }
             items.append(contentsOf: page.results)
             if items.count >= page.total { return items }
+            guard !page.results.isEmpty else { throw AudiobookshelfError.unreadableResponse }
+            pageNumber += 1
+        }
+    }
+
+    func bookGroups(libraryID: String, kind: String) async throws -> [ABSBookGroup] {
+        guard kind == "series" || kind == "collections" else { throw AudiobookshelfError.unreadableResponse }
+        var groups: [ABSBookGroup] = []
+        var pageNumber = 0
+        let limit = 50
+        while true {
+            let page: ABSGroupPage = try decode(await request(path: ["api", "libraries", libraryID, kind],
+                query: [URLQueryItem(name: "page", value: String(pageNumber)),
+                        URLQueryItem(name: "limit", value: String(limit)),
+                        URLQueryItem(name: "minified", value: "0")]))
+            guard page.page == pageNumber, page.limit == limit else { throw AudiobookshelfError.unreadableResponse }
+            groups.append(contentsOf: page.results)
+            if groups.count >= page.total { return groups }
             guard !page.results.isEmpty else { throw AudiobookshelfError.unreadableResponse }
             pageNumber += 1
         }

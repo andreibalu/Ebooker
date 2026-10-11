@@ -28,6 +28,8 @@ interface FakeItem {
   /** Server-side listening position in seconds, if the person already started the book. */
   progress?: number;
   trackSeconds?: number;
+  sequence?: string;
+  finished?: boolean;
 }
 
 export const TRACK_SECONDS = 30;
@@ -37,6 +39,17 @@ export const absItems: FakeItem[] = [
   { id: 'abs-dune', libraryId: 'lib-main', title: 'Dune of Fixtures', author: 'E2E Herbert', narrator: '', addedAt: 1_700_000_100_000, tracks: 1, progress: 12 },
   { id: 'abs-poems', libraryId: 'lib-poetry', title: 'Collected Test Poems', author: 'E2E Dickinson', narrator: '', addedAt: 1_700_000_200_000, tracks: 1 },
 ];
+
+absItems.push(...[
+  { id: 'abs-series-ten', title: 'Volume Ten', sequence: '10', finished: true, progress: 30 },
+  { id: 'abs-series-two', title: 'Volume Two', sequence: '2', author: 'E2E Herbert', narrator: 'E2E Other Narrator' },
+  { id: 'abs-series-none', title: 'Unnumbered Tale' },
+  { id: 'abs-series-half', title: 'Volume Interlude', sequence: '1.5' },
+  { id: 'abs-series-one', title: 'Volume One', sequence: '1' },
+].map((entry) => ({ libraryId: 'lib-main', author: 'E2E Tolkien', narrator: 'E2E Narrator',
+  addedAt: 1_700_000_300_000, tracks: 1, ...entry })));
+
+const authorID = (item: FakeItem) => `author-${item.author.replaceAll(' ', '-')}`;
 
 const libraries = [
   { id: 'lib-main', name: 'E2E Shelf', mediaType: 'book' },
@@ -95,8 +108,9 @@ function itemJSON(item: FakeItem, expanded: boolean) {
     media: {
       metadata: {
         title: item.title,
-        authorName: item.author,
-        narratorName: item.narrator,
+        authors: [{ id: authorID(item), name: item.author }],
+        narrators: item.narrator ? [item.narrator] : [],
+        ...(expanded ? { authorName: item.author, narratorName: item.narrator } : {}),
         description: `<p>${item.title} is served by the e2e fake Audiobookshelf server.</p>`,
       },
       duration: item.tracks * (item.trackSeconds ?? TRACK_SECONDS),
@@ -112,7 +126,7 @@ function progressJSON(item: FakeItem, currentTime: number) {
   return {
     libraryItemId: item.id, duration, currentTime,
     progress: duration > 0 ? currentTime / duration : 0,
-    isFinished: false, lastUpdate: Date.now(),
+    isFinished: item.finished ?? false, lastUpdate: Date.now(),
   };
 }
 
@@ -210,11 +224,33 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
     }
     if (path === '/api/libraries') return json(res, 200, { libraries });
 
+    const groupMatch = /^\/api\/libraries\/([^/]+)\/(series|collections)$/.exec(path);
+    if (groupMatch) {
+      const page = Number(url.searchParams.get('page') ?? 0);
+      const limit = Number(url.searchParams.get('limit') ?? 50);
+      const groups = groupMatch[1] === 'lib-main' ? groupMatch[2] === 'series'
+        ? [{ id: 'series-fixture', name: 'Fixture Saga', books: absItems.filter((item) => item.id.startsWith('abs-series-'))
+          .map((item) => ({ ...itemJSON(item, true), sequence: item.sequence ?? null })) },
+          ...Array.from({ length: 50 }, (_, index) => ({ id: `series-empty-${index}`, name: `Unused Saga ${index}`, books: [] }))]
+        : [{ id: 'collection-fixture', name: 'Fixture Favorites', books: ['abs-dune', 'abs-hobbit']
+          .map((id) => itemJSON(absItems.find((item) => item.id === id)!, true)) }] : [];
+      return json(res, 200, { results: groups.slice(page * limit, (page + 1) * limit), total: groups.length, limit, page });
+    }
+
     const itemsMatch = /^\/api\/libraries\/([^/]+)\/items$/.exec(path);
     if (itemsMatch) {
       const page = Number(url.searchParams.get('page') ?? 0);
       const limit = Number(url.searchParams.get('limit') ?? 50);
-      const all = absItems.filter((item) => item.libraryId === itemsMatch[1]);
+      let all = absItems.filter((item) => item.libraryId === itemsMatch[1]);
+      const filter = url.searchParams.get('filter');
+      if (filter) {
+        const split = filter.indexOf('.');
+        const kind = filter.slice(0, split);
+        const value = Buffer.from(filter.slice(split + 1), 'base64').toString('utf8');
+        if (kind === 'authors') all = all.filter((item) => authorID(item) === value);
+        else if (kind === 'narrators') all = all.filter((item) => item.narrator === value);
+        else return json(res, 400, { error: 'Unsupported filter' });
+      }
       const results = all.slice(page * limit, page * limit + limit).map((item) => itemJSON(item, false));
       return json(res, 200, { results, total: all.length, limit, page });
     }

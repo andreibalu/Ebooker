@@ -13,6 +13,7 @@ nonisolated struct ABSLibraryItem: Decodable, Equatable, Sendable, Identifiable 
     let media: ABSMedia
     /// Milliseconds since 1970. Drives the "Recently Added" rail.
     var addedAt: Double? = nil
+    var sequence: String? = nil
 
     var addedDate: Date? { addedAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
 }
@@ -52,6 +53,8 @@ nonisolated struct ABSBookMetadata: Decodable, Equatable, Sendable {
     let narratorName: String?
     let description: String?
     var subtitle: String? = nil
+    var authors: [ABSPerson]? = nil
+    var narrators: [String]? = nil
 
     var displayTitle: String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -59,13 +62,13 @@ nonisolated struct ABSBookMetadata: Decodable, Equatable, Sendable {
     }
 
     var displayAuthor: String {
-        let trimmed = (authorName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = (authorName ?? authors?.map(\.name).joined(separator: ", ") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Unknown author" : trimmed
     }
 
     /// Nil when the server stores an empty narrator (it sends `""`, not null).
     var displayNarrator: String? {
-        let trimmed = (narratorName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = (narratorName ?? narrators?.joined(separator: ", ") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 }
@@ -141,6 +144,43 @@ nonisolated struct ABSProgressUpdate: Encodable, Sendable {
 
 nonisolated struct ABSPage: Decodable, Sendable {
     let results: [ABSLibraryItem]
+    let total: Int
+    let limit: Int
+    let page: Int
+}
+
+nonisolated struct ABSPerson: Decodable, Equatable, Sendable, Identifiable {
+    let id: String
+    let name: String
+}
+
+nonisolated struct ABSBookGroup: Decodable, Sendable, Identifiable {
+    let id: String
+    let name: String
+    let books: [ABSLibraryItem]
+
+    var readingOrder: [ABSLibraryItem] {
+        books.sorted { lhs, rhs in
+            let a = lhs.sequence?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let b = rhs.sequence?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasA = !(a ?? "").isEmpty
+            let hasB = !(b ?? "").isEmpty
+            if hasA != hasB { return hasA }
+            if hasA, let a, let b, a != b {
+                if let numberA = Decimal(string: a, locale: Locale(identifier: "en_US_POSIX")),
+                   let numberB = Decimal(string: b, locale: Locale(identifier: "en_US_POSIX")), numberA != numberB {
+                    return numberA < numberB
+                }
+                return a.compare(b, options: [.numeric, .caseInsensitive]) == .orderedAscending
+            }
+            let comparison = lhs.media.metadata.displayTitle.localizedStandardCompare(rhs.media.metadata.displayTitle)
+            return comparison == .orderedSame ? lhs.id < rhs.id : comparison == .orderedAscending
+        }
+    }
+}
+
+nonisolated struct ABSGroupPage: Decodable, Sendable {
+    let results: [ABSBookGroup]
     let total: Int
     let limit: Int
     let page: Int

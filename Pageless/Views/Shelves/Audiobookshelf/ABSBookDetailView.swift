@@ -82,13 +82,30 @@ struct ABSBookDetailView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            Text(metadata.displayAuthor)
-                .font(.system(.body, design: .serif))
-                .foregroundStyle(.primary)
-            if let narrator = metadata.displayNarrator {
-                Text("Read by \(narrator)")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            if let authors = metadata.authors, !authors.isEmpty {
+                ForEach(authors) { author in
+                    NavigationLink {
+                        ABSBookGroupView(libraryID: viewModel.summary.libraryId, kind: "authors", title: author.name,
+                                         person: author.id, onOpenPlayer: onOpenPlayer, account: account)
+                    } label: {
+                        Text(author.name).font(.system(.body, design: .serif)).underline()
+                    }
+                    .foregroundStyle(.primary)
+                    .accessibilityIdentifier("abs.detail.author")
+                }
+            } else {
+                Text(metadata.displayAuthor).font(.system(.body, design: .serif)).foregroundStyle(.primary)
+            }
+            let narrators = metadata.narrators ?? metadata.displayNarrator.map { [$0] } ?? []
+            ForEach(narrators, id: \.self) { narrator in
+                NavigationLink {
+                    ABSBookGroupView(libraryID: viewModel.summary.libraryId, kind: "narrators", title: narrator,
+                                     person: narrator, onOpenPlayer: onOpenPlayer, account: account)
+                } label: {
+                    Text("Read by \(narrator)").font(.footnote).underline()
+                }
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("abs.detail.narrator")
             }
             statusLine
                 .padding(.top, 6)
