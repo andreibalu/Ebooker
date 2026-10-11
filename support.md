@@ -169,3 +169,7 @@ Email [andrei.baluta@yahoo.com](mailto:andrei.baluta@yahoo.com) with:
 - Screenshots or a screen recording if relevant
 
 Thanks for using Unpaged.
+
+### Search saved moments
+
+Tap the magnifying glass in My Library to search saved moments across every book. Search by moment name, note, quote, character, category, mood, book title, or author. Multiple words must all match, and spelling works without accents. With no search text, you see your recent moments. Tap a result to play from its saved track and time. Moments from removed books or books whose audio is missing remain searchable; restore the audio before playing them. Streaming results need an internet connection.

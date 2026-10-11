@@ -229,6 +229,10 @@ All purchases are StoreKit-owned. `PlusEntitlementStore.shared` owns AI and iClo
 
 ## Feature Systems
 
+### Library moment search
+
+The header magnifying glass opens `MomentSearchView` across all books, including archived and cloud-only records. In-memory matching folds case and diacritics, requires every query word, and ranks name/book hits above notes/quotes, then recency. Empty search shows the latest 30 moments grouped by book. Search uses `MomentRow` and `playTrack(at:in:time:)`; unavailable audio and offline streaming rows show a disabled reason. No new stored fields or network requests.
+
 ### Free Books — two parallel systems (by design)
 
 1. **LibriVox catalog (primary, iPhone)** — 20,000+ books, cached in `LibriVoxBook` via `LibriVoxCatalogSync` (24h incremental sync). UI: "Shelves" tab (internal `LibraryTab.freeBooks`, LibriVox source) → `BrowseLibriVoxView` → `LibriVoxBookDetailView`.

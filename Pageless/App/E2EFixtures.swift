@@ -72,6 +72,25 @@ enum E2EFixtures {
                                      audiobook: secondBook)
         context.insert(secondTrack)
         secondBook.tracks.append(secondTrack)
+        if ProcessInfo.processInfo.arguments.contains("-e2e-moment-search") {
+            let orphan = Audiobook(title: "E2E Missing Audio", author: "Fixture Author",
+                                   folderName: "E2E-Missing-Audio", totalDuration: 300)
+            orphan.isDownloaded = false
+            context.insert(orphan)
+            let searchMoments = [
+                Moment(trackIndex: 1, time: 45, label: "E2E Harbor", audiobook: book,
+                       quoteLine: "The lantern shone across the harbor."),
+                Moment(trackIndex: 0, time: 90, label: "E2E Arrival", audiobook: secondBook,
+                       characters: ["Ariadne"]),
+                Moment(trackIndex: 0, time: 120, label: "E2E Café", audiobook: secondBook),
+                Moment(trackIndex: 0, time: 150, label: "E2E Unrelated", audiobook: secondBook),
+                Moment(trackIndex: 0, time: 30, label: "E2E Orphan", audiobook: orphan),
+            ]
+            for entry in searchMoments {
+                context.insert(entry)
+                entry.audiobook?.moments.append(entry)
+            }
+        }
         let today = Calendar.current.startOfDay(for: .now)
         context.insert(ReadingSession(date: today, dayKey: ReadingSession.makeDayKey(date: today),
                                       hour: 10, minutes: 42, bookID: book.id,
