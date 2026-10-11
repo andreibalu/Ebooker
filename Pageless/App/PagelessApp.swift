@@ -48,6 +48,7 @@ struct PagelessApp: App {
         .modelContainer(appDelegate.modelContainer)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
+            ABSProgressReporter.flush()
             handlePendingIntent()
         }
     }

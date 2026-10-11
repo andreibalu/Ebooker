@@ -27,6 +27,7 @@ interface FakeItem {
   tracks: number;
   /** Server-side listening position in seconds, if the person already started the book. */
   progress?: number;
+  trackSeconds?: number;
 }
 
 export const TRACK_SECONDS = 30;
@@ -53,6 +54,8 @@ export interface FakeAudiobookshelf {
   progressPatches: ProgressPatch[];
   /** Audio requests for `itemID`, with the `token` query value each one carried. */
   audioTokens(itemID: string): (string | null)[];
+  setProgress(itemID: string, currentTime: number, lastUpdate?: number, isFinished?: boolean): void;
+  setProgressFailure(mode: 500 | 'unreachable' | null): void;
   close(): Promise<void>;
 }
 
@@ -72,8 +75,8 @@ const audio = silenceWAV(TRACK_SECONDS);
 function track(item: FakeItem, index: number) {
   return {
     index: index + 1,
-    startOffset: index * TRACK_SECONDS,
-    duration: TRACK_SECONDS,
+    startOffset: index * (item.trackSeconds ?? TRACK_SECONDS),
+    duration: item.trackSeconds ?? TRACK_SECONDS,
     title: `part-${index + 1}.wav`,
     contentUrl: `/audio/${item.id}/${index + 1}.wav`,
     mimeType: 'audio/wav',
@@ -95,7 +98,7 @@ function itemJSON(item: FakeItem, expanded: boolean) {
         narratorName: item.narrator,
         description: `<p>${item.title} is served by the e2e fake Audiobookshelf server.</p>`,
       },
-      duration: item.tracks * TRACK_SECONDS,
+      duration: item.tracks * (item.trackSeconds ?? TRACK_SECONDS),
       numTracks: item.tracks,
       coverPath: '',
       ...(expanded ? { tracks, audioTracks: null, chapters: [] } : {}),
@@ -104,7 +107,7 @@ function itemJSON(item: FakeItem, expanded: boolean) {
 }
 
 function progressJSON(item: FakeItem, currentTime: number) {
-  const duration = item.tracks * TRACK_SECONDS;
+  const duration = item.tracks * (item.trackSeconds ?? TRACK_SECONDS);
   return {
     libraryItemId: item.id, duration, currentTime,
     progress: duration > 0 ? currentTime / duration : 0,
@@ -139,11 +142,17 @@ function sendAudio(req: IncomingMessage, res: ServerResponse, bytes: Buffer) {
   res.end(req.method === 'HEAD' ? undefined : bytes.subarray(start, end + 1));
 }
 
-export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobookshelf> {
+export async function startFakeAudiobookshelf(port = 47378, longBook = false): Promise<FakeAudiobookshelf> {
+  if (longBook) absItems[0].trackSeconds = 360;
+  else delete absItems[0].trackSeconds;
   const requests: string[] = [];
   const progressPatches: ProgressPatch[] = [];
   const audioTokenLog: { itemID: string; token: string | null }[] = [];
   const progress = new Map(absItems.filter((item) => item.progress).map((item) => [item.id, item.progress!]));
+  const updates = new Map<string, { lastUpdate: number; isFinished: boolean }>();
+  let progressFailure: 500 | 'unreachable' | null = null;
+  const serverProgress = (item: FakeItem) => ({ ...progressJSON(item, progress.get(item.id)!),
+    ...(updates.get(item.id) ?? { lastUpdate: 1_700_000_000_000, isFinished: false }) });
   let base = '';
 
   const authorized = (req: IncomingMessage) => {
@@ -173,7 +182,8 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
         res.writeHead(401, { 'content-type': 'text/plain' });
         return res.end('Unauthorized');
       }
-      return sendAudio(req, res, audio);
+      const item = absItems.find((entry) => entry.id === audioMatch[1]);
+      return sendAudio(req, res, item?.trackSeconds ? silenceWAV(item.trackSeconds) : audio);
     }
 
     if (!path.startsWith('/api/')) {
@@ -201,7 +211,7 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
 
     if (path === '/api/me/progress' && req.method === 'GET') {
       const mediaProgress = absItems.filter((item) => progress.has(item.id))
-        .map((item) => progressJSON(item, progress.get(item.id)!));
+        .map((item) => serverProgress(item));
       return json(res, 200, { mediaProgress });
     }
 
@@ -210,13 +220,16 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
       const item = absItems.find((entry) => entry.id === progressMatch[1]);
       if (!item) return json(res, 404, {});
       if (req.method === 'PATCH') {
+        if (progressFailure === 'unreachable') { req.socket.destroy(); return; }
+        if (progressFailure === 500) return json(res, 500, {});
         const body = JSON.parse((await readBody(req)) || '{}');
         progressPatches.push({ itemID: item.id, currentTime: body.currentTime, duration: body.duration, isFinished: body.isFinished });
         progress.set(item.id, body.currentTime);
+        updates.set(item.id, { lastUpdate: Date.now(), isFinished: body.isFinished });
         return json(res, 200, {});
       }
       if (!progress.has(item.id)) return json(res, 404, {});
-      return json(res, 200, progressJSON(item, progress.get(item.id)!));
+      return json(res, 200, serverProgress(item));
     }
 
     const playMatch = /^\/api\/items\/([^/]+)\/play$/.exec(path);
@@ -256,6 +269,10 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
     serverURL: base,
     requests,
     progressPatches,
+    setProgress: (itemID, currentTime, lastUpdate = Date.now(), isFinished = false) => {
+      progress.set(itemID, currentTime); updates.set(itemID, { lastUpdate, isFinished });
+    },
+    setProgressFailure: (mode) => { progressFailure = mode; },
     audioTokens: (itemID) => audioTokenLog.filter((entry) => entry.itemID === itemID).map((entry) => entry.token),
     close: () => new Promise<void>((resolve) => {
       server.closeAllConnections();

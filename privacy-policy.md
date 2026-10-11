@@ -67,6 +67,8 @@ Unpaged lets you browse and download free public-domain audiobooks from [LibriVo
 
 ## Audiobookshelf (optional)
 
+Unsent listening progress is kept locally as the latest item ID, server address, position, duration, finished status, and client timestamp. This queue contains no credentials and is cleared on disconnect or a server change. Unpaged retries delivery when connectivity returns, the app opens, or the connection refreshes, and reads server progress before resuming to compare update timestamps.
+
 You can connect Unpaged to an [Audiobookshelf](https://www.audiobookshelf.org) server that you run or have an account on. Unpaged then talks **directly** to that server — there is no Unpaged server in between — to sign in, list your libraries and books, load covers, stream audio, and report your listening position back so the server (and your other Audiobookshelf apps) stay in sync. Your server's operator can see this activity the same way they see any Audiobookshelf client. The developer never receives any of it.
 
 Your login is stored only in the iOS Keychain on this iPhone. When you sign in with a password, Unpaged exchanges it for a session token and does not keep the password. Books you add from your server are stored in your library without any credential; the token is attached only at the moment audio is requested. **Settings → Audiobookshelf Server → Disconnect** deletes the stored login. Books you added stay in your library (and, with iCloud Sync on, in your iCloud Library) but won't play until you connect again.

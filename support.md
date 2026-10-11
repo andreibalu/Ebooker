@@ -30,6 +30,8 @@ At the top of the tab, **Collections** are hand-picked shelves of classics group
 
 ### Can I use my Audiobookshelf server?
 
+Unpaged keeps the latest unsent listening position on this iPhone and retries when you reconnect or reopen the app. Before resuming, it checks for newer server progress with a short timeout. Updates more than 30 seconds apart follow the newer timestamp, including intentional rewinds. Disconnecting clears unsent progress.
+
 Yes. If you run [Audiobookshelf](https://www.audiobookshelf.org) (or someone shares a server with you), open the **Shelves** tab, tap **Shelves** again to open the source menu, and choose **Audiobookshelf** — or go to **Settings → Audiobookshelf Server**. Enter your server address (for example `https://abs.example.com`) and either sign in with your username and password or paste an API key.
 
 - **API keys** are created in Audiobookshelf under **Settings → API Keys**. A new key may need to be switched on there before Unpaged can use it.

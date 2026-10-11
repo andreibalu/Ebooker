@@ -202,3 +202,93 @@ test('an unreachable server shows Retry, and Retry loads the shelf once it is ba
     await server.close();
   }
 });
+
+async function addAndPlayHobbit(screen: Screen) {
+  await tapVisibleCenter(screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien').first());
+  await screen.getByTestId('abs.detail.add').tap();
+  await expect(screen.getByText('In your Library', { exact: true })).toBeVisible();
+  await screen.getByTestId('abs.detail.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+}
+
+async function resumeHobbit(screen: Screen) {
+  await screen.getByTestId('shelvesTab').tap();
+  await tapVisibleCenter(screen.getByRole('button', /The Fixture Hobbit, by E2E Tolkien/).first());
+  await screen.getByTestId('abs.detail.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+}
+
+test('ABS durable progress delivers only the latest failed position after relaunch', async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    server.setProgressFailure(500);
+    await addAndPlayHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[3-9] of 00:30$/);
+    await screen.getByTestId('player.playPause').tap();
+    const value = await screen.getByTestId('player.scrubber').inputValue();
+    expect(server.progressPatches).toHaveLength(0);
+    server.setProgressFailure(null);
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    await expect.poll(() => server.progressPatches.length).toBe(1);
+    const patch = server.progressPatches[0];
+    const seconds = Number(value.match(/^00:(\d+) of /)?.[1]);
+    expect(Math.abs(patch.currentTime - seconds)).toBeLessThan(2);
+    expect(patch.isFinished).toBe(false);
+  });
+});
+
+test('ABS durable progress resumes from a newer server position five minutes ahead', async ({ device, screen, nativeKeyboard }) => {
+  const server = await startFakeAudiobookshelf(47378, true);
+  try {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await addAndPlayHobbit(screen);
+    await screen.getByTestId('player.playPause').tap();
+    await expect.poll(() => server.progressPatches.length).toBeGreaterThan(0);
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    server.setProgress('abs-hobbit', 300);
+    await resumeHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^05:0\d of 06:00$/);
+  } finally { await server.close(); }
+});
+
+test('ABS durable progress keeps a newer local rewind', async ({ device, screen, nativeKeyboard }) => {
+  const server = await startFakeAudiobookshelf(47378, true);
+  try {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    server.setProgress('abs-hobbit', 300, Date.now() - 60_000);
+    await addAndPlayHobbit(screen);
+    await screen.getByTestId('player.playPause').tap();
+    server.setProgressFailure(500);
+    const scrubber = screen.getByTestId('player.scrubber');
+    const box = await scrubber.boundingBox();
+    if (!box) throw new Error('Scrubber has no bounds');
+    const y = box.y + box.height * 0.75;
+    await screen.swipe({ from: { x: box.x + box.width * 0.83, y }, to: { x: box.x + box.width * 0.2, y } });
+    await expect(scrubber).toHaveValue(/^(00|01|02):\d\d of 06:00$/);
+    await screen.getByTestId('player.playPause').tap();
+    await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+    await screen.getByTestId('player.playPause').tap();
+    server.setProgress('abs-hobbit', 300, Date.now() - 60_000);
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    await resumeHobbit(screen);
+    await expect(scrubber).toHaveValue(/^(00|01|02):\d\d of 06:00$/);
+  } finally { await server.close(); }
+});
+
+test('ABS durable progress sends finished state', { timeout: 180_000 }, async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await addAndPlayHobbit(screen);
+    await expect.poll(() => server.progressPatches.some((patch) => patch.itemID === 'abs-hobbit' && patch.isFinished),
+      { timeout: 90_000 }).toBe(true);
+    expect(server.progressPatches.at(-1)?.currentTime).toBe(60);
+  });
+});

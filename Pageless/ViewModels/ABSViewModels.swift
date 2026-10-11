@@ -401,6 +401,8 @@ final class ABSBookDetailViewModel {
     /// Adds the item as a streaming book (or returns the existing row). Nil on failure, with
     /// `actionError` set in plain words.
     func addToLibrary(account: ABSAccount, modelContext: ModelContext) async -> Audiobook? {
+        // Server progress is reconciled by `AudioPlayerManager.startPlayback`, which must see the
+        // adoption itself so it skips the resume backtrack on a position taken from the server.
         if let libraryBook { return libraryBook }
         guard NetworkMonitor.shared.isConnected else {
             actionError = "You're offline. Connect to the internet to add books from your server."

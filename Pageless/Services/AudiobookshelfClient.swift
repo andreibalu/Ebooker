@@ -185,8 +185,8 @@ actor AudiobookshelfClient {
     /// A stream token must outlive a long listening stretch; below this the session refreshes.
     static let minimumStreamTokenLifetime: TimeInterval = 45 * 60
 
-    func mediaProgress(itemID: String) async throws -> ABSMediaProgress? {
-        do { return try decode(await request(path: ["api", "me", "progress", itemID])) }
+    func mediaProgress(itemID: String, timeout: TimeInterval = 20) async throws -> ABSMediaProgress? {
+        do { return try decode(await request(path: ["api", "me", "progress", itemID], timeout: timeout, refreshOnUnauthorized: timeout > 2)) }
         catch AudiobookshelfError.serverError(status: 404) { return nil }
     }
 
@@ -195,25 +195,30 @@ actor AudiobookshelfClient {
         return response.mediaProgress
     }
 
-    func updateProgress(itemID: String, update: ABSProgressUpdate) async throws {
+    func updateProgress(itemID: String, update: ABSProgressUpdate, expectedServer: String? = nil) async throws {
+        if let expectedServer, try requiredConnection().baseURL.absoluteString != expectedServer {
+            throw AudiobookshelfError.notConnected
+        }
         guard update.duration >= 0, update.currentTime >= 0 else { throw AudiobookshelfError.unreadableResponse }
         let body = try JSONEncoder().encode(update)
         _ = try await request(path: ["api", "me", "progress", itemID], method: "PATCH", body: body)
     }
 
     private func request(path: [String], method: String = "GET", body: Data? = nil,
-                         query: [URLQueryItem] = []) async throws -> Data {
+                         query: [URLQueryItem] = [], timeout: TimeInterval = 20,
+                         refreshOnUnauthorized: Bool = true) async throws -> Data {
         let connection = try requiredConnection()
         do {
             return try await send(baseURL: connection.baseURL, path: path, method: method, body: body,
-                                  query: query, headers: [:], auth: connection.credential)
+                                  query: query, headers: [:], auth: connection.credential, timeout: timeout)
         } catch AudiobookshelfError.expiredToken {
+            guard refreshOnUnauthorized else { throw AudiobookshelfError.expiredToken }
             guard case .session(let failedAccess, _) = connection.credential else {
                 throw AudiobookshelfError.badCredentials
             }
             let renewed = try await refresh(after: failedAccess)
             return try await send(baseURL: renewed.baseURL, path: path, method: method, body: body,
-                                  query: query, headers: [:], auth: renewed.credential)
+                                  query: query, headers: [:], auth: renewed.credential, timeout: timeout)
         }
     }
 
@@ -247,6 +252,7 @@ actor AudiobookshelfClient {
                                         credential: .session(accessToken: newAccess, refreshToken: newRefresh),
                                         username: active.username)
             try credentials.save(renewed)
+            Task { @MainActor in ABSProgressReporter.flush() }
             return renewed
         }
         let id = UUID()
@@ -257,10 +263,10 @@ actor AudiobookshelfClient {
 
     private func send(baseURL: URL, path: [String], method: String, body: Data?,
                       query: [URLQueryItem] = [], headers: [String: String],
-                      auth: ABSCredential?) async throws -> Data {
+                      auth: ABSCredential?, timeout: TimeInterval = 20) async throws -> Data {
         var request = URLRequest(url: try makeURL(baseURL: baseURL, path: path, query: query))
         // A wrong LAN address should fail in seconds, not after URLSession's default minute.
-        request.timeoutInterval = 20
+        request.timeoutInterval = timeout
         request.httpMethod = method
         request.httpBody = body
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
