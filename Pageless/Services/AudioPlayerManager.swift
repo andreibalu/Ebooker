@@ -104,6 +104,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     @Published private(set) var playbackRate: Double = 1
     @Published private(set) var loadingPlaybackBookID: UUID?
     @Published var sleepTimerEndsAt: Date?
+    @Published private(set) var sleepAtChapterEnd = false
+    private var sleepChapterEnd: Double?
     @Published var playerErrorMessage: String?
     /// Chapters of the current book: embedded/server chapters when the files carry them,
     /// otherwise one per track.
@@ -403,6 +405,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         // navigation (a second "next chapter" tap) must step from where the user asked to be.
         currentTime = boundedTime
         pendingSeek = (boundedTime, Date())
+        refreshChapterSleepBoundary()
         player.seek(to: target) { [weak self] finished in
             guard let self else { return }
             Task { @MainActor in
@@ -532,6 +535,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             )
         }
         if rebuilt != chapters { chapters = rebuilt }
+        refreshChapterSleepBoundary()
     }
 
     /// Reads chapters for the committed item off the playback path, then rebuilds the list if the
@@ -617,6 +621,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func setSleepTimer(seconds: Double?) {
         sleepTimerTask?.cancel()
+        sleepTimerEndsAt = nil
+        sleepAtChapterEnd = seconds == SleepTimerOption.endOfChapter.rawValue
+        refreshChapterSleepBoundary()
+        if sleepAtChapterEnd { return }
         guard var seconds else {
             sleepTimerEndsAt = nil
             return
@@ -641,6 +649,37 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 self.sleepTimerEndsAt = nil
             }
         }
+    }
+
+    var chapterSleepRemaining: Double {
+        guard let end = sleepChapterEnd, let book = currentAudiobook else { return 0 }
+        let position = navigationPosition
+        let globalTime = AudiobookshelfLibraryService.globalTime(
+            trackIndex: position.trackIndex, timeInTrack: position.time,
+            trackDurations: book.sortedTracks.map(\.duration)
+        )
+        return max(0, end - globalTime)
+    }
+
+    private func refreshChapterSleepBoundary() {
+        guard sleepAtChapterEnd, let book = currentAudiobook, let chapter = currentChapter else {
+            sleepChapterEnd = nil
+            player.currentItem?.forwardPlaybackEndTime = .invalid
+            return
+        }
+        let durations = book.sortedTracks.map(\.duration)
+        let end = AudiobookshelfLibraryService.globalTime(
+            trackIndex: chapter.trackIndex, timeInTrack: chapter.start,
+            trackDurations: durations
+        ) + chapter.duration
+        sleepChapterEnd = end
+        let trackStart = durations.prefix(currentTrackIndex).reduce(0, +)
+        let endInTrack = end - trackStart
+        // AVPlayer itself clamps rendering here, including in the background and for streams.
+        // A chapter spanning files leaves intermediate items unrestricted.
+        player.currentItem?.forwardPlaybackEndTime = endInTrack > 0 && endInTrack <= duration + 0.05
+            ? CMTime(seconds: min(endInTrack, duration), preferredTimescale: 600)
+            : .invalid
     }
 
     func setProgressMarker() {
@@ -915,7 +954,27 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         ) { [weak self] notification in
             guard let self else { return }
             guard notification.object as? AVPlayerItem === self.player.currentItem else { return }
+            let endedItem = notification.object as? AVPlayerItem
             Task { @MainActor in
+                guard endedItem === self.player.currentItem else { return }
+                if self.sleepAtChapterEnd, let end = self.sleepChapterEnd,
+                   let book = self.currentAudiobook {
+                    let trackStart = book.sortedTracks.prefix(self.currentTrackIndex).reduce(0) { $0 + $1.duration }
+                    let endInTrack = end - trackStart
+                    // Ignore stale end notifications after a seek retargeted the timer.
+                    if endInTrack <= self.duration + 0.05,
+                       self.player.currentTime().seconds >= endInTrack - 0.05 {
+                        self.pendingSeek = nil
+                        self.currentTime = min(endInTrack, self.duration)
+                        self.pause()
+                        self.setSleepTimer(seconds: nil)
+                        if !self.canGoToNextTrack, endInTrack >= self.duration - 0.05 {
+                            self.markCurrentBookFinished()
+                        }
+                        return
+                    }
+                    if endInTrack <= self.duration + 0.05 { return }
+                }
                 if self.canGoToNextTrack {
                     self.nextTrack()
                 } else {
@@ -963,6 +1022,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func markCurrentBookFinished() {
         guard let audiobook = currentAudiobook else { return }
+        setSleepTimer(seconds: nil)
         player.pause()
         isPlaying = false
         let trackIndex = max(audiobook.sortedTracks.count - 1, 0)
