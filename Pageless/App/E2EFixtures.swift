@@ -7,12 +7,25 @@ import SwiftData
 enum E2EFixtures {
     static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("-e2e-fixture") }
 
+    static func argument(_ key: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard enabled, let index = args.firstIndex(of: key), args.indices.contains(index + 1) else { return nil }
+        return args[index + 1]
+    }
+
+    static var fakeRecapText: String? { argument("-e2e-fake-recap") }
+    static var welcomeRecapCalls = 0
+
     static func storeDirectory(in support: URL) throws -> URL {
         let directory = support.appendingPathComponent("E2EFixtures", isDirectory: true)
         if ProcessInfo.processInfo.arguments.contains("-e2e-reset-fixture") {
             if FileManager.default.fileExists(atPath: directory.path) {
                 try FileManager.default.removeItem(at: directory)
             }
+            for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("welcomeBackDismissed.") {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+            UserDefaults.standard.removeObject(forKey: AISettingsKey.welcomeBackRecaps.rawValue)
             // UIKit scene restoration would otherwise reopen whatever screen the previous run
             // ended on (for example Reading stats), so a reset must also start from the root.
             let savedState = support.deletingLastPathComponent()
@@ -51,6 +64,17 @@ enum E2EFixtures {
                                    audiobook: book)
             context.insert(track)
             book.tracks.append(track)
+        }
+        if let value = argument("-e2e-welcome-days"), let days = Double(value) {
+            book.lastPlayedAt = Date.now.addingTimeInterval(-days * 86_400)
+            book.currentTrackIndex = 0
+            book.currentTime = 200
+            book.progressTrackIndex = 0
+            book.progressTime = 200
+            book.progressUpdatedAt = book.lastPlayedAt
+            if let text = argument("-e2e-persisted-recap") {
+                book.storeProgressRecap(text: text, headline: "At the harbour", anchorTrackIndex: 0, anchorTime: 200)
+            }
         }
         let moment = Moment(trackIndex: 0, time: 30, label: "E2E First Moment",
                             audiobook: book, notes: "A saved fixture note", categories: [.dialogue])
@@ -175,6 +199,20 @@ enum E2EFixtures {
         text("data"); integer(byteCount)
         data.append(Data(count: Int(byteCount)))
         return data
+    }
+}
+
+struct E2EWelcomeRecapProvider: RecapProviding {
+    let text: String
+    func generateRecap(transcript: String, audiobookTitle: String?, includeProgressHeadline: Bool) async throws -> RecapGenerationResult {
+        await MainActor.run { E2EFixtures.welcomeRecapCalls += 1 }
+        return RecapGenerationResult(recap: text, progressHeadline: "At the harbour")
+    }
+}
+
+struct E2EWelcomeTranscriber: SegmentTranscribing {
+    func transcribeSegment(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String {
+        "The traveller reached the harbour."
     }
 }
 #endif

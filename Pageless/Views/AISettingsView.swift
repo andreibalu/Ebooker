@@ -17,6 +17,7 @@ struct AISettingsView: View {
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
     @AppStorage("useSmartSummary") private var useSmartSummary = false
+    @AppStorage(AISettingsKey.welcomeBackRecaps.rawValue) private var welcomeBackRecaps = true
     @AppStorage("shortenSummary") private var shortenSummary = false
 
     private var isSmartNamingAvailable: Bool {
@@ -156,6 +157,12 @@ struct AISettingsView: View {
                             caption: "Summarize where you left off on the book detail screen"
                         )
                     }
+                    dividerInset
+                    SettingsToggleRow(isOn: $welcomeBackRecaps, isDisabled: aiSubTogglesDisabled) {
+                        SettingsRowLabel(title: "Welcome-back recaps",
+                                         caption: "Offer a recap after three days away from a book")
+                    }
+                    .accessibilityIdentifier("settings.welcomeBackRecaps")
                     if useSmartSummary {
                         dividerInset
                         SettingsToggleRow(isOn: $shortenSummary, isDisabled: aiSubTogglesDisabled) {

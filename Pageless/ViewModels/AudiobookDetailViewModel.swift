@@ -126,6 +126,7 @@ final class AudiobookDetailViewModel {
         trackIndex: Int,
         progressTime: Double,
         includeProgressHeadline: Bool,
+        requestSpeechAuthorization: Bool = true,
         modelContext: ModelContext? = nil,
         onSuccessfulRecap: (() -> Void)? = nil
     ) async {
@@ -152,7 +153,8 @@ final class AudiobookDetailViewModel {
         let transcript: String?
         do {
             transcript = try await obtainTranscript(
-                fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime
+                fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime,
+                requestSpeechAuthorization: requestSpeechAuthorization
             )
         } catch is CancellationError {
             // Cancellation should not be reported as a transcription failure.
@@ -179,7 +181,8 @@ final class AudiobookDetailViewModel {
 
     /// SpeechAnalyzer first (no permission, no export); legacy export +
     /// SFSpeechRecognizer fallback. Internal for tests.
-    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String? {
+    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double,
+                          requestSpeechAuthorization: Bool = true) async throws -> String? {
         try Task.checkCancellation()
         do {
             let transcript = try await segmentTranscriber.transcribeSegment(
@@ -195,7 +198,9 @@ final class AudiobookDetailViewModel {
         }
 
         try Task.checkCancellation()
-        let authStatus = await transcription.requestAuthorization()
+        let authStatus = requestSpeechAuthorization
+            ? await transcription.requestAuthorization()
+            : SFSpeechRecognizer.authorizationStatus()
         try Task.checkCancellation()
         guard authStatus == .authorized else {
             recapError = "Speech recognition not authorized."
