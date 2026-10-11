@@ -167,7 +167,7 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
   const updates = new Map<string, { lastUpdate: number; isFinished: boolean }>();
   let progressFailure: 500 | 'unreachable' | null = null;
   const serverProgress = (item: FakeItem) => ({ ...progressJSON(item, progress.get(item.id)!),
-    ...(updates.get(item.id) ?? { lastUpdate: 1_700_000_000_000, isFinished: false }) });
+    ...(updates.get(item.id) ?? { lastUpdate: 1_700_000_000_000, isFinished: item.finished ?? false }) });
   let base = '';
   const controls = { audioDelayMS: 0 };
 
