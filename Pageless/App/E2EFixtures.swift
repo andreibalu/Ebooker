@@ -18,6 +18,11 @@ enum E2EFixtures {
     }
 
     static var fakeRecapText: String? { argument("-e2e-fake-recap") }
+    /// Replaces only the welcome-back transcriber, for qualifying the real model where the
+    /// simulator has no on-device speech asset.
+    static var transcriptText: String? {
+        argument("-e2e-transcript-file").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+    }
     static var welcomeRecapCalls = 0
 
     static func storeDirectory(in support: URL) throws -> URL {
@@ -218,8 +223,10 @@ struct E2EWelcomeRecapProvider: RecapProviding {
 }
 
 struct E2EWelcomeTranscriber: SegmentTranscribing {
+    var text = "The traveller reached the harbour."
+
     func transcribeSegment(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String {
-        "The traveller reached the harbour."
+        text
     }
 }
 #endif

@@ -24,6 +24,8 @@ final class WelcomeBackRecapViewModel {
         if let fake = E2EFixtures.fakeRecapText {
             provider = E2EWelcomeRecapProvider(text: fake)
             transcriber = E2EWelcomeTranscriber()
+        } else if let transcript = E2EFixtures.transcriptText {
+            transcriber = E2EWelcomeTranscriber(text: transcript)
         }
         #endif
         recapModel = AudiobookDetailViewModel(audiobook: audiobook, recapProvider: provider,

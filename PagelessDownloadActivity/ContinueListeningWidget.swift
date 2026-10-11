@@ -80,7 +80,7 @@ private struct ListeningWidgetView: View {
                     }
                 } else if family == .systemMedium {
                     HStack(spacing: 12) {
-                        cover.frame(width: 78, height: 110)
+                        cover(side: 104)
                         VStack(alignment: .leading, spacing: 5) {
                             metadata(book)
                             progress(book)
@@ -98,7 +98,7 @@ private struct ListeningWidgetView: View {
                 } else {
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(alignment: .top, spacing: 8) {
-                            cover.frame(width: 42, height: 54)
+                            cover(side: 48)
                             metadata(book)
                         }
                         Spacer(minLength: 0)
@@ -117,7 +117,9 @@ private struct ListeningWidgetView: View {
         .accessibilityIdentifier("widget.continueListening")
     }
 
-    private var cover: some View {
+    /// Square, like the saved 300px cover. Clips after framing: a scaled-to-fill image overflows its
+    /// frame, so clipping first would let it spill into the widget margin and under the text.
+    private func cover(side: CGFloat) -> some View {
         Group {
             if let image = entry.cover {
                 Image(uiImage: image).resizable().widgetAccentedRenderingMode(.desaturated)
@@ -127,6 +129,7 @@ private struct ListeningWidgetView: View {
                 Color.secondary.opacity(0.15)
             }
         }
+        .frame(width: side, height: side)
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .accessibilityHidden(true)
     }

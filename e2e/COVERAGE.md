@@ -18,6 +18,12 @@ A code review of the merged branch found three app bugs, fixed before the final 
 - Resuming after adopting a newer server position reported the old local position back to the server. Covered by `ABS durable progress resumes from a newer server position five minutes ahead`.
 - Cancelling an Audiobookshelf download could delete the manifest of a download restarted during the cancel. No E2E test drives that race.
 
+Manual checks on the same simulator, 2026-10-12:
+
+- **Continue Listening widget.** The small and medium widgets were added on the Home Screen through SpringBoard's widget gallery and checked in light and dark appearance. They show the empty state ("Start a book in Unpaged") when no snapshot exists. Tapping the widget cold-launches into the player at the saved position. The medium Play button resumes a paused book. The check found the cover overflowing into the widget margin and cropping the text. It now renders as a square cover clipped after framing. The Lock Screen accessory families were not placed.
+- **App Group in signed profiles.** A Release build signed with automatic provisioning lists `group.andreibaludev.Pageless` in the entitlements of both `Pageless.app` and the `DownloadActivity` extension, and in both team provisioning profiles. These are development profiles. No archive was made, so the App Store distribution profile is unchecked.
+- **Welcome-back recap with the real model.** The Plus trial was bought through the local StoreKit sheet, with local AI on and the book last played 4 days ago. On the first try no card appeared, as designed for a failure: this simulator has no on-device speech recognition asset, the SpeechAnalyzer path fails, and the recap never requests speech permission for the fallback. With `-e2e-transcript-file` supplying the narrated chapter's text, the on-device model returned a headline and a correct recap in under 5 seconds, and the saved recap reappeared after a relaunch without the hook. Real transcription still needs a device.
+
 ## Historical validation, 2026-10-07 (before test pruning)
 
 These results and test counts predate the test pruning.

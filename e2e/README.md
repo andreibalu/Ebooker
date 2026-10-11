@@ -68,6 +68,7 @@ DEBUG-only launch hooks:
 | Hook | Effect |
 | --- | --- |
 | `-e2e-fake-recap <text>` | Uses a deterministic recap provider and segment transcriber, bypassing AI/Plus/local-AI gates only for welcome-back recaps on iOS 26+. `welcomeBack.providerCalls` exposes generation calls. |
+| `-e2e-transcript-file <path>` | Replaces only the welcome-back segment transcriber with the file's text. The recap model and the Plus, local-AI and setting gates stay real. Use it to qualify the on-device model on a simulator without a speech asset. |
 | `-e2e-welcome-days <n>` | On initial fixture seeding, sets the listening book's last-played date n days ago and saved/current progress to 200 seconds. |
 | `-e2e-persisted-recap <text>` | With welcome-days seeding, stores a matching recap at the saved position. |
 | `-e2e-welcome-threshold-days <n>` | Overrides the three-day return threshold for this DEBUG fixture launch. |
