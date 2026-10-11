@@ -39,6 +39,9 @@ enum E2EFixtures {
             }
             // A reset run starts with no Audiobookshelf server; the fixture login is separate.
             try? ABSKeychainCredentialStore().clear()
+            try? FileManager.default.removeItem(at: support.appendingPathComponent("ABSDownloads"))
+            let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            try? FileManager.default.removeItem(at: cache.appendingPathComponent("Audiobookshelf"))
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
                         "absSelectedLibraryID", "abs.progressOutbox"] {

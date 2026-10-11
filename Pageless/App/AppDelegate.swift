@@ -192,6 +192,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             catch { fatalError("Could not seed E2E fixtures: \(error)") }
         }
         #endif
+        ABSDownloadManager.shared.configure(context: modelContainer.mainContext)
         FingerprintBackfillService.runIfNeeded(modelContainer: modelContainer)
         OrphanDetectionService.runIfNeeded(modelContainer: modelContainer)
 
@@ -233,6 +234,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 restorationSucceeded = await freeBookDownloader.restoreBackgroundSession(
                     modelContext: modelContainer.mainContext
                 )
+            } else if identifier == ABSDownloadManager.sessionIdentifier {
+                await ABSDownloadManager.shared.reconcile()
             } else if identifier == LibriVoxBackgroundDownloadCoordinator.sessionIdentifier {
                 restorationSucceeded = await libriVoxDownloadCoordinator.restoreBackgroundSession()
             }

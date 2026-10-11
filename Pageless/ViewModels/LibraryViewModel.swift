@@ -164,12 +164,12 @@ final class LibraryViewModel {
         }
     }
 
-    /// An Audiobookshelf book's audio lives on the user's server, so removing it only drops the
-    /// Unpaged row (progress already pushed to the server survives there). No archive state: the
-    /// book can be added again from Shelves at any time.
+    /// Removes the Unpaged row and any local download, without deleting server content.
+    /// The book can be added again from Shelves at any time.
     func deleteAudiobookshelfBook(_ audiobook: Audiobook, modelContext: ModelContext) {
         do {
-            try LibraryImportService.deleteAudiobook(audiobook, deleteFiles: false, modelContext: modelContext)
+            Task { await ABSDownloadManager.shared.cancel(audiobook.id) }
+            try LibraryImportService.deleteAudiobook(audiobook, deleteFiles: true, modelContext: modelContext)
         } catch {
             presentAlert(message: error.localizedDescription)
         }

@@ -56,6 +56,7 @@ export interface FakeAudiobookshelf {
   audioTokens(itemID: string): (string | null)[];
   setProgress(itemID: string, currentTime: number, lastUpdate?: number, isFinished?: boolean): void;
   setProgressFailure(mode: 500 | 'unreachable' | null): void;
+  audioDelayMS: number;
   close(): Promise<void>;
 }
 
@@ -154,6 +155,7 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
   const serverProgress = (item: FakeItem) => ({ ...progressJSON(item, progress.get(item.id)!),
     ...(updates.get(item.id) ?? { lastUpdate: 1_700_000_000_000, isFinished: false }) });
   let base = '';
+  const controls = { audioDelayMS: 0 };
 
   const authorized = (req: IncomingMessage) => {
     const header = req.headers.authorization ?? '';
@@ -183,7 +185,15 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
         return res.end('Unauthorized');
       }
       const item = absItems.find((entry) => entry.id === audioMatch[1]);
-      return sendAudio(req, res, item?.trackSeconds ? silenceWAV(item.trackSeconds) : audio);
+      const body = item?.trackSeconds ? silenceWAV(item.trackSeconds) : audio;
+      if (controls.audioDelayMS > 0) {
+        res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': body.length });
+        res.write(body.subarray(0, 44_000));
+        const timer = setTimeout(() => res.end(body.subarray(44_000)), controls.audioDelayMS);
+        res.on('close', () => clearTimeout(timer));
+        return;
+      }
+      return sendAudio(req, res, body);
     }
 
     if (!path.startsWith('/api/')) {
@@ -266,6 +276,8 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   return {
+    get audioDelayMS() { return controls.audioDelayMS; },
+    set audioDelayMS(value: number) { controls.audioDelayMS = value; },
     serverURL: base,
     requests,
     progressPatches,

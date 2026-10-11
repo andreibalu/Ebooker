@@ -10,7 +10,7 @@ import SwiftData
 /// At launch, books that synced down from iCloud may carry `isDownloaded == true` even though
 /// the audio files don't exist on this device. This service reconciles that: any book whose
 /// storage folder is empty or missing gets flipped to `isDownloaded = false` so the rest of the
-/// app treats it as a Cloud Library orphan that needs re-acquisition.
+/// app treats own imports as Cloud Library orphans and server books as streaming entries.
 enum OrphanDetectionService {
     private static let log = Logger(subsystem: "andreibaludev.Pageless", category: "OrphanDetection")
 
@@ -23,7 +23,8 @@ enum OrphanDetectionService {
     /// Only books that claim local audio are inspected. Streaming entries — free books and books
     /// from the user's Audiobookshelf server — legitimately have no folder and are never orphans.
     static func needsLocalFileCheck(_ book: Audiobook) -> Bool {
-        guard book.isDownloaded, !book.isAudiobookshelfBook else { return false }
+        guard book.isDownloaded else { return false }
+        if book.isAudiobookshelfBook { return true }
         return !book.tracks.contains(where: { $0.remoteURL != nil && $0.storedFileName.isEmpty })
     }
 
@@ -51,7 +52,13 @@ enum OrphanDetectionService {
             let contents = exists
                 ? ((try? fm.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? [])
                 : []
-            let hasFiles = !contents.isEmpty
+            // A partial ABS folder would fail playback, so ABS books need every track file.
+            let hasFiles = book.isAudiobookshelfBook
+                ? !book.tracks.isEmpty && book.tracks.allSatisfy { track in
+                    !track.storedFileName.isEmpty
+                        && fm.fileExists(atPath: folderURL.appendingPathComponent(track.storedFileName).path)
+                }
+                : !contents.isEmpty
 
             log.info("Inspect local audiobook storage exists=\(exists, privacy: .public) hasFiles=\(hasFiles, privacy: .public) fileCount=\(contents.count, privacy: .public) trackCount=\(book.tracks.count, privacy: .public)")
 

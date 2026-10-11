@@ -220,6 +220,11 @@ struct PlayerView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("player.bookContext")
                 }
+                if book.isAudiobookshelfBook && !book.isDownloaded {
+                    Text("Download this book to use smart moments.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("player.smartMoments.downloadRequired")
+                }
                 if let chapterLine = embeddedChapterLine {
                     chapterLineText(chapterLine)
                 }

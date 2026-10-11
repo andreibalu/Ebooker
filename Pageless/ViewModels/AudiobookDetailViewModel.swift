@@ -143,7 +143,9 @@ final class AudiobookDetailViewModel {
               let fileURL = try? LibraryImportService.fileURL(for: tracks[trackIndex], in: audiobook)
         else {
             guard !Task.isCancelled else { return }
-            recapError = "Audio for this book isn't on this iPhone."
+            recapError = audiobook.isAudiobookshelfBook
+                ? "Download this book to use recaps."
+                : "Audio for this book isn't on this iPhone."
             return
         }
 

@@ -250,6 +250,15 @@ struct ContentView: View {
             isPresented: deleteConfirmationBinding
         ) {
             if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
+                if viewModel.deleteCandidate?.isDownloaded == true {
+                    Button("Remove Download", role: .destructive) {
+                        unloadDeleteCandidateFromPlayer()
+                        if let book = viewModel.deleteCandidate {
+                            Task { await ABSDownloadManager.shared.removeDownload(book) }
+                            viewModel.deleteCandidate = nil
+                        }
+                    }
+                }
                 Button("Remove from Library", role: .destructive) {
                     unloadDeleteCandidateFromPlayer()
                     if let book = viewModel.deleteCandidate {
@@ -293,7 +302,11 @@ struct ContentView: View {
             }
         } message: {
             if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
-                Text("Removes this book from Unpaged. It stays on your Audiobookshelf server, and you can add it again from Shelves.")
+                if viewModel.deleteCandidate?.isDownloaded == true {
+                    Text("Remove Download deletes the audio on this iPhone and keeps the book streaming from your server. Remove from Library removes it from Unpaged. Your server keeps the book either way.")
+                } else {
+                    Text("Removes this book from Unpaged. It stays on your Audiobookshelf server, and you can add it again from Shelves.")
+                }
             } else if viewModel.deleteCandidate?.isStreamingOnly == true {
                 if IcloudSyncGate.isEnabled() {
                     Text("Removes this book from your library on this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream it again anytime.")
@@ -679,6 +692,7 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     if tab == .allBooks {
+                        ABSDownloadsSection()
                         LibriVoxDownloadSection { catalogID in
                             selectedLibraryDownloadBook = browseViewModel.catalogBook(
                                 id: catalogID,
@@ -783,7 +797,7 @@ struct ContentView: View {
             Button(role: .destructive) {
                 viewModel.deleteCandidate = audiobook
             } label: {
-                Label(audiobook.isStreamingOnly ? "Remove from Library" : audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
+                Label(audiobook.isAudiobookshelfBook ? "Remove from Library" : audiobook.isStreamingOnly ? "Remove from Library" : audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
             }
         }
     }
@@ -943,7 +957,9 @@ struct ContentView: View {
     }
 
     private var deleteAlertTitle: String {
-        if viewModel.deleteCandidate?.isStreamingOnly == true {
+        if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
+            return "Remove Audiobookshelf Book?"
+        } else if viewModel.deleteCandidate?.isStreamingOnly == true {
             return "Remove from Library?"
         } else if viewModel.deleteCandidate?.isFreeBook == true {
             return "Remove Download?"

@@ -36,11 +36,11 @@ Yes. If you run [Audiobookshelf](https://www.audiobookshelf.org) (or someone sha
 
 - **API keys** are created in Audiobookshelf under **Settings → API Keys**. A new key may need to be switched on there before Unpaged can use it.
 - **Browsing:** Shelves shows your book libraries with **Continue Listening**, **Recently Added**, and the full library with search. If your server has several book libraries, tap the library name to switch. Podcast libraries aren't shown.
-- **Listening:** tap **Play** on a book to add it to your Library as a streaming book and start listening. Nothing is downloaded, so your server has to be reachable while you listen. Your position is sent back to the server when you pause, leave the app, or finish, so other Audiobookshelf apps pick up where you left off.
+- **Listening:** tap **Play** on a book to add it to your Library as a streaming book and start listening. Choose **Download** in Shelves or Library details to save the audio on this iPhone for offline listening. Downloads show progress and support cancel and retry, including after relaunch. Streaming needs a reachable server. Your position is sent back to the server when you pause, leave the app, or finish, so other Audiobookshelf apps pick up where you left off.
 - **Addresses:** both `https://` and plain `http://` addresses work, including servers on your local network (for example `http://192.168.1.20:13378` or `http://nas.local:13378`) and over a VPN such as Tailscale (for example `http://nas.your-tailnet.ts.net:13378` or `http://100.101.102.103:13378`). iOS will ask to allow **Local Network** access the first time you reach a server on your home network. If you enter a plain `http://` address for a server on the public internet, Unpaged warns you before signing in, because your password and listening activity would travel unencrypted; HTTPS (for example via a reverse proxy or Tailscale HTTPS certificates) is recommended for remote access. If a VPN address stops working, check that the VPN is switched on.
-- **Privacy:** your login stays on this iPhone, in the Keychain. **Settings → Audiobookshelf Server → Disconnect** removes it. Books you added stay in your Library but won't play until you reconnect.
+- **Privacy:** your login stays on this iPhone, in the Keychain. **Settings → Audiobookshelf Server → Disconnect** removes it. Books you added stay in your Library. Disconnect asks whether to keep or remove downloads; kept downloads still play offline. Streaming needs you to reconnect.
 
-Removing an Audiobookshelf book from your Library only removes it from Unpaged; it stays on your server and you can add it again from Shelves.
+Removing an Audiobookshelf book from your Library only removes it from Unpaged; it stays on your server and you can add it again from Shelves. **Remove Download** keeps the book, progress, moments, and EQ and returns to streaming. **Settings → Audiobookshelf Server** shows downloaded audio size and offers **Remove All Downloads**. Downloaded server books support on-device recaps and smart moments when Apple Intelligence is available.
 
 ### Can I resume from a widget?
 
@@ -48,7 +48,7 @@ Add Unpaged’s **Continue Listening** widget from the Home Screen or Lock Scree
 
 ### How do I navigate chapters?
 
-Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata requires a reachable server.
+Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata can also come from a saved item detail when the server is unreachable.
 
 ### Can playback stop at the end of a chapter?
 
@@ -94,7 +94,7 @@ Yes. Browse your library, play and pause, skip between tracks, and save bookmark
 
 ### Does Unpaged work offline?
 
-Anything you've downloaded plays offline, including LibriVox titles. Streaming-only library entries (including books from your Audiobookshelf server) and the LibriVox catalog browser require a network connection.
+Anything you've downloaded plays offline, including LibriVox and Audiobookshelf titles. Audiobookshelf shelves you have browsed are saved on this iPhone; if the server is unreachable, an offline banner identifies the saved content. Adding, streaming, and downloading require a reachable server. Cached browsing may be unavailable if iOS clears its cache.
 
 ### How do I restore my purchases on a new device?
 
