@@ -269,6 +269,31 @@ test('ABS durable progress delivers only the latest failed position after relaun
   });
 });
 
+test('ABS durable progress drops a queued stale position after newer server progress', async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    server.setProgressFailure(500);
+    await addAndPlayHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[3-9] of 00:30$/);
+    await screen.getByTestId('player.playPause').tap();
+    await expect.poll(() => server.requests.filter((line) => line === 'PATCH /api/me/progress/abs-hobbit').length)
+      .toBeGreaterThan(0);
+    expect(server.progressPatches).toHaveLength(0);
+    // Stop all local reports before placing the other device's newer position on the server.
+    terminate(bundle);
+    server.setProgress('abs-hobbit', 45, Date.now() + 60_000);
+    server.setProgressFailure(null);
+    const requestCount = server.requests.length;
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    await expect.poll(() => server.requests.slice(requestCount).includes('GET /api/me/progress/abs-hobbit')).toBe(true);
+    await expect(screen.getByTestId('libraryTab')).toBeVisible();
+    expect(server.getProgress('abs-hobbit')).toBe(45);
+    expect(server.progressPatches).toHaveLength(0);
+  });
+});
+
 test('ABS durable progress resumes from a newer server position five minutes ahead', async ({ device, screen, nativeKeyboard }) => {
   const server = await startFakeAudiobookshelf(47378, true);
   try {
@@ -280,8 +305,14 @@ test('ABS durable progress resumes from a newer server position five minutes ahe
     await expect.poll(() => server.progressPatches.length).toBeGreaterThan(0);
     await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
     server.setProgress('abs-hobbit', 300);
+    const patchCount = server.progressPatches.length;
     await resumeHobbit(screen);
     await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^05:0\d of 06:00$/);
+    await screen.getByTestId('player.playPause').tap();
+    await expect.poll(() => server.progressPatches.length).toBeGreaterThan(patchCount);
+    const resumedPatches = server.progressPatches.slice(patchCount).filter((patch) => patch.itemID === 'abs-hobbit');
+    expect(resumedPatches.length).toBeGreaterThan(0);
+    expect(resumedPatches.every((patch) => patch.currentTime >= 300)).toBe(true);
   } finally { await server.close(); }
 });
 

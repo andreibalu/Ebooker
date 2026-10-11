@@ -68,6 +68,7 @@ export interface FakeAudiobookshelf {
   /** Audio requests for `itemID`, with the `token` query value each one carried. */
   audioTokens(itemID: string): (string | null)[];
   setProgress(itemID: string, currentTime: number, lastUpdate?: number, isFinished?: boolean): void;
+  getProgress(itemID: string): number | undefined;
   setProgressFailure(mode: 500 | 'unreachable' | null): void;
   audioDelayMS: number;
   close(): Promise<void>;
@@ -320,6 +321,7 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
     setProgress: (itemID, currentTime, lastUpdate = Date.now(), isFinished = false) => {
       progress.set(itemID, currentTime); updates.set(itemID, { lastUpdate, isFinished });
     },
+    getProgress: (itemID) => progress.get(itemID),
     setProgressFailure: (mode) => { progressFailure = mode; },
     audioTokens: (itemID) => audioTokenLog.filter((entry) => entry.itemID === itemID).map((entry) => entry.token),
     close: () => new Promise<void>((resolve) => {

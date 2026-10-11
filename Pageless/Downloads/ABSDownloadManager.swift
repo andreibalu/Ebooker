@@ -121,7 +121,7 @@ final class ABSDownloadManager: NSObject {
         let tasks = await session.allTasks
         for task in tasks where task.taskDescription?.hasPrefix(job.id.uuidString + "|") == true { task.cancel() }
         do {
-            try FileManager.default.removeItem(at: manifest(job))
+            if jobs[bookID] == nil { try FileManager.default.removeItem(at: manifest(job)) }
             if FileManager.default.fileExists(atPath: staging(job).path) { try FileManager.default.removeItem(at: staging(job)) }
             if job.completed.count == job.tracks.count, let book = book(id: bookID), !book.isDownloaded {
                 let folder = try LibriVoxDownloadService.storageFolderURL(named: book.folderName)
