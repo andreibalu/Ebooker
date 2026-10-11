@@ -129,6 +129,17 @@ enum ABSProgressReporter {
             var attempted: [String: Entry] = [:]
             while let entry = entries.values.first(where: { attempted[$0.itemID] != $0 }) {
                 attempted[entry.itemID] = entry
+                do {
+                    if let progress = try await client.mediaProgress(itemID: entry.itemID),
+                       let lastUpdate = progress.lastUpdate,
+                       Date(timeIntervalSince1970: lastUpdate / 1000) > entry.timestamp {
+                        if entries[entry.itemID] == entry { entries.removeValue(forKey: entry.itemID); save() }
+                        continue
+                    }
+                } catch {
+                    log.info("Progress check failed: \(String(describing: error), privacy: .public)")
+                    continue
+                }
                 var remove = false
                 do {
                     try await client.updateProgress(itemID: entry.itemID,

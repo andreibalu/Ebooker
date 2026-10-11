@@ -366,6 +366,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(book, context: modelContext)
                 guard resumeToken == absResumeGeneration, currentAudiobook === book else { return }
                 if adopted {
+                    currentTrackIndex = book.currentTrackIndex
+                    currentTime = book.currentTime
                     await load(audiobook: book, trackIndex: book.currentTrackIndex, time: book.currentTime, autoplay: true)
                 } else {
                     play(reconcileABS: false)
