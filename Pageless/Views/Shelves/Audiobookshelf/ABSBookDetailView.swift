@@ -178,7 +178,7 @@ struct ABSBookDetailView: View {
                 }
             }
             .buttonStyle(ABSPrimaryButtonStyle())
-            .disabled(viewModel.actionState == .working)
+            .disabled(viewModel.actionState == .working || (viewModel.isOffline && viewModel.libraryBook?.isDownloaded != true))
             .accessibilityIdentifier("abs.detail.play")
 
             if viewModel.libraryBook == nil {
@@ -188,7 +188,7 @@ struct ABSBookDetailView: View {
                     Text("Add to Library")
                 }
                 .buttonStyle(ABSSecondaryButtonStyle())
-                .disabled(viewModel.actionState == .working)
+                .disabled(viewModel.actionState == .working || viewModel.isOffline)
                 .accessibilityIdentifier("abs.detail.add")
             }
 
@@ -201,10 +201,25 @@ struct ABSBookDetailView: View {
                     .accessibilityIdentifier("abs.detail.error")
             }
 
-            Text("Streams from your server — nothing is downloaded.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+            if let book = viewModel.libraryBook {
+                ABSDownloadControls(book: book, isOffline: viewModel.isOffline, client: account.client)
+            } else {
+                Button("Download") {
+                    Task {
+                        if let book = await viewModel.addToLibrary(account: account, modelContext: modelContext) {
+                            await ABSDownloadManager.shared.start(book, client: account.client)
+                        }
+                    }
+                }
+                .buttonStyle(ABSSecondaryButtonStyle())
+                .disabled(viewModel.actionState == .working || viewModel.isOffline)
+                .accessibilityIdentifier("abs.download.start")
+                Text(viewModel.isOffline
+                     ? "Connect to your server to add, download, or stream this book."
+                     : "Download this book to use recaps and smart moments.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier(viewModel.isOffline ? "abs.detail.offline" : "abs.ai.downloadRequired")
+            }
         }
         .frame(maxWidth: 400)
     }

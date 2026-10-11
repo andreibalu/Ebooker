@@ -34,6 +34,7 @@ struct AudiobookDetailView: View {
     @State private var freeBackup: Audiobook?
     @State private var showFreeRestoreConfirm = false
     @State private var catalogBook: LibriVoxBook?
+    @State private var isABSOffline = false
 
     /// The "Match with iCloud backup" affordance only appears when sync is active (which itself
     /// requires an active iCloud subscription), this is a downloaded own book, and there's at least
@@ -43,6 +44,7 @@ struct AudiobookDetailView: View {
         IcloudSyncGate.isEnabled()
             && audiobook.isDownloaded
             && !audiobook.isFreeBook
+            && !audiobook.isAudiobookshelfBook
             && hasCloudCandidates
     }
 
@@ -98,7 +100,9 @@ struct AudiobookDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 header
-                // Offline download is a LibriVox feature; Audiobookshelf books always stream.
+                if audiobook.isAudiobookshelfBook {
+                    ABSDownloadControls(book: audiobook, isOffline: isABSOffline || !NetworkMonitor.shared.isConnected)
+                }
                 if (audiobook.isStreamingOnly && !audiobook.isAudiobookshelfBook) || downloadEntry != nil {
                     streamingDownloadSection
                 }
@@ -180,6 +184,12 @@ struct AudiobookDetailView: View {
         }
         .sheet(isPresented: $showFilterSheet) {
             MomentFilterSheet(audiobook: audiobook, viewModel: viewModel)
+        }
+        .task {
+            if let itemID = audiobook.absItemID {
+                let item = try? await ABSAccount.shared.client.item(id: itemID)
+                isABSOffline = await ABSAccount.shared.client.isUsingCachedResponses || item == nil
+            }
         }
         .onAppear {
             viewModel.reconcileStoredRecap(modelContext: modelContext)

@@ -19,6 +19,12 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
 
 /// Standalone ABS transport. URLSession is injectable so no running server is needed in tests.
 actor AudiobookshelfClient {
+    /// True when the latest browse request was answered from `ABSResponseCache` because the
+    /// server was unreachable; any live response clears it.
+    private(set) var isUsingCachedResponses = false
+
+    func beginBrowseLoad() { isUsingCachedResponses = false }
+
     private let session: URLSession
     private let credentials: any ABSCredentialStoring
     /// Identity of the connection a refresh was started for. A refresh may only be shared with, or
@@ -203,6 +209,36 @@ actor AudiobookshelfClient {
 
     private func request(path: [String], method: String = "GET", body: Data? = nil,
                          query: [URLQueryItem] = []) async throws -> Data {
+        let connection = try requiredConnection()
+        let cacheable = method == "GET" && (path.starts(with: ["api", "libraries"])
+            || path.starts(with: ["api", "items"]) || path.starts(with: ["api", "me", "progress"]))
+        let cacheURL = ABSResponseCache.url(connection: connection, path: path, query: query)
+        do {
+            let data = try await authenticatedRequest(path: path, method: method, body: body, query: query)
+            guard let active = try self.connection(), active.baseURL == connection.baseURL,
+                  active.username == connection.username else { throw AudiobookshelfError.notConnected }
+            if cacheable { ABSResponseCache.write(data, at: cacheURL) }
+            isUsingCachedResponses = false
+            return data
+        } catch {
+            let unavailable: Bool
+            switch error as? AudiobookshelfError {
+            case .offline?, .unreachableServer?: unavailable = true
+            case .serverError(let status)? where status >= 500: unavailable = true
+            default: unavailable = error is URLError
+            }
+            if cacheable, unavailable, let active = try? self.connection(),
+               active.baseURL == connection.baseURL, active.username == connection.username,
+               let data = ABSResponseCache.read(at: cacheURL) {
+                isUsingCachedResponses = true
+                return data
+            }
+            throw error
+        }
+    }
+
+    private func authenticatedRequest(path: [String], method: String, body: Data?,
+                                      query: [URLQueryItem]) async throws -> Data {
         let connection = try requiredConnection()
         do {
             return try await send(baseURL: connection.baseURL, path: path, method: method, body: body,

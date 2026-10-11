@@ -53,6 +53,7 @@ export interface FakeAudiobookshelf {
   progressPatches: ProgressPatch[];
   /** Audio requests for `itemID`, with the `token` query value each one carried. */
   audioTokens(itemID: string): (string | null)[];
+  audioDelayMS: number;
   close(): Promise<void>;
 }
 
@@ -145,6 +146,7 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
   const audioTokenLog: { itemID: string; token: string | null }[] = [];
   const progress = new Map(absItems.filter((item) => item.progress).map((item) => [item.id, item.progress!]));
   let base = '';
+  const controls = { audioDelayMS: 0 };
 
   const authorized = (req: IncomingMessage) => {
     const header = req.headers.authorization ?? '';
@@ -172,6 +174,13 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
       if (token !== ACCESS_TOKEN && token !== ABS_API_KEY) {
         res.writeHead(401, { 'content-type': 'text/plain' });
         return res.end('Unauthorized');
+      }
+      if (controls.audioDelayMS > 0) {
+        res.writeHead(200, { 'content-type': 'audio/wav', 'content-length': audio.length });
+        res.write(audio.subarray(0, 44_000));
+        const timer = setTimeout(() => res.end(audio.subarray(44_000)), controls.audioDelayMS);
+        res.on('close', () => clearTimeout(timer));
+        return;
       }
       return sendAudio(req, res, audio);
     }
@@ -253,6 +262,8 @@ export async function startFakeAudiobookshelf(port = 47378): Promise<FakeAudiobo
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   return {
+    get audioDelayMS() { return controls.audioDelayMS; },
+    set audioDelayMS(value: number) { controls.audioDelayMS = value; },
     serverURL: base,
     requests,
     progressPatches,

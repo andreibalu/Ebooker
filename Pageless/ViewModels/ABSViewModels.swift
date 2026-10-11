@@ -217,6 +217,7 @@ final class ABSBrowseViewModel {
     private(set) var items: [ABSLibraryItem] = []
     private(set) var progressByItemID: [String: ABSMediaProgress] = [:]
     var searchQuery = ""
+    private(set) var isOffline = false
     private var loadedOnce = false
 
     var selectedLibrary: ABSLibrary? {
@@ -254,9 +255,8 @@ final class ABSBrowseViewModel {
 
     func load(account: ABSAccount, preferredLibraryID: String?, isNetworkAvailable: Bool? = nil) async {
         loadedOnce = true
-        let isNetworkAvailable = isNetworkAvailable ?? NetworkMonitor.shared.isConnected
         guard account.isConnected else { phase = .signedOut; return }
-        guard isNetworkAvailable else { phase = .offline; return }
+        await account.client.beginBrowseLoad()
         if items.isEmpty { phase = .loading }
         do {
             let books = try await account.client.libraries().filter { $0.mediaType == "book" }
@@ -277,8 +277,10 @@ final class ABSBrowseViewModel {
             progressByItemID = Dictionary((loadedProgress ?? []).map { ($0.libraryItemId, $0) },
                                           uniquingKeysWith: { first, _ in first })
             account.reload()
+            isOffline = await account.client.isUsingCachedResponses
             phase = .loaded
         } catch {
+            isOffline = true
             phase = Self.phase(for: error)
         }
     }
@@ -340,6 +342,7 @@ final class ABSBookDetailViewModel {
     private(set) var progress: ABSMediaProgress?
     private(set) var libraryBook: Audiobook?
     private(set) var actionState: ActionState = .idle
+    private(set) var isOffline = false
     var actionError: String?
 
     init(item: ABSLibraryItem, progress: ABSMediaProgress?) {
@@ -396,6 +399,7 @@ final class ABSBookDetailViewModel {
         let (loadedItem, loadedProgress) = await (expanded, serverProgress)
         if let loadedItem { item = loadedItem }
         if let loadedProgress { progress = loadedProgress }
+        isOffline = await account.client.isUsingCachedResponses || loadedItem == nil
     }
 
     /// Adds the item as a streaming book (or returns the existing row). Nil on failure, with

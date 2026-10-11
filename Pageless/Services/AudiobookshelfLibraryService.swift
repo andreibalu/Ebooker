@@ -195,7 +195,9 @@ enum AudiobookshelfLibraryService {
     /// True when a URL carries anything that looks like a credential. Used as a last-line guard
     /// before a URL is written to a synced row.
     static func containsCredential(_ url: URL) -> Bool {
-        guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return true }
+        if components.user != nil || components.password != nil { return true }
+        guard let items = components.queryItems else { return false }
         return items.contains { ["token", "api_key", "apikey", "access_token"].contains($0.name.lowercased()) }
     }
 }

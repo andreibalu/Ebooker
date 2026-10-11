@@ -80,8 +80,8 @@ final class Audiobook: Identifiable {
         set { _absItemID = newValue }
     }
 
-    /// Streamed from the user's Audiobookshelf server. Such a book is `!isDownloaded && !isFreeBook`
-    /// — the same shape as an own-book iCloud orphan — so every orphan check must exclude it.
+    /// From the user's Audiobookshelf server. Downloads keep this identity.
+    /// Missing audio returns to streaming, so orphan checks must exclude ABS identity.
     var isAudiobookshelfBook: Bool { !(absItemID ?? "").isEmpty }
 
     // Own books that synced from iCloud but lack local files have isDownloaded==false too —

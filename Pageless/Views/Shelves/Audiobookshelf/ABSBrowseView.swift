@@ -33,6 +33,16 @@ struct ABSBrowseView: View {
                         .padding(.bottom, 24)
                 }
 
+                if viewModel.isOffline && viewModel.phase == .loaded {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Offline · Showing saved shelves. Downloaded books can still play.")
+                            .font(.subheadline)
+                            .accessibilityIdentifier("abs.browse.offline")
+                        Button("Retry") { Task { await reload() } }
+                            .accessibilityIdentifier("abs.browse.retry")
+                    }
+                    .padding(20)
+                }
                 content
             }
             .padding(.bottom, 120)
