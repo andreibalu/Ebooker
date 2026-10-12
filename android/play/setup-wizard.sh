@@ -253,8 +253,22 @@ if [[ -e "$CONFIG/unpaged-upload.jks" && ! -f "$CONFIG/upload-signing.properties
   note "Retrieve it with: security find-generic-password -a '$USER' -s 'Unpaged Play upload key' -w"
   step "Run chmod 600 on the properties file and keystore, then re-run stage 2."
   exit 1
-elif [[ ! -f "$CONFIG/unpaged-upload.jks" || ! -f "$CONFIG/upload-signing.properties" ]]; then
-  warn "The upload key or signing properties are missing."
+elif [[ ! -e "$CONFIG/unpaged-upload.jks" && -f "$CONFIG/upload-signing.properties" ]]; then
+  # A new key would not match the certificate Play already has, so restore the old one.
+  warn "upload-signing.properties exists, but the upload keystore is missing. Don't create a new key."
+  step "Restore unpaged-upload.jks from your backup to $CONFIG/unpaged-upload.jks and re-run stage 2."
+  step "If the key is lost for good, ask Play Console support to reset the upload key"
+  step "  (Setup → App signing → Request upload key reset), then move the old properties file aside."
+  exit 1
+elif [[ ! -e "$CONFIG/unpaged-upload.jks" ]]; then
+  if security find-generic-password -a "$USER" -s 'Unpaged Play upload key' >/dev/null 2>&1; then
+    # The Keychain still holds an earlier key's password; overwriting it would lose that key for good.
+    warn "Keychain already has an \"Unpaged Play upload key\" password, but no keystore is here."
+    step "Restore unpaged-upload.jks and upload-signing.properties from your backup, or delete"
+    step "  that Keychain item on purpose if no upload key was ever registered with Play."
+    exit 1
+  fi
+  warn "No upload key exists on this Mac."
   confirm "Create a new upload key and signing properties on this Mac?" || exit 1
   create_upload_key
 fi
@@ -349,6 +363,22 @@ if ! verification="$(LC_ALL=C "$JAVA_HOME/bin/jarsigner" -verify "$AAB" 2>&1)" \
   || ! grep -q '^jar verified\.$' <<< "$verification"; then
   warn "Release bundle is unsigned or its signature is invalid. Complete stage 2 and rebuild in stage 6."
   say "$verification"
+  exit 1
+fi
+# A valid signature can still come from a debug or old key. The first upload registers whatever
+# certificate signed it, so the bundle must carry the configured upload key's certificate.
+sha256() { LC_ALL=C sed -n 's/^[[:space:]]*SHA256: //p' | head -1; }
+UPLOAD_STOREPASS="$(sed -n 's/^storePassword=//p' "$CONFIG/upload-signing.properties")" \
+  && export UPLOAD_STOREPASS
+expected="$("$JAVA_HOME/bin/keytool" -list -v -keystore "$CONFIG/unpaged-upload.jks" -alias upload \
+  -storepass:env UPLOAD_STOREPASS 2>/dev/null | sha256)"
+actual="$("$JAVA_HOME/bin/keytool" -printcert -jarfile "$AAB" 2>/dev/null | sha256)"
+unset UPLOAD_STOREPASS
+if [[ -z "$expected" || "$expected" != "$actual" ]]; then
+  warn "The bundle is not signed with the upload key in $CONFIG/unpaged-upload.jks."
+  note "Bundle certificate SHA-256:     ${actual:-none}"
+  note "Upload key certificate SHA-256: ${expected:-unreadable}"
+  step "Delete $AAB and rebuild it in stage 6."
   exit 1
 fi
 say "Signed bundle: $AAB"
