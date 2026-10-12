@@ -136,6 +136,8 @@ enum OrphanRestoreService {
                 throw LibraryMutationError.modelCommittedButTransactionMarkerFailed(error)
             }
 
+            // The deleted local book may be the one the Continue Listening widget shows.
+            ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
             log.info("Merged local book into cloud entry")
             return cloudEntry
         } catch {

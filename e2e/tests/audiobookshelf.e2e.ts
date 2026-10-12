@@ -1,6 +1,6 @@
 import { expect, type Screen } from 'e2e';
 import { test, tapVisibleCenter, longPressVisibleTop } from './native-actions.js';
-import { appDataPath, bundle, terminate } from '../support/simulator.js';
+import { appDataPath, bundle, terminate, writeAppBool } from '../support/simulator.js';
 import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -288,6 +288,30 @@ test('ABS durable progress delivers only the latest failed position after relaun
     const seconds = Number(value.match(/^00:(\d+) of /)?.[1]);
     expect(Math.abs(patch.currentTime - seconds)).toBeLessThan(2);
     expect(patch.isFinished).toBe(false);
+  });
+});
+
+test('Play Latest Book resumes an ABS book from its saved marker, not an earlier current position', async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: [...reset, '-resumeBacktrackSeconds', '0'] });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await addAndPlayHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:(0[6-9]|1\d) of 00:30$/, { timeout: 20_000 });
+    await screen.getByTestId('player.playPause').tap();
+    const saved = Number((await screen.getByTestId('player.scrubber').inputValue()).match(/^00:(\d+) of /)?.[1]);
+    terminate(bundle);
+    // As after replaying the opening: the current position sits well behind the saved marker.
+    const args = [...onServer, '-resumeBacktrackSeconds', '0', '-e2e-abs-rewind-current', '1'];
+    await device.openApp(bundle, { relaunch: true, launchArguments: args });
+    await device.home();
+    writeAppBool('intent.playLatestBook', true);
+    await device.openApp(bundle, { launchArguments: args });
+    await expect(screen.getByTestId('miniPlayer.title')).toHaveText('The Fixture Hobbit', { timeout: 15_000 });
+    await screen.getByTestId('miniPlayer.playPause').tap();
+    await tapVisibleCenter(screen.getByTestId('miniPlayer.title'));
+    const resumed = Number((await screen.getByTestId('player.scrubber').inputValue()).match(/^00:(\d+) of /)?.[1]);
+    expect(resumed).toBeGreaterThanOrEqual(saved - 1);
   });
 });
 

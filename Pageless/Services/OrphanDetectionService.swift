@@ -69,6 +69,8 @@ enum OrphanDetectionService {
         }
         if flipped > 0 {
             try? context.save()
+            // A book that lost its audio leaves the library, so the widget may need the next one.
+            await MainActor.run { ContinueListeningSnapshotWriter.shared.refresh(context: modelContainer.mainContext) }
             log.info("Marked \(flipped, privacy: .public) book(s) as iCloud orphans missing local files")
         }
     }

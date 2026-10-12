@@ -56,3 +56,11 @@ test('moment search: disconnected Audiobookshelf row is disabled', async ({ devi
   await expect(screen.getByTestId('momentSearch.row.E2E Server Moment')).toBeDisabled();
   await expect(screen.getByTestId('momentSearch.row.E2E Server Moment')).toContainText('Connect your Audiobookshelf server to play');
 });
+
+test('moment search: row whose track file is missing is disabled', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('momentSearchButton').tap();
+  await screen.getByPlaceholder('Search saved moments').fill('Missing Track');
+  await expect(screen.getByTestId('momentSearch.row.E2E Missing Track')).toBeDisabled();
+  await expect(screen.getByTestId('momentSearch.row.E2E Missing Track')).toContainText('Audio is not on this iPhone');
+});

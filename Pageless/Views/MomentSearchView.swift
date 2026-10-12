@@ -130,6 +130,13 @@ struct MomentSearchView: View {
         if book.isArchived { return "Book has been removed from the library" }
         if book.isCloudOnlyOrphan { return "Audio is not on this iPhone" }
         if !book.sortedTracks.indices.contains(moment.trackIndex) { return "Track unavailable" }
+        // Synced rows can claim local audio before orphan detection checks this device's files.
+        if book.isDownloaded {
+            let file = try? LibraryImportService.fileURL(for: book.sortedTracks[moment.trackIndex], in: book)
+            if !(file.map { FileManager.default.fileExists(atPath: $0.path) } ?? false) {
+                return "Audio is not on this iPhone"
+            }
+        }
         if book.isStreamingOnly && !network.isConnected { return "Connect to the internet to stream" }
         if book.isStreamingOnly && book.isAudiobookshelfBook {
             guard let server = ABSAccount.shared.summary?.baseURL else { return "Connect your Audiobookshelf server to play" }

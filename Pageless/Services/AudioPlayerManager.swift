@@ -296,11 +296,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         loadingPlaybackBookID == audiobook.id
     }
 
-    func startPlayback(for audiobook: Audiobook, autoplay: Bool = true) async {
-        absResumeGeneration &+= 1
-        let resumeToken = absResumeGeneration
-        let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(audiobook, context: modelContext)
-        guard resumeToken == absResumeGeneration else { return }
+    /// `adoptedServerProgress` is nil when the Audiobookshelf position still needs reconciling.
+    func startPlayback(for audiobook: Audiobook, autoplay: Bool = true, adoptedServerProgress: Bool? = nil) async {
+        var adopted = adoptedServerProgress ?? false
+        if adoptedServerProgress == nil {
+            guard let reconciled = await reconcileAudiobookshelfBeforeResume(audiobook) else { return }
+            adopted = reconciled
+        }
         let trackIndex = audiobook.isFinished ? 0 : audiobook.currentTrackIndex
         let baseTime = audiobook.isFinished ? 0 : audiobook.currentTime
         let applyBacktrack = !adopted && resumeBacktrackAvailableThisLaunch && !audiobook.isFinished
@@ -310,17 +312,28 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     /// Starts like tapping “Your progress” on the book detail: uses the saved progress marker when set (with On Resume backtrack), otherwise last playback position.
+    /// Audiobookshelf books reconcile with the server first; an adopted server position wins,
+    /// otherwise the saved marker is honored like any other book.
     func startPlaybackFromSavedProgress(for audiobook: Audiobook, autoplay: Bool = true) async {
-        if audiobook.isAudiobookshelfBook {
-            await startPlayback(for: audiobook, autoplay: autoplay)
+        guard let adopted = await reconcileAudiobookshelfBeforeResume(audiobook) else { return }
+        if adopted {
+            await startPlayback(for: audiobook, autoplay: autoplay, adoptedServerProgress: true)
             return
         }
         switch AudiobookSavedProgressResume.startChoice(for: audiobook) {
         case .useProgressBookmark(let idx, let t):
             await playProgressBookmark(at: idx, in: audiobook, time: t, autoplay: autoplay)
         case .useStandardStartPlayback:
-            await startPlayback(for: audiobook, autoplay: autoplay)
+            await startPlayback(for: audiobook, autoplay: autoplay, adoptedServerProgress: false)
         }
+    }
+
+    /// Whether a newer server position was adopted, or nil when a later start superseded this one.
+    private func reconcileAudiobookshelfBeforeResume(_ audiobook: Audiobook) async -> Bool? {
+        absResumeGeneration &+= 1
+        let resumeToken = absResumeGeneration
+        let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(audiobook, context: modelContext)
+        return resumeToken == absResumeGeneration ? adopted : nil
     }
 
     /// Seeks to the saved progress marker time exactly (no resume backtrack). Use when the user scrubbed away and wants to snap back.

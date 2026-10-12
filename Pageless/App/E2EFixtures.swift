@@ -58,6 +58,16 @@ enum E2EFixtures {
     }
 
     static func seedIfNeeded(_ context: ModelContext) throws {
+        // Saves Audiobookshelf books' current position as their marker, then moves the current
+        // position back, as after replaying an earlier part of the book.
+        if let value = argument("-e2e-abs-rewind-current"), let seconds = Double(value) {
+            for book in try context.fetch(FetchDescriptor<Audiobook>()) where book.isAudiobookshelfBook {
+                book.progressTrackIndex = book.currentTrackIndex
+                book.progressTime = book.currentTime
+                book.currentTime = seconds
+            }
+            try context.save()
+        }
         let marker = try storeDirectoryWithoutReset()
             .appendingPathComponent("seeded")
         guard !FileManager.default.fileExists(atPath: marker.path) else { return }
@@ -114,6 +124,22 @@ enum E2EFixtures {
                                    folderName: "E2E-Missing-Audio", totalDuration: 300)
             orphan.isDownloaded = false
             context.insert(orphan)
+            // Local audio for track 1 only: the missing track 2 file keeps the book downloaded, as
+            // a synced row looks before orphan detection checks this device.
+            let partial = Audiobook(title: "E2E Partial Audio", author: "Fixture Author",
+                                    folderName: "E2E-Partial-Audio", totalDuration: 600)
+            context.insert(partial)
+            let partialDirectory = LibraryMutationTransaction.defaultAudiobooksRoot()
+                .appendingPathComponent(partial.folderName, isDirectory: true)
+            try FileManager.default.createDirectory(at: partialDirectory, withIntermediateDirectories: true)
+            try silenceWAV(seconds: 300).write(to: partialDirectory.appendingPathComponent("chapter-0.wav"))
+            for index in 0..<2 {
+                let partialTrack = AudioTrack(title: "E2E Partial \(index + 1)", originalFileName: "chapter-\(index).wav",
+                                              storedFileName: "chapter-\(index).wav", orderIndex: index, duration: 300,
+                                              audiobook: partial)
+                context.insert(partialTrack)
+                partial.tracks.append(partialTrack)
+            }
             // A streaming Audiobookshelf book kept after disconnect: no credentials can play it.
             let serverBook = Audiobook(title: "E2E Server Book", author: "Fixture Author",
                                        folderName: "E2E-Server-Book", totalDuration: 300)
@@ -135,6 +161,7 @@ enum E2EFixtures {
                 Moment(trackIndex: 0, time: 150, label: "E2E Unrelated", audiobook: secondBook),
                 Moment(trackIndex: 0, time: 30, label: "E2E Orphan", audiobook: orphan),
                 Moment(trackIndex: 0, time: 60, label: "E2E Server Moment", audiobook: serverBook),
+                Moment(trackIndex: 1, time: 20, label: "E2E Missing Track", audiobook: partial),
             ]
             for entry in searchMoments {
                 context.insert(entry)
