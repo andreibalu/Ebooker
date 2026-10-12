@@ -29,7 +29,7 @@ After editing, update the matching public Gist mirror(s).
 
 ### Marketing site
 
-`site/` is a zero-dependency static site: `node site/build.mjs` writes `site/dist/`; preview with `node site/tools/serve.mjs`. `.github/workflows/pages.yml` deploys on pushes to `main`. Home and 404 pages have English, German, Spanish, French, Italian, and Brazilian Portuguese versions; locale strings live in `site/src/i18n/`. `store-listing/` holds localized App Store drafts for the next version, not the submitted version.
+`site/` is a static site whose build has no dependencies: `node site/build.mjs` writes `site/dist/`; `cd site && npm run preview` serves it on port 4400. `.github/workflows/pages.yml` deploys on pushes to `main`. Home, Plus and 404 pages have English, German, Spanish, French, Italian, and Brazilian Portuguese versions. English copy lives in `site/src/content.mjs` and translations in `site/src/i18n/*.mjs`. Images in `site/public/` are committed; `npm install && npm run assets` in `site/` regenerates them from the App Store screenshots. Design rules: `site/README.md`. `store-listing/` holds localized App Store drafts for the next version, not the submitted version.
 
 Implementation plans, design specs, handoff notes and validation logs (e.g. `docs/superpowers/plans/`, `docs/superpowers/specs/`) are temporary. Keep only active work in the repo; once the work merges, fold any durable decision into `AGENTS.md` / `android/AGENTS.md` and delete the artifact. Run evidence belongs in the PR. `docs/research/` holds dated research that is still actionable; delete a note once its recommendation ships or is dropped.
 
