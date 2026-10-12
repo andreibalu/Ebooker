@@ -37,7 +37,7 @@ fun MediumLargeSheet(onDismissRequest: () -> Unit, modifier: Modifier = Modifier
     val state = rememberStandardBottomSheetState(initialValue = SheetValue.PartiallyExpanded, skipHiddenState = false)
     LaunchedEffect(state.currentValue) { if (state.currentValue == SheetValue.Hidden) onDismissRequest() }
     Dialog(onDismissRequest, DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        BoxWithConstraints(Modifier.fillMaxSize().statusBarsPadding()) {
             val largeHeight = maxHeight * .94f
             val mediumHeight = maxHeight * .525f
             // A scaffold keeps the large sheet below the window at its medium detent.

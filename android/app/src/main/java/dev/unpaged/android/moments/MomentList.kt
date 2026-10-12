@@ -83,7 +83,9 @@ private fun SwipeMoment(moment: LibraryMoment, delete: () -> Unit, content: @Com
     BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))) {
         val width = with(density) { maxWidth.toPx() }
         val reveal = with(density) { 82.dp.toPx() }
-        Surface(color = MaterialTheme.colorScheme.error, modifier = Modifier.matchParentSize()) {
+        // The rounded card's antialiased edges expose anything painted underneath.
+        // Keep the destructive background out of the resting card entirely.
+        if (animated.toInt() < 0) Surface(color = MaterialTheme.colorScheme.error, modifier = Modifier.matchParentSize()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
                 TextButton(onClick = delete, modifier = Modifier.width(82.dp).fillMaxHeight()) {
                     Text("Delete", color = MaterialTheme.colorScheme.onError)
