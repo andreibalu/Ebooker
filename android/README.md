@@ -159,7 +159,7 @@ The Shelves driver uses bundled debug metadata and forced saved-only browsing.
 
 Use a dedicated API35 default ARM64 image, Pixel 7 AVD named `Unpaged_E2E_*`.
 Boot it and specify its serial explicitly. Other attached devices are allowed only
-if they are also dedicated `Unpaged_E2E_*` emulators, so parallel worktrees can
+if they are also dedicated `Unpaged_E2E_*` emulators (or the approved test phone), so parallel worktrees can
 each drive their own instance:
 
 ```sh
@@ -167,9 +167,13 @@ export ANDROID_SERIAL=emulator-5580
 ./tools/run-e2e.sh
 ```
 
+The owner's test phone (Galaxy A54 `RZCW60SZE3H`: fresh install, no SIM, Wi-Fi
+only) may stay attached during emulator runs. The suite never targets it: picker
+selectors are pinned to the emulator image, so the phone is for manual checks.
+
 The script requires the JDK/SDK exports above. It refuses a physical or unrelated
-target, any attached physical device or non-`Unpaged_E2E_*` AVD, and incomplete
-boot. Gradle runs the suite only on `ANDROID_SERIAL`; the script fails if the log
+target, any other attached physical device or non-`Unpaged_E2E_*` AVD, and
+incomplete boot. Gradle runs the suite only on `ANDROID_SERIAL`; the script fails if the log
 shows tests on any other AVD. Each run starts the fake Audiobookshelf server on its
 own host port (derived from the serial, or `E2E_ABS_PORT`) and maps it to
 `127.0.0.1:13378` on the device with `adb reverse`. Tests clear only

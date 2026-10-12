@@ -12,9 +12,12 @@ case "$ANDROID_SERIAL" in emulator-*) ;; *) echo 'Use a dedicated emulator, not 
 name="$("$adb" -s "$ANDROID_SERIAL" emu avd name | tr -d '\r' | head -1)"
 case "$name" in Unpaged_E2E_*) ;; *) echo "Refusing unrelated AVD: $name" >&2; exit 1;; esac
 # Other attached devices are allowed only when they are dedicated Unpaged_E2E emulators,
-# so parallel worktrees can each drive their own instance. Gradle targets ANDROID_SERIAL.
+# so parallel worktrees can each drive their own instance, or the owner's approved test
+# phone, which the suite never targets. Gradle targets ANDROID_SERIAL.
+approved_phones="RZCW60SZE3H"
 for other in $("$adb" devices | awk 'NR>1 && $2=="device" { print $1 }'); do
   [[ "$other" == "$ANDROID_SERIAL" ]] && continue
+  [[ " $approved_phones " == *" $other "* ]] && continue
   case "$other" in emulator-*) ;; *) echo "Refusing a run with non-emulator device $other attached." >&2; exit 1;; esac
   other_name="$("$adb" -s "$other" emu avd name | tr -d '\r' | head -1)"
   case "$other_name" in Unpaged_E2E_*) ;; *) echo "Refusing a run with unrelated AVD $other_name attached." >&2; exit 1;; esac
