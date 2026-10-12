@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -129,22 +131,24 @@ internal fun LibraryBookCard(book: LibraryBook, onFavorite: () -> Unit, onRemove
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Box {
                 LibraryBookCover(book, Modifier.fillMaxWidth().height(185.dp), onCoverColor = { coverColor = it })
-                if (playing || book.lastPlayedAt != null) {
-                    Surface(Modifier.align(Alignment.TopEnd).padding(10.dp), shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = .6f)) {
-                        Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            if (playing) Icon(Icons.Default.GraphicEq, null, Modifier.size(14.dp))
-                            Text(if (playing) "Playing" else relativePlayedAt(book.lastPlayedAt ?: 0), fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
                 Surface(Modifier.align(Alignment.BottomEnd).offset(x = 9.dp, y = 9.dp), shape = CircleShape,
                     color = androidx.compose.ui.graphics.lerp(coverColor, Color.White, .32f)) {
                     IconButton(onClick = onFavorite, modifier = Modifier.size(40.dp).testTag("book.favorite.${book.id}")
                         .semantics { contentDescription = if (book.isFavorite) "Remove favorite" else "Add favorite" }) {
                         Icon(if (book.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder, null,
                             Modifier.size(20.dp), tint = if (book.isFavorite) UnpagedTheme.favorite else Color.White)
+                    }
+                }
+            }
+            // Status sits under the cover so it never covers a generated title. Unplayed books keep
+            // the row, invisible, so every card in a grid row has the same height.
+            val status = playing || book.lastPlayedAt != null
+            Row(Modifier.fillMaxWidth().alpha(if (status) 1f else 0f).then(if (status) Modifier else Modifier.clearAndSetSemantics {}), horizontalArrangement = Arrangement.End) {
+                Surface(shape = CircleShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (playing) Icon(Icons.Default.GraphicEq, null, Modifier.size(14.dp))
+                        Text(if (playing) "Playing" else book.lastPlayedAt?.let(::relativePlayedAt) ?: "New", fontSize = 12.sp, lineHeight = 15.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
