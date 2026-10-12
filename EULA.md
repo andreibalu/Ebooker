@@ -3,7 +3,7 @@
 **App:** Unpaged
 **Developer:** Andrei Baluta
 **Contact:** andrei.baluta@yahoo.com
-**Last updated:** September 28, 2026
+**Last updated:** October 12, 2026
 
 This End User License Agreement ("Agreement") is a legal agreement between you
 ("you") and Andrei Baluta ("Developer," "we," "us") for the use of the Unpaged
@@ -180,3 +180,20 @@ terms. Upon termination, you must cease all use of the Application.
 
 This Agreement is governed by the laws of Romania, without regard to its
 conflict-of-law principles, except where prohibited by applicable law.
+
+## 17. Unpaged for Android
+
+If you obtained the Application from Google Play for an Android device, this
+section applies and replaces the Apple-specific terms. The Agreement is between
+you and the Developer only; Google is not a party to it and is not responsible
+for the Application. Sections 1, 3 and 13, and the references to Apple devices,
+Apple usage rules and the Apple Media Services Terms and Conditions in Section 2,
+do not apply. The Developer grants you a non-exclusive, non-transferable license
+to use the Application on Android devices you own or control, subject to the
+Google Play Terms of Service. All other restrictions in Section 2 still apply.
+
+The Android version has no purchases, subscriptions or iCloud Sync. Its optional
+on-device AI features use Gemini Nano through Google's ML Kit and an open-source
+speech model downloaded from Hugging Face with your consent, as described in the
+Privacy Policy. Android backups of your library are handled by Android and your
+backup provider, under their terms.

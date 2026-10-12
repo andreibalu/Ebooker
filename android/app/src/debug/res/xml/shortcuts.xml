@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug overlay: the debug build keeps the development application id. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="play_latest_book" android:enabled="true"
+        android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/play_latest_book">
+        <intent android:action="dev.unpaged.android.PLAY_LATEST_BOOK"
+            android:targetPackage="dev.unpaged.android.development" android:targetClass="dev.unpaged.android.MainActivity" />
+    </shortcut>
+</shortcuts>

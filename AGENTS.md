@@ -53,7 +53,7 @@ Screenshot display types through the API: the 6.9" set (1320×2868) uploads as `
 
 **Python here has no `jwt` or `cryptography` module**, so every off-the-shelf ASC snippet fails. Sign the ES256 JWT by piping the `header.payload` through `openssl dgst -sha256 -sign` and converting the DER `SEQUENCE{INTEGER r, INTEGER s}` to raw `r||s` (32 bytes each).
 
-**Xcode Cloud also builds every push to `main` and uploads it**: `ci_scripts/ci_post_clone.sh` takes the marketing version from `VERSION` and the build number from `CI_BUILD_NUMBER`. Once a version is approved, bump `VERSION` and the pbxproj right away, or every `main` push fails upload with ITMS-90186 / ITMS-90062.
+**Xcode Cloud builds only on request.** Pushes start nothing; both workflows are manual-start since 2026-10-12. Start a build only when the owner asks for a TestFlight or App Store build: `scripts/xcode-cloud-build.sh External` tests and archives `main` (App Store eligible), `scripts/xcode-cloud-build.sh Internal` archives `dev` for internal TestFlight, and no argument lists the workflows. `ci_scripts/ci_post_clone.sh` takes the marketing version from `VERSION` and the build number from `CI_BUILD_NUMBER`. Once a version is approved, bump `VERSION` and the pbxproj before the next build, or its upload fails with ITMS-90186 / ITMS-90062.
 
 Release checklist beyond the build: IAP review screenshot + review notes must match the *shipping* UI (a stale screenshot showing removed copy is a review risk), external docs pushed to their Gists (see above), and release notes saved on the version.
 

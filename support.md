@@ -1,8 +1,8 @@
 # Unpaged — Support
 
-_Last updated: October 6, 2026_
+_Last updated: October 12, 2026_
 
-Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later. This page is the support hub — start here if something isn't working or if you have a question.
+Unpaged is a free, private audiobook player for iPhone and CarPlay, built for iOS 18 and later, and for Android 8.0 and later. Android users: see [Unpaged for Android](#unpaged-for-android) first. This page is the support hub — start here if something isn't working or if you have a question.
 
 **Contact:** [andrei.baluta@yahoo.com](mailto:andrei.baluta@yahoo.com)
 
@@ -151,6 +151,28 @@ Tap the magnifying glass in My Library to search saved moments across every book
 
 With Unpaged Plus and local AI enabled on an Apple Intelligence-compatible iPhone running iOS 26 or later, opening a downloaded book after at least three days away can offer a recap above its playback controls. The book needs at least three minutes of saved progress and must be unfinished. The recap uses only audio before your saved listening point. Resume starts from saved progress with your configured resume offset; Not now hides the offer until a later listening session and another qualifying break. Turn off Welcome-back recaps in Settings → AI Features. Recaps run on-device and playback remains available while a recap loads. If a recap cannot be prepared, the offer disappears silently.
 
+## Unpaged for Android
+
+Unpaged for Android runs on Android 8.0 or later and is free, with no purchases. It has your own audiobooks, LibriVox free books, Audiobookshelf streaming, moments, chapters, a sleep timer, a per-book equalizer, Reading Activity and Android Auto. It does not have iCloud Sync, Unpaged Plus, the coffee tip, widgets, end-of-chapter sleep, moment search or Audiobookshelf downloads.
+
+### How do I add audiobooks on Android?
+
+In **Library**, tap **+** (Import Audiobook) and pick MP3, M4B, M4A, AAC, FLAC, OGG, Opus or WAV files from any storage provider. Unpaged copies the audio into its own storage and never changes or deletes your originals. Keep Unpaged open until the import finishes.
+
+### How do I move my library to a new Android phone?
+
+Leave **Settings → Back Up Library** on and turn on Backup by Google in Android settings. When you set up a new phone and restore from that backup, or use a direct phone-to-phone transfer, your library, progress, moments and settings come back. Audio is not backed up: free books stream or download again, and books you imported show **Audio Missing** until you import the same files, when Unpaged offers to restore them with their progress and moments.
+
+### Which Android phones support the AI features?
+
+Smart moment names and recaps need a phone with Gemini Nano, such as a Pixel 9 or later or a recent Samsung Galaxy S. **Settings → On-device AI** shows whether your phone is supported. The features are off by default and need a one-time 60 MB speech model download. They run entirely on your phone. Every other feature works on all phones.
+
+### Does Unpaged work with Android Auto?
+
+Yes. Your favorites, library, free books and the current book's chapters appear in Android Auto. You can play, pause, skip, change chapters, change speed and save a moment from the car screen, and ask Google Assistant to play a book on Unpaged.
+
+When you report an Android problem, include your phone model and Android version (**Settings → About phone**).
+
 ## Troubleshooting
 
 ### A file I imported won't play
@@ -175,7 +197,7 @@ The offer and renewal price for the selected monthly or yearly plan are shown by
 
 ## Privacy
 
-Unpaged does not collect, sell, or share your personal data with the developer. Optional features communicate directly with Apple, LibriVox, and Internet Archive as described in the [Privacy Policy](https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262).
+Unpaged does not collect, sell, or share your personal data with the developer. Optional features communicate directly with Apple (on iPhone), Google (on Android), LibriVox, Internet Archive, Hugging Face and your own Audiobookshelf server as described in the [Privacy Policy](https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262).
 
 ## Reporting a bug or requesting a feature
 

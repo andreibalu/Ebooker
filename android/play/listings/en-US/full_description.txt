@@ -1,0 +1,49 @@
+Unpaged is a calm, focused audiobook player. Bring your own books, stream free classics from LibriVox, or connect your own Audiobookshelf server. No account, no ads, no tracking.
+
+YOUR OWN AUDIOBOOKS
+• Import MP3, M4B, M4A, AAC, FLAC, OGG, Opus and WAV files from your phone or any storage provider
+• Chapters are read from M4B and MP3 files automatically
+• Unpaged copies the audio into its own storage and never touches your originals
+
+20,000+ FREE CLASSICS
+• Browse the full LibriVox catalog of public-domain audiobooks
+• Stream instantly, or download a book to listen offline
+• Hear a 20-second sample before you add a book
+• Hand-picked collections and a daily pick to get you started
+
+AUDIOBOOKSHELF
+• Connect your self-hosted Audiobookshelf server over your home network or VPN
+• Browse and search your libraries, then stream any book
+• Your listening progress is sent back to your server
+
+MOMENTS
+• Save a moment with one tap when a passage stays with you
+• Add a name and a note, then jump straight back to it later
+
+LISTENING THE WAY YOU LIKE
+• Variable playback speed and adjustable skip intervals
+• Sleep timer
+• A five-band equalizer with presets, saved per book
+• Resumes a few seconds back so you never lose your place
+• Lock screen, notification and Bluetooth headphone controls
+
+ANDROID AUTO
+• Browse your favorites, library and free books from your car screen
+• Jump between chapters and save moments while you drive
+• "Play Latest Book" shortcut and voice search
+
+READING ACTIVITY
+• A listening heatmap, streaks and your best listening days
+• Totals for time listened and books finished
+
+ON-DEVICE AI (SUPPORTED PHONES)
+• On phones with Gemini Nano, Unpaged can name a saved moment from the passage you just heard and write a recap of the story so far
+• Everything runs on your phone. Your audio and text are never sent to a server. The speech model downloads only after you agree.
+• AI features are off by default, and the rest of the app works the same on every phone
+
+PRIVATE BY DESIGN
+• No account and no ads
+• Your library stays on your phone, and Android backup can restore it on a new phone
+• Unpaged has no server of its own
+
+Unpaged is also available on iPhone.
