@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.google.devtools.ksp")
     id("com.android.application")
@@ -5,21 +7,40 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Play upload key, kept outside the repository. The file holds storeFile, storePassword,
+// keyAlias and keyPassword. Without it, bundleRelease produces an unsigned bundle.
+val uploadSigning = Properties().apply {
+    val path = providers.gradleProperty("unpaged.uploadSigning").orNull
+        ?: "${System.getProperty("user.home")}/.config/unpaged/upload-signing.properties"
+    file(path).takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+
 android {
-    // Development identity only; final package and Play identity remain undecided.
     namespace = "dev.unpaged.android"
     compileSdk = 36
     buildToolsVersion = "36.0.0"
     ndkVersion = "28.2.13676358"
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     defaultConfig {
-        applicationId = "dev.unpaged.android.development"
-        // Provisional scaffold floor, not a product/device-support decision.
+        // Permanent Play identity. Debug builds keep the development id (see androidComponents).
+        applicationId = "app.unpaged"
         minSdk = 26
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         targetSdk = 36
+        // Raise versionCode for every Play upload.
         versionCode = 1
-        versionName = "0.0.1-dev"
+        versionName = "1.0.0"
+    }
+    signingConfigs {
+        if (uploadSigning.isNotEmpty()) create("upload") {
+            storeFile = file(uploadSigning.getProperty("storeFile"))
+            storePassword = uploadSigning.getProperty("storePassword")
+            keyAlias = uploadSigning.getProperty("keyAlias")
+            keyPassword = uploadSigning.getProperty("keyPassword")
+        }
+    }
+    buildTypes {
+        release { signingConfig = signingConfigs.findByName("upload") }
     }
     buildFeatures { compose = true }
     testOptions { unitTests.isIncludeAndroidResources = true }
@@ -32,6 +53,10 @@ android {
         // Stable compatible versions are deliberate; upgrades are reviewed separately.
         disable += setOf("AndroidGradlePluginVersion", "GradleDependency")
     }
+}
+androidComponents {
+    // Debug installs beside the Play build; E2E and fixtures target this id.
+    onVariants(selector().withBuildType("debug")) { it.applicationId.set("dev.unpaged.android.development") }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
 

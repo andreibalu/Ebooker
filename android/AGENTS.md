@@ -22,9 +22,13 @@ implementation slices are merged. Physical-device testing is next:
   instructions.
 - Keep the single production `app` module plus the separate `e2e` driver until
   an architecture decision justifies more modules.
-- `dev.unpaged.android.development`, `0.0.1-dev`, minSdk 26 and the placeholder
-  launcher icon are provisional development choices, not Play registration or a
-  supported-phone promise.
+- The Play application id is `app.unpaged` and is permanent. Debug builds keep
+  `dev.unpaged.android.development`, so E2E, fixtures and `adb` commands target
+  that id and install beside the Play build. minSdk stays 26.
+- Raise `versionCode` for every Play upload. The release bundle is signed with
+  the upload key from `~/.config/unpaged/upload-signing.properties` (outside the
+  repo); Google Play App Signing holds the app signing key. Release steps and
+  store text live in `android/play/` (see `android/README.md` → Google Play).
 - Use the checked-in Gradle wrapper and process-local JDK/SDK variables. Never
   install global Gradle or edit shell profiles. Pin exact dependency versions;
   update the checksum with any wrapper change. No automatic license acceptance.

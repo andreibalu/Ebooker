@@ -1,8 +1,8 @@
 # Unpaged — Privacy Policy
 
-_Last updated: October 6, 2026_
+_Last updated: October 12, 2026_
 
-Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) with LibriVox/Internet Archive (free-book browsing, streaming, and downloads), and — only if you connect one — with your own Audiobookshelf server. Unpaged never receives your name, email, or payment details.
+Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) with LibriVox/Internet Archive (free-book browsing, streaming, and downloads), and — only if you connect one — with your own Audiobookshelf server. Unpaged never receives your name, email, or payment details. Unpaged is available for iPhone and Android. Most of this policy describes the iPhone app; [Unpaged for Android](#unpaged-for-android) explains where the Android app differs.
 
 ## What stays on your device
 
@@ -87,7 +87,27 @@ Network requests are made only:
 - Through Apple's Speech framework when CarPlay voice search runs or AI transcription uses the legacy fallback; Unpaged requires processing to stay on-device
 - To Apple, once per language, when iOS downloads its on-device speech-recognition model the first time AI transcription runs (no audio or content is sent)
 
-All requests use HTTPS, except that an Audiobookshelf server may be reached over plain HTTP if that is the address you enter (common for servers on a home network or a VPN such as Tailscale). If you enter a plain HTTP address for a server on the public internet, Unpaged warns you before signing in that your login and listening activity would be sent unencrypted. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the app.
+All requests use HTTPS, except that an Audiobookshelf server may be reached over plain HTTP if that is the address you enter (common for servers on a home network or a VPN such as Tailscale). If you enter a plain HTTP address for a server on the public internet, Unpaged warns you before signing in that your login and listening activity would be sent unencrypted. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the iPhone app.
+
+## Unpaged for Android
+
+The Android app offers the same local library, LibriVox, Audiobookshelf, moments, equalizer, and Reading Activity features, with these differences.
+
+**No purchases or iCloud.** The Android app has no subscriptions, tips, or in-app purchases, and no iCloud Sync. Every feature is free.
+
+**Permissions.** Android asks only for permission to show notifications (Android 13 and later), used for playback controls and download progress. Declining it never blocks playback. Unpaged for Android does not request microphone or speech-recognition access. Android Auto voice search is handled by Google Assistant, which passes Unpaged only the text of your request.
+
+**Where data is stored.** Your library, progress, moments, settings, and Reading Activity live in the app's private storage on your phone. Imported audio is copied into that storage; your original files are never modified or deleted. Audiobookshelf sign-in details are encrypted with a key held in the Android Keystore and are never included in backups.
+
+**Android backup (optional).** When the in-app Back Up Library setting and your phone's backup service are both on, Android's backup system (for example Backup by Google, stored in your Google account) saves a copy of your library list, progress, moments, and settings, and can restore it on a new phone or after reinstalling. Audio files, covers, the LibriVox catalog cache, AI recaps, downloaded models, and Audiobookshelf credentials are excluded. Unpaged never sees this backup; Google's [Privacy Policy](https://policies.google.com/privacy) governs it. Turning off Back Up Library in Settings stops cloud backup of Unpaged; a direct phone-to-phone transfer during new-phone setup still copies the library.
+
+**On-device AI (optional, off by default).** On phones that support Gemini Nano, Unpaged can name moments and write recaps. Text generation uses Gemini Nano on your phone through Google's ML Kit GenAI Prompt API, and speech-to-text runs on your phone with the open-source Whisper model. Your audio, transcripts, prompts, and results are never sent to any server. The Whisper speech model (about 60 MB) is downloaded from Hugging Face (huggingface.co) only after you agree; that download sends a standard web request, which reveals your IP address to Hugging Face, and no audio or content. You can delete the model in Settings. Gemini Nano itself is installed and updated by Android, not by Unpaged.
+
+**Google ML Kit diagnostics.** The ML Kit library behind Gemini Nano sends Google diagnostic and usage information so Google can maintain it: device model and Android version, app package name and version, per-installation and device identifiers, performance metrics, error codes, configured language, and the size (not the content) of AI requests and results. This is sent over HTTPS, is not shared with third parties by Google, and is not used for advertising. It never includes your audio, books, moments, or generated text. See Google's [ML Kit data disclosure](https://developers.google.com/ml-kit/android-data-disclosure). Apart from this library, the Android app bundles no analytics, ad networks, crash-reporting SDKs, or tracking.
+
+**Network usage.** The Android app connects only to LibriVox and Internet Archive (browsing, samples, streaming, downloads), the Audiobookshelf server you connect, Hugging Face (the one-time speech model download), and Google through ML Kit as described above. As on iPhone, a plain HTTP Audiobookshelf address is allowed, and you are warned before signing in to one on the public internet.
+
+**Deleting your data.** Uninstalling Unpaged deletes everything it stored on your phone. To remove a backup, delete it from your Google account's backup settings.
 
 ## Children
 
@@ -95,7 +115,7 @@ Unpaged is not directed at children under 13. We do not knowingly collect any pe
 
 ## Changes to this policy
 
-If this policy changes, the revised version will be posted at the same URL with an updated date. Material changes will be noted in the App Store version notes.
+If this policy changes, the revised version will be posted at the same URL with an updated date. Material changes will be noted in the App Store and Google Play release notes.
 
 ## Contact
 

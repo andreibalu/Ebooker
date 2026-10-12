@@ -85,13 +85,28 @@ The distribution checksum is pinned in `gradle-wrapper.properties` and checked
 by the wrapper when fetching Gradle. Wrapper scripts/JAR come from the official
 [Gradle v8.13.0 source](https://github.com/gradle/gradle/tree/v8.13.0).
 
-## Provisional choices
+## Google Play
 
-`dev.unpaged.android.development` is a development application ID. Version
-`0.0.1-dev`, minSdk 26 and the two-bar placeholder icon are scaffolding choices.
-Minimum phone support, final application identity and Play release gates remain
-open Wayfinder decisions. SDK level alone never establishes local-AI availability.
-The native build emits arm64-v8a and x86_64 libraries only.
+The Play build is `app.unpaged`; debug builds keep `dev.unpaged.android.development`
+so both install side by side. Release bundles are signed with the upload key named in
+`~/.config/unpaged/upload-signing.properties` (or `-Punpaged.uploadSigning=<file>`);
+without that file `bundleRelease` produces an unsigned bundle. Google Play App
+Signing holds the app signing key. minSdk is 26. The native build emits arm64-v8a
+and x86_64 libraries only, aligned for 16 KB pages. SDK level alone never
+establishes local-AI availability.
+
+`play/` holds the store listing text (`listings/en-US/`), release notes, the
+graphics generator (`tools/PlayGraphics.java`), `setup-wizard.sh` for the one-time
+console and Google Cloud setup, and `publish.sh` for later uploads:
+
+```sh
+./gradlew --no-daemon :app:bundleRelease     # raise versionCode first
+play/publish.sh bundle internal              # draft release on the internal track
+play/publish.sh listing                      # text + images from ~/.config/unpaged/play-assets
+```
+
+`publish.sh` gets a token by impersonating the publisher service account with your
+`gcloud` login, so no key file exists.
 
 Playback declares INTERNET and foreground media-playback permissions; ACCESS_NETWORK_STATE
 supports LibriVox offline detection. API33+ notification permission is optional and

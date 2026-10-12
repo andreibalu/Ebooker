@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The iOS app icon's bookmark and dot, redrawn from AppIcon-1024.png coordinates and
+     scaled so it fills about 75% of a square mask, like iOS, inside the 66dp safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <group android:scaleX="0.074" android:scaleY="0.074" android:translateX="16.11" android:translateY="16.63">
+        <path android:fillColor="#F3EEE7" android:pathData="M387,122H637V758L512,653L387,758Z" />
+        <path android:fillColor="#E49A20" android:pathData="M511.5,746a72,72 0,1 1,0 144a72,72 0,1 1,0 -144z" />
+    </group>
+</vector>

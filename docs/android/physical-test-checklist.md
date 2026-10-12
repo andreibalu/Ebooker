@@ -18,7 +18,7 @@ with the phone model and Android version.
    to allow installs from that app once.
 
 The debug build installs as "Unpaged" with the id
-`dev.unpaged.android.development`, next to any future Play build.
+`dev.unpaged.android.development`, next to the Play build (`app.unpaged`).
 
 ## Playback
 
@@ -79,10 +79,7 @@ and the rest of the app works.
 
 ## Before a Play Store release
 
-These are not needed for your own testing:
-
-- A release signing key and a Play Console app entry.
-- A final application id. The debug build uses `dev.unpaged.android.development`.
-- Android sections in `privacy-policy.md`, `support.md` and `EULA.md`, covering
-  Gemini Nano, the speech model download from Hugging Face and Android backup.
-  Then update the Gist mirrors.
+- [ ] Install the closed-test build from Google Play (`app.unpaged`) on at least
+      one physical phone and repeat Playback and Backup and restore above.
+- [ ] Notification permission prompt appears in onboarding; download and
+      playback notifications show while the app is in the background.
