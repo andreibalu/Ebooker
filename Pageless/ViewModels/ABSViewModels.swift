@@ -362,6 +362,7 @@ final class ABSBookGroupViewModel {
 
     func load(libraryID: String, kind: String, groupID: String?, person: String?, account: ABSAccount) async {
         phase = .loading
+        await account.client.beginBrowseLoad()
         do {
             if let person {
                 // URL-safe alphabet: a raw "+" would arrive as a space. ABS (Node) decodes both alphabets.
@@ -452,6 +453,7 @@ final class ABSBookDetailViewModel {
 
     func load(account: ABSAccount, modelContext: ModelContext) async {
         refreshLibraryBook(modelContext: modelContext)
+        await account.client.beginBrowseLoad()
         async let expanded = try? account.client.item(id: summary.id)
         async let serverProgress = try? account.client.mediaProgress(itemID: summary.id)
         let (loadedItem, loadedProgress) = await (expanded, serverProgress)

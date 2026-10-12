@@ -71,6 +71,10 @@ export interface FakeAudiobookshelf {
   getProgress(itemID: string): number | undefined;
   setProgressFailure(mode: 500 | 'unreachable' | null): void;
   audioDelayMS: number;
+  /** Fails library item listings with a 500 while every other route keeps answering. */
+  itemsFailure: boolean;
+  /** Delays the media progress list, so it completes after a concurrent item listing. */
+  progressListDelayMS: number;
   close(): Promise<void>;
 }
 
@@ -170,7 +174,7 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
   const serverProgress = (item: FakeItem) => ({ ...progressJSON(item, progress.get(item.id)!),
     ...(updates.get(item.id) ?? { lastUpdate: 1_700_000_000_000, isFinished: item.finished ?? false }) });
   let base = '';
-  const controls = { audioDelayMS: 0 };
+  const controls = { audioDelayMS: 0, itemsFailure: false, progressListDelayMS: 0 };
 
   const authorized = (req: IncomingMessage) => {
     const header = req.headers.authorization ?? '';
@@ -240,6 +244,7 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
 
     const itemsMatch = /^\/api\/libraries\/([^/]+)\/items$/.exec(path);
     if (itemsMatch) {
+      if (controls.itemsFailure) return json(res, 500, {});
       const page = Number(url.searchParams.get('page') ?? 0);
       const limit = Number(url.searchParams.get('limit') ?? 50);
       let all = absItems.filter((item) => item.libraryId === itemsMatch[1]);
@@ -257,6 +262,7 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
     }
 
     if (path === '/api/me/progress' && req.method === 'GET') {
+      if (controls.progressListDelayMS > 0) await new Promise((resolve) => setTimeout(resolve, controls.progressListDelayMS));
       const mediaProgress = absItems.filter((item) => progress.has(item.id))
         .map((item) => serverProgress(item));
       return json(res, 200, { mediaProgress });
@@ -315,6 +321,10 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
   return {
     get audioDelayMS() { return controls.audioDelayMS; },
     set audioDelayMS(value: number) { controls.audioDelayMS = value; },
+    get itemsFailure() { return controls.itemsFailure; },
+    set itemsFailure(value: boolean) { controls.itemsFailure = value; },
+    get progressListDelayMS() { return controls.progressListDelayMS; },
+    set progressListDelayMS(value: number) { controls.progressListDelayMS = value; },
     serverURL: base,
     requests,
     progressPatches,

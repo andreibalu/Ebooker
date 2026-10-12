@@ -19,8 +19,9 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
 
 /// Standalone ABS transport. URLSession is injectable so no running server is needed in tests.
 actor AudiobookshelfClient {
-    /// True when the latest browse request was answered from `ABSResponseCache` because the
-    /// server was unreachable; any live response clears it.
+    /// True when any request since `beginBrowseLoad()` was answered from `ABSResponseCache`
+    /// because the server was unreachable. A live response never clears it: a load's requests
+    /// run concurrently, and the last one to finish must not hide an earlier fallback.
     private(set) var isUsingCachedResponses = false
 
     func beginBrowseLoad() { isUsingCachedResponses = false }
@@ -242,7 +243,6 @@ actor AudiobookshelfClient {
             guard let active = try self.connection(), active.baseURL == connection.baseURL,
                   active.username == connection.username else { throw AudiobookshelfError.notConnected }
             if cacheable { ABSResponseCache.write(data, at: cacheURL) }
-            isUsingCachedResponses = false
             return data
         } catch {
             let unavailable: Bool

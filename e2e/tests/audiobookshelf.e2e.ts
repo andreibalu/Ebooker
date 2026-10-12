@@ -233,6 +233,28 @@ test('an unreachable server shows cached shelves, and Retry refreshes once it is
   }
 });
 
+test('cached shelves keep the offline banner when progress answers after the item listing fails', async ({ device, screen, nativeKeyboard }) => {
+  const server = await startFakeAudiobookshelf();
+  try {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    await expect(screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien')).toBeVisible({ timeout: 30_000 });
+
+    // Browse fetches items and progress together. The items request falls back to the saved
+    // shelves first; the progress request then succeeds, and must not hide the offline banner.
+    server.itemsFailure = true;
+    server.progressListDelayMS = 1_500;
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    await screen.getByTestId('shelvesTab').tap();
+    await expect(screen.getByTestId('abs.browse.offline')).toBeVisible({ timeout: 45_000 });
+    await screen.scrollUntilVisible(screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien'));
+    await expect(screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien')).toBeVisible();
+  } finally {
+    await server.close();
+  }
+});
+
 async function addAndPlayHobbit(screen: Screen) {
   await tapVisibleCenter(screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien').first());
   await screen.getByTestId('abs.detail.add').tap();
