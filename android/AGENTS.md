@@ -37,6 +37,9 @@ implementation slices are merged. Physical-device testing is next:
 - Every change runs `:app:assembleDebug :app:lintDebug :app:testDebugUnitTest`
   (zero lint issues). UI or behavior changes also run `tools/run-e2e.sh` on a
   dedicated `Unpaged_E2E_*` emulator, and their captures get a visual review.
+- The owner's test phone, Galaxy A54 `RZCW60SZE3H` (fresh install, no SIM,
+  Wi-Fi only), is approved for installs, E2E runs and physical checks without
+  asking. Address it by serial. Never use any other physical device.
 - Follow `../AGENTS.md` → Testing for both platforms: E2E is the preferred sole
   testing mechanism; isolated tests require a written failure analysis before
   implementation and must catch bugs the E2E assertions miss. The host command
