@@ -70,7 +70,7 @@ export const site = {
   anatomy: {
     eyebrow: 'Anatomy of a moment',
     heading: 'How a moment<br><em>writes itself.</em>',
-    text: 'With Unpaged Plus, Apple Intelligence can fill in a moment for you. Here is what happens in the two seconds after you tap Save Moment. All of it runs on your iPhone. The audio and the words never leave it.',
+    text: 'With Unpaged Plus, Apple Intelligence can fill in a moment for you. Here is what happens when you tap Save Moment in a downloaded book. All of it runs on your iPhone. The audio and the words never leave it.',
     book: 'Pride and Prejudice',
     author: 'Jane Austen',
     chapter: 'Chapter 1',
@@ -151,7 +151,7 @@ export const site = {
       ['cloud', 'Your library, carried forward', 'iCloud sync backs up your library, listening progress, moments, equalizer settings and reading activity. Audio stays on each device: re-import your own book, or re-add a LibriVox title, and its place comes back.'],
       ['plans', 'Choose the plan in the app', 'Monthly and yearly plans through the App Store. Current prices and any trial are shown before you subscribe. Earlier AI and iCloud purchases are still recognized.']
     ],
-    qualification: 'Apple Intelligence features require iOS 26 or later on a supported iPhone with Apple Intelligence turned on. The player runs on iOS 18 and later. iCloud sync requires iCloud sign-in.'
+    qualification: 'Apple Intelligence features require iOS 26 or later on a supported iPhone with Apple Intelligence turned on. Smart naming and recaps work on books stored on your iPhone, not while streaming. The player runs on iOS 18 and later. iCloud sync requires iCloud sign-in.'
   },
   notFound: { title: 'Lost your place? · Unpaged', heading: 'Lost your <em>place?</em>', text: 'This page isn’t in the book. Your next chapter starts back at the beginning.', cta: 'Back to Unpaged' }
 };

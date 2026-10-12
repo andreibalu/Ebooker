@@ -219,15 +219,15 @@ a:hover > .i-arrow { translate: 3px 0; }
 .card-ai { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--amber-text); background: var(--amber-wash); padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
 .field { padding: 12px 0; border-bottom: 1px solid #efe8db; transition: opacity .45s var(--ease); }
 .field:last-child { border-bottom: 0; }
-.f-label { display: flex; align-items: center; gap: 8px; font: 600 10.5px/1.2 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: #8d8577; margin-bottom: 7px; }
-.f-label i { font-style: normal; letter-spacing: .02em; text-transform: none; font-weight: 500; color: #a69d8e; }
+.f-label { display: flex; align-items: center; gap: 8px; font: 600 10.5px/1.2 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; }
+.f-label i { font-style: normal; letter-spacing: .02em; text-transform: none; font-weight: 500; color: #7a7366; }
 .f-value { font-size: 14px; line-height: 1.5; color: var(--ink-2); min-height: 1.5em; }
 .f-title { font: 600 17px/1.3 var(--sans); color: var(--ink); }
 .f-quote { font: italic 400 16px/1.45 var(--serif); color: var(--ink); }
 .verified { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; letter-spacing: .02em; text-transform: none; font-weight: 600; color: #3f7a4f; opacity: 0; transition: opacity .4s .6s; }
 .labs { display: flex; flex-wrap: wrap; gap: 5px; }
-.lab { padding: 4px 9px; border-radius: 999px; font-size: 12px; line-height: 1.35; color: #9b9385; background: #f2ece1; transition: background .35s var(--ease), color .35s var(--ease), opacity .35s var(--ease), scale .35s var(--spring); }
-.field[data-state=done] .lab[data-picked], .field[data-state=now] .lab[data-picked].on { background: var(--amber); color: #fff; font-weight: 600; }
+.lab { padding: 4px 9px; border-radius: 999px; font-size: 12px; line-height: 1.35; color: #6b6458; background: #f2ece1; transition: background .35s var(--ease), color .35s var(--ease), opacity .35s var(--ease), scale .35s var(--spring); }
+.field[data-state=done] .lab[data-picked], .field[data-state=now] .lab[data-picked].on { background: #a86518; color: #fff; font-weight: 600; }
 .field[data-state=done] .labs .lab:not([data-picked]) { display: none; }
 .field[data-state=now] .lab.on { scale: 1.06; }
 .field[data-state=todo] { opacity: .32; }

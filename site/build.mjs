@@ -62,7 +62,7 @@ const arrow = `<svg class="i-arrow" viewBox="0 0 24 24" aria-hidden="true"><path
 const sparkle = `<svg class="i-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.5 4.6 2.9 7 7.5 7.5-4.6.5-7 2.9-7.5 7.5-.5-4.6-2.9-7-7.5-7.5 4.6-.5 7-2.9 7.5-7.5Z"/><path d="M19 15.5c.2 1.8 1.1 2.8 3 3-1.9.2-2.8 1.1-3 3-.2-1.9-1.2-2.8-3-3 1.8-.2 2.8-1.2 3-3Z"/></svg>`;
 const bookmarkGlyph = `<svg class="i-bookmark" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v18l-5-4.2L7 21Z"/></svg>`;
 const check = `<svg class="i-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg>`;
-const phone = (screen, alt, { cls = '', eager = false } = {}) => `<div class="phone ${cls}"><img src="${asset(`screens/${screen}.webp`)}" width="${W}" height="${H}" alt="${e(alt)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></div>`;
+const phone = (screen, alt, { cls = '', eager = false, hidden = false } = {}) => `<div class="phone ${cls}"${hidden ? ' aria-hidden="true"' : ''}><img src="${asset(`screens/${screen}.webp`)}" width="${W}" height="${H}" alt="${e(alt)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></div>`;
 const head = (eyebrow, heading, id, text = '', cls = '') => `<div class="section-head ${cls}"><p class="eyebrow">${e(eyebrow)}</p><h2 id="${id}">${rich(heading)}</h2>${text ? `<p class="lede">${e(text)}</p>` : ''}</div>`;
 const checks = arr => `<ul class="checks">${arr.map(t => `<li>${check}<span>${e(t)}</span></li>`).join('')}</ul>`;
 const badgeFor = site => (cls = '') => `<a class="store-badge ${cls}" href="${config.appStoreUrl}"><img src="${asset('img/app-store-badge.svg')}" width="156" height="52" alt="${e(site.ui.badgeAlt)}"></a>`;
@@ -131,8 +131,8 @@ function homePage(site, code) {
   <div class="library-top">${head(src.eyebrow, src.heading, 'library-title')}
   <div class="tabs" role="tablist" aria-label="${e(t.tabsLabel)}">${src.items.map((s, i) => `<button type="button" role="tab" id="tab-${i}" aria-controls="panel-${i}" aria-selected="${i === 0}" tabindex="${i ? -1 : 0}"><span class="tab-n">0${i + 1}</span>${e(s.name)}</button>`).join('')}</div></div>
   <div class="library-body">
-    <div class="library-art"><div class="library-stack">${src.items.map((s, i) => phone(s.screen, s.alt, { cls: `lib-phone${i ? '' : ' is-active'}` })).join('')}</div></div>
-    <div class="library-panels">${src.items.map((s, i) => `<div class="panel" role="tabpanel" id="panel-${i}" aria-labelledby="tab-${i}" ${i ? 'hidden' : ''}><h3>${e(s.title)}</h3><p>${e(s.text)}</p>${checks(s.details)}</div>`).join('')}</div>
+    <div class="library-art"><div class="library-stack">${src.items.map((s, i) => phone(s.screen, s.alt, { cls: `lib-phone${i ? '' : ' is-active'}`, hidden: i > 0 })).join('')}</div></div>
+    <div class="library-panels">${src.items.map((s, i) => `<div class="panel" role="tabpanel" id="panel-${i}" aria-labelledby="tab-${i}" tabindex="0" ${i ? 'hidden' : ''}><h3>${e(s.title)}</h3><p>${e(s.text)}</p>${checks(s.details)}</div>`).join('')}</div>
   </div>
 </div></section>`;
 
@@ -185,7 +185,7 @@ function homePage(site, code) {
           ${field('f-name', 3, e(f.name), `<p class="f-value f-title" lang="en" data-type>${e(r.name)}</p>`)}
           ${field('f-cats', 4, `${e(f.categories)} <i>${e(f.categoriesHint)}</i>`, `<div class="labs" lang="en">${chips(r.categories, r.picked, 'chip')}</div>`)}
           ${field('f-mood', 4, `${e(f.mood)} <i>${e(f.moodHint)}</i>`, `<div class="labs" lang="en">${chips(r.moods, [r.mood], 'mood')}</div>`)}
-          ${field('f-who', 5, e(f.characters), `<div class="labs">${r.characters.map(([id, n]) => `<span class="lab" id="${id}" data-picked>${e(n)}</span>`).join('')}</div>`)}
+          ${field('f-who', 5, e(f.characters), `<div class="labs" lang="en">${r.characters.map(([id, n]) => `<span class="lab" id="${id}" data-picked>${e(n)}</span>`).join('')}</div>`)}
           ${field('f-quote', 6, `${e(f.quote)} <span class="verified">${check}${e(f.verified)}</span>`, `<p class="f-value f-quote" lang="en" data-type>“${e(r.quote)}”</p>`)}
           ${field('f-note', 7, e(f.note), `<p class="f-value" lang="en" data-type>${e(r.note)}</p>`)}
         </div>

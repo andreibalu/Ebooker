@@ -52,6 +52,7 @@ function selectTab(i, focus = false) {
     if (on && panel.hidden) { panel.hidden = false; panel.classList.remove('is-entering'); void panel.offsetWidth; panel.classList.add('is-entering'); }
     else if (!on) panel.hidden = true;
     phones[j]?.classList.toggle('is-active', on);
+    phones[j]?.setAttribute('aria-hidden', String(!on));
   });
   if (focus) tabs[i].focus();
 }
