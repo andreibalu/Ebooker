@@ -13,21 +13,24 @@ object CatalogEnvironment {
     fun permitsAudio(url: String) = java.net.URI(url).let { it.scheme == "https" || (it.scheme == "http" && it.host == "127.0.0.1" && it.port == 13378) }
     fun savedOnly(context: Context) = context.getSharedPreferences("shelves-debug", Context.MODE_PRIVATE).getBoolean("fixture", false)
     fun heroDay(context: Context, day: Int) = if (savedOnly(context)) 7 else day
-    fun seed(context: Context, download: Boolean = false) {
+    fun seed(context: Context, download: Boolean = false, retry: Boolean = false) {
         val rows = JSONObject(context.assets.open("librivox-fixture.json").bufferedReader().use { it.readText() }).getJSONArray("books")
         val store = SQLiteCatalogStore(context)
         try { store.seed((0 until rows.length()).map { LibriVoxClient.decodeBook(rows.getJSONObject(it)).let { book ->
-            if (download && book.id == "133") book.copy(tracks = listOf(CatalogTrack(1, "Durable Chapter", 300, "http://127.0.0.1:13378/audio/download.wav")))
+            if (retry && book.id == "133") book.copy(tracks = (1..3).map { index ->
+                CatalogTrack(index, "Retry Chapter $index", 300, "http://127.0.0.1:13378/audio/retry-$index.wav")
+            })
+            else if (download && book.id == "133") book.copy(tracks = listOf(CatalogTrack(1, "Durable Chapter", 300, "http://127.0.0.1:13378/audio/download.wav")))
             else book
         } }) }
         finally { store.close() }
-        context.getSharedPreferences("shelves-debug", Context.MODE_PRIVATE).edit(commit = true) { putBoolean("fixture", true); putBoolean("download", download) }
+        context.getSharedPreferences("shelves-debug", Context.MODE_PRIVATE).edit(commit = true) { putBoolean("fixture", true); putBoolean("download", download || retry) }
     }
 }
 /** Only the debug manifest exposes this explicit fixture entry point. */
 class ShelvesFixtureActivity : MainActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (intent.getBooleanExtra("e2e-shelves-fixture", false)) CatalogEnvironment.seed(this, intent.getBooleanExtra("e2e-download-fixture", false))
+        if (intent.getBooleanExtra("e2e-shelves-fixture", false)) CatalogEnvironment.seed(this, intent.getBooleanExtra("e2e-download-fixture", false), intent.getBooleanExtra("e2e-retry-fixture", false))
         super.onCreate(savedInstanceState)
     }
 }
