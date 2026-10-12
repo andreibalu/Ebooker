@@ -4,6 +4,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.*
@@ -38,20 +40,23 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
                     val partial = File(staging, "$name.part")
                     var lastUpdate = 0L
                     val job = currentCoroutineContext()
-                    ResumableFile.copy(track.remoteUrl ?: error("No audio URL is available."), partial,
-                        { job.ensureActive(); check(!cancelled.exists()) { "Download cancelled." } }) { bytes, total ->
-                        val now = android.os.SystemClock.elapsedRealtime()
-                        if (now - lastUpdate >= 500 || bytes == total) {
-                            lastUpdate = now
-                            val fraction = if (total > 0) (bytes.toFloat() / total).coerceIn(0f, 1f) else 0f
-                            val percent = ((index + fraction) * 100 / row.tracks.size).toInt()
-                            runBlocking {
-                                setProgress(workDataOf(PROGRESS to percent, "track" to (index + 1), "total" to row.tracks.size))
-                                foreground(notification(row.title, percent))
+                    retryTrack(cancelled) {
+                        ResumableFile.copy(track.remoteUrl ?: error("No audio URL is available."), partial,
+                            { job.ensureActive(); check(!cancelled.exists()) { "Download cancelled." } }) { bytes, total ->
+                            val now = android.os.SystemClock.elapsedRealtime()
+                            if (now - lastUpdate >= 500 || bytes == total) {
+                                lastUpdate = now
+                                val fraction = if (total > 0) (bytes.toFloat() / total).coerceIn(0f, 1f) else 0f
+                                val percent = ((index + fraction) * 100 / row.tracks.size).toInt()
+                                runBlocking {
+                                    setProgress(workDataOf(PROGRESS to percent, "track" to (index + 1), "total" to row.tracks.size))
+                                    foreground(notification(row.title, percent))
+                                }
                             }
                         }
                     }
                     currentCoroutineContext().ensureActive()
+                    check(!cancelled.exists()) { "Download cancelled." }
                     check(partial.renameTo(destination)) { "Couldn't save the download." }
                     File(partial.path + ".validator").delete()
                 }
@@ -77,12 +82,42 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
             }
         } catch (cancel: CancellationException) { throw cancel }
         catch (error: Exception) {
+            // Finished tracks survive a rerun, so this resumes after a track exhausts its own attempts.
             if (DownloadFailures.retryable(error) && runAttemptCount < 4) Result.retry()
             else Result.failure(workDataOf(ERROR to (error.message ?: "Couldn't download this book. Please try again.")))
         } finally {
             if (folder?.let { File(it, ".cancelled").exists() } == true ||
                 runCatching { WorkManager.getInstance(applicationContext).getWorkInfoById(id).get()?.state == WorkInfo.State.CANCELLED }.getOrDefault(false)) folder?.deleteRecursively()
             store.close()
+        }
+    }
+
+    private fun connected(): Boolean {
+        val manager = applicationContext.getSystemService(ConnectivityManager::class.java)
+        return manager.getNetworkCapabilities(manager.activeNetwork)
+            ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+    }
+
+    /** Each track owns six attempts; the partial file and validator survive every retry. */
+    private suspend fun retryTrack(cancelled: File, copy: () -> Unit) {
+        val backoffs = longArrayOf(2_000, 5_000, 10_000, 20_000, 30_000)
+        var attempt = 0
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            check(!cancelled.exists()) { "Download cancelled." }
+            try { copy(); return }
+            catch (cancel: CancellationException) { throw cancel }
+            catch (error: Exception) {
+                if (!DownloadFailures.retryable(error) || attempt == backoffs.size || !connected()) throw error
+                // Poll the on-disk cancellation marker during backoff as well as during transfer.
+                var remaining = backoffs[attempt++]
+                while (remaining > 0) {
+                    val wait = minOf(remaining, 250L)
+                    delay(wait)
+                    check(!cancelled.exists()) { "Download cancelled." }
+                    remaining -= wait
+                }
+            }
         }
     }
 
@@ -125,7 +160,10 @@ class LibriVoxDownloadWorker(context: Context, parameters: WorkerParameters) : C
 
 /** Only transient I/O failures are worth another attempt; logic errors and bad input would fail identically. */
 internal object DownloadFailures {
-    fun retryable(error: Throwable) = error is java.io.IOException
+    fun retryable(error: Throwable) = when (error) {
+        is RecordingHttpException -> error.statusCode == 408 || error.statusCode == 429 || error.statusCode in 500..599
+        else -> error is java.io.IOException
+    }
     fun finishedIds(rows: List<WorkInfo>) = rows.filter { it.state.isFinished }.map { it.id.toString() }
 }
 

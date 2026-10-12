@@ -1342,6 +1342,77 @@ class LibraryE2ETest {
         closeBackupLibrary()
     }
 
+    private fun startRetryDownload(status: Int) {
+        absRequest("/_test/reset", "POST")
+        absRequest("/_test/retry-$status", "POST")
+        device.executeShellCommand("am force-stop $app")
+        device.executeShellCommand("am start -W -n $app/dev.unpaged.android.shelves.ShelvesFixtureActivity --ez e2e-shelves-fixture true --ez e2e-retry-fixture true")
+        field("tab.Shelves").click()
+        field("shelves.book.133").click()
+        scrollTo("shelves.download", scrollId = "shelves.detail")
+        field("shelves.download").click()
+    }
+
+    @Test fun transientTrackFailuresRetryAndResumeWithoutUserAction() {
+        startRetryDownload(500)
+        visible(By.text("Cancel Download"))
+        assertTrue("All three tracks should finish automatically", device.wait(Until.gone(By.text("Cancel Download")), 90_000))
+        assertFalse(device.hasObject(By.text("Try Again")))
+        visible(By.text("View in Library"))
+        val requests = absRequest("/_test/state").getJSONArray("track_requests")
+        assertEquals("Four attempts per track, with no worker-level HTTP retry", 12, requests.length())
+        for (track in 1..3) {
+            val rows = (0 until requests.length()).map { requests.getJSONObject(it) }
+                .filter { it.getString("path") == "/audio/retry-$track.wav" }
+            assertEquals(listOf(200, 500, 500, 206), rows.map { it.getInt("status") })
+            assertEquals(0L, rows.first().getLong("range"))
+            assertTrue("The partial must survive both HTTP failures", rows.drop(1).all { it.getLong("range") == 65536L })
+            for ((index, seconds) in listOf(2, 5, 10).withIndex()) {
+                val elapsed = rows[index + 1].getDouble("time") - rows[index].getDouble("time")
+                assertTrue("Track $track backoff $index: $elapsed", elapsed >= seconds - 0.2 && elapsed < seconds + 5)
+            }
+        }
+        tapText("View in Library")
+        field("book.play")
+        assertFalse(device.hasObject(By.text("Streaming")))
+        screenshot("download-retry-complete-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout()
+        screenshot("download-retry-complete-dark")
+        relaunch(); tapText("Jane Eyre")
+        field("book.play").click(); dismissNotificationPrompt()
+        waitForElapsed { it >= 1 }
+    }
+
+    @Test fun permanentTrack404FailsWithoutRetry() {
+        startRetryDownload(404)
+        assertTrue("404 should fail promptly", device.wait(Until.hasObject(By.text("The recording server returned HTTP 404.")), 5_000))
+        visible(By.text("Try Again"))
+        assertFalse(device.hasObject(By.text("Cancel Download")))
+        screenshot("download-404-light")
+        device.executeShellCommand("cmd uimode night yes"); settleLayout()
+        screenshot("download-404-dark")
+        assertStays("A permanent failure must not retry in the background", 12_000) {
+            absRequest("/_test/state").getJSONArray("track_requests").length() == 1
+        }
+        device.pressBack(); selectLibraryTab()
+        visible(By.text("The recording server returned HTTP 404."))
+        visible(By.text("Retry"))
+    }
+
+    @Test fun cancellingTrackRetryStopsBackoff() {
+        startRetryDownload(500)
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (absRequest("/_test/state").getJSONArray("track_requests").length() < 3 &&
+            android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(100)
+        assertEquals(3, absRequest("/_test/state").getJSONArray("track_requests").length())
+        tapText("Cancel Download")
+        field("shelves.download")
+        screenshot("download-retry-cancelled-light")
+        assertStays("Cancellation must stop the ten-second backoff", 12_000) {
+            absRequest("/_test/state").getJSONArray("track_requests").length() == 3
+        }
+    }
+
     @Test fun durableDownloadResumesPartialFileAfterForceStop() {
         absRequest("/_test/reset", "POST")
         device.executeShellCommand("am force-stop $app")
@@ -1359,6 +1430,8 @@ class LibraryE2ETest {
         device.executeShellCommand("am force-stop $app")
         launch()
         field("tab.Shelves").click()
+        // The resumed download's row can push the book below the fold.
+        scrollTo("shelves.book.133", scrollId = "shelves.list")
         field("shelves.book.133").click()
         val deadline = android.os.SystemClock.uptimeMillis() + 100_000
         do {

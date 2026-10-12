@@ -22,7 +22,7 @@ events = args.evidence / 'abs-server-events.jsonl'
 events.write_text('')
 lock = threading.Lock()
 state = {'login': 0, 'bad_password': 0, 'authorize': 0, 'covers': 0, 'play': 0,
-         'download_ranges': [], 'tokenized_streams': 0, 'progress': [], 'refresh': 0}
+         'download_ranges': [], 'track_requests': [], 'tokenized_streams': 0, 'progress': [], 'refresh': 0}
 
 def jwt(payload):
     return 'fixture.' + base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip('=') + '.signature'
@@ -54,6 +54,7 @@ items = [
 
 default_items = copy.deepcopy(items)
 visual = False
+retry_status = 500
 
 def use_fixture(is_visual):
     global items, visual
@@ -104,13 +105,17 @@ class Handler(BaseHTTPRequestHandler):
                 output.write(json.dumps({'event': key, 'payload': value}) + '\n')
 
     def do_POST(self):
+        global retry_status
         path = urlsplit(self.path).path
         body = self.body()
+        if path in ('/_test/retry-500', '/_test/retry-404'):
+            retry_status = int(path.rsplit('-', 1)[1])
+            return self.respond({})
         if path in ('/_test/reset', '/_test/visual'):
             use_fixture(path == '/_test/visual')
             with lock:
                 for key in state:
-                    state[key] = [] if key in ('progress', 'download_ranges') else 0
+                    state[key] = [] if key in ('progress', 'download_ranges', 'track_requests') else 0
                 save_state()
             return self.respond({})
         if path == '/login':
@@ -148,6 +153,35 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond(state)
         if path == '/_test/health':
             return self.respond({'ready': True})
+        if path.startswith('/audio/retry-'):
+            start = int(self.headers.get('Range', 'bytes=0-').removeprefix('bytes=').split('-')[0])
+            with lock:
+                attempt = 1 + sum(row['path'] == path for row in state['track_requests'])
+            # First transfer drops after a partial body; then two HTTP failures. Every track
+            # needs its own retry budget and must retain its nonzero Range.
+            status = 404 if retry_status == 404 else (500 if attempt in (2, 3) else (206 if start else 200))
+            self.record('track_requests', {'path': path, 'attempt': attempt, 'range': start,
+                                           'status': status, 'time': time.monotonic()})
+            if status in (404, 500):
+                return self.respond({}, status)
+            data = (args.fixtures / 'Chapter 1.wav').read_bytes()
+            self.send_response(status)
+            self.send_header('Content-Type', 'audio/wav')
+            self.send_header('Content-Length', str(len(data) - start))
+            self.send_header('ETag', '"retry-v1"')
+            if start:
+                self.send_header('Content-Range', f'bytes {start}-{len(data)-1}/{len(data)}')
+            self.end_headers()
+            if attempt == 1:
+                self.wfile.write(data[:65536])
+                self.wfile.flush()
+                self.close_connection = True
+                return
+            try:
+                self.wfile.write(data[start:])
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            return
         if path == '/audio/download.wav':
             data = (args.fixtures / 'Chapter 1.wav').read_bytes()
             start = int(self.headers.get('Range', 'bytes=0-').removeprefix('bytes=').split('-')[0])

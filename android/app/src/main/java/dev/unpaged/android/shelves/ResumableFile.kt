@@ -37,7 +37,7 @@ object ResumableFile {
                 if (total == offset) { progress(offset, offset); return true }
                 return false
             }
-            if (code != 200 && code != 206) throw IOException("The recording server returned HTTP $code.")
+            if (code != 200 && code != 206) throw RecordingHttpException(code)
             val range = connection.getHeaderField("Content-Range")
             val matched = Regex("bytes (\\d+)-(\\d+)/(\\d+)").matchEntire(range ?: "")
             val append = code == 206
@@ -74,3 +74,6 @@ object ResumableFile {
         } finally { connection.disconnect() }
     }
 }
+
+/** Retains the server status so permanent failures do not consume retry budgets. */
+class RecordingHttpException(val statusCode: Int) : IOException("The recording server returned HTTP $statusCode.")
