@@ -278,32 +278,34 @@ final class ABSBrowseViewModel {
     func load(account: ABSAccount, preferredLibraryID: String?, isNetworkAvailable: Bool? = nil) async {
         loadedOnce = true
         guard account.isConnected else { phase = .signedOut; return }
-        await account.client.beginBrowseLoad()
         if items.isEmpty { phase = .loading }
-        do {
-            let books = try await account.client.libraries().filter { $0.mediaType == "book" }
-            libraries = books
-            guard !books.isEmpty else {
-                items = []
-                phase = .noBookLibraries
-                return
+        let cacheUse = ABSCacheUse()
+        await ABSCacheUse.$current.withValue(cacheUse) {
+            do {
+                let books = try await account.client.libraries().filter { $0.mediaType == "book" }
+                libraries = books
+                guard !books.isEmpty else {
+                    items = []
+                    phase = .noBookLibraries
+                    return
+                }
+                let libraryID = books.first(where: { $0.id == preferredLibraryID })?.id
+                    ?? books.first(where: { $0.id == selectedLibraryID })?.id
+                    ?? books[0].id
+                selectedLibraryID = libraryID
+                async let fetchedItems = account.client.allLibraryItems(libraryID: libraryID, limit: 100)
+                async let fetchedProgress = try? account.client.allMediaProgress()
+                let (loadedItems, loadedProgress) = try await (fetchedItems, fetchedProgress)
+                items = loadedItems.filter { $0.mediaType == "book" }
+                progressByItemID = Dictionary((loadedProgress ?? []).map { ($0.libraryItemId, $0) },
+                                              uniquingKeysWith: { first, _ in first })
+                account.reload()
+                isOffline = cacheUse.used
+                phase = .loaded
+            } catch {
+                isOffline = true
+                phase = Self.phase(for: error)
             }
-            let libraryID = books.first(where: { $0.id == preferredLibraryID })?.id
-                ?? books.first(where: { $0.id == selectedLibraryID })?.id
-                ?? books[0].id
-            selectedLibraryID = libraryID
-            async let fetchedItems = account.client.allLibraryItems(libraryID: libraryID, limit: 100)
-            async let fetchedProgress = try? account.client.allMediaProgress()
-            let (loadedItems, loadedProgress) = try await (fetchedItems, fetchedProgress)
-            items = loadedItems.filter { $0.mediaType == "book" }
-            progressByItemID = Dictionary((loadedProgress ?? []).map { ($0.libraryItemId, $0) },
-                                          uniquingKeysWith: { first, _ in first })
-            account.reload()
-            isOffline = await account.client.isUsingCachedResponses
-            phase = .loaded
-        } catch {
-            isOffline = true
-            phase = Self.phase(for: error)
         }
     }
 
@@ -362,26 +364,28 @@ final class ABSBookGroupViewModel {
 
     func load(libraryID: String, kind: String, groupID: String?, person: String?, account: ABSAccount) async {
         phase = .loading
-        await account.client.beginBrowseLoad()
-        do {
-            if let person {
-                // URL-safe alphabet: a raw "+" would arrive as a space. ABS (Node) decodes both alphabets.
-                let encoded = Data(person.utf8).base64EncodedString()
-                    .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
-                let filter = "\(kind).\(encoded)"
-                books = try await account.client.allLibraryItems(libraryID: libraryID, filter: filter)
-                    .filter { $0.mediaType == "book" }
-                    .sorted { $0.media.metadata.displayTitle.localizedStandardCompare($1.media.metadata.displayTitle) == .orderedAscending }
-            } else {
-                groups = try await account.client.bookGroups(libraryID: libraryID, kind: kind)
-                if let groupID, let group = groups.first(where: { $0.id == groupID }) {
-                    books = kind == "series" ? group.readingOrder : group.books
+        let cacheUse = ABSCacheUse()
+        await ABSCacheUse.$current.withValue(cacheUse) {
+            do {
+                if let person {
+                    // URL-safe alphabet: a raw "+" would arrive as a space. ABS (Node) decodes both alphabets.
+                    let encoded = Data(person.utf8).base64EncodedString()
+                        .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+                    let filter = "\(kind).\(encoded)"
+                    books = try await account.client.allLibraryItems(libraryID: libraryID, filter: filter)
+                        .filter { $0.mediaType == "book" }
+                        .sorted { $0.media.metadata.displayTitle.localizedStandardCompare($1.media.metadata.displayTitle) == .orderedAscending }
+                } else {
+                    groups = try await account.client.bookGroups(libraryID: libraryID, kind: kind)
+                    if let groupID, let group = groups.first(where: { $0.id == groupID }) {
+                        books = kind == "series" ? group.readingOrder : group.books
+                    }
                 }
+                isOffline = cacheUse.used
+                phase = .loaded
+            } catch {
+                phase = ABSBrowseViewModel.phase(for: error)
             }
-            isOffline = await account.client.isUsingCachedResponses
-            phase = .loaded
-        } catch {
-            phase = ABSBrowseViewModel.phase(for: error)
         }
     }
 }
@@ -453,13 +457,15 @@ final class ABSBookDetailViewModel {
 
     func load(account: ABSAccount, modelContext: ModelContext) async {
         refreshLibraryBook(modelContext: modelContext)
-        await account.client.beginBrowseLoad()
-        async let expanded = try? account.client.item(id: summary.id)
-        async let serverProgress = try? account.client.mediaProgress(itemID: summary.id)
-        let (loadedItem, loadedProgress) = await (expanded, serverProgress)
+        let cacheUse = ABSCacheUse()
+        let (loadedItem, loadedProgress) = await ABSCacheUse.$current.withValue(cacheUse) {
+            async let expanded = try? account.client.item(id: summary.id)
+            async let serverProgress = try? account.client.mediaProgress(itemID: summary.id)
+            return await (expanded, serverProgress)
+        }
         if let loadedItem { item = loadedItem }
         if let loadedProgress { progress = loadedProgress }
-        isOffline = await account.client.isUsingCachedResponses || loadedItem == nil
+        isOffline = cacheUse.used || loadedItem == nil
     }
 
     /// Adds the item as a streaming book (or returns the existing row). Nil on failure, with

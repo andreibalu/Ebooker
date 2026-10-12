@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 nonisolated enum AudiobookshelfError: Error, Equatable {
     case notConnected
@@ -17,15 +18,19 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
     case notAudiobookshelfServer
 }
 
+/// Records whether any request in one screen load was answered from `ABSResponseCache`.
+/// Bound with `ABSCacheUse.$current.withValue`, so a load's concurrent `async let` requests
+/// share it while overlapping loads on other screens each keep their own.
+nonisolated final class ABSCacheUse: Sendable {
+    @TaskLocal static var current: ABSCacheUse?
+    private let state = OSAllocatedUnfairLock(initialState: false)
+
+    var used: Bool { state.withLock { $0 } }
+    func markUsed() { state.withLock { $0 = true } }
+}
+
 /// Standalone ABS transport. URLSession is injectable so no running server is needed in tests.
 actor AudiobookshelfClient {
-    /// True when any request since `beginBrowseLoad()` was answered from `ABSResponseCache`
-    /// because the server was unreachable. A live response never clears it: a load's requests
-    /// run concurrently, and the last one to finish must not hide an earlier fallback.
-    private(set) var isUsingCachedResponses = false
-
-    func beginBrowseLoad() { isUsingCachedResponses = false }
-
     private let session: URLSession
     private let credentials: any ABSCredentialStoring
     /// Identity of the connection a refresh was started for. A refresh may only be shared with, or
@@ -256,7 +261,7 @@ actor AudiobookshelfClient {
             if cacheable, unavailable, let active = try? self.connection(),
                active.baseURL == connection.baseURL, active.username == connection.username,
                let data = ABSResponseCache.read(at: cacheURL) {
-                isUsingCachedResponses = true
+                ABSCacheUse.current?.markUsed()
                 return data
             }
             throw error

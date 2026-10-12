@@ -107,12 +107,7 @@ final class AudiobookDetailViewModel {
         guard
             let text = audiobook.progressRecapText,
             !text.isEmpty,
-            let anchorTrack = audiobook.progressRecapAnchorTrackIndex,
-            let anchorTime = audiobook.progressRecapAnchorTime,
-            let progressTrack = audiobook.progressTrackIndex,
-            let progressT = audiobook.progressTime,
-            anchorTrack == progressTrack,
-            anchorTime == progressT
+            audiobook.progressRecapMatchesProgress
         else {
             recapText = nil
             recapProgressHeadline = nil

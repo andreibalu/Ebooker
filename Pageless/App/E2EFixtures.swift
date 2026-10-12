@@ -85,7 +85,8 @@ enum E2EFixtures {
             book.progressTime = 200
             book.progressUpdatedAt = book.lastPlayedAt
             if let text = argument("-e2e-persisted-recap") {
-                book.storeProgressRecap(text: text, headline: "At the harbour", anchorTrackIndex: 0, anchorTime: 200)
+                let anchor = argument("-e2e-persisted-recap-anchor").flatMap(Double.init) ?? 200
+                book.storeProgressRecap(text: text, headline: "At the harbour", anchorTrackIndex: 0, anchorTime: anchor)
             }
         }
         let moment = Moment(trackIndex: 0, time: 30, label: "E2E First Moment",

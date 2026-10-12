@@ -188,9 +188,11 @@ struct AudiobookDetailView: View {
         }
         .task {
             if let itemID = audiobook.absItemID {
-                await ABSAccount.shared.client.beginBrowseLoad()
-                let item = try? await ABSAccount.shared.client.item(id: itemID)
-                isABSOffline = await ABSAccount.shared.client.isUsingCachedResponses || item == nil
+                let cacheUse = ABSCacheUse()
+                let item = await ABSCacheUse.$current.withValue(cacheUse) {
+                    try? await ABSAccount.shared.client.item(id: itemID)
+                }
+                isABSOffline = cacheUse.used || item == nil
             }
         }
         .onAppear {

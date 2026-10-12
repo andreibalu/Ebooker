@@ -71,6 +71,7 @@ DEBUG-only launch hooks:
 | `-e2e-transcript-file <path>` | Replaces only the welcome-back segment transcriber with the file's text. The recap model and the Plus, local-AI and setting gates stay real. Use it to qualify the on-device model on a simulator without a speech asset. |
 | `-e2e-welcome-days <n>` | On initial fixture seeding, sets the listening book's last-played date n days ago and saved/current progress to 200 seconds. |
 | `-e2e-persisted-recap <text>` | With welcome-days seeding, stores a matching recap at the saved position. |
+| `-e2e-persisted-recap-anchor <seconds>` | Anchors that recap at this position instead (saved progress is 200 s). |
 | `-e2e-welcome-threshold-days <n>` | Overrides the three-day return threshold for this DEBUG fixture launch. |
 | `-e2e-fixture` | Opens the separate fixture store and seeds it once. |
 | `-e2e-reset-fixture` | Deletes the fixture store, saved scene state, the fixture Audiobookshelf login and onboarding preference keys before seeding. |

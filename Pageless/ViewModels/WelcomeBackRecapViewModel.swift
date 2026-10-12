@@ -30,10 +30,7 @@ final class WelcomeBackRecapViewModel {
         #endif
         recapModel = AudiobookDetailViewModel(audiobook: audiobook, recapProvider: provider,
                                              segmentTranscriber: transcriber)
-        if audiobook.progressRecapAnchorTrackIndex == audiobook.progressTrackIndex,
-           let anchor = audiobook.progressRecapAnchorTime,
-           let position = audiobook.progressTime,
-           anchor <= position, position - anchor <= 60 {
+        if audiobook.progressRecapMatchesProgress, let anchor = audiobook.progressRecapAnchorTime {
             cachedTrack = audiobook.progressRecapAnchorTrackIndex
             cachedTime = anchor
             cachedText = audiobook.progressRecapText
@@ -69,7 +66,7 @@ final class WelcomeBackRecapViewModel {
         else { return }
         returnDate = date
         if let cachedText, !cachedText.isEmpty, cachedTrack == track,
-           let cachedTime, cachedTime <= position, position - cachedTime <= 60 {
+           let cachedTime, cachedTime <= position, position - cachedTime <= Audiobook.progressRecapTolerance {
             text = cachedText
             headline = cachedHeadline
             return

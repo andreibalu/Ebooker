@@ -327,19 +327,20 @@ final class Audiobook: Identifiable {
         _progressRecapAnchorTime = anchorTime
     }
 
+    /// How far progress may move past a recap's anchor, in the same track, before the recap is stale.
+    static let progressRecapTolerance: Double = 60
+
+    /// True when the persisted recap still describes the high-water progress marker: same track,
+    /// anchored at or up to `progressRecapTolerance` seconds before it.
+    var progressRecapMatchesProgress: Bool {
+        guard let pt = _progressTrackIndex, let ptm = _progressTime,
+              let at = _progressRecapAnchorTrackIndex, let atm = _progressRecapAnchorTime else { return false }
+        return pt == at && atm <= ptm && ptm - atm <= Self.progressRecapTolerance
+    }
+
     /// Drops persisted recap if it no longer matches the current high-water progress marker.
     func discardProgressRecapIfAnchorMismatched() {
         guard _progressRecapText != nil else { return }
-        guard let pt = _progressTrackIndex, let ptm = _progressTime else {
-            clearProgressRecap()
-            return
-        }
-        guard let at = _progressRecapAnchorTrackIndex, let atm = _progressRecapAnchorTime else {
-            clearProgressRecap()
-            return
-        }
-        if pt != at || ptm != atm {
-            clearProgressRecap()
-        }
+        if !progressRecapMatchesProgress { clearProgressRecap() }
     }
 }
