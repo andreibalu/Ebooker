@@ -266,15 +266,18 @@ for (const [code, site] of Object.entries(locales)) {
   write(`${prefix}plus/index.html`, layout(site, code, { title: site.plusPage.title, description: site.plusPage.description, body: plusPage(site, code), route: 'plus/', type: 'plus', alternates: true }));
 }
 
-// GitHub Pages serves the root 404 for every unknown URL; a locale prefix swaps in that language.
-const nf = english.notFound;
-const lost = Object.fromEntries(Object.entries(locales).filter(([c]) => c !== 'en').map(([c, s]) => [c, { lang: htmlLang(c), title: s.notFound.title, heading: s.notFound.heading, text: s.notFound.text, cta: s.notFound.cta, home: `${base}${prefixOf(c)}` }]));
-const missing = `<section class="lost"><div class="wrap lost-inner"><div class="lost-ribbon" aria-hidden="true"><span class="ribbon-body"></span><span class="ribbon-dot"></span></div><p class="eyebrow">404</p><h1 id="lost-title">${rich(nf.heading)}</h1><p class="lede">${e(nf.text)}</p><a class="pill" href="${base}"><span>${e(nf.cta)}</span>${arrow}</a></div></section>
-<script>
-{const s=${JSON.stringify(lost)}[location.pathname.slice(${base.length}).split('/')[0]];
-if(s){document.documentElement.lang=s.lang;document.title=s.title;document.querySelector('#lost-title').innerHTML=s.heading;document.querySelector('.lost .lede').textContent=s.text;const a=document.querySelector('.lost .pill');a.href=s.home;a.querySelector('span').textContent=s.cta;}}
-</script>`;
-write('404.html', layout(english, 'en', { title: nf.title, description: nf.text, body: missing, route: '404.html', type: '404', noindex: true }));
+// GitHub Pages serves the root 404 for every unknown URL. Each locale's full page (header, body, footer)
+// ships as a template; a locale prefix in the path swaps it in before app.mjs runs.
+const missingBody = (site, code) => `<section class="lost"><div class="wrap lost-inner"><div class="lost-ribbon" aria-hidden="true"><span class="ribbon-body"></span><span class="ribbon-dot"></span></div><p class="eyebrow">404</p><h1 id="lost-title">${rich(site.notFound.heading)}</h1><p class="lede">${e(site.notFound.text)}</p><a class="pill" href="${base}${prefixOf(code)}"><span>${e(site.notFound.cta)}</span>${arrow}</a></div></section>`;
+const page404 = (site, code) => layout(site, code, { title: site.notFound.title, description: site.notFound.text, body: missingBody(site, code), route: '404.html', type: '404', noindex: true });
+const chrome = html => html.slice(html.indexOf('<a class="skip-link"'), html.indexOf('<script type="module"'));
+const lost = Object.fromEntries(Object.entries(locales).filter(([c]) => c !== 'en').map(([c, s]) => [c, { lang: htmlLang(c), title: s.notFound.title, text: s.notFound.text }]));
+const templates = Object.keys(lost).map(c => `<template id="lost-${c}">${chrome(page404(locales[c], c))}</template>`).join('');
+const swap = `${templates}<script>{const c=location.pathname.slice(${base.length}).split('/')[0],s=${JSON.stringify(lost)}[c],t=document.getElementById('lost-'+c);
+if(s&&t){const d=document,n=t.content;d.documentElement.lang=s.lang;d.title=s.title;for(const m of d.querySelectorAll('meta[name=description],meta[property="og:description"]'))m.content=s.text;d.querySelector('meta[property="og:title"]').content=s.title;
+for(const q of ['.skip-link','header','main','footer'])d.querySelector(q).replaceWith(n.querySelector(q));}
+for(const x of document.querySelectorAll('template[id^=lost-]'))x.remove();}</script>`;
+write('404.html', page404(english, 'en').replace('<script type="module"', `${swap}\n<script type="module"`));
 
 // ---------------------------------------------------------------- documents
 const DOCS = [
