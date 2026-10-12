@@ -29,13 +29,8 @@ final class StoreKitTransactionTests {
     private let session: SKTestSession
 
     init() throws {
-        // App-hosted simulator tests can read the repository, so the scheme's configuration is
-        // the single source of truth instead of a copy that could drift.
-        let configuration = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Pageless/Configuration/Products.storekit")
+        // The scheme's configuration is the single source of truth (see LocalStoreKitConfiguration).
+        let configuration = LocalStoreKitConfiguration.url()
         session = try SKTestSession(contentsOf: configuration)
         session.resetToDefaultState()
         session.clearTransactions()

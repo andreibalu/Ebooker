@@ -24,6 +24,8 @@ Six code-review rounds on the release branch added these cases, most of them sho
 
 The last fix, `d3008fb`, changed only the legacy-progress fallback; `audiobookshelf.e2e.ts` passed on it apart from one failure in `a server book is added…` (the Remove dialog did not appear), which passed 3 of 3 reruns. The round-6 fix was checked with `player.e2e.ts` (11 of 11) and the native-flows, library, widget and moment-search files: 29 of 30 passed. The failure, `offline Shelves keeps cached books…`, stopped scrolling at the top of the chart; that code is unchanged, and the test passed 1 of 2 reruns. No E2E drives the Continue Listening widget refresh after an iCloud orphan merge or a mid-session CloudKit import.
 
+After merge, a seventh review round made the end-of-file advance depend on the item the sleep timer stopped, not on the playback position. `offline Shelves keeps cached books…` now checks the first chart row instead of scrolling to a specific book, and passed 4 of 4. `player.e2e.ts` and `native-flows.e2e.ts` passed 25 of 25. With the shared scheme set to serial testing, all 295 Swift tests and 8 UI tests pass.
+
 ## Validation, 2026-10-11 (wave 1 features)
 
 Native suite on the dedicated `Unpaged e2e integration` simulator (iPhone 18 Pro, iOS 27.0) at `555d580`, 103 tests in 14 files. The full run passed 102, with `live-catalog.e2e.ts` skipped because it is opt-in. The run before it, at `a358666`, passed 100 of 101. Its one failure was a test fault: `local playback advances chapters and creates a persisted manual moment` tapped the moment sheet's Done button before SwiftUI enabled it, and failed about one run in three. The test now waits for Done to be enabled, and passed 5 of 5 on its own.

@@ -106,6 +106,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     @Published var sleepTimerEndsAt: Date?
     @Published private(set) var sleepAtChapterEnd = false
     private var sleepChapterEnd: Double?
+    /// The item a chapter sleep timer stopped at its end; Play continues with the next file.
+    private weak var chapterSleepEndedItem: AVPlayerItem?
     @Published var playerErrorMessage: String?
     /// Chapters of the current book: embedded/server chapters when the files carry them,
     /// otherwise one per track.
@@ -390,11 +392,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
         // A chapter sleep timer that expired at the end of a file leaves the ended item loaded;
         // playing it again does nothing, so continue with the next file instead.
-        if pendingSeek == nil, pendingPlaybackTarget == nil, !isLoadingItem, canGoToNextTrack,
-           duration > 0, player.currentTime().seconds >= duration - 0.25 {
+        if let ended = chapterSleepEndedItem, ended === player.currentItem,
+           pendingSeek == nil, pendingPlaybackTarget == nil, !isLoadingItem, canGoToNextTrack {
+            chapterSleepEndedItem = nil
             navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
             return
         }
+        chapterSleepEndedItem = nil
         player.play()
         player.rate = Float(playbackRate)
         isPlaying = true
@@ -447,6 +451,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func seek(to seconds: Double, applyProgressPenalty: Bool = true) {
+        chapterSleepEndedItem = nil
         if applyProgressPenalty {
             persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
         }
@@ -1023,8 +1028,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                         self.currentTime = min(endInTrack, self.duration)
                         self.pause()
                         self.setSleepTimer(seconds: nil)
-                        if !self.canGoToNextTrack, endInTrack >= self.duration - 0.05 {
-                            self.markCurrentBookFinished()
+                        if endInTrack >= self.duration - 0.05 {
+                            if self.canGoToNextTrack {
+                                self.chapterSleepEndedItem = endedItem
+                            } else {
+                                self.markCurrentBookFinished()
+                            }
                         }
                         return
                     }
