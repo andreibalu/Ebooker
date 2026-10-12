@@ -90,9 +90,14 @@ struct AudiobookshelfLibraryTests {
         #expect(!OrphanDetectionService.shouldMarkOrphan(abs, hasLocalFiles: false))
         #expect(!abs.isCloudOnlyOrphan)
 
-        // Even a stray downloaded flag on an ABS row must not trigger the local-file orphan check.
-        let flagged = Audiobook(title: "ABS", folderName: "f", absItemID: "item1", isDownloaded: true)
-        #expect(!OrphanDetectionService.shouldMarkOrphan(flagged, hasLocalFiles: false))
+        // A downloaded ABS book whose files are missing (e.g. synced from another device) returns to
+        // streaming, never to the cloud-only orphan state.
+        let downloaded = Audiobook(title: "ABS", folderName: "f", absItemID: "item1", isDownloaded: true)
+        #expect(OrphanDetectionService.shouldMarkOrphan(downloaded, hasLocalFiles: false))
+        #expect(!OrphanDetectionService.shouldMarkOrphan(downloaded, hasLocalFiles: true))
+        downloaded.isDownloaded = false
+        #expect(downloaded.isStreamingOnly)
+        #expect(!downloaded.isCloudOnlyOrphan)
 
         let own = Audiobook(title: "Own", folderName: "f", isDownloaded: true)
         #expect(OrphanDetectionService.shouldMarkOrphan(own, hasLocalFiles: false))

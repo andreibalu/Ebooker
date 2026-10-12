@@ -14,14 +14,25 @@ import Foundation
 import StoreKitTest
 import Testing
 
-@MainActor
-@Suite struct StoreKitLedgerReset {
-    @Test func clearLocalStoreKitLedger() async throws {
-        let configuration = URL(fileURLWithPath: #filePath)
+/// The scheme's `Products.storekit`. The app bundle carries the same file, which is the only copy
+/// Xcode Cloud test runs can read (the repository path fails there). The repository path stays as a fallback.
+enum LocalStoreKitConfiguration {
+    static func url() -> URL {
+        if let bundled = Bundle.main.url(forResource: "Products", withExtension: "storekit") {
+            return bundled
+        }
+        return URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Pageless/Configuration/Products.storekit")
+    }
+}
+
+@MainActor
+@Suite struct StoreKitLedgerReset {
+    @Test func clearLocalStoreKitLedger() async throws {
+        let configuration = LocalStoreKitConfiguration.url()
         let session = try SKTestSession(contentsOf: configuration)
         session.resetToDefaultState()
         session.clearTransactions()

@@ -352,6 +352,7 @@ These rules apply to both iOS and Android:
 
 Run the native E2E suite and any retained isolated regression tests before a release build. For retained Swift Testing tests (`import Testing`), Codex uses `mcp__XcodeBuildMCP__test_sim` (or `test_device`) with `extraArgs: ["-parallel-testing-enabled", "NO"]`; Claude Code uses the `xcodebuild … test -parallel-testing-enabled NO` form from "Build & Run". `e2e/COVERAGE.md` records E2E scope and qualification boundaries.
 
+- The shared scheme marks both test targets non-parallelizable, so Xcode Cloud runs them serially too. Several suites share process-wide state (the `Audiobooks` folder, `MPNowPlayingInfoCenter`) and fail when run in parallel. StoreKit tests load the `Products.storekit` copy bundled in the app, because Xcode Cloud test runs fail to read the repository copy ("File not found").
 - Reuse helpers in `PagelessTests/Mocks/` only for retained isolated regressions. Adding a protocol does not require adding a mock or a unit-test suite.
 - **In-memory test containers: always pass `cloudKitDatabase: .none`** to `ModelConfiguration`. The default `.automatic` picks up the host app's CloudKit entitlement and fails CloudKit-shape validation. `SchemaCompatibilityTests.syncedSchemaSatisfiesCloudKitConstraints` is the one intentional `.private(...)` validation, via a file-backed temp store.
 - **Hold the container in a local**: `let container = try makeContainer(); let context = container.mainContext` — never `try makeContainer().mainContext` (container deallocates; first fetch crashes the host app).
