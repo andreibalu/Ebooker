@@ -236,7 +236,7 @@ test('chapter sleep retargets after a chapter jump', async ({ device, screen }) 
   await saveChapterSleepEvidence('retargeted-boundary');
 });
 
-test('chapter sleep stops at a track end without advancing', async ({ device, screen }) => {
+test('chapter sleep stops at a track end, and Play continues with the next file', async ({ device, screen }) => {
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture', '-skipForwardSeconds', '15'] });
   await openListeningBookPaused(screen);
   for (let i = 0; i < 19; i++) await screen.getByLabel('Skip forward').first().tap();
@@ -249,4 +249,11 @@ test('chapter sleep stops at a track end without advancing', async ({ device, sc
   await screen.getByTestId('player.chapters').tap();
   await expect(screen.getByTestId('chapters.row.0')).toBeSelected();
   await saveChapterSleepEvidence('track-boundary');
+  // Play after a track-end expiry continues with the next file, not the ended item.
+  await screen.getByRole('button', 'Done').tap();
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 1');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 2', { timeout: 10_000 });
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[1-9] of /, { timeout: 10_000 });
 });

@@ -8,6 +8,22 @@ This matrix covers every iOS feature except Apple Intelligence and iCloud sync, 
 - `support/fake-audiobookshelf.ts` serves an Audiobookshelf server on localhost.
 - The local `Products.storekit` configuration stands in for the App Store.
 
+## Validation, 2026-10-12 (release 1.5.0)
+
+Full native suite at `b02fdc5` on the same simulator (iPhone 18 Pro, iOS 27.0): 108 passed and `live-catalog.e2e.ts` skipped (opt-in), in 37 minutes. Rerun from `e2e/` with `E2E_SIMULATOR_UDID=<udid> E2E_BUILD_DIR=<build> npx e2e run`.
+
+Six code-review rounds on the release branch added these cases, most of them shown failing before their fix:
+
+- Cached Audiobookshelf shelves keep the offline banner when an overlapping load succeeds online (`cached shelves keep the offline banner…`).
+- A queued position is never sent to the server as a different user (`ABS durable progress never sends a queued position as a different user…`).
+- A local position saved before `absProgressWrittenAt` existed counts as of its last playback, so an older server position does not replace it (`ABS durable progress keeps a legacy local position played after the server position`).
+- Play Latest Book resumes an Audiobookshelf book from its saved marker, after reconciling with the server (`Play Latest Book resumes an ABS book from its saved marker…`).
+- Moment search disables rows for a disconnected Audiobookshelf server and for a missing track file (`moment-search.e2e.ts`).
+- A cached recap whose anchor is within 60 s of the saved position survives a relaunch (`welcome-back.e2e.ts`).
+- Play after an End of chapter expiry at a file end continues with the next file (`chapter sleep stops at a track end, and Play continues with the next file`).
+
+The last fix, `d3008fb`, changed only the legacy-progress fallback; `audiobookshelf.e2e.ts` passed on it apart from one failure in `a server book is added…` (the Remove dialog did not appear), which passed 3 of 3 reruns. The round-6 fix was checked with `player.e2e.ts` (11 of 11) and the native-flows, library, widget and moment-search files: 29 of 30 passed. The failure, `offline Shelves keeps cached books…`, stopped scrolling at the top of the chart; that code is unchanged, and the test passed 1 of 2 reruns. No E2E drives the Continue Listening widget refresh after an iCloud orphan merge or a mid-session CloudKit import.
+
 ## Validation, 2026-10-11 (wave 1 features)
 
 Native suite on the dedicated `Unpaged e2e integration` simulator (iPhone 18 Pro, iOS 27.0) at `555d580`, 103 tests in 14 files. The full run passed 102, with `live-catalog.e2e.ts` skipped because it is opt-in. The run before it, at `a358666`, passed 100 of 101. Its one failure was a test fault: `local playback advances chapters and creates a persisted manual moment` tapped the moment sheet's Done button before SwiftUI enabled it, and failed about one run in three. The test now waits for Done to be enabled, and passed 5 of 5 on its own.

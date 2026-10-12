@@ -388,6 +388,13 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             }
             return
         }
+        // A chapter sleep timer that expired at the end of a file leaves the ended item loaded;
+        // playing it again does nothing, so continue with the next file instead.
+        if pendingSeek == nil, pendingPlaybackTarget == nil, !isLoadingItem, canGoToNextTrack,
+           duration > 0, player.currentTime().seconds >= duration - 0.25 {
+            navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
+            return
+        }
         player.play()
         player.rate = Float(playbackRate)
         isPlaying = true
