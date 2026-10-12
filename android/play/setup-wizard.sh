@@ -199,6 +199,33 @@ ASSETS="$CONFIG/play-assets"
 CONSOLE="https://play.google.com/console"
 mkdir -p "$CONFIG" && chmod 700 "$CONFIG"
 
+# Keep provisioning callable on its own for checks with a temporary CONFIG.
+create_upload_key() (
+  local service="${1:-Unpaged Play upload key}" password developer_name store_file
+  if [[ -e "$CONFIG/unpaged-upload.jks" ]]; then
+    warn "The upload keystore already exists; refusing to replace it."
+    exit 1
+  fi
+  umask 077
+  mkdir -p "$CONFIG"
+  ask developer_name "Developer name [Andrei Baluta]:"
+  developer_name="${developer_name:-Andrei Baluta}"
+  # Quote the CN so commas in a developer name do not become DN separators.
+  developer_name="${developer_name//\\/\\\\}"
+  developer_name="${developer_name//\"/\\\"}"
+  password="$(openssl rand -base64 24)"
+  security add-generic-password -U -a "$USER" -s "$service" -w "$password"
+  JAVA_HOME=/opt/homebrew/opt/openjdk@21
+  "$JAVA_HOME/bin/keytool" -genkeypair -v -keystore "$CONFIG/unpaged-upload.jks" \
+    -storetype PKCS12 -alias upload -keyalg RSA -keysize 4096 -validity 10000 \
+    -storepass "$password" -keypass "$password" -dname "CN=\"$developer_name\""
+  store_file="${CONFIG//\\/\\\\}/unpaged-upload.jks"
+  printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=upload\nkeyPassword=%s\n' \
+    "$store_file" "$password" "$password" > "$CONFIG/upload-signing.properties"
+  chmod 600 "$CONFIG/upload-signing.properties" "$CONFIG/unpaged-upload.jks"
+  say "Created the upload key and signing properties; saved its password in Keychain."
+)
+
 banner "Unpaged for Android → Google Play"
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
@@ -219,6 +246,32 @@ pause "Press Enter once Play Console shows your account home page."
 
 # ── 2 ─────────────────────────────────────────────────────────────────────
 stage "Back up the upload key"
+if [[ -e "$CONFIG/unpaged-upload.jks" && ! -f "$CONFIG/upload-signing.properties" ]]; then
+  warn "The upload key exists, but upload-signing.properties is missing. Keep the existing key."
+  step "Recreate $CONFIG/upload-signing.properties with storeFile=$CONFIG/unpaged-upload.jks,"
+  step "keyAlias=upload, and storePassword/keyPassword set to the existing Keychain password."
+  note "Retrieve it with: security find-generic-password -a '$USER' -s 'Unpaged Play upload key' -w"
+  step "Run chmod 600 on the properties file and keystore, then re-run stage 2."
+  exit 1
+elif [[ ! -e "$CONFIG/unpaged-upload.jks" && -f "$CONFIG/upload-signing.properties" ]]; then
+  # A new key would not match the certificate Play already has, so restore the old one.
+  warn "upload-signing.properties exists, but the upload keystore is missing. Don't create a new key."
+  step "Restore unpaged-upload.jks from your backup to $CONFIG/unpaged-upload.jks and re-run stage 2."
+  step "If the key is lost for good, ask Play Console support to reset the upload key"
+  step "  (Setup → App signing → Request upload key reset), then move the old properties file aside."
+  exit 1
+elif [[ ! -e "$CONFIG/unpaged-upload.jks" ]]; then
+  if security find-generic-password -a "$USER" -s 'Unpaged Play upload key' >/dev/null 2>&1; then
+    # The Keychain still holds an earlier key's password; overwriting it would lose that key for good.
+    warn "Keychain already has an \"Unpaged Play upload key\" password, but no keystore is here."
+    step "Restore unpaged-upload.jks and upload-signing.properties from your backup, or delete"
+    step "  that Keychain item on purpose if no upload key was ever registered with Play."
+    exit 1
+  fi
+  warn "No upload key exists on this Mac."
+  confirm "Create a new upload key and signing properties on this Mac?" || exit 1
+  create_upload_key
+fi
 say "Every Play update must be signed with this key. If it's lost, Google can"
 say "reset it, but only after a support request. Keep two copies."
 step "Keystore file: $CONFIG/unpaged-upload.jks"
@@ -292,11 +345,44 @@ pause "Press Enter once the service account is listed under Users and permission
 # ── 6 ─────────────────────────────────────────────────────────────────────
 stage "First upload: internal testing"
 say "Google requires the very first bundle to be uploaded by hand."
+if [[ ! -f "$CONFIG/upload-signing.properties" || ! -f "$CONFIG/unpaged-upload.jks" ]]; then
+  warn "Cannot build or upload: upload signing files are missing. Complete stage 2 first."
+  exit 1
+fi
+JAVA_HOME=/opt/homebrew/opt/openjdk@21
 if [[ ! -f "$AAB" ]] && confirm "No release bundle yet. Build it now with Gradle?"; then
-  (cd "$ANDROID" && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home}" \
+  (cd "$ANDROID" && JAVA_HOME="$JAVA_HOME" \
     ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}" ./gradlew --no-daemon :app:bundleRelease)
 fi
-[[ -f "$AAB" ]] && { say "Bundle: $AAB"; open -R "$AAB" 2>/dev/null || true; }
+if [[ ! -f "$AAB" ]]; then
+  warn "No release bundle exists. Build it in stage 6 before uploading."
+  exit 1
+fi
+# jarsigner returns success for unsigned archives; require its verified result too.
+if ! verification="$(LC_ALL=C "$JAVA_HOME/bin/jarsigner" -verify "$AAB" 2>&1)" \
+  || ! grep -q '^jar verified\.$' <<< "$verification"; then
+  warn "Release bundle is unsigned or its signature is invalid. Complete stage 2 and rebuild in stage 6."
+  say "$verification"
+  exit 1
+fi
+# A valid signature can still come from a debug or old key. The first upload registers whatever
+# certificate signed it, so the bundle must carry the configured upload key's certificate.
+sha256() { LC_ALL=C sed -n 's/^[[:space:]]*SHA256: //p' | head -1; }
+UPLOAD_STOREPASS="$(sed -n 's/^storePassword=//p' "$CONFIG/upload-signing.properties")" \
+  && export UPLOAD_STOREPASS
+expected="$("$JAVA_HOME/bin/keytool" -list -v -keystore "$CONFIG/unpaged-upload.jks" -alias upload \
+  -storepass:env UPLOAD_STOREPASS 2>/dev/null | sha256)"
+actual="$("$JAVA_HOME/bin/keytool" -printcert -jarfile "$AAB" 2>/dev/null | sha256)"
+unset UPLOAD_STOREPASS
+if [[ -z "$expected" || "$expected" != "$actual" ]]; then
+  warn "The bundle is not signed with the upload key in $CONFIG/unpaged-upload.jks."
+  note "Bundle certificate SHA-256:     ${actual:-none}"
+  note "Upload key certificate SHA-256: ${expected:-unreadable}"
+  step "Delete $AAB and rebuild it in stage 6."
+  exit 1
+fi
+say "Signed bundle: $AAB"
+open -R "$AAB" 2>/dev/null || true
 step "In the app: Test and release → Testing → Internal testing → Testers tab:"
 step "  Create email list \"Me\" with your own address, save, and tick it."
 step "Releases tab → Create new release. Keep the Google-generated app signing key."

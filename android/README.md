@@ -97,7 +97,13 @@ establishes local-AI availability.
 
 `play/` holds the store listing text (`listings/en-US/`), release notes, the
 graphics generator (`tools/PlayGraphics.java`), `setup-wizard.sh` for the one-time
-console and Google Cloud setup, and `publish.sh` for later uploads:
+console and Google Cloud setup, and `publish.sh` for later uploads. Stage 2 offers
+to create an upload key when none exists, saves the password in macOS Keychain,
+and asks you to back up the key. It never replaces a key: if only the keystore,
+only the properties file, or only the Keychain password is left, it stops and asks
+you to restore the backup (or reset the upload key through Play Console support).
+Stage 6 requires the signing files and checks that the bundle is signed with that
+upload key's certificate before upload:
 
 ```sh
 ./gradlew --no-daemon :app:bundleRelease     # raise versionCode first
