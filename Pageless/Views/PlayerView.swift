@@ -220,6 +220,11 @@ struct PlayerView: View {
                         .multilineTextAlignment(.center)
                         .accessibilityIdentifier("player.bookContext")
                 }
+                if book.isAudiobookshelfBook && !book.isDownloaded {
+                    Text("Download this book to use smart moments.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("player.smartMoments.downloadRequired")
+                }
                 if let chapterLine = embeddedChapterLine {
                     chapterLineText(chapterLine)
                 }
@@ -471,18 +476,21 @@ struct PlayerView: View {
                     Button(option.title) {
                         player.setSleepTimer(seconds: option.rawValue)
                     }
+                    .accessibilityIdentifier(option == .endOfChapter ? "player.sleep.endOfChapter" : "player.sleep.\(Int(option.rawValue))")
                 }
             } label: {
                 TimelineView(.periodic(from: .now, by: 1)) { timeline in
                     compactQuickActionSegment(
                         icon: "moon.zzz.fill",
-                        text: PlayerQuickActionDisplay.sleepTimerTitle(
-                            endsAt: player.sleepTimerEndsAt,
-                            now: timeline.date
-                        ),
-                        filled: player.sleepTimerEndsAt != nil,
+                        text: player.sleepAtChapterEnd
+                            ? "End of chapter\n\(TimeFormatter.clockString(seconds: player.chapterSleepRemaining))"
+                            : PlayerQuickActionDisplay.sleepTimerTitle(
+                                endsAt: player.sleepTimerEndsAt,
+                                now: timeline.date
+                            ),
+                        filled: player.sleepAtChapterEnd || player.sleepTimerEndsAt != nil,
                         expands: true,
-                        accented: player.sleepTimerEndsAt != nil
+                        accented: player.sleepAtChapterEnd || player.sleepTimerEndsAt != nil
                     )
                 }
             }
@@ -534,7 +542,7 @@ struct PlayerView: View {
                 .foregroundStyle(accented ? Color.amber : Color.primary)
             Text(text)
                 .font(.subheadline.weight(.medium))
-                .lineLimit(1)
+                .lineLimit(text.contains("\n") ? 2 : 1)
                 .minimumScaleFactor(0.72)
                 .allowsTightening(true)
                 .monospacedDigit()

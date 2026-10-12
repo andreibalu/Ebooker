@@ -111,6 +111,8 @@ struct ContentView: View {
     @State private var playerDismissGeneration: UInt = 0
     @State private var isSettingsPresented = false
     @State private var isPlusHubPresented = false
+    @State private var isMomentSearchPresented = false
+    @State private var playMomentAfterSearch = false
     @State private var isDownloadScrollPending = false
     /// Changing this rebuilds the navigation stack. The links push without a path, so a
     /// rebuild is the only way to pop every pushed screen.
@@ -145,6 +147,12 @@ struct ContentView: View {
                             onOpenPlayer: openPlayer,
                             browseViewModel: browseViewModel
                         )
+                    }
+                    // Registered on the stack, not in the paged tab content: destinations inside
+                    // the lazy pager are dropped, and view-destination links there pop on reuse.
+                    .navigationDestination(for: ABSGroupRoute.self) { route in
+                        ABSBookGroupView(libraryID: route.libraryID, kind: route.kind, title: route.title,
+                                         groupID: route.groupID, onOpenPlayer: openPlayer, account: absAccount)
                     }
                 }
                 .id(navigationStackID)
@@ -211,6 +219,17 @@ struct ContentView: View {
                 selectedTab = .freeBooks
             }
         }
+        .sheet(isPresented: $isMomentSearchPresented, onDismiss: {
+            if playMomentAfterSearch {
+                playMomentAfterSearch = false
+                openPlayer()
+            }
+        }) {
+            MomentSearchView {
+                playMomentAfterSearch = true
+                isMomentSearchPresented = false
+            }
+        }
         .sheet(isPresented: $isPlusHubPresented) {
             PlusHubView()
             .environmentObject(player)
@@ -237,6 +256,15 @@ struct ContentView: View {
             isPresented: deleteConfirmationBinding
         ) {
             if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
+                if viewModel.deleteCandidate?.isDownloaded == true {
+                    Button("Remove Download", role: .destructive) {
+                        unloadDeleteCandidateFromPlayer()
+                        if let book = viewModel.deleteCandidate {
+                            Task { await ABSDownloadManager.shared.removeDownload(book) }
+                            viewModel.deleteCandidate = nil
+                        }
+                    }
+                }
                 Button("Remove from Library", role: .destructive) {
                     unloadDeleteCandidateFromPlayer()
                     if let book = viewModel.deleteCandidate {
@@ -280,7 +308,11 @@ struct ContentView: View {
             }
         } message: {
             if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
-                Text("Removes this book from Unpaged. It stays on your Audiobookshelf server, and you can add it again from Shelves.")
+                if viewModel.deleteCandidate?.isDownloaded == true {
+                    Text("Remove Download deletes the audio on this iPhone and keeps the book streaming from your server. Remove from Library removes it from Unpaged. Your server keeps the book either way.")
+                } else {
+                    Text("Removes this book from Unpaged. It stays on your Audiobookshelf server, and you can add it again from Shelves.")
+                }
             } else if viewModel.deleteCandidate?.isStreamingOnly == true {
                 if IcloudSyncGate.isEnabled() {
                     Text("Removes this book from your library on this iPhone. Your progress and bookmarks stay in your iCloud Library, and you can stream it again anytime.")
@@ -372,7 +404,7 @@ struct ContentView: View {
             player.playerErrorMessage = nil
         }
         .onChange(of: router.pendingRoute) { _, route in
-            guard route == .downloads else { return }
+            guard route == .downloads || route == .library else { return }
             playerTeardownTask?.cancel()
             playerTeardownTask = nil
             playerDismissGeneration &+= 1
@@ -384,8 +416,8 @@ struct ContentView: View {
             selectedLibraryDownloadBook = nil
             navigationStackID &+= 1
             selectedTab = .allBooks
-            isDownloadScrollPending = true
-            router.consume(.downloads)
+            isDownloadScrollPending = route == .downloads
+            if let route { router.consume(route) }
         }
     }
 
@@ -411,6 +443,14 @@ struct ContentView: View {
             Spacer()
 
             HStack(spacing: 6) {
+                Button {
+                    isMomentSearchPresented = true
+                } label: {
+                    toolbarIconButton(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel("Search saved moments")
+                .accessibilityIdentifier("momentSearchButton")
+
                 // Unpaged Plus hub — always shown. It is the purchase entry point (keeps the iCloud
                 // Sync purchase reachable without iCloud sign-in, Apple 3.1.1) and, for users whose
                 // sync is on, holds the iCloud Library.
@@ -658,6 +698,7 @@ struct ContentView: View {
             ScrollView {
                 LazyVStack(spacing: 16) {
                     if tab == .allBooks {
+                        ABSDownloadsSection()
                         LibriVoxDownloadSection { catalogID in
                             selectedLibraryDownloadBook = browseViewModel.catalogBook(
                                 id: catalogID,
@@ -762,7 +803,7 @@ struct ContentView: View {
             Button(role: .destructive) {
                 viewModel.deleteCandidate = audiobook
             } label: {
-                Label(audiobook.isStreamingOnly ? "Remove from Library" : audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
+                Label(audiobook.isAudiobookshelfBook ? "Remove from Library" : audiobook.isStreamingOnly ? "Remove from Library" : audiobook.isFreeBook ? "Remove Download" : "Delete", systemImage: "trash")
             }
         }
     }
@@ -922,7 +963,9 @@ struct ContentView: View {
     }
 
     private var deleteAlertTitle: String {
-        if viewModel.deleteCandidate?.isStreamingOnly == true {
+        if viewModel.deleteCandidate?.isAudiobookshelfBook == true {
+            return "Remove Audiobookshelf Book?"
+        } else if viewModel.deleteCandidate?.isStreamingOnly == true {
             return "Remove from Library?"
         } else if viewModel.deleteCandidate?.isFreeBook == true {
             return "Remove Download?"

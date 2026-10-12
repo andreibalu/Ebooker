@@ -51,6 +51,8 @@ test('local playback advances chapters and creates a persisted manual moment', a
   await expect(screen.getByText('E2E Chapter 1').first()).toBeVisible();
   await screen.getByTestId('player.saveMoment').tap();
   await screen.getByTestId('moment.name').fill('E2E Persisted Moment');
+  // Done stays disabled until SwiftUI applies the typed name; a tap before that is dropped.
+  await expect(screen.getByTestId('moment.done').last()).toBeEnabled();
   await tapVisibleCenter(screen.getByTestId('moment.done').last());
   await expect(screen.getByTestId('moment.done')).toBeHidden();
   await device.openApp(bundle, { relaunch: true, launchArguments: fixture });

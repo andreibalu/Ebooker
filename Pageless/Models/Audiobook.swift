@@ -80,8 +80,16 @@ final class Audiobook: Identifiable {
         set { _absItemID = newValue }
     }
 
-    /// Streamed from the user's Audiobookshelf server. Such a book is `!isDownloaded && !isFreeBook`
-    /// — the same shape as an own-book iCloud orphan — so every orphan check must exclude it.
+    // When Unpaged last wrote this ABS book's position (locally or adopted from the server).
+    // Reconciliation compares it with the server's `lastUpdate`; nullable for lightweight migration.
+    private var _absProgressWrittenAt: Date?
+    var absProgressWrittenAt: Date? {
+        get { _absProgressWrittenAt }
+        set { _absProgressWrittenAt = newValue }
+    }
+
+    /// From the user's Audiobookshelf server. Downloads keep this identity.
+    /// Missing audio returns to streaming, so orphan checks must exclude ABS identity.
     var isAudiobookshelfBook: Bool { !(absItemID ?? "").isEmpty }
 
     // Own books that synced from iCloud but lack local files have isDownloaded==false too —
@@ -319,19 +327,20 @@ final class Audiobook: Identifiable {
         _progressRecapAnchorTime = anchorTime
     }
 
+    /// How far progress may move past a recap's anchor, in the same track, before the recap is stale.
+    static let progressRecapTolerance: Double = 60
+
+    /// True when the persisted recap still describes the high-water progress marker: same track,
+    /// anchored at or up to `progressRecapTolerance` seconds before it.
+    var progressRecapMatchesProgress: Bool {
+        guard let pt = _progressTrackIndex, let ptm = _progressTime,
+              let at = _progressRecapAnchorTrackIndex, let atm = _progressRecapAnchorTime else { return false }
+        return pt == at && atm <= ptm && ptm - atm <= Self.progressRecapTolerance
+    }
+
     /// Drops persisted recap if it no longer matches the current high-water progress marker.
     func discardProgressRecapIfAnchorMismatched() {
         guard _progressRecapText != nil else { return }
-        guard let pt = _progressTrackIndex, let ptm = _progressTime else {
-            clearProgressRecap()
-            return
-        }
-        guard let at = _progressRecapAnchorTrackIndex, let atm = _progressRecapAnchorTime else {
-            clearProgressRecap()
-            return
-        }
-        if pt != at || ptm != atm {
-            clearProgressRecap()
-        }
+        if !progressRecapMatchesProgress { clearProgressRecap() }
     }
 }

@@ -5,7 +5,25 @@ import SwiftData
 /// Opt-in fixtures for the dedicated E2E simulator. Shipping builds contain no launch hooks.
 @MainActor
 enum E2EFixtures {
-    static var enabled: Bool { ProcessInfo.processInfo.arguments.contains("-e2e-fixture") }
+    /// `e2e.stickyFixture` lets a test launch the app cold from a URL, which carries no launch arguments.
+    static var enabled: Bool {
+        ProcessInfo.processInfo.arguments.contains("-e2e-fixture")
+            || UserDefaults.standard.bool(forKey: "e2e.stickyFixture")
+    }
+
+    static func argument(_ key: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard enabled, let index = args.firstIndex(of: key), args.indices.contains(index + 1) else { return nil }
+        return args[index + 1]
+    }
+
+    static var fakeRecapText: String? { argument("-e2e-fake-recap") }
+    /// Replaces only the welcome-back transcriber, for qualifying the real model where the
+    /// simulator has no on-device speech asset.
+    static var transcriptText: String? {
+        argument("-e2e-transcript-file").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+    }
+    static var welcomeRecapCalls = 0
 
     static func storeDirectory(in support: URL) throws -> URL {
         let directory = support.appendingPathComponent("E2EFixtures", isDirectory: true)
@@ -13,6 +31,10 @@ enum E2EFixtures {
             if FileManager.default.fileExists(atPath: directory.path) {
                 try FileManager.default.removeItem(at: directory)
             }
+            for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("welcomeBackDismissed.") {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+            UserDefaults.standard.removeObject(forKey: AISettingsKey.welcomeBackRecaps.rawValue)
             // UIKit scene restoration would otherwise reopen whatever screen the previous run
             // ended on (for example Reading stats), so a reset must also start from the root.
             let savedState = support.deletingLastPathComponent()
@@ -22,9 +44,12 @@ enum E2EFixtures {
             }
             // A reset run starts with no Audiobookshelf server; the fixture login is separate.
             try? ABSKeychainCredentialStore().clear()
+            try? FileManager.default.removeItem(at: support.appendingPathComponent("ABSDownloads"))
+            let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            try? FileManager.default.removeItem(at: cache.appendingPathComponent("Audiobookshelf"))
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
-                        "absSelectedLibraryID"] {
+                        "absSelectedLibraryID", "abs.progressOutbox"] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
@@ -33,6 +58,23 @@ enum E2EFixtures {
     }
 
     static func seedIfNeeded(_ context: ModelContext) throws {
+        // Audiobookshelf books as saved before the local progress timestamp existed.
+        if ProcessInfo.processInfo.arguments.contains("-e2e-abs-legacy-progress") {
+            for book in try context.fetch(FetchDescriptor<Audiobook>()) where book.isAudiobookshelfBook {
+                book.absProgressWrittenAt = nil
+            }
+            try context.save()
+        }
+        // Saves Audiobookshelf books' current position as their marker, then moves the current
+        // position back, as after replaying an earlier part of the book.
+        if let value = argument("-e2e-abs-rewind-current"), let seconds = Double(value) {
+            for book in try context.fetch(FetchDescriptor<Audiobook>()) where book.isAudiobookshelfBook {
+                book.progressTrackIndex = book.currentTrackIndex
+                book.progressTime = book.currentTime
+                book.currentTime = seconds
+            }
+            try context.save()
+        }
         let marker = try storeDirectoryWithoutReset()
             .appendingPathComponent("seeded")
         guard !FileManager.default.fileExists(atPath: marker.path) else { return }
@@ -51,6 +93,18 @@ enum E2EFixtures {
                                    audiobook: book)
             context.insert(track)
             book.tracks.append(track)
+        }
+        if let value = argument("-e2e-welcome-days"), let days = Double(value) {
+            book.lastPlayedAt = Date.now.addingTimeInterval(-days * 86_400)
+            book.currentTrackIndex = 0
+            book.currentTime = 200
+            book.progressTrackIndex = 0
+            book.progressTime = 200
+            book.progressUpdatedAt = book.lastPlayedAt
+            if let text = argument("-e2e-persisted-recap") {
+                let anchor = argument("-e2e-persisted-recap-anchor").flatMap(Double.init) ?? 200
+                book.storeProgressRecap(text: text, headline: "At the harbour", anchorTrackIndex: 0, anchorTime: anchor)
+            }
         }
         let moment = Moment(trackIndex: 0, time: 30, label: "E2E First Moment",
                             audiobook: book, notes: "A saved fixture note", categories: [.dialogue])
@@ -72,6 +126,55 @@ enum E2EFixtures {
                                      audiobook: secondBook)
         context.insert(secondTrack)
         secondBook.tracks.append(secondTrack)
+        if ProcessInfo.processInfo.arguments.contains("-e2e-moment-search") {
+            let orphan = Audiobook(title: "E2E Missing Audio", author: "Fixture Author",
+                                   folderName: "E2E-Missing-Audio", totalDuration: 300)
+            orphan.isDownloaded = false
+            context.insert(orphan)
+            // Local audio for track 1 only: the missing track 2 file keeps the book downloaded, as
+            // a synced row looks before orphan detection checks this device.
+            let partial = Audiobook(title: "E2E Partial Audio", author: "Fixture Author",
+                                    folderName: "E2E-Partial-Audio", totalDuration: 600)
+            context.insert(partial)
+            let partialDirectory = LibraryMutationTransaction.defaultAudiobooksRoot()
+                .appendingPathComponent(partial.folderName, isDirectory: true)
+            try FileManager.default.createDirectory(at: partialDirectory, withIntermediateDirectories: true)
+            try silenceWAV(seconds: 300).write(to: partialDirectory.appendingPathComponent("chapter-0.wav"))
+            for index in 0..<2 {
+                let partialTrack = AudioTrack(title: "E2E Partial \(index + 1)", originalFileName: "chapter-\(index).wav",
+                                              storedFileName: "chapter-\(index).wav", orderIndex: index, duration: 300,
+                                              audiobook: partial)
+                context.insert(partialTrack)
+                partial.tracks.append(partialTrack)
+            }
+            // A streaming Audiobookshelf book kept after disconnect: no credentials can play it.
+            let serverBook = Audiobook(title: "E2E Server Book", author: "Fixture Author",
+                                       folderName: "E2E-Server-Book", totalDuration: 300)
+            serverBook.isDownloaded = false
+            serverBook.absItemID = "e2e-disconnected"
+            context.insert(serverBook)
+            let serverTrack = AudioTrack(title: "E2E Server Chapter", originalFileName: "server.mp3",
+                                         storedFileName: "server.mp3", orderIndex: 0, duration: 300,
+                                         audiobook: serverBook)
+            serverTrack.remoteURLString = "http://127.0.0.1:9/api/items/e2e-disconnected/file/1"
+            context.insert(serverTrack)
+            serverBook.tracks.append(serverTrack)
+            let searchMoments = [
+                Moment(trackIndex: 1, time: 45, label: "E2E Harbor", audiobook: book,
+                       quoteLine: "The lantern shone across the harbor."),
+                Moment(trackIndex: 0, time: 90, label: "E2E Arrival", audiobook: secondBook,
+                       characters: ["Ariadne"]),
+                Moment(trackIndex: 0, time: 120, label: "E2E Café", audiobook: secondBook),
+                Moment(trackIndex: 0, time: 150, label: "E2E Unrelated", audiobook: secondBook),
+                Moment(trackIndex: 0, time: 30, label: "E2E Orphan", audiobook: orphan),
+                Moment(trackIndex: 0, time: 60, label: "E2E Server Moment", audiobook: serverBook),
+                Moment(trackIndex: 1, time: 20, label: "E2E Missing Track", audiobook: partial),
+            ]
+            for entry in searchMoments {
+                context.insert(entry)
+                entry.audiobook?.moments.append(entry)
+            }
+        }
         let today = Calendar.current.startOfDay(for: .now)
         context.insert(ReadingSession(date: today, dayKey: ReadingSession.makeDayKey(date: today),
                                       hour: 10, minutes: 42, bookID: book.id,
@@ -156,6 +259,22 @@ enum E2EFixtures {
         text("data"); integer(byteCount)
         data.append(Data(count: Int(byteCount)))
         return data
+    }
+}
+
+struct E2EWelcomeRecapProvider: RecapProviding {
+    let text: String
+    func generateRecap(transcript: String, audiobookTitle: String?, includeProgressHeadline: Bool) async throws -> RecapGenerationResult {
+        await MainActor.run { E2EFixtures.welcomeRecapCalls += 1 }
+        return RecapGenerationResult(recap: text, progressHeadline: "At the harbour")
+    }
+}
+
+struct E2EWelcomeTranscriber: SegmentTranscribing {
+    var text = "The traveller reached the harbour."
+
+    func transcribeSegment(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String {
+        text
     }
 }
 #endif

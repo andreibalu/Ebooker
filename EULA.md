@@ -135,8 +135,10 @@ Developer. AI generation runs on-device using Apple Intelligence. Primary AI
   on-device recognition support and does not permit server processing. Network
 requests support free-book browsing, streaming, and downloads through
   LibriVox/Internet Archive, purchases through Apple (including the optional
-  coffee tip), and optional Plus iCloud Sync in your private iCloud account. The
-  Developer operates no backend server.
+  coffee tip), your connected Audiobookshelf server for browsing, streaming,
+  downloads and listening progress, and optional Plus iCloud Sync in your private
+  iCloud account. Downloaded server audio can use the same on-device AI as
+  imported audio. The Developer operates no backend server.
 Full details are in the Privacy Policy:
 <https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262>
 

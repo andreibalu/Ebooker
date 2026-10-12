@@ -111,7 +111,8 @@ final class PlayerViewModel {
         isProcessingSmartSave = true
         defer { isProcessingSmartSave = false }
 
-        guard let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
+        guard audiobook.isDownloaded,
+              let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
             resetMomentState()
             pendingMomentTime = savedTime
             return

@@ -30,19 +30,30 @@ At the top of the tab, **Collections** are hand-picked shelves of classics group
 
 ### Can I use my Audiobookshelf server?
 
+Unpaged keeps the latest unsent listening position on this iPhone and retries when you reconnect or reopen the app. Before resuming, it checks for newer server progress with a short timeout. Updates more than 30 seconds apart follow the newer timestamp, including intentional rewinds. Disconnecting clears unsent progress.
+
 Yes. If you run [Audiobookshelf](https://www.audiobookshelf.org) (or someone shares a server with you), open the **Shelves** tab, tap **Shelves** again to open the source menu, and choose **Audiobookshelf** — or go to **Settings → Audiobookshelf Server**. Enter your server address (for example `https://abs.example.com`) and either sign in with your username and password or paste an API key.
 
 - **API keys** are created in Audiobookshelf under **Settings → API Keys**. A new key may need to be switched on there before Unpaged can use it.
 - **Browsing:** Shelves shows your book libraries with **Continue Listening**, **Recently Added**, and the full library with search. If your server has several book libraries, tap the library name to switch. Podcast libraries aren't shown.
-- **Listening:** tap **Play** on a book to add it to your Library as a streaming book and start listening. Nothing is downloaded, so your server has to be reachable while you listen. Your position is sent back to the server when you pause, leave the app, or finish, so other Audiobookshelf apps pick up where you left off.
+- **Browsing:** open Series for books in reading order, including fractional book numbers, or Collections for the order saved on your server. Tap an author or narrator in a book's details to see their books in the current library. The progress filter shows All, Not started, In progress, or Finished and works together with search. Browsed series, collections, and person pages remain available from saved data when your server is unreachable.
+- **Listening:** tap **Play** on a book to add it to your Library as a streaming book and start listening. Choose **Download** in Shelves or Library details to save the audio on this iPhone for offline listening. Downloads show progress and support cancel and retry, including after relaunch. Streaming needs a reachable server. Your position is sent back to the server when you pause, leave the app, or finish, so other Audiobookshelf apps pick up where you left off.
 - **Addresses:** both `https://` and plain `http://` addresses work, including servers on your local network (for example `http://192.168.1.20:13378` or `http://nas.local:13378`) and over a VPN such as Tailscale (for example `http://nas.your-tailnet.ts.net:13378` or `http://100.101.102.103:13378`). iOS will ask to allow **Local Network** access the first time you reach a server on your home network. If you enter a plain `http://` address for a server on the public internet, Unpaged warns you before signing in, because your password and listening activity would travel unencrypted; HTTPS (for example via a reverse proxy or Tailscale HTTPS certificates) is recommended for remote access. If a VPN address stops working, check that the VPN is switched on.
-- **Privacy:** your login stays on this iPhone, in the Keychain. **Settings → Audiobookshelf Server → Disconnect** removes it. Books you added stay in your Library but won't play until you reconnect.
+- **Privacy:** your login stays on this iPhone, in the Keychain. **Settings → Audiobookshelf Server → Disconnect** removes it. Books you added stay in your Library. Disconnect asks whether to keep or remove downloads; kept downloads still play offline. Streaming needs you to reconnect.
 
-Removing an Audiobookshelf book from your Library only removes it from Unpaged; it stays on your server and you can add it again from Shelves.
+Removing an Audiobookshelf book from your Library only removes it from Unpaged; it stays on your server and you can add it again from Shelves. **Remove Download** keeps the book, progress, moments, and EQ and returns to streaming. **Settings → Audiobookshelf Server** shows downloaded audio size and offers **Remove All Downloads**. Downloaded server books support on-device recaps and smart moments when Apple Intelligence is available.
+
+### Can I resume from a widget?
+
+Add Unpaged’s **Continue Listening** widget from the Home Screen or Lock Screen widget gallery. It shows your last played book and listening progress. Tap it to open Unpaged and resume; the medium Home Screen widget also has a **Play** button. After removing that book, the widget shows your next most recently played book. Before you play a book, it opens your library.
 
 ### How do I navigate chapters?
 
-Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata requires a reachable server.
+Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata can also come from a saved item detail when the server is unreachable.
+
+### Can playback stop at the end of a chapter?
+
+Open the player's **Sleep Timer** menu and choose **End of chapter**, or a 5, 15, 30, or 60 minute timer. The chapter option shows the time remaining and pauses at the current chapter's end without starting the next chapter. Seeking or jumping to another chapter moves the timer to that chapter's end. Pausing manually keeps it armed; choose **Off** to cancel. It works with downloaded and streaming books, including while the app is in the background.
 
 ### How do I change the app's appearance?
 
@@ -84,7 +95,7 @@ Yes. Browse your library, play and pause, skip between tracks, and save bookmark
 
 ### Does Unpaged work offline?
 
-Anything you've downloaded plays offline, including LibriVox titles. Streaming-only library entries (including books from your Audiobookshelf server) and the LibriVox catalog browser require a network connection.
+Anything you've downloaded plays offline, including LibriVox and Audiobookshelf titles. Audiobookshelf shelves you have browsed are saved on this iPhone; if the server is unreachable, an offline banner identifies the saved content. Adding, streaming, and downloading require a reachable server. Cached browsing may be unavailable if iOS clears its cache.
 
 ### How do I restore my purchases on a new device?
 
@@ -131,6 +142,14 @@ When iCloud Sync is on, every book shows a small **iCloud checkmark** — on its
 5. If you added a book as new and only later realized it has an older iCloud backup, open the book and tap the **iCloud** button in the top-right corner to pick the matching entry and pull its progress and bookmarks onto your copy. (The button appears only when iCloud Sync is on and there's a matching backup to merge into.)
 
 Your iCloud Library keeps every book forever — it's only emptied when you swipe to delete a row inside the **iCloud Library**, which permanently removes that book from iCloud on all your devices.
+
+### Search saved moments
+
+Tap the magnifying glass in My Library to search saved moments across every book. Search by moment name, note, quote, character, category, mood, book title, or author. Multiple words must all match, and spelling works without accents. With no search text, you see your recent moments. Tap a result to play from its saved track and time. Moments from removed books or books whose audio is missing remain searchable; restore the audio before playing them. Streaming results need an internet connection.
+
+### Welcome-back recaps
+
+With Unpaged Plus and local AI enabled on an Apple Intelligence-compatible iPhone running iOS 26 or later, opening a downloaded book after at least three days away can offer a recap above its playback controls. The book needs at least three minutes of saved progress and must be unfinished. The recap uses only audio before your saved listening point. Resume starts from saved progress with your configured resume offset; Not now hides the offer until a later listening session and another qualifying break. Turn off Welcome-back recaps in Settings → AI Features. Recaps run on-device and playback remains available while a recap loads. If a recap cannot be prepared, the offer disappears silently.
 
 ## Troubleshooting
 

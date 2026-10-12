@@ -107,12 +107,7 @@ final class AudiobookDetailViewModel {
         guard
             let text = audiobook.progressRecapText,
             !text.isEmpty,
-            let anchorTrack = audiobook.progressRecapAnchorTrackIndex,
-            let anchorTime = audiobook.progressRecapAnchorTime,
-            let progressTrack = audiobook.progressTrackIndex,
-            let progressT = audiobook.progressTime,
-            anchorTrack == progressTrack,
-            anchorTime == progressT
+            audiobook.progressRecapMatchesProgress
         else {
             recapText = nil
             recapProgressHeadline = nil
@@ -126,6 +121,7 @@ final class AudiobookDetailViewModel {
         trackIndex: Int,
         progressTime: Double,
         includeProgressHeadline: Bool,
+        requestSpeechAuthorization: Bool = true,
         modelContext: ModelContext? = nil,
         onSuccessfulRecap: (() -> Void)? = nil
     ) async {
@@ -142,7 +138,9 @@ final class AudiobookDetailViewModel {
               let fileURL = try? LibraryImportService.fileURL(for: tracks[trackIndex], in: audiobook)
         else {
             guard !Task.isCancelled else { return }
-            recapError = "Audio for this book isn't on this iPhone."
+            recapError = audiobook.isAudiobookshelfBook
+                ? "Download this book to use recaps."
+                : "Audio for this book isn't on this iPhone."
             return
         }
 
@@ -152,7 +150,8 @@ final class AudiobookDetailViewModel {
         let transcript: String?
         do {
             transcript = try await obtainTranscript(
-                fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime
+                fileURL: fileURL, startSeconds: startSeconds, endSeconds: progressTime,
+                requestSpeechAuthorization: requestSpeechAuthorization
             )
         } catch is CancellationError {
             // Cancellation should not be reported as a transcription failure.
@@ -179,7 +178,8 @@ final class AudiobookDetailViewModel {
 
     /// SpeechAnalyzer first (no permission, no export); legacy export +
     /// SFSpeechRecognizer fallback. Internal for tests.
-    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double) async throws -> String? {
+    func obtainTranscript(fileURL: URL, startSeconds: Double, endSeconds: Double,
+                          requestSpeechAuthorization: Bool = true) async throws -> String? {
         try Task.checkCancellation()
         do {
             let transcript = try await segmentTranscriber.transcribeSegment(
@@ -195,7 +195,9 @@ final class AudiobookDetailViewModel {
         }
 
         try Task.checkCancellation()
-        let authStatus = await transcription.requestAuthorization()
+        let authStatus = requestSpeechAuthorization
+            ? await transcription.requestAuthorization()
+            : SFSpeechRecognizer.authorizationStatus()
         try Task.checkCancellation()
         guard authStatus == .authorized else {
             recapError = "Speech recognition not authorized."

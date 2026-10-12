@@ -32,6 +32,7 @@ enum AudiobookshelfLibraryService {
         modelContext: ModelContext
     ) throws -> Audiobook {
         if let existing = try existingBook(itemID: item.id, modelContext: modelContext) {
+            if let progress { reconcile(progress, for: existing) }
             if existing.coverArtData == nil, let coverArtData { existing.coverArtData = coverArtData }
             try modelContext.save()
             return existing
@@ -86,11 +87,52 @@ enum AudiobookshelfLibraryService {
                 audiobook.progressTrackIndex = position.trackIndex
                 audiobook.progressTime = position.timeInTrack
                 audiobook.progressUpdatedAt = .now
+                audiobook.absProgressWrittenAt = progress.lastUpdate.map { Date(timeIntervalSince1970: $0 / 1000) }
             }
         }
 
         try modelContext.save()
         return audiobook
+    }
+
+    @MainActor
+    @discardableResult
+    static func reconcile(_ progress: ABSMediaProgress, for book: Audiobook) -> Bool {
+        guard let updated = progress.lastUpdate, updated.isFinite,
+              progress.currentTime.isFinite, progress.currentTime >= 0 else { return false }
+        let serverDate = Date(timeIntervalSince1970: updated / 1000)
+        let pending = book.absItemID.flatMap { ABSProgressReporter.pendingTimestamp(itemID: $0) }
+        // Books saved before `absProgressWrittenAt` existed fall back to their last local playback.
+        let written = book.absProgressWrittenAt ?? book.lastPlayedAt ?? .distantPast
+        let localDate = max(written, pending ?? .distantPast)
+        let durations = book.sortedTracks.map(\.duration)
+        let localTime = globalTime(trackIndex: book.currentTrackIndex, timeInTrack: book.currentTime,
+                                   trackDurations: durations)
+        guard serverDate > localDate, abs(progress.currentTime - localTime) > 30 else { return false }
+        let position = position(forGlobalTime: progress.currentTime, trackDurations: durations)
+        book.currentTrackIndex = position.trackIndex
+        book.currentTime = position.timeInTrack
+        book.progressTrackIndex = position.trackIndex
+        book.progressTime = position.timeInTrack
+        book.progressUpdatedAt = serverDate
+        book.absProgressWrittenAt = serverDate
+        book.isFinished = progress.isFinished
+        book.clearProgressRecap()
+        return true
+    }
+
+    @MainActor
+    static func reconcileBeforeResume(_ book: Audiobook, context: ModelContext?) async -> Bool {
+        guard let itemID = book.absItemID, NetworkMonitor.shared.isConnected,
+              let stored = book.sortedTracks.first?.remoteURL,
+              let server = ABSAccount.shared.summary?.baseURL,
+              stored.host() == server.host(), stored.port == server.port, stored.scheme == server.scheme,
+              stored.path.hasPrefix(server.path.hasSuffix("/") ? server.path : server.path + "/"),
+              let progress = try? await ABSAccount.shared.client.mediaProgress(itemID: itemID, timeout: 2)
+        else { return false }
+        let changed = reconcile(progress, for: book)
+        if changed { try? context?.save() }
+        return changed
     }
 
     // MARK: - Track titles
@@ -184,6 +226,11 @@ enum AudiobookshelfLibraryService {
         isFinished: Bool
     ) -> ABSProgressSnapshot? {
         guard let itemID = audiobook.absItemID, !itemID.isEmpty else { return nil }
+        if let server = ABSAccount.shared.summary?.baseURL,
+           let stored = audiobook.sortedTracks.first?.remoteURL {
+            guard stored.host() == server.host(), stored.port == server.port, stored.scheme == server.scheme,
+                  stored.path.hasPrefix(server.path.hasSuffix("/") ? server.path : server.path + "/") else { return nil }
+        }
         let durations = audiobook.sortedTracks.map(\.duration)
         let total = audiobook.totalDuration > 0 ? audiobook.totalDuration : durations.reduce(0, +)
         guard total > 0 else { return nil }
@@ -195,7 +242,9 @@ enum AudiobookshelfLibraryService {
     /// True when a URL carries anything that looks like a credential. Used as a last-line guard
     /// before a URL is written to a synced row.
     static func containsCredential(_ url: URL) -> Bool {
-        guard let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return false }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return true }
+        if components.user != nil || components.password != nil { return true }
+        guard let items = components.queryItems else { return false }
         return items.contains { ["token", "api_key", "apikey", "access_token"].contains($0.name.lowercased()) }
     }
 }

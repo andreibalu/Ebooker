@@ -30,7 +30,7 @@ done
 xcrun simctl shutdown "$E2E_SIMULATOR_UDID"; xcrun simctl boot "$E2E_SIMULATOR_UDID"
 ```
 
-The build script checks that the selected simulator name starts with `Unpaged e2e`. It boots that simulator, builds Debug with isolated scratch DerivedData, and installs the app. Set `E2E_BUILD_DIR` to retain or reuse a chosen scratch directory. The printed `build.log` contains diagnostics. The test config never chooses a simulator implicitly. It assumes the app is installed. For tests that call `device.installApp()`, `E2E_APP_PATH` optionally names a build.
+The build script checks that the selected simulator name starts with `Unpaged e2e`. It boots that simulator, builds Debug with isolated scratch DerivedData, and installs the app. Set `E2E_BUILD_DIR` to retain or reuse a chosen scratch directory. The printed `build.log` contains diagnostics. Test listing skips simulator inventory checks and needs no device. Test execution never chooses a simulator implicitly. It assumes the app is installed. For tests that call `device.installApp()`, `E2E_APP_PATH` optionally names a build.
 
 Launch tests with `-e2e-fixture`. Each test's reset helper adds `-e2e-reset-fixture` to its initial launch. Later `app.restart()` calls preserve data, so persistence assertions remain meaningful. One worker and zero retries expose failures without overlapping simulator interaction.
 
@@ -67,6 +67,14 @@ DEBUG-only launch hooks:
 
 | Hook | Effect |
 | --- | --- |
+| `-e2e-fake-recap <text>` | Uses a deterministic recap provider and segment transcriber, bypassing AI/Plus/local-AI gates only for welcome-back recaps on iOS 26+. `welcomeBack.providerCalls` exposes generation calls. |
+| `-e2e-transcript-file <path>` | Replaces only the welcome-back segment transcriber with the file's text. The recap model and the Plus, local-AI and setting gates stay real. Use it to qualify the on-device model on a simulator without a speech asset. |
+| `-e2e-welcome-days <n>` | On initial fixture seeding, sets the listening book's last-played date n days ago and saved/current progress to 200 seconds. |
+| `-e2e-persisted-recap <text>` | With welcome-days seeding, stores a matching recap at the saved position. |
+| `-e2e-persisted-recap-anchor <seconds>` | Anchors that recap at this position instead (saved progress is 200 s). |
+| `-e2e-abs-legacy-progress` | Clears each Audiobookshelf book's local progress write timestamp, as saved by builds before it existed. |
+| `-e2e-abs-rewind-current <seconds>` | Saves each Audiobookshelf book's current position as its marker, then sets the current position to this value. |
+| `-e2e-welcome-threshold-days <n>` | Overrides the three-day return threshold for this DEBUG fixture launch. |
 | `-e2e-fixture` | Opens the separate fixture store and seeds it once. |
 | `-e2e-reset-fixture` | Deletes the fixture store, saved scene state, the fixture Audiobookshelf login and onboarding preference keys before seeding. |
 | `-e2e-online` | Lets NetworkMonitor report a connection. The fixture is offline otherwise. |

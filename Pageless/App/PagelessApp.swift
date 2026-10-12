@@ -33,22 +33,31 @@ struct PagelessApp: App {
                 .environment(onboardingManager)
                 .environment(appDelegate.freeBookDownloader)
                 .appAppearance(appearance)
+                .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UnpagedPlayLatestBook"))) { _ in
+                    handlePendingIntent()
+                }
                 .task {
                     _ = await appDelegate.freeBookDownloader.restoreBackgroundSession(
                         modelContext: appDelegate.modelContainer.mainContext
                     )
-                    await UnpagedAppShortcuts.updateAppShortcutParameters()
+                    ContinueListeningSnapshotWriter.shared.refresh(context: appDelegate.modelContainer.mainContext)
+                    handlePendingIntent()
+                    UnpagedAppShortcuts.updateAppShortcutParameters()
                 }
         }
         .modelContainer(appDelegate.modelContainer)
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
+            ABSProgressReporter.flush()
             handlePendingIntent()
         }
     }
 
     private func handlePendingIntent() {
-        guard UserDefaults.standard.bool(forKey: "intent.playLatestBook") else { return }
+        let sharedDefaults = UserDefaults(suiteName: "group.andreibaludev.Pageless")
+        guard UserDefaults.standard.bool(forKey: "intent.playLatestBook")
+            || sharedDefaults?.bool(forKey: "intent.playLatestBook") == true else { return }
+        sharedDefaults?.removeObject(forKey: "intent.playLatestBook")
         UserDefaults.standard.removeObject(forKey: "intent.playLatestBook")
         let context = appDelegate.modelContainer.mainContext
         let descriptor = FetchDescriptor<Audiobook>(
@@ -77,7 +86,15 @@ private struct PagelessRootView: View {
         ContentView()
             .environment(downloadManager)
             .environment(router)
-            .onOpenURL { router.open($0) }
+            .onOpenURL { url in
+                // The innermost onOpenURL receives the URL, so `.resume` hands off to PagelessApp here.
+                if UnpagedRoute(url: url) == .resume {
+                    UserDefaults.standard.set(true, forKey: "intent.playLatestBook")
+                    NotificationCenter.default.post(name: Notification.Name("UnpagedPlayLatestBook"), object: nil)
+                } else {
+                    router.open(url)
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { downloadManager.applicationDidBecomeActive() }
             }

@@ -12,6 +12,8 @@ struct MomentRow: View {
     let moment: Moment
     let openPlayer: () -> Void
     let onDelete: () -> Void
+    var searchQuery: String? = nil
+    var unavailableReason: String? = nil
 
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
@@ -37,7 +39,67 @@ struct MomentRow: View {
         max(containerWidth, 320)
     }
 
+    @ViewBuilder
     var body: some View {
+        if let searchQuery {
+            Button {
+                Task {
+                    await player.playTrack(at: moment.trackIndex, in: audiobook, time: moment.time)
+                    openPlayer()
+                }
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "flag.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        highlighted(moment.label, query: searchQuery).font(.subheadline)
+                        Text("\(TimeFormatter.clockString(seconds: moment.time)) · \(trackTitle)")
+                            .font(.caption).foregroundStyle(.secondary)
+                        if let note = moment.notes, !note.isEmpty {
+                            highlighted(note, query: searchQuery).font(.caption).lineLimit(2)
+                        }
+                        if let quote = moment.quoteLine, !quote.isEmpty {
+                            highlighted(quote, query: searchQuery).font(.caption).lineLimit(2)
+                        }
+                        if !moment.characters.isEmpty {
+                            highlighted(moment.characters.joined(separator: ", "), query: searchQuery).font(.caption)
+                        }
+                        let metadata = (moment.categories.map(\.displayName) + [moment.mood?.displayName].compactMap { $0 })
+                        if !metadata.isEmpty {
+                            highlighted(metadata.joined(separator: " · "), query: searchQuery).font(.caption)
+                        }
+                        if let unavailableReason {
+                            Text(unavailableReason).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "play.circle").font(.title3).foregroundStyle(.secondary)
+                }
+                .multilineTextAlignment(.leading)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 16).padding(.vertical, 14)
+                .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .disabled(unavailableReason != nil)
+            .accessibilityIdentifier("momentSearch.row.\(moment.label)")
+        } else {
+            editableBody
+        }
+    }
+
+    private var trackTitle: String {
+        let tracks = audiobook.sortedTracks
+        guard tracks.indices.contains(moment.trackIndex) else { return "Track unavailable" }
+        return tracks[moment.trackIndex].displayTitle
+    }
+
+    private func highlighted(_ value: String, query: String) -> Text {
+        Text(MomentSearch.highlighted(value, query: query))
+    }
+
+    private var editableBody: some View {
         ZStack(alignment: .trailing) {
             deleteActionBackground
 

@@ -11,12 +11,12 @@ Everything you create or import in Unpaged stays on your device unless you expli
 - Audiobook files you import from Files or iCloud Drive
 - Your library, favorites, playback progress, and finished/unfinished status
 - Bookmarks ("moments"), notes, transcripts, AI-generated names and recaps
-- Playback preferences (sort order, skip intervals, sleep timer, equalizer settings)
+- Playback preferences (sort order, skip intervals, sleep timer, equalizer settings), including the welcome-back recap setting and device-local dismissal date for each book
 - Free-book downloads from LibriVox and the bundled catalog
 - If you connect an Audiobookshelf server: its address, your username, and the sign-in token or API key, stored in the iOS Keychain on this iPhone (your password itself is not stored)
 - In-app purchase entitlement state for Unpaged Plus and recognized legacy purchases. Apple processes subscription and introductory-offer eligibility; the optional coffee tip is a consumable purchase and does not create an app entitlement.
 
-This data is stored in the app's private container on your iPhone. Unpaged does not upload it to any server controlled by the developer. Deleting the app removes the local copy; data previously synced to your private iCloud database remains there until you delete it through Apple's iCloud controls.
+This data is stored in the app's private container on your iPhone. The Continue Listening widget also keeps the last played book’s title, author, identifier, progress, time left, last-played date, and a small cover image in an on-device App Group container shared only with Unpaged’s widget extension. Unpaged does not upload it to any server controlled by the developer. Deleting the app removes the local copy; data previously synced to your private iCloud database remains there until you delete it through Apple's iCloud controls.
 
 ## Permissions Unpaged requests
 
@@ -67,9 +67,13 @@ Unpaged lets you browse and download free public-domain audiobooks from [LibriVo
 
 ## Audiobookshelf (optional)
 
-You can connect Unpaged to an [Audiobookshelf](https://www.audiobookshelf.org) server that you run or have an account on. Unpaged then talks **directly** to that server — there is no Unpaged server in between — to sign in, list your libraries and books, load covers, stream audio, and report your listening position back so the server (and your other Audiobookshelf apps) stay in sync. Your server's operator can see this activity the same way they see any Audiobookshelf client. The developer never receives any of it.
+You can connect Unpaged to an [Audiobookshelf](https://www.audiobookshelf.org) server that you run or have an account on. Unpaged then talks **directly** to that server — there is no Unpaged server in between — to sign in, list your libraries and books, load covers, stream or download audio, and report your listening position back so the server (and your other Audiobookshelf apps) stay in sync. Your server's operator can see this activity the same way they see any Audiobookshelf client. The developer never receives any of it.
 
-Your login is stored only in the iOS Keychain on this iPhone. When you sign in with a password, Unpaged exchanges it for a session token and does not keep the password. Books you add from your server are stored in your library without any credential; the token is attached only at the moment audio is requested. **Settings → Audiobookshelf Server → Disconnect** deletes the stored login. Books you added stay in your library (and, with iCloud Sync on, in your iCloud Library) but won't play until you connect again.
+Unsent listening progress is kept locally as the latest item ID, server address, position, duration, finished status, and client timestamp. This queue contains no credentials and is cleared on disconnect or a server change. Unpaged retries delivery when connectivity returns, the app opens, or the connection refreshes, and reads server progress before resuming or sending a queued position to compare update timestamps.
+
+Your login is stored only in the iOS Keychain on this iPhone. When you sign in with a password, Unpaged exchanges it for a session token and does not keep the password. Books you add from your server are stored in your library without any credential; the token is attached only at the moment audio is requested. **Settings → Audiobookshelf Server → Disconnect** deletes the stored login. Books you added stay in your library (and, with iCloud Sync on, in your iCloud Library). Disconnect asks whether to keep or remove downloaded audio. Kept downloads play offline; streaming requires reconnecting.
+
+Server library lists, series and collections with their book order, author and narrator browsing results, book metadata, item details, and listening positions are cached under this iPhone's Caches directory for offline browsing, separately for each server and username. These caches contain no login tokens or API keys and may be cleared by iOS. Downloaded audio stays in Application Support; background download manifests store only token-less audio addresses and transfer status. Audio files do not sync through iCloud. Remove Download deletes the local audio while keeping library metadata, progress, moments, and EQ. Downloaded books can use the same on-device AI processing as imported books.
 
 ## Network usage
 
@@ -77,7 +81,7 @@ Network requests are made only:
 
 - To LibriVox/Internet Archive when you browse, sample, or download a free book
 - To stream a streaming-only audiobook you've added to your library
-- To the Audiobookshelf server you connect, when you browse it, play one of its books, or pause/finish listening (to send your position back)
+- To the Audiobookshelf server you connect, when you browse it, stream or download audio, or pause/finish listening (to send your position back)
 - To Apple iCloud when you enable iCloud Sync
 - To Apple (App Store / StoreKit) for in-app purchase and restore
 - Through Apple's Speech framework when CarPlay voice search runs or AI transcription uses the legacy fallback; Unpaged requires processing to stay on-device

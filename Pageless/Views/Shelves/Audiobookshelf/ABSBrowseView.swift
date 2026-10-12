@@ -27,12 +27,25 @@ struct ABSBrowseView: View {
                     .padding(.top, 18)
                     .padding(.bottom, 16)
 
+                if viewModel.phase == .loaded {
+                    browseControls.padding(.horizontal, 20).padding(.bottom, 16)
+                }
                 if viewModel.phase == .loaded && viewModel.hasContent {
                     searchBar(text: $vm.searchQuery)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 24)
                 }
 
+                if viewModel.isOffline && viewModel.phase == .loaded {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Offline · Showing saved shelves. Downloaded books can still play.")
+                            .font(.subheadline)
+                            .accessibilityIdentifier("abs.browse.offline")
+                        Button("Retry") { Task { await reload() } }
+                            .accessibilityIdentifier("abs.browse.retry")
+                    }
+                    .padding(20)
+                }
                 content
             }
             .padding(.bottom, 120)
@@ -50,6 +63,30 @@ struct ABSBrowseView: View {
             Task { await reload() }
         }
         .accessibilityIdentifier("abs.browse")
+    }
+
+    private var browseControls: some View {
+        HStack(spacing: 18) {
+            if let libraryID = viewModel.selectedLibraryID {
+                NavigationLink("Series", value: ABSGroupRoute(libraryID: libraryID, kind: "series", title: "Series"))
+                    .accessibilityIdentifier("abs.browse.series")
+                NavigationLink("Collections", value: ABSGroupRoute(libraryID: libraryID, kind: "collections", title: "Collections"))
+                    .accessibilityIdentifier("abs.browse.collections")
+            }
+            Spacer(minLength: 0)
+            Menu {
+                ForEach(ABSBrowseViewModel.ProgressFilter.allCases) { filter in
+                    Button(filter.title) { viewModel.progressFilter = filter }
+                        .accessibilityIdentifier("abs.browse.progress.\(filter.rawValue)")
+                }
+            } label: {
+                Label(viewModel.progressFilter.title, systemImage: "line.3.horizontal.decrease")
+            }
+            .accessibilityLabel("Progress: \(viewModel.progressFilter.title)")
+            .accessibilityIdentifier("abs.browse.progressFilter")
+        }
+        .font(.subheadline)
+        .foregroundStyle(.primary)
     }
 
     // MARK: - Header
@@ -193,7 +230,7 @@ struct ABSBrowseView: View {
             ABSEyebrow(text: results.count == 1 ? "1 result" : "\(results.count) results")
                 .padding(.horizontal, 20)
             if results.isEmpty {
-                Text("No titles or authors match “\(viewModel.searchQuery)”.")
+                Text(viewModel.searchQuery.isEmpty ? "No books match this progress filter." : "No titles or authors match “\(viewModel.searchQuery)”.")
                     .font(.system(.subheadline, design: .serif))
                     .italic()
                     .foregroundStyle(.secondary)

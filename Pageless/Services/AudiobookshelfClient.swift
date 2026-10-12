@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 nonisolated enum AudiobookshelfError: Error, Equatable {
     case notConnected
@@ -15,6 +16,17 @@ nonisolated enum AudiobookshelfError: Error, Equatable {
     case offline
     /// Something answered, but not an Audiobookshelf server (e.g. 404 on `/login`).
     case notAudiobookshelfServer
+}
+
+/// Records whether any request in one screen load was answered from `ABSResponseCache`.
+/// Bound with `ABSCacheUse.$current.withValue`, so a load's concurrent `async let` requests
+/// share it while overlapping loads on other screens each keep their own.
+nonisolated final class ABSCacheUse: Sendable {
+    @TaskLocal static var current: ABSCacheUse?
+    private let state = OSAllocatedUnfairLock(initialState: false)
+
+    var used: Bool { state.withLock { $0 } }
+    func markUsed() { state.withLock { $0 = true } }
 }
 
 /// Standalone ABS transport. URLSession is injectable so no running server is needed in tests.
@@ -91,23 +103,42 @@ actor AudiobookshelfClient {
         return response.libraries
     }
 
-    func libraryItems(libraryID: String, page: Int, limit: Int = 50) async throws -> ABSPage {
+    func libraryItems(libraryID: String, page: Int, limit: Int = 50, filter: String? = nil) async throws -> ABSPage {
         guard page >= 0, limit > 0 else { throw AudiobookshelfError.unreadableResponse }
-        let data = try await request(path: ["api", "libraries", libraryID, "items"],
-                                     query: [URLQueryItem(name: "page", value: String(page)),
-                                             URLQueryItem(name: "limit", value: String(limit)),
-                                             URLQueryItem(name: "collapseseries", value: "0")])
+        var query = [URLQueryItem(name: "page", value: String(page)),
+                     URLQueryItem(name: "limit", value: String(limit)),
+                     URLQueryItem(name: "collapseseries", value: "0")]
+        if let filter { query.append(URLQueryItem(name: "filter", value: filter)) }
+        let data = try await request(path: ["api", "libraries", libraryID, "items"], query: query)
         return try decode(data)
     }
 
-    func allLibraryItems(libraryID: String, limit: Int = 50) async throws -> [ABSLibraryItem] {
+    func allLibraryItems(libraryID: String, limit: Int = 50, filter: String? = nil) async throws -> [ABSLibraryItem] {
         var items: [ABSLibraryItem] = []
         var pageNumber = 0
         while true {
-            let page = try await libraryItems(libraryID: libraryID, page: pageNumber, limit: limit)
+            let page = try await libraryItems(libraryID: libraryID, page: pageNumber, limit: limit, filter: filter)
             guard page.page == pageNumber, page.limit == limit else { throw AudiobookshelfError.unreadableResponse }
             items.append(contentsOf: page.results)
             if items.count >= page.total { return items }
+            guard !page.results.isEmpty else { throw AudiobookshelfError.unreadableResponse }
+            pageNumber += 1
+        }
+    }
+
+    func bookGroups(libraryID: String, kind: String) async throws -> [ABSBookGroup] {
+        guard kind == "series" || kind == "collections" else { throw AudiobookshelfError.unreadableResponse }
+        var groups: [ABSBookGroup] = []
+        var pageNumber = 0
+        let limit = 50
+        while true {
+            let page: ABSGroupPage = try decode(await request(path: ["api", "libraries", libraryID, kind],
+                query: [URLQueryItem(name: "page", value: String(pageNumber)),
+                        URLQueryItem(name: "limit", value: String(limit)),
+                        URLQueryItem(name: "minified", value: "0")]))
+            guard page.page == pageNumber, page.limit == limit else { throw AudiobookshelfError.unreadableResponse }
+            groups.append(contentsOf: page.results)
+            if groups.count >= page.total { return groups }
             guard !page.results.isEmpty else { throw AudiobookshelfError.unreadableResponse }
             pageNumber += 1
         }
@@ -185,8 +216,8 @@ actor AudiobookshelfClient {
     /// A stream token must outlive a long listening stretch; below this the session refreshes.
     static let minimumStreamTokenLifetime: TimeInterval = 45 * 60
 
-    func mediaProgress(itemID: String) async throws -> ABSMediaProgress? {
-        do { return try decode(await request(path: ["api", "me", "progress", itemID])) }
+    func mediaProgress(itemID: String, timeout: TimeInterval = 20) async throws -> ABSMediaProgress? {
+        do { return try decode(await request(path: ["api", "me", "progress", itemID], timeout: timeout, refreshOnUnauthorized: timeout > 2)) }
         catch AudiobookshelfError.serverError(status: 404) { return nil }
     }
 
@@ -195,25 +226,63 @@ actor AudiobookshelfClient {
         return response.mediaProgress
     }
 
-    func updateProgress(itemID: String, update: ABSProgressUpdate) async throws {
+    func updateProgress(itemID: String, update: ABSProgressUpdate, expectedAccount: ABSProgressAccount? = nil) async throws {
+        if let expectedAccount {
+            let connection = try requiredConnection()
+            guard connection.baseURL.absoluteString == expectedAccount.server,
+                  connection.username == expectedAccount.username else { throw AudiobookshelfError.notConnected }
+        }
         guard update.duration >= 0, update.currentTime >= 0 else { throw AudiobookshelfError.unreadableResponse }
         let body = try JSONEncoder().encode(update)
         _ = try await request(path: ["api", "me", "progress", itemID], method: "PATCH", body: body)
     }
 
     private func request(path: [String], method: String = "GET", body: Data? = nil,
-                         query: [URLQueryItem] = []) async throws -> Data {
+                         query: [URLQueryItem] = [], timeout: TimeInterval = 20,
+                         refreshOnUnauthorized: Bool = true) async throws -> Data {
+        let connection = try requiredConnection()
+        let cacheable = method == "GET" && (path.starts(with: ["api", "libraries"])
+            || path.starts(with: ["api", "items"]) || path.starts(with: ["api", "me", "progress"]))
+        let cacheURL = ABSResponseCache.url(connection: connection, path: path, query: query)
+        do {
+            let data = try await authenticatedRequest(path: path, method: method, body: body, query: query,
+                                                      timeout: timeout, refreshOnUnauthorized: refreshOnUnauthorized)
+            guard let active = try self.connection(), active.baseURL == connection.baseURL,
+                  active.username == connection.username else { throw AudiobookshelfError.notConnected }
+            if cacheable { ABSResponseCache.write(data, at: cacheURL) }
+            return data
+        } catch {
+            let unavailable: Bool
+            switch error as? AudiobookshelfError {
+            case .offline?, .unreachableServer?: unavailable = true
+            case .serverError(let status)? where status >= 500: unavailable = true
+            default: unavailable = error is URLError
+            }
+            if cacheable, unavailable, let active = try? self.connection(),
+               active.baseURL == connection.baseURL, active.username == connection.username,
+               let data = ABSResponseCache.read(at: cacheURL) {
+                ABSCacheUse.current?.markUsed()
+                return data
+            }
+            throw error
+        }
+    }
+
+    private func authenticatedRequest(path: [String], method: String, body: Data?,
+                                      query: [URLQueryItem], timeout: TimeInterval,
+                                      refreshOnUnauthorized: Bool) async throws -> Data {
         let connection = try requiredConnection()
         do {
             return try await send(baseURL: connection.baseURL, path: path, method: method, body: body,
-                                  query: query, headers: [:], auth: connection.credential)
+                                  query: query, headers: [:], auth: connection.credential, timeout: timeout)
         } catch AudiobookshelfError.expiredToken {
+            guard refreshOnUnauthorized else { throw AudiobookshelfError.expiredToken }
             guard case .session(let failedAccess, _) = connection.credential else {
                 throw AudiobookshelfError.badCredentials
             }
             let renewed = try await refresh(after: failedAccess)
             return try await send(baseURL: renewed.baseURL, path: path, method: method, body: body,
-                                  query: query, headers: [:], auth: renewed.credential)
+                                  query: query, headers: [:], auth: renewed.credential, timeout: timeout)
         }
     }
 
@@ -247,6 +316,7 @@ actor AudiobookshelfClient {
                                         credential: .session(accessToken: newAccess, refreshToken: newRefresh),
                                         username: active.username)
             try credentials.save(renewed)
+            Task { @MainActor in ABSProgressReporter.flush() }
             return renewed
         }
         let id = UUID()
@@ -257,10 +327,10 @@ actor AudiobookshelfClient {
 
     private func send(baseURL: URL, path: [String], method: String, body: Data?,
                       query: [URLQueryItem] = [], headers: [String: String],
-                      auth: ABSCredential?) async throws -> Data {
+                      auth: ABSCredential?, timeout: TimeInterval = 20) async throws -> Data {
         var request = URLRequest(url: try makeURL(baseURL: baseURL, path: path, query: query))
         // A wrong LAN address should fail in seconds, not after URLSession's default minute.
-        request.timeoutInterval = 20
+        request.timeoutInterval = timeout
         request.httpMethod = method
         request.httpBody = body
         if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
@@ -399,6 +469,12 @@ actor AudiobookshelfClient {
         default:
             return .unreachableServer
         }
+    }
+
+    /// Whether a stored stream URL belongs to the server at `base`, so it can play with that
+    /// server's credentials.
+    nonisolated static func isSameOrigin(_ string: String, base: URL) -> Bool {
+        (try? sameOriginURL(string, base: base)) != nil
     }
 
     nonisolated private static func sameOriginURL(_ string: String, base: URL) throws -> URL {
