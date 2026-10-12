@@ -221,9 +221,11 @@ actor AudiobookshelfClient {
         return response.mediaProgress
     }
 
-    func updateProgress(itemID: String, update: ABSProgressUpdate, expectedServer: String? = nil) async throws {
-        if let expectedServer, try requiredConnection().baseURL.absoluteString != expectedServer {
-            throw AudiobookshelfError.notConnected
+    func updateProgress(itemID: String, update: ABSProgressUpdate, expectedAccount: ABSProgressAccount? = nil) async throws {
+        if let expectedAccount {
+            let connection = try requiredConnection()
+            guard connection.baseURL.absoluteString == expectedAccount.server,
+                  connection.username == expectedAccount.username else { throw AudiobookshelfError.notConnected }
         }
         guard update.duration >= 0, update.currentTime >= 0 else { throw AudiobookshelfError.unreadableResponse }
         let body = try JSONEncoder().encode(update)
@@ -462,6 +464,12 @@ actor AudiobookshelfClient {
         default:
             return .unreachableServer
         }
+    }
+
+    /// Whether a stored stream URL belongs to the server at `base`, so it can play with that
+    /// server's credentials.
+    nonisolated static func isSameOrigin(_ string: String, base: URL) -> Bool {
+        (try? sameOriginURL(string, base: base)) != nil
     }
 
     nonisolated private static func sameOriginURL(_ string: String, base: URL) throws -> URL {

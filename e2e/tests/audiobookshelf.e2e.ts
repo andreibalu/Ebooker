@@ -291,6 +291,36 @@ test('ABS durable progress delivers only the latest failed position after relaun
   });
 });
 
+test('ABS durable progress never sends a queued position as a different user on the same server', async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: reset });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    server.setProgressFailure(500);
+    await addAndPlayHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[3-9] of 00:30$/);
+    await screen.getByTestId('player.playPause').tap();
+    await expect.poll(() => server.requests.filter((line) => line === 'PATCH /api/me/progress/abs-hobbit').length)
+      .toBeGreaterThan(0);
+    terminate(bundle);
+    // The password session expires; the person reconnects the same server with another user's API key.
+    server.sessionRevoked = true;
+    server.setProgressFailure(null);
+    await device.openApp(bundle, { relaunch: true, launchArguments: onServer });
+    await screen.getByTestId('shelvesTab').tap();
+    await tapVisibleCenter(screen.getByTestId('abs.browse.reconnect'));
+    await screen.getByTestId('abs.connect.mode.apiKey').tap();
+    await screen.getByTestId('abs.connect.server').fill(server.serverURL);
+    await screen.getByTestId('abs.connect.server').press('Enter');
+    await nativeKeyboard.typeFocusedText(ABS_API_KEY);
+    await nativeKeyboard.submitFocused();
+    await expect(screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien')).toBeVisible({ timeout: 30_000 });
+    expect(server.requests).toContain('POST /api/authorize');
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    expect(server.progressPatches).toHaveLength(0);
+  });
+});
+
 test('ABS durable progress drops a queued stale position after newer server progress', async ({ device, screen, nativeKeyboard }) => {
   await withServer(async (server) => {
     await device.openApp(bundle, { relaunch: true, launchArguments: reset });

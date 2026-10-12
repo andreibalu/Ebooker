@@ -57,14 +57,26 @@ struct MomentSearchView: View {
         }.map { $0.0 }
     }
 
-    private var books: [Audiobook] {
-        var seen = Set<UUID>()
-        return results.compactMap(\.audiobook).filter { seen.insert($0.id).inserted }
+    /// Ranked results grouped by book in one pass, books in order of their best result.
+    private func grouped(_ results: [Moment]) -> [(book: Audiobook, moments: [Moment])] {
+        var groups: [(book: Audiobook, moments: [Moment])] = []
+        var indexByBook: [UUID: Int] = [:]
+        for moment in results {
+            guard let book = moment.audiobook else { continue }
+            if let index = indexByBook[book.id] {
+                groups[index].moments.append(moment)
+            } else {
+                indexByBook[book.id] = groups.count
+                groups.append((book, [moment]))
+            }
+        }
+        return groups
     }
 
     var body: some View {
         NavigationStack {
             ScrollView {
+                let results = self.results
                 LazyVStack(alignment: .leading, spacing: 16) {
                     if results.isEmpty {
                         ContentUnavailableView(
@@ -81,7 +93,7 @@ struct MomentSearchView: View {
                             Text("Recent Moments").font(.subheadline.weight(.semibold))
                                 .accessibilityIdentifier("momentSearch.recent")
                         }
-                        ForEach(books) { book in
+                        ForEach(grouped(results), id: \.book.id) { book, bookMoments in
                             HStack(spacing: 10) {
                                 cover(book).frame(width: 40, height: 48).clipShape(RoundedRectangle(cornerRadius: 5))
                                 VStack(alignment: .leading) {
@@ -91,7 +103,7 @@ struct MomentSearchView: View {
                                     }
                                 }
                             }
-                            ForEach(results.filter { $0.audiobook?.id == book.id }) { moment in
+                            ForEach(bookMoments) { moment in
                                 MomentRow(audiobook: book, moment: moment, openPlayer: onOpenPlayer,
                                           onDelete: {}, searchQuery: query,
                                           unavailableReason: unavailableReason(book, moment: moment))
@@ -119,6 +131,11 @@ struct MomentSearchView: View {
         if book.isCloudOnlyOrphan { return "Audio is not on this iPhone" }
         if !book.sortedTracks.indices.contains(moment.trackIndex) { return "Track unavailable" }
         if book.isStreamingOnly && !network.isConnected { return "Connect to the internet to stream" }
+        if book.isStreamingOnly && book.isAudiobookshelfBook {
+            guard let server = ABSAccount.shared.summary?.baseURL else { return "Connect your Audiobookshelf server to play" }
+            let stored = book.sortedTracks[moment.trackIndex].remoteURLString ?? ""
+            if !AudiobookshelfClient.isSameOrigin(stored, base: server) { return "Connect to this book's Audiobookshelf server" }
+        }
         return nil
     }
 

@@ -47,3 +47,12 @@ test('moment search: orphan row is disabled', async ({ device, screen }) => {
   await expect(screen.getByTestId('momentSearch.row.E2E Orphan')).toBeDisabled();
   await expect(screen.getByTestId('momentSearch.row.E2E Orphan')).toContainText('Audio is not on this iPhone');
 });
+
+test('moment search: disconnected Audiobookshelf row is disabled', async ({ device, screen }) => {
+  // Online, so the row is disabled for the missing connection rather than the network.
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-online'] });
+  await screen.getByTestId('momentSearchButton').tap();
+  await screen.getByPlaceholder('Search saved moments').fill('Server Moment');
+  await expect(screen.getByTestId('momentSearch.row.E2E Server Moment')).toBeDisabled();
+  await expect(screen.getByTestId('momentSearch.row.E2E Server Moment')).toContainText('Connect your Audiobookshelf server to play');
+});

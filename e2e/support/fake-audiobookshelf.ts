@@ -75,6 +75,8 @@ export interface FakeAudiobookshelf {
   itemsFailure: boolean;
   /** Delays the media progress list, so it completes after a concurrent item listing. */
   progressListDelayMS: number;
+  /** Rejects the signed-in user's session token (and its refresh) while API keys still work. */
+  sessionRevoked: boolean;
   close(): Promise<void>;
 }
 
@@ -174,11 +176,11 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
   const serverProgress = (item: FakeItem) => ({ ...progressJSON(item, progress.get(item.id)!),
     ...(updates.get(item.id) ?? { lastUpdate: 1_700_000_000_000, isFinished: item.finished ?? false }) });
   let base = '';
-  const controls = { audioDelayMS: 0, itemsFailure: false, progressListDelayMS: 0 };
+  const controls = { audioDelayMS: 0, itemsFailure: false, progressListDelayMS: 0, sessionRevoked: false };
 
   const authorized = (req: IncomingMessage) => {
     const header = req.headers.authorization ?? '';
-    return header === `Bearer ${ACCESS_TOKEN}` || header === `Bearer ${ABS_API_KEY}`;
+    return (header === `Bearer ${ACCESS_TOKEN}` && !controls.sessionRevoked) || header === `Bearer ${ABS_API_KEY}`;
   };
 
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
@@ -215,6 +217,13 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
       return sendAudio(req, res, body);
     }
 
+    if (path === '/auth/refresh' && req.method === 'POST') {
+      if (controls.sessionRevoked || req.headers['x-refresh-token'] !== REFRESH_TOKEN) {
+        res.writeHead(401, { 'content-type': 'text/plain' });
+        return res.end('Unauthorized');
+      }
+      return json(res, 200, { user: { username: ABS_USERNAME, accessToken: ACCESS_TOKEN, refreshToken: REFRESH_TOKEN } });
+    }
     if (!path.startsWith('/api/')) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       return res.end('not found');
@@ -325,6 +334,8 @@ export async function startFakeAudiobookshelf(port = 47378, longBook = false): P
     set itemsFailure(value: boolean) { controls.itemsFailure = value; },
     get progressListDelayMS() { return controls.progressListDelayMS; },
     set progressListDelayMS(value: number) { controls.progressListDelayMS = value; },
+    get sessionRevoked() { return controls.sessionRevoked; },
+    set sessionRevoked(value: boolean) { controls.sessionRevoked = value; },
     serverURL: base,
     requests,
     progressPatches,

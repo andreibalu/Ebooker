@@ -113,6 +113,18 @@ enum E2EFixtures {
                                    folderName: "E2E-Missing-Audio", totalDuration: 300)
             orphan.isDownloaded = false
             context.insert(orphan)
+            // A streaming Audiobookshelf book kept after disconnect: no credentials can play it.
+            let serverBook = Audiobook(title: "E2E Server Book", author: "Fixture Author",
+                                       folderName: "E2E-Server-Book", totalDuration: 300)
+            serverBook.isDownloaded = false
+            serverBook.absItemID = "e2e-disconnected"
+            context.insert(serverBook)
+            let serverTrack = AudioTrack(title: "E2E Server Chapter", originalFileName: "server.mp3",
+                                         storedFileName: "server.mp3", orderIndex: 0, duration: 300,
+                                         audiobook: serverBook)
+            serverTrack.remoteURLString = "http://127.0.0.1:9/api/items/e2e-disconnected/file/1"
+            context.insert(serverTrack)
+            serverBook.tracks.append(serverTrack)
             let searchMoments = [
                 Moment(trackIndex: 1, time: 45, label: "E2E Harbor", audiobook: book,
                        quoteLine: "The lantern shone across the harbor."),
@@ -121,6 +133,7 @@ enum E2EFixtures {
                 Moment(trackIndex: 0, time: 120, label: "E2E Café", audiobook: secondBook),
                 Moment(trackIndex: 0, time: 150, label: "E2E Unrelated", audiobook: secondBook),
                 Moment(trackIndex: 0, time: 30, label: "E2E Orphan", audiobook: orphan),
+                Moment(trackIndex: 0, time: 60, label: "E2E Server Moment", audiobook: serverBook),
             ]
             for entry in searchMoments {
                 context.insert(entry)
