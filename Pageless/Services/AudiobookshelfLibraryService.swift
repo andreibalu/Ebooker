@@ -102,7 +102,9 @@ enum AudiobookshelfLibraryService {
               progress.currentTime.isFinite, progress.currentTime >= 0 else { return false }
         let serverDate = Date(timeIntervalSince1970: updated / 1000)
         let pending = book.absItemID.flatMap { ABSProgressReporter.pendingTimestamp(itemID: $0) }
-        let localDate = max(book.absProgressWrittenAt ?? .distantPast, pending ?? .distantPast)
+        // Books saved before `absProgressWrittenAt` existed fall back to their last local playback.
+        let written = book.absProgressWrittenAt ?? book.lastPlayedAt ?? .distantPast
+        let localDate = max(written, pending ?? .distantPast)
         let durations = book.sortedTracks.map(\.duration)
         let localTime = globalTime(trackIndex: book.currentTrackIndex, timeInTrack: book.currentTime,
                                    trackDurations: durations)

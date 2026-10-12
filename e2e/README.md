@@ -72,6 +72,7 @@ DEBUG-only launch hooks:
 | `-e2e-welcome-days <n>` | On initial fixture seeding, sets the listening book's last-played date n days ago and saved/current progress to 200 seconds. |
 | `-e2e-persisted-recap <text>` | With welcome-days seeding, stores a matching recap at the saved position. |
 | `-e2e-persisted-recap-anchor <seconds>` | Anchors that recap at this position instead (saved progress is 200 s). |
+| `-e2e-abs-legacy-progress` | Clears each Audiobookshelf book's local progress write timestamp, as saved by builds before it existed. |
 | `-e2e-abs-rewind-current <seconds>` | Saves each Audiobookshelf book's current position as its marker, then sets the current position to this value. |
 | `-e2e-welcome-threshold-days <n>` | Overrides the three-day return threshold for this DEBUG fixture launch. |
 | `-e2e-fixture` | Opens the separate fixture store and seeds it once. |

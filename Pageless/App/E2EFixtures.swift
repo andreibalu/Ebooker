@@ -58,6 +58,13 @@ enum E2EFixtures {
     }
 
     static func seedIfNeeded(_ context: ModelContext) throws {
+        // Audiobookshelf books as saved before the local progress timestamp existed.
+        if ProcessInfo.processInfo.arguments.contains("-e2e-abs-legacy-progress") {
+            for book in try context.fetch(FetchDescriptor<Audiobook>()) where book.isAudiobookshelfBook {
+                book.absProgressWrittenAt = nil
+            }
+            try context.save()
+        }
         // Saves Audiobookshelf books' current position as their marker, then moves the current
         // position back, as after replaying an earlier part of the book.
         if let value = argument("-e2e-abs-rewind-current"), let seconds = Double(value) {

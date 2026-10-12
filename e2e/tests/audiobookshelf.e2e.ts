@@ -291,6 +291,26 @@ test('ABS durable progress delivers only the latest failed position after relaun
   });
 });
 
+test('ABS durable progress keeps a legacy local position played after the server position', async ({ device, screen, nativeKeyboard }) => {
+  await withServer(async (server) => {
+    await device.openApp(bundle, { relaunch: true, launchArguments: [...reset, '-resumeBacktrackSeconds', '0'] });
+    await openConnectSheet(screen);
+    await signIn(screen, nativeKeyboard, server.serverURL);
+    const beforePlay = Date.now();
+    await addAndPlayHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[3-9] of 00:30$/);
+    await screen.getByTestId('player.playPause').tap();
+    terminate(bundle);
+    // Another device saved 0:45 before this listening session; the local row has no write timestamp.
+    server.setProgress('abs-hobbit', 45, beforePlay - 60_000);
+    await device.openApp(bundle, { relaunch: true,
+      launchArguments: [...onServer, '-resumeBacktrackSeconds', '0', '-e2e-abs-legacy-progress'] });
+    await resumeHobbit(screen);
+    await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:(0\d|1[0-2]) of 00:30$/);
+    await screen.getByTestId('player.playPause').tap();
+  });
+});
+
 test('Play Latest Book resumes an ABS book from its saved marker, not an earlier current position', async ({ device, screen, nativeKeyboard }) => {
   await withServer(async (server) => {
     await device.openApp(bundle, { relaunch: true, launchArguments: [...reset, '-resumeBacktrackSeconds', '0'] });
