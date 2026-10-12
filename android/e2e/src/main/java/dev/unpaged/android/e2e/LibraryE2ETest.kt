@@ -19,9 +19,6 @@ import org.junit.rules.TestWatcher
 import org.junit.runner.Description
 import org.junit.runner.RunWith
 
-/** The owner's test phone (Galaxy A54, fresh install, no SIM, Wi-Fi only); keep in step with tools/run-e2e.sh. */
-private val APPROVED_PHONES = setOf("RZCW60SZE3H")
-
 /** Black-box app and system-picker journeys; no app hooks, repository calls or DB assertions. */
 @RunWith(AndroidJUnit4::class)
 class LibraryE2ETest {
@@ -46,11 +43,8 @@ class LibraryE2ETest {
         Configurator.getInstance().waitForIdleTimeout = 100
         assertEquals("Use tools/run-e2e.sh on its dedicated emulator", "true",
             InstrumentationRegistry.getArguments().getString("e2eApproved"))
-        // Only a dedicated Unpaged_E2E emulator or the owner's approved test phone may be wiped.
-        if (device.executeShellCommand("getprop ro.serialno").trim() !in APPROVED_PHONES) {
-            assertEquals("1", device.executeShellCommand("getprop ro.kernel.qemu").trim())
-            assertTrue(device.executeShellCommand("getprop ro.boot.qemu.avd_name").trim().startsWith("Unpaged_E2E_"))
-        }
+        assertEquals("1", device.executeShellCommand("getprop ro.kernel.qemu").trim())
+        assertTrue(device.executeShellCommand("getprop ro.boot.qemu.avd_name").trim().startsWith("Unpaged_E2E_"))
         for (setting in listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale"))
             device.executeShellCommand("settings put global $setting 0")
         device.pressHome()
