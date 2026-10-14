@@ -8,6 +8,10 @@ This matrix covers every iOS feature except Apple Intelligence and iCloud sync, 
 - `support/fake-audiobookshelf.ts` serves an Audiobookshelf server on localhost.
 - The local `Products.storekit` configuration stands in for the App Store.
 
+## Validation, 2026-10-14 (large text header)
+
+`tests/accessibility-layout.e2e.ts` sets the simulator to accessibility-extra-extra-extra-large text with Button Shapes and Bold Text, then asserts the "My Library" header title keeps a usable width, one row of height and a place in the top 20% of the screen, the three tabs stay short rows, each of the four header buttons opens its screen, and the Shelves "Collections" heading stays on one line. It restores `large` text and turns both switches off in `afterEach`, even on failure. The app relaunches, so no simulator reboot was needed. On `main` (before `66d8e9b`) it fails because the title's width is 0; on the fix it passes. At `66d8e9b` plus this file on the dedicated simulator (iPhone 18 Pro, iOS 27.0), it ran with `moment-search`, `library`, `native-flows`, `free-books` and `purchases`: 44 passed, 0 failed, in 12 minutes. Rerun with `E2E_SIMULATOR_UDID=<udid> E2E_BUILD_DIR=<build> npx e2e run tests/accessibility-layout.e2e.ts` from `e2e/`. Frames come from `boundingBox()`. The assertions use loose bounds, not exact sizes, and the test covers Moment Search, Plus, Settings and Import through their sheets, not the Files picker.
+
 ## Validation, 2026-10-12 (release 1.5.0)
 
 Full native suite at `b02fdc5` on the same simulator (iPhone 18 Pro, iOS 27.0): 108 passed and `live-catalog.e2e.ts` skipped (opt-in), in 37 minutes. Rerun from `e2e/` with `E2E_SIMULATOR_UDID=<udid> E2E_BUILD_DIR=<build> npx e2e run`.
