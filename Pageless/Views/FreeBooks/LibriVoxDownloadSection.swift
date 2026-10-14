@@ -119,10 +119,13 @@ struct LibriVoxDownloadSection: View {
                 HStack(spacing: 10) {
                     Text("Downloads · \(entries.count)")
                         .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .layoutPriority(1)
                     Rectangle()
                         .fill(Color.primary.opacity(0.18))
                         .frame(height: 0.5)
                 }
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .transition(.opacity)
 
                 ForEach(entries, id: \.catalogID) { entry in

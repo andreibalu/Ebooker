@@ -432,13 +432,21 @@ struct ContentView: View {
                 Text("\(visibleLibraryBookCount)")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(Color.cream)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .padding(.horizontal, 4)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("My Library")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
             }
+            // The title outranks the Spacer: without it, large text or Display Zoom squeezes the
+            // title to a sliver that wraps a letter per line and stretches the header down the screen.
+            .layoutPriority(1)
 
             Spacer()
 
@@ -448,6 +456,7 @@ struct ContentView: View {
                 } label: {
                     toolbarIconButton(systemName: "magnifyingglass")
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Search saved moments")
                 .accessibilityIdentifier("momentSearchButton")
 
@@ -461,6 +470,7 @@ struct ContentView: View {
                         .foregroundStyle(Color.amber)
                 }
                 .accessibilityLabel("Unpaged Plus")
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("plusButton")
 
                 Button {
@@ -468,6 +478,7 @@ struct ContentView: View {
                 } label: {
                     toolbarIconButton(systemName: "slider.horizontal.3")
                 }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("settingsButton")
 
                 Button {
@@ -489,9 +500,13 @@ struct ContentView: View {
                 } label: {
                     toolbarIconButton(systemName: "plus")
                 }
+                .buttonStyle(.plain)
                 .accessibilityIdentifier("importButton")
             }
         }
+        // The icon buttons are fixed 36pt frames, so the row past xxxLarge only crowds the title.
+        // They draw their own card and use the plain style, so Button Shapes adds no outer ring.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private func toolbarIconButton(systemName: String) -> some View {
@@ -538,6 +553,8 @@ struct ContentView: View {
             }
         }
         .padding(.bottom, 1)
+        // Three equal columns: accessibility sizes would hyphenate each label over several lines.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     @ViewBuilder
@@ -644,6 +661,8 @@ struct ContentView: View {
                 Text(title)
                     .font(.subheadline.weight(isSelected ? .semibold : .regular))
                     .foregroundStyle(isSelected ? .primary : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 if showsChevron {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 9, weight: .semibold))

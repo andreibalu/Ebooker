@@ -131,9 +131,11 @@ struct BrowseLibriVoxView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .layoutPriority(1)
             hairline
         }
         .padding(.horizontal, 20)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: - Search bar
@@ -179,7 +181,21 @@ struct BrowseLibriVoxView: View {
 
     // MARK: - Filter row
 
+    /// Button Shapes draws a pill around each menu; when the pills no longer fit the width, the row
+    /// scrolls rather than truncating the labels to three letters.
     private var filterRow: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                filterMenus
+                Spacer()
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                filterMenus
+            }
+        }
+    }
+
+    private var filterMenus: some View {
         HStack(spacing: 22) {
             Menu {
                 Button("All Languages") {
@@ -246,8 +262,6 @@ struct BrowseLibriVoxView: View {
             } label: {
                 filterLabel(viewModel.selectedDuration?.rawValue ?? "Length", isSelected: viewModel.selectedDuration != nil)
             }
-
-            Spacer()
         }
     }
 
@@ -559,6 +573,8 @@ struct BrowseLibriVoxView: View {
                 Text("Collections")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -569,6 +585,7 @@ struct BrowseLibriVoxView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var collectionsRail: some View {
@@ -611,6 +628,8 @@ struct BrowseLibriVoxView: View {
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        // Fixed-size card: text past xxxLarge truncates to a few letters and clips.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: - Numbered chart row
