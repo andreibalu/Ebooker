@@ -87,6 +87,9 @@ struct ABSBrowseView: View {
         }
         .font(.subheadline)
         .foregroundStyle(.primary)
+        .lineLimit(1)
+        // Three controls share one row; at accessibility sizes each label wraps a few letters a line.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: - Header

@@ -138,6 +138,8 @@ struct AudiobookCardView: View {
                     }
                 }
             }
+            // Half-width grid card: past accessibility1 the title fits two or three letters a line.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
 
             // Custom slim progress capsule
             GeometryReader { geo in
