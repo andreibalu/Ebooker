@@ -56,7 +56,7 @@ Xcode Cloud builds start only when the owner asks for a TestFlight or App Store 
 
 The `External` workflow builds `main`, so merge the version bump before starting it. An External run has three actions, and only the archive decides a release:
 
-- `Test - iOS` has failed on every run since at least build 121, in `StoreKitTransactionTests` and on a 10-minute timeout. The local serial run in step 2 is the gate. Don't hold a release on this action. Read its failures through `/v1/ciBuildActions/{id}/issues` (the action named exactly `Test - iOS`, not the TestFlight one).
+- `Test - iOS` runs the Swift tests on several simulators. It failed on every run from build 121 to 126 because `StoreKitLedgerReset` left the payment sheet on, and the first StoreKit purchase hung. #80 fixed that, and an Xcode Cloud run has not confirmed it yet. If this action fails, read its failures through `/v1/ciBuildActions/{id}/issues` (the action named exactly `Test - iOS`, not the TestFlight one) and its logs through `/v1/ciBuildActions/{id}/artifacts`. Then fix the cause or tell the owner. The local serial run in step 2 is still the gate.
 - `Archive - iOS` uploads the build. Once it succeeds, the build appears under `/v1/builds` and processes to `VALID` within minutes.
 - `TestFlight External Testing - iOS` can stay `RUNNING` for a long time, and it leaves the run without a completion status. Poll the build's `processingState`, not the run.
 
