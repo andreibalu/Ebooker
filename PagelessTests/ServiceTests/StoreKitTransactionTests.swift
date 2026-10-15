@@ -16,6 +16,10 @@
 //  The session is reset in `init` only: a `deinit` reset is not awaited and can overlap the next
 //  test's purchase, which leaves transactions unfinishable.
 //
+//  `Transaction.currentEntitlements` trails the session ledger, by more than a second on a fresh
+//  Xcode Cloud simulator. `freshPlusStore` therefore waits for the entitlement the ledger implies
+//  instead of reading it once, and a one-minute limit turns any hang into a fast failure.
+//
 
 import Foundation
 import StoreKit
@@ -24,7 +28,7 @@ import Testing
 @testable import Pageless
 
 @MainActor
-@Suite(.serialized)
+@Suite(.serialized, .timeLimit(.minutes(1)))
 final class StoreKitTransactionTests {
     private let session: SKTestSession
 
@@ -38,11 +42,16 @@ final class StoreKitTransactionTests {
         session.askToBuyEnabled = false
     }
 
-    private func freshPlusStore() async -> PlusEntitlementStore {
+    /// `expectingPlus` is what the session ledger grants. A stale cache either way breaks the test:
+    /// a leftover Plus turns the next purchase into a no-op, a missing one fails the assertion.
+    private func freshPlusStore(expectingPlus: Bool = false) async -> PlusEntitlementStore {
         let store = PlusEntitlementStore.shared
         store.purchaseError = nil
         store.restoreError = nil
-        await store.refreshEntitlements()
+        _ = await Self.waitUntil {
+            await store.refreshEntitlements()
+            return store.isPlus == expectingPlus
+        }
         await store.loadProduct()
         return store
     }
@@ -115,7 +124,7 @@ final class StoreKitTransactionTests {
 
     @Test func restoreKeepsAnExistingSubscriptionWithoutError() async throws {
         try await session.buyProduct(identifier: PlusProductID.monthly)
-        let store = await freshPlusStore()
+        let store = await freshPlusStore(expectingPlus: true)
 
         await store.restorePurchases()
 
@@ -125,7 +134,7 @@ final class StoreKitTransactionTests {
 
     @Test func legacyAIUnlockStillGrantsPlusPermanently() async throws {
         try await session.buyProduct(identifier: AIProductID.unlock)
-        let store = await freshPlusStore()
+        let store = await freshPlusStore(expectingPlus: true)
 
         let ledger = await Self.describeLedger(session)
         #expect(store.isPlus, "\(ledger)")
@@ -135,7 +144,7 @@ final class StoreKitTransactionTests {
 
     @Test func legacyICloudSubscriptionStillGrantsPlus() async throws {
         try await session.buyProduct(identifier: ICloudSyncProductID.monthly)
-        let store = await freshPlusStore()
+        let store = await freshPlusStore(expectingPlus: true)
 
         #expect(store.isPlus)
         #expect(store.hasManageableSubscription)
