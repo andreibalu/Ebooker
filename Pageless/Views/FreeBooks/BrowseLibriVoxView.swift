@@ -86,7 +86,6 @@ struct BrowseLibriVoxView: View {
                     .padding(.top, 16)
 
                 filterRow
-                    .padding(.horizontal, 20)
                     .padding(.top, 4)
 
                 statusLine
@@ -131,9 +130,11 @@ struct BrowseLibriVoxView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
+                .layoutPriority(1)
             hairline
         }
         .padding(.horizontal, 20)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: - Search bar
@@ -179,7 +180,16 @@ struct BrowseLibriVoxView: View {
 
     // MARK: - Filter row
 
+    /// Scrolls to the screen edge like the collections rail: Button Shapes pills, Bold Text or a long
+    /// selected genre can outgrow the width, and the next menu then peeks in instead of truncating.
     private var filterRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            filterMenus
+                .padding(.horizontal, 20)
+        }
+    }
+
+    private var filterMenus: some View {
         HStack(spacing: 22) {
             Menu {
                 Button("All Languages") {
@@ -246,8 +256,6 @@ struct BrowseLibriVoxView: View {
             } label: {
                 filterLabel(viewModel.selectedDuration?.rawValue ?? "Length", isSelected: viewModel.selectedDuration != nil)
             }
-
-            Spacer()
         }
     }
 
@@ -559,6 +567,8 @@ struct BrowseLibriVoxView: View {
                 Text("Collections")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .layoutPriority(1)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -569,11 +579,12 @@ struct BrowseLibriVoxView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var collectionsRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 ForEach(LibriVoxCollection.all) { collection in
                     NavigationLink {
                         LibriVoxCollectionView(
@@ -602,15 +613,19 @@ struct BrowseLibriVoxView: View {
             Text(collection.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
+                .lineLimit(2)
             Text("\(collection.bookIDs.count) books")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 132, height: 68, alignment: .topLeading)
+        // Fixed width, growing height: large text wraps the title to a second line instead of
+        // truncating it; past xxxLarge even two lines hold only a few letters.
+        .frame(width: 132, alignment: .topLeading)
+        .frame(minHeight: 68, alignment: .topLeading)
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     // MARK: - Numbered chart row
