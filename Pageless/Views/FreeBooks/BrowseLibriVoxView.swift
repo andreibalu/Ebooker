@@ -86,7 +86,6 @@ struct BrowseLibriVoxView: View {
                     .padding(.top, 16)
 
                 filterRow
-                    .padding(.horizontal, 20)
                     .padding(.top, 4)
 
                 statusLine
@@ -181,17 +180,12 @@ struct BrowseLibriVoxView: View {
 
     // MARK: - Filter row
 
-    /// Button Shapes draws a pill around each menu; when the pills no longer fit the width, the row
-    /// scrolls rather than truncating the labels to three letters.
+    /// Scrolls to the screen edge like the collections rail: Button Shapes pills, Bold Text or a long
+    /// selected genre can outgrow the width, and the next menu then peeks in instead of truncating.
     private var filterRow: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 0) {
-                filterMenus
-                Spacer()
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                filterMenus
-            }
+        ScrollView(.horizontal, showsIndicators: false) {
+            filterMenus
+                .padding(.horizontal, 20)
         }
     }
 
@@ -590,7 +584,7 @@ struct BrowseLibriVoxView: View {
 
     private var collectionsRail: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 ForEach(LibriVoxCollection.all) { collection in
                     NavigationLink {
                         LibriVoxCollectionView(
@@ -619,16 +613,18 @@ struct BrowseLibriVoxView: View {
             Text(collection.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
-                .lineLimit(1)
+                .lineLimit(2)
             Text("\(collection.bookIDs.count) books")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 132, height: 68, alignment: .topLeading)
+        // Fixed width, growing height: large text wraps the title to a second line instead of
+        // truncating it; past xxxLarge even two lines hold only a few letters.
+        .frame(width: 132, alignment: .topLeading)
+        .frame(minHeight: 68, alignment: .topLeading)
         .padding(14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
-        // Fixed-size card: text past xxxLarge truncates to a few letters and clips.
         .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 

@@ -18,17 +18,28 @@ const dismiss = (screen: Screen) => tapVisibleCenter(dismissButton(screen));
 const simctl = (...args: string[]): void => {
   execFileSync('xcrun', ['simctl', ...args], { stdio: 'ignore' });
 };
+const accessibilityCommands = (on: boolean): string[][] => [
+  ['ui', udid(), 'content_size', on ? 'accessibility-extra-extra-extra-large' : 'large'],
+  ...['ButtonShapesEnabled', 'EnhancedTextLegibilityEnabled'].map((key) => [
+    'spawn', udid(), 'defaults', 'write', 'com.apple.Accessibility', key, '-bool', on ? 'YES' : 'NO',
+  ]),
+];
 const setAccessibility = (on: boolean): void => {
-  simctl('ui', udid(), 'content_size', on ? 'accessibility-extra-extra-extra-large' : 'large');
-  for (const key of ['ButtonShapesEnabled', 'EnhancedTextLegibilityEnabled']) {
-    simctl('spawn', udid(), 'defaults', 'write', 'com.apple.Accessibility', key, '-bool', on ? 'YES' : 'NO');
-  }
+  for (const args of accessibilityCommands(on)) simctl(...args);
 };
 
 test.afterEach(() => {
-  // Restore even on failure so later suites see the default text size and no Button Shapes.
-  terminate(bundle);
-  setAccessibility(false);
+  // Restore even on failure so later suites see the default text size and no Button Shapes. Each
+  // command runs on its own, so one failing still lets the others restore their setting.
+  const errors: unknown[] = [];
+  for (const restore of [() => terminate(bundle), ...accessibilityCommands(false).map((args) => () => simctl(...args))]) {
+    try {
+      restore();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) throw errors[0];
 });
 
 test('large text with Button Shapes and Bold Text keeps the header, tabs and Shelves headings compact', async ({ device, screen, app }) => {

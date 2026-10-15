@@ -437,15 +437,19 @@ struct ContentView: View {
                     .padding(.horizontal, 4)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            // The circle and icon buttons take about 250pt, so Display Zoom (320pt wide) leaves the
+            // title almost no room. It shrinks to fit, and drops out below 64pt rather than wrapping
+            // a letter per line and stretching the header down the screen. The Library tab still
+            // names the screen. Its priority over the Spacer keeps large text from squeezing it.
+            ViewThatFits(in: .horizontal) {
                 Text("My Library")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
+                    .frame(idealWidth: 64, alignment: .leading)
+                EmptyView()
             }
-            // The title outranks the Spacer: without it, large text or Display Zoom squeezes the
-            // title to a sliver that wraps a letter per line and stretches the header down the screen.
             .layoutPriority(1)
 
             Spacer()
@@ -469,8 +473,8 @@ struct ContentView: View {
                     toolbarIconButton(systemName: "sparkles")
                         .foregroundStyle(Color.amber)
                 }
-                .accessibilityLabel("Unpaged Plus")
                 .buttonStyle(.plain)
+                .accessibilityLabel("Unpaged Plus")
                 .accessibilityIdentifier("plusButton")
 
                 Button {
@@ -479,6 +483,7 @@ struct ContentView: View {
                     toolbarIconButton(systemName: "slider.horizontal.3")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Settings")
                 .accessibilityIdentifier("settingsButton")
 
                 Button {
@@ -501,6 +506,7 @@ struct ContentView: View {
                     toolbarIconButton(systemName: "plus")
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Import audiobook")
                 .accessibilityIdentifier("importButton")
             }
         }
