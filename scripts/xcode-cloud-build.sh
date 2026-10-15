@@ -5,51 +5,11 @@
 #   scripts/xcode-cloud-build.sh External        # test + archive main, App Store eligible (TestFlight/App Store)
 #   scripts/xcode-cloud-build.sh Internal        # archive dev, internal TestFlight only
 #
-# Credentials stay outside the repo: ~/.appstoreconnect/issuer_id and
-# ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8. Set ASC_KEY_ID to pick a key;
-# otherwise the first key that can read the app is used.
+# Credentials and key choice: see scripts/asc-api.sh.
 set -euo pipefail
 
-APP_ID=6761081641
-API=https://api.appstoreconnect.apple.com
-KEYS=~/.appstoreconnect/private_keys
-ISSUER=$(tr -d '[:space:]' < ~/.appstoreconnect/issuer_id)
-
-b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
-
-token() {
-  local kid=$1 now header payload der
-  now=$(date +%s)
-  header=$(printf '{"alg":"ES256","kid":"%s","typ":"JWT"}' "$kid" | b64url)
-  payload=$(printf '{"iss":"%s","iat":%d,"exp":%d,"aud":"appstoreconnect-v1"}' "$ISSUER" "$now" $((now + 1100)) | b64url)
-  # ES256 wants raw r||s; openssl emits DER SEQUENCE{INTEGER r, INTEGER s}.
-  der=$(printf '%s.%s' "$header" "$payload" | openssl dgst -sha256 -sign "$KEYS/AuthKey_$kid.p8" | xxd -p | tr -d '\n')
-  printf '%s.%s.%s' "$header" "$payload" "$(python3 -I -c '
-import base64, sys
-d = bytes.fromhex(sys.argv[1]); i = 2 + (d[1] & 0x7f if d[1] & 0x80 else 0)
-def integer(i):
-    n = d[i + 1]; return d[i + 2:i + 2 + n].lstrip(b"\0").rjust(32, b"\0"), i + 2 + n
-r, i = integer(i); s, _ = integer(i)
-print(base64.urlsafe_b64encode(r + s).decode().rstrip("="))' "$der")"
-}
-
-api() { # api METHOD PATH [BODY]
-  local args=(-sf -X "$1" -H "Authorization: Bearer $TOKEN")
-  [ $# -ge 3 ] && args+=(-H 'Content-Type: application/json' -d "$3")
-  curl "${args[@]}" "$API$2"
-}
-
-json() { python3 -I -c "import json, os, sys; d = json.load(sys.stdin); $1"; }
-
-TOKEN=""
-for path in $KEYS/AuthKey_*.p8; do
-  kid=$(basename "$path" .p8); kid=${kid#AuthKey_}
-  [ -n "${ASC_KEY_ID:-}" ] && [ "$kid" != "$ASC_KEY_ID" ] && continue
-  TOKEN=$(token "$kid")
-  api GET "/v1/apps/$APP_ID" >/dev/null 2>&1 && break
-  TOKEN=""
-done
-[ -n "$TOKEN" ] || { echo "No App Store Connect key in $KEYS can read app $APP_ID." >&2; exit 1; }
+# Signs the JWT and defines api and json.
+. "$(dirname "$0")/asc-api.sh"
 
 PRODUCT=$(api GET "/v1/apps/$APP_ID/ciProduct" | json 'print(d["data"]["id"])')
 WORKFLOWS=$(api GET "/v1/ciProducts/$PRODUCT/workflows")
