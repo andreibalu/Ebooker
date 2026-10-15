@@ -6,7 +6,7 @@ iCloud sync is a Plus feature (see `purchases.md`). The `"synced"` SwiftData con
 
 ## The gate
 
-`IcloudSyncGate` is the single decision point; every sync-sensitive branch calls `IcloudSyncGate.isEnabled()` instead of reading the toggle. It requires the Plus launch cache (`PlusEntitlementStore.isSubscribedAtLaunch()`), the `iCloudSyncEnabled` preference and a signed-in iCloud account (`ubiquityIdentityToken`). It is computed once per process, so a purchase, cancellation or toggle change takes effect after relaunch. When it is false, `AppDelegate` builds the container with `cloudKitDatabase: .none`. DEBUG E2E fixture launches force it off.
+`IcloudSyncGate` is the single decision point: sync-sensitive behavior calls `IcloudSyncGate.isEnabled()` rather than reading the toggle. The one deliberate exception is `ICloudSettingsView`'s caption, which compares the stored preference with the gate to say a change applies after relaunch. It requires the Plus launch cache (`PlusEntitlementStore.isSubscribedAtLaunch()`), the `iCloudSyncEnabled` preference and a signed-in iCloud account (`ubiquityIdentityToken`). It is computed once per process, so a purchase, cancellation or toggle change takes effect after relaunch. When it is false, `AppDelegate` builds the container with `cloudKitDatabase: .none`. DEBUG E2E fixture launches force it off.
 
 ## Record states
 
@@ -34,7 +34,7 @@ A book's state comes from flags on `Audiobook`; use its computed properties inst
 ## Restore on re-import (own books)
 
 - **Import path.** `LibraryViewModel` asks `OrphanRestoreService.findMatch`, which accepts any fingerprint overlap regardless of track count and doesn't check the sync gate. A match shows `RestoreMatchSheet` ("Restore from iCloud" or "Add as new book").
-- **Cloud Library "Locate…".** Requires the picked files' fingerprints to match exactly.
+- **Cloud Library "Locate…".** Adopts silently only when the picked files' fingerprints match the book's exactly (`LibraryImportService.hasExactFingerprintMultiset`); any other selection asks the user to confirm replacing the book's audio first.
 - **`adopt`.** Updates matched track records in place (by fingerprint, then index), inserts extra incoming tracks and deletes surplus ones. Progress, moments and EQ live on the `Audiobook` and survive. `Moment.trackIndex` is positional, so a changed track count can repoint moments.
 - **Merge.** "Match with iCloud" on a book's detail screen (`MatchCloudEntrySheet`) can merge a local book into its cloud record via `OrphanRestoreService.merge`, which deletes the local `Audiobook`.
 

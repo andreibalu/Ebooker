@@ -17,7 +17,7 @@ There are two catalogs:
 
 ## Catalog sync
 
-- `LibriVoxCatalogSync` runs at most daily. Until one full pass has completed, each run continues a full, resumable pass; after that it syncs incrementally.
+- `LibriVoxCatalogSync` first makes one full, resumable pass, continuing it on every trigger until it completes. After that it syncs incrementally, at most once a day.
 - **Classics first.** Before the full sync starts, a preload fetches the curated classics by id (`LibriVoxAPIClient.fetchBooks(ids:)`) and seeds them (`LibriVoxCatalogSync.seed`), so the hero and featured rows work at once. Search and filters stay interactive throughout; a non-blocking banner (`isLoadingFullCatalog`) shows while the full sync runs.
 - **Concurrency.** `LibriVoxCatalogStore.make` builds its `@ModelActor` off the main actor; page writes, searches and filter aggregation run on its background context. Commit each page before persisting the next offset in `LibriVoxSyncCheckpoint`, so a crash never skips a page.
 - **Lifecycle.** Backgrounding raises a pause flag and uses a short background task to save the current page. Foregrounding resumes from the cursor with exactly one sync in flight.

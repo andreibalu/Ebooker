@@ -17,7 +17,7 @@ The fallback runs when the primary throws or returns an empty transcript. `Cance
 
 Within smart save and recaps, the fallback is the only code that requests speech authorization. Keep authorization there; an up-front gate would block the permission-free primary path.
 
-Moment and recap windows differ, and the fallback's clip spans a different window from the primary's. The constants sit in `PlayerViewModel`, `AudiobookDetailViewModel` and `AudioExtractionService`.
+Windows differ by feature. For moments, the primary path and the fallback clip cover different spans (constants in `PlayerViewModel` and `AudioExtractionService`), so a fallback transcript is not the same text. Recaps use one window, ending at the saved position, on both paths (set inline in `AudiobookDetailViewModel.loadRecap`).
 
 ## Generation
 
@@ -25,7 +25,7 @@ Moment and recap windows differ, and the fallback's clip spans a different windo
 - Greedy sampling and a `maximumResponseTokens` cap keep extraction deterministic and latency-bounded.
 - `FoundationModelGeneration.run` classifies generation errors: guardrail or refusal → `unsafeContent` with no retry; context overflow → one retry on the transcript's tail; rate-limited or concurrent → one delayed retry. iOS 27's `LanguageModelError` gets the same mapping. Callers match on the error enums (`MomentNamingError.unsafeContent`, `RecapError.unsafeContent`), never on description strings.
 - **Budget.** The on-device context window is small and shared by prompt and response. On iOS 27, `LanguageModelError.contextSizeExceeded` reports its size. In `@Generable` structs fields generate in declaration order and the last one is clipped when the budget runs out, so declare cheap structured fields first and the longest prose last (a recap's `progressHeadline` precedes `recap` for this reason).
-- Post-process every free-text field: the model ignores word and sentence counts. `MomentNamingService.trimToCompleteSentences` and `sanitizedQuoteLine` cut mid-sentence endings and oversized quotes.
+- The model ignores word and sentence counts, and the response cap can cut prose mid-sentence. `MomentNamingService.trimToCompleteSentences` repairs the moment note and `sanitizedQuoteLine` the quote; the moment name and the recap body are only whitespace-trimmed, so a clipped recap shows as clipped. A new prose field needs the same repair.
 - **Guide literals.** Mood and categories use `@Guide(.anyOf…)` constrained decoding. Macro arguments can't reference constants, so the values exist three times: the `@Guide` literals, `categoryGuideValues` / `moodGuideValues`, and `MomentEnums`. Change all three together. No test compares them, and a value the enums don't know is dropped silently.
 
 ## Quotes

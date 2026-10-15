@@ -36,7 +36,7 @@ Progress math in `Audiobook` compares `orderIndex` with the positional index int
 
 ## Titles and rename
 
-- Playback surfaces show `AudioTrack.displayTitle`. A single-track book's lone track title is file-metadata noise, so `displayTitle` falls back to `Audiobook.title`; multi-track books keep per-track titles. Chapters built per track take their titles from `displayTitle` too, so CarPlay's chapter list follows a rename.
+- Playback surfaces show `AudioTrack.displayTitle`. A single-track book's lone track title is file-metadata noise, so `displayTitle` falls back to `Audiobook.title`; multi-track books keep per-track titles. Chapters built per track take their titles from `displayTitle` too, but `chapters` is a stored snapshot rebuilt only on load, track commit and marker refresh: after a rename, the player's and CarPlay's chapter lists show the old title until the next rebuild.
 - Rename is display-side: `LibraryViewModel.commitRename` writes `Audiobook.title` only, and `AudioTrack.title` rows stay as imported.
 - `MiniPlayerBar` shows the book title and adds a track line only when it differs (`miniSecondaryLine`).
 

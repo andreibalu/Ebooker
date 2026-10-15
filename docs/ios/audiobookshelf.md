@@ -39,7 +39,7 @@ Tokens live only in the Keychain (`ABSKeychainCredentialStore`).
 - `didFinishDownloadingTo` moves the file synchronously, before returning; the system deletes it afterwards. The background completion handler runs (through `AppDelegate`) only after the file move and manifest write.
 - The event drain type, `BackgroundEventDrain`, lives in `LibriVoxBackgroundDownloadCoordinator.swift`; both download systems depend on it.
 - Cancel removes partial files and the manifest without promoting.
-- The Library's pinned downloads section shows in-flight and failed ABS jobs. ABS downloads have no Live Activity.
+- `ABSDownloadsSection`, pinned at the top of the Library tab above the LibriVox downloads, shows in-flight and failed ABS jobs; a finished book moves to the grid. ABS downloads have no Live Activity.
 - Settings (`ABSServerSettingsView`) shows downloaded size, removes all downloads, and on disconnect offers to keep or remove audio.
 
 ## Browse cache and offline
