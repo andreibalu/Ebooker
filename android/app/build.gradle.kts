@@ -23,7 +23,7 @@ android {
     externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
     defaultConfig {
         // Permanent Play identity. Debug builds keep the development id (see androidComponents).
-        applicationId = "app.unpaged"
+        applicationId = "com.andreibaludev.unpaged"
         minSdk = 26
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         targetSdk = 36

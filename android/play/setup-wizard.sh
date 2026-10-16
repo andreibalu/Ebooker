@@ -327,7 +327,7 @@ step "App or game: App.   Free or paid: Free."
 step "Contact email: andrei.baluta@yahoo.com"
 step "Tick the Developer Program Policies, US export laws and Play App Signing terms."
 step "Click Create app."
-note "The package name, app.unpaged, is set by the first upload in stage 6 and is permanent."
+note "The package name, com.andreibaludev.unpaged, is set by the first upload in stage 6 and is permanent."
 pause "Press Enter once the app's dashboard is open."
 
 # ── 5 ─────────────────────────────────────────────────────────────────────
