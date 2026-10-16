@@ -159,9 +159,13 @@ if (body) {
         const dx = Math.max(30, (ex - sx) * .5);
         d = `M${sx},${sy} C${sx + dx},${sy} ${ex - dx},${ey} ${ex},${ey}`;
       } else {
-        sx = a.cx; sy = a.b + 1; ex = b.l + 4; ey = b.t - 3;
-        const dy = Math.max(24, (ey - sy) * .5);
-        d = `M${sx},${sy} C${sx},${sy + dy} ${ex},${ey - dy} ${ex},${ey}`;
+        // Stacked layout: a cable would cut across the prose and the finished fields, so the
+        // highlighted words and the lit chip carry the link.
+        if (target !== field) {
+          if (animate && !reduced()) { const t = token; setTimeout(() => { if (t === token) target.classList.add('on'); }, i * 260 + 650); }
+          else target.classList.add('on');
+        }
+        i++; continue;
       }
       // A label lights up when its cable lands.
       const chip = target === field ? null : target;
@@ -225,7 +229,11 @@ if (body) {
 
   // Scroll drives the walkthrough. The reading line sits mid-screen, or just under the pinned stage on phones.
   const narrow = matchMedia('(max-width: 1100px)');
-  const line = () => narrow.matches ? stage.getBoundingClientRect().bottom + 28 : innerHeight / 2;
+  const line = () => {
+    if (!narrow.matches) return innerHeight / 2;
+    const bottom = stage.getBoundingClientRect().bottom;
+    return bottom + Math.min(130, Math.max(28, (innerHeight - bottom) * .5));
+  };
   let ticking = false;
   function pick() {
     ticking = false;

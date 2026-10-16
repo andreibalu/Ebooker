@@ -37,6 +37,9 @@ a root `404.html` that swaps in the visitor's locale by path prefix, and
   Its excerpt, results and chips stay English (the app is English-only) and carry `lang="en"`.
   Field claims must match `MomentNamingService`: ten categories, eight moods,
   quotes kept only when they appear in the transcript.
-- Under 1100px the anatomy stacks: the stage stays sticky, the transcript becomes a
-  scrolling window, and the active step is the one under the stage's bottom edge.
+- Under 1100px the anatomy stacks: the stage stays sticky at one fixed height for
+  all seven steps, the transcript is a scrolling window that takes the room the card
+  leaves, and the card accumulates (finished fields shrink to one line, the field in
+  play shows in full, the card appears at step 3). There are no cables on the stacked
+  layout. The active step is the one a little below the stage's bottom edge.
 - Every animation has a static state for `prefers-reduced-motion` and the footer toggle.
