@@ -22,7 +22,7 @@ implementation slices are merged. Physical-device testing is next:
   instructions.
 - Keep the single production `app` module plus the separate `e2e` driver until
   an architecture decision justifies more modules.
-- The Play application id is `app.unpaged` and is permanent. Debug builds keep
+- The Play application id is `com.andreibaludev.unpaged` and is permanent. Debug builds keep
   `dev.unpaged.android.development`, so E2E, fixtures and `adb` commands target
   that id and install beside the Play build. minSdk stays 26.
 - Raise `versionCode` for every Play upload. The release bundle is signed with

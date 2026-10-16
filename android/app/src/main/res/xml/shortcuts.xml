@@ -3,6 +3,6 @@
     <shortcut android:shortcutId="play_latest_book" android:enabled="true"
         android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/play_latest_book">
         <intent android:action="dev.unpaged.android.PLAY_LATEST_BOOK"
-            android:targetPackage="app.unpaged" android:targetClass="dev.unpaged.android.MainActivity" />
+            android:targetPackage="com.andreibaludev.unpaged" android:targetClass="dev.unpaged.android.MainActivity" />
     </shortcut>
 </shortcuts>
