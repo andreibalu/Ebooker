@@ -439,7 +439,7 @@ a:hover > .i-arrow { translate: 3px 0; }
 }
 @media (max-width: 1100px) {
   /* Anatomy: the stage pins under the header; steps scroll beneath it. */
-  .anatomy-body { grid-template-columns: 1fr; gap: 0; margin-top: 48px; }
+  .anatomy-body { grid-template-columns: minmax(0, 1fr); gap: 0; margin-top: 48px; }
   .stage { order: -1; top: 64px; padding: 12px 12px 14px; border-radius: 22px; z-index: 3; }
   .anatomy-body::before { content: ''; order: -2; position: sticky; top: 0; height: 64px; margin-bottom: -64px; background: var(--navy); z-index: 2; }
   .stage-nav { margin-bottom: 10px; gap: 2px; }
@@ -449,35 +449,51 @@ a:hover > .i-arrow { translate: 3px 0; }
   .tape-meta { font-size: 11.5px; margin-bottom: 4px; }
   .wave { height: 30px; }
   .tape-scale { font-size: 9.5px; }
-  .transcript { margin-top: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.5; border-radius: 14px; }
+  .transcript { margin-top: 0; padding: 12px 14px; font-size: 14px; line-height: 1.5; border-radius: 14px; }
   .t-status { margin-bottom: 6px; }
   .t-skip { display: none; }
   /* The waveform only matters while it listens; after that the room goes to the words. */
   .anatomy-body:not([data-step='1']):not([data-step='2']) .tape { display: none; }
-  .anatomy-body:not([data-step='1']):not([data-step='2']) .transcript { margin-top: 0; }
   .stage-now { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: 12px; }
   .lab { font-size: 11px; padding: 3px 8px; }
   .now-n { display: none; }
-  /* A window onto the transcript; the script scrolls it to the words in play. */
-  .t-text { max-height: clamp(132px, 27svh, 240px); overflow: hidden; mask: linear-gradient(transparent, #000 14px, #000 calc(100% - 22px), transparent); }
-  [data-step='1'] .t-text { max-height: 96px; }
-  [data-step='4'] .t-text { max-height: min(150px, 20svh); }
-  .card { padding: 10px 14px 4px; border-radius: 16px; }
-  .card-top { display: none; }
-  .field { padding: 8px 0; border: 0; }
-  .field:not([data-state=now]) { display: none; }
-  .anatomy-body[data-step='1'] #f-name, .anatomy-body[data-step='2'] #f-name { display: block; }
-  .anatomy-body[data-step='4'] #f-cats, .anatomy-body[data-step='4'] #f-mood { display: block; }
-  .steps { padding-block: 8vh 36vh; position: relative; z-index: 1; }
-  .step { min-height: 58vh; justify-content: flex-start; padding-top: 0; }
+  /* The stage keeps one height for all seven steps. The transcript is a window that takes whatever the card leaves; the script scrolls it to the words in play. */
+  .stage { height: min(440px, 58svh); display: flex; flex-direction: column; }
+  .stage-nav { flex: none; }
+  .stage-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+  .source { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .tape { flex: none; }
+  .transcript { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .t-text { flex: 1 1 0; min-height: 0; overflow: hidden; mask: linear-gradient(transparent, #000 14px, #000 calc(100% - 22px), transparent); }
+  [data-step='1'] .t-text { min-height: 0; }
+  /* The card builds up like on desktop: finished fields stay as one compact line, the field in play shows in full, the rest wait. */
+  .stage-grid > * { min-width: 0; }
+  .card { flex: none; align-self: stretch; padding: 8px 14px 6px; border-radius: 16px; }
+  .anatomy-body[data-step='1'] .card, .anatomy-body[data-step='2'] .card { display: none; }
+  .card-top { display: none; padding-bottom: 6px; }
+  .anatomy-body[data-step='7'] .card-top { display: flex; }
+  .card-top > span:nth-child(2) { min-width: 0; }
+  .anatomy-body[data-step='7'] .source { display: none; }
+  .anatomy-body[data-step='7'] .stage-grid { justify-content: center; }
+  .field { padding: 6px 0; border-bottom: 1px solid #efe8db; }
+  .field:last-child { border-bottom: 0; }
+  .field[data-state=todo] { display: none; }
+  .field[data-state=done] .f-label, .field[data-state=done] .verified { display: none; }
+  .field[data-state=done] .f-title { font-size: 15px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .field[data-state=done] .f-quote { font-size: 14px; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .field[data-state=done] .labs { flex-wrap: nowrap; overflow: hidden; mask: linear-gradient(90deg, #000 calc(100% - 24px), transparent); }
+  .field[data-state=done] .lab { flex: none; }
+  .field[data-state=now] .labs { gap: 4px; }
+  .field[data-state=now] .lab { padding: 2px 7px; }
+  .field[data-state=now] .f-label { margin-bottom: 5px; }
+  .steps { padding-block: 4vh 36vh; position: relative; z-index: 1; }
+  .step { min-height: 250px; justify-content: flex-start; padding-top: 0; }
   .step h3 { font-size: 26px; }
   .anatomy-foot { grid-template-columns: 1fr; gap: 16px; }
 }
 @media (max-width: 1100px) and (max-height: 720px) {
-  .t-text { max-height: clamp(120px, 23svh, 200px); }
-  [data-step='4'] .t-text { max-height: 96px; }
-  .anatomy-body[data-step='2'] .tape { display: none; }
-  .anatomy-body[data-step='2'] .transcript { margin-top: 0; }
+  /* No room for the card header at step 7 on short screens. */
+  .anatomy-body[data-step='7'] .card-top { display: none; }
   .step p:last-child { font-size: 15px; margin-top: 10px; }
   .step h3 { font-size: 24px; }
 }
