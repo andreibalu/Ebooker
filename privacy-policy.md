@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: October 12, 2026_
+_Last updated: October 17, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) with LibriVox/Internet Archive (free-book browsing, streaming, and downloads), and — only if you connect one — with your own Audiobookshelf server. Unpaged never receives your name, email, or payment details. Unpaged is available for iPhone and Android. Most of this policy describes the iPhone app; [Unpaged for Android](#unpaged-for-android) explains where the Android app differs.
 
@@ -88,6 +88,10 @@ Network requests are made only:
 - To Apple, once per language, when iOS downloads its on-device speech-recognition model the first time AI transcription runs (no audio or content is sent)
 
 All requests use HTTPS, except that an Audiobookshelf server may be reached over plain HTTP if that is the address you enter (common for servers on a home network or a VPN such as Tailscale). If you enter a plain HTTP address for a server on the public internet, Unpaged warns you before signing in that your login and listening activity would be sent unencrypted. No analytics, ad networks, crash reporting SDKs, or third-party tracking are bundled in the iPhone app.
+
+## The Unpaged website
+
+The website (the marketing pages and these documents) uses no cookies, analytics or geolocation. To show the current sky behind its header, your browser sends one request to [Open-Meteo](https://open-meteo.com) with an approximate location: coordinates for a city in your browser's time zone, not your actual position. The request carries no identifier and no referring page. The weather that comes back is kept only in your browser's session storage for up to 30 minutes and is gone when you close the tab. If the request fails, the sky follows your device's clock instead. Open-Meteo's handling of requests is covered by its own [terms and privacy policy](https://open-meteo.com/en/terms).
 
 ## Unpaged for Android
 

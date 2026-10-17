@@ -46,6 +46,7 @@ for (const entry of fs.readdirSync(out)) fs.rmSync(path.join(out, entry), { recu
 fs.cpSync(path.join(root, 'public'), out, { recursive: true });
 fs.cpSync(path.join(root, 'src/style.css'), path.join(out, 'style.css'));
 fs.cpSync(path.join(root, 'src/app.mjs'), path.join(out, 'app.mjs'));
+for (const file of ['sky.css', 'sky.mjs']) fs.cpSync(path.join(root, 'src', file), path.join(out, file));
 const written = [];
 const write = (rel, html) => {
   const file = path.join(out, rel);
@@ -61,6 +62,11 @@ fs.writeFileSync(path.join(out, 'img/favicon.svg'), logoMark('').replace(' class
 const arrow = `<svg class="i-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>`;
 const sparkle = `<svg class="i-sparkle" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5c.5 4.6 2.9 7 7.5 7.5-4.6.5-7 2.9-7.5 7.5-.5-4.6-2.9-7-7.5-7.5 4.6-.5 7-2.9 7.5-7.5Z"/><path d="M19 15.5c.2 1.8 1.1 2.8 3 3-1.9.2-2.8 1.1-3 3-.2-1.9-1.2-2.8-3-3 1.8-.2 2.8-1.2 3-3Z"/></svg>`;
 const bookmarkGlyph = `<svg class="i-bookmark" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v18l-5-4.2L7 21Z"/></svg>`;
+// The live sky (src/sky.css, src/sky.mjs) sits behind the header and the first section. `strip` is the short header-only band.
+const sky = (strip = false) => `<div class="sky${strip ? ' sky-strip' : ''}" aria-hidden="true"><div class="sky-stars"></div><div class="sky-sun"></div><div class="sky-moon"></div><canvas class="sky-canvas"></canvas><div class="sky-fog"></div><div class="sky-flash"></div><i class="sky-end"></i></div>`;
+// Picks the daypart and weather before first paint, so dark skies never flash light text: a QA override,
+// else this session's last sky (under 30 minutes old), else the clock. sky.mjs refines it.
+const skyBoot = `<script>try{const r=document.documentElement,q=new URLSearchParams(location.search),s=JSON.parse(sessionStorage.getItem('unpaged-sky-state')||'null'),d=q.get('daypart'),w=q.get('sky'),f=s&&w!=='offline'&&Date.now()-s.at<18e5,n=new Date(),m=n.getHours()*60+n.getMinutes();r.dataset.daypart=/^(dawn|day|dusk|night)$/.test(d)?d:f?s.daypart:m<345||m>=1170?'night':m<435?'dawn':m<1080?'day':'dusk';r.dataset.weather=/^(clear|cloudy|fog|rain|snow|storm)$/.test(w)?w:f?s.weather:'clear'}catch{}</script>`;
 const check = `<svg class="i-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.2 4.2L19 7"/></svg>`;
 const phone = (screen, alt, { cls = '', eager = false, hidden = false } = {}) => `<div class="phone ${cls}"${hidden ? ' aria-hidden="true"' : ''}><img src="${asset(`screens/${screen}.webp`)}" width="${W}" height="${H}" alt="${e(alt)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></div>`;
 const head = (eyebrow, heading, id, text = '', cls = '') => `<div class="section-head ${cls}"><p class="eyebrow">${e(eyebrow)}</p><h2 id="${id}">${rich(heading)}</h2>${text ? `<p class="lede">${e(text)}</p>` : ''}</div>`;
@@ -91,15 +97,16 @@ ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <meta name="apple-itunes-app" content="app-id=${config.appId}">
 <link rel="icon" href="${asset('img/favicon.svg')}" type="image/svg+xml"><link rel="apple-touch-icon" href="${asset('img/apple-touch-icon.png')}">
 <link rel="preload" href="${asset('fonts/newsreader.woff2')}" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="${asset('style.css')}">
+<link rel="stylesheet" href="${asset('style.css')}"><link rel="stylesheet" href="${asset('sky.css')}">
+${skyBoot}
 <script>document.documentElement.classList.add('js');try{if(localStorage.getItem('unpaged-reduce-motion')==='1')document.documentElement.classList.add('reduce-motion')}catch{}</script>
 ${type === 'home' ? `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'MobileApplication', name: 'Unpaged', operatingSystem: 'iOS 18 or later', applicationCategory: 'MultimediaApplication', url, downloadUrl: config.appStoreUrl, offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, author: { '@type': 'Person', name: 'Andrei Baluta' } })}</script>` : ''}
 </head><body data-page="${type}">
 <a class="skip-link" href="#main">${e(t.skip)}</a>
 <header class="header"><div class="wrap header-inner">${wordmark}<nav aria-label="${e(t.primaryNav)}">${nav.map(([label, href], i) => `<a href="${href}"${type === 'plus' && i === 3 ? ' aria-current="page"' : ''}>${e(label)}</a>`).join('')}</nav>${pill(t.getApp, 'pill-small')}</div></header>
-<main id="main" tabindex="-1">${body}</main>
+<main id="main" tabindex="-1">${type === 'doc' || type === '404' ? sky(true) : ''}${body}</main>
 <footer class="footer"><div class="wrap footer-inner">${wordmark}<p>${e(site.footer.credit)}</p><nav aria-label="${e(t.legalNav)}">${site.footer.links.map(([label, slug]) => `<a href="${base}${slug}/">${e(label)}</a>`).join('')}</nav>${languages}<button type="button" class="motion-toggle" data-motion-toggle aria-pressed="false">${e(t.reduceMotion)}</button></div></footer>
-<script type="module" src="${asset('app.mjs')}"></script>
+<script type="module" src="${asset('app.mjs')}"></script><script type="module" src="${asset('sky.mjs')}"></script>
 </body></html>`;
 }
 
@@ -110,7 +117,7 @@ function homePage(site, code) {
 
   const h = site.hero;
   const hero = `
-<section class="hero" aria-labelledby="hero-title"><div class="wrap hero-grid">
+<section class="hero" aria-labelledby="hero-title">${sky()}<div class="wrap hero-grid">
   <div class="hero-copy">
     <p class="eyebrow">${e(h.eyebrow)}</p>
     <h1 id="hero-title">${h.lines.map(l => `<span class="line">${rich(l)}</span>`).join('')}</h1>
@@ -251,7 +258,7 @@ function plusPage(site, code) {
   const t = site.ui, pp = site.plusPage, r = site.anatomy.result;
   const label = id => r.categories.concat(r.moods).find(([k]) => k === id)[1];
   return `
-<section class="plus-hero"><div class="wrap plus-hero-grid">
+<section class="plus-hero">${sky()}<div class="wrap plus-hero-grid">
   <div><a class="text-link back" href="${base}${prefixOf(code)}">← ${e(t.back)}</a><p class="eyebrow">${e(pp.eyebrow)}</p><h1>${rich(pp.heading)}</h1><p class="lede">${e(pp.intro)}</p><div class="actions">${badgeFor(site)()}</div></div>
   <div class="plus-art">${phone('recap', site.habits.items[1].alt, { eager: true })}<div class="moment-chip chip-static" aria-hidden="true"><span class="chip-icon">${bookmarkGlyph}</span><span class="chip-text"><b>${e(r.name)}</b><span>${[r.picked[0], r.picked[2], r.mood].map(label).join(' · ')}</span></span><span class="chip-ai">${sparkle}</span></div></div>
 </div></section>
