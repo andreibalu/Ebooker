@@ -31,6 +31,22 @@
   --ease: cubic-bezier(.22, .7, .1, 1);
   --spring: cubic-bezier(.34, 1.4, .5, 1);
   --t-h2: clamp(40px, 5vw, 72px);
+  --settle: linear(0, 0.038, 0.131, 0.253, 0.385, 0.514, 0.631, 0.733, 0.817, 0.885, 0.936, 0.974, 1, 1.017, 1.027, 1.031, 1.031, 1.03, 1.026, 1.022, 1.018, 1.014, 1.011, 1.007, 1.005, 1.003, 1.002, 1.001, 1);
+
+  /* Light. The sky layer (sky.mjs) may set --sun-angle, --light-warmth and --light-strength on <html>;
+     everything here falls back to a warm late-morning light without it. --sun is read like a gradient
+     angle: light enters from the gradient's start side, so highlights sit there and shadows fall
+     toward its end (135deg: lit from the top left, shadows to the bottom right). */
+  --sun: var(--sun-angle, 135deg);
+  --warmth: var(--light-warmth, .6);
+  --strength: var(--light-strength, 1);
+  --sun-x: sin(var(--sun));
+  --sun-y: calc(-1 * cos(var(--sun)));
+  --glow: color-mix(in oklab, #ffad42 calc(var(--warmth) * 100%), #fff4de);
+  --glow-deep: color-mix(in oklab, #e8931c calc(var(--warmth) * 100%), #ffd9a0);
+  /* Paper grain and a finer light noise for navy, as inline feTurbulence tiles. */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.33 0 0 0 0 0.23 0 0 0 0 0.12 0.17 0 0 0 -0.055'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 0.96 0 0 0 0 0.9 0.09 0 0 0 -0.035'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -95,10 +111,37 @@ a:hover > .i-arrow { translate: 3px 0; }
 .i-bookmark { width: 1em; height: 1em; fill: currentColor; }
 .i-check { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
-/* ---------------------------------------------------------------- phone */
-.phone { position: relative; width: 280px; aspect-ratio: 720 / 1564; padding: 9px; border-radius: 50px; background: linear-gradient(145deg, #2b3947, #0d1823 40%, #1d2a37); box-shadow: inset 0 0 0 1.5px #3c4b5a, 0 40px 60px -30px #12223170, 0 12px 24px -12px #1222314d; }
-.phone img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 41px; background: var(--paper); }
-.phone::after { content: ''; position: absolute; top: 19px; left: 50%; width: 31%; height: 25px; translate: -50% 0; border-radius: 20px; background: #05090d; }
+/* ---------------------------------------------------------------- phone
+   .phone is the layout box and sits on the "ground": its ::before is the light pool on the
+   backdrop, its ::after the contact shadow. .device is the hardware and takes the tilt from
+   app.mjs: a machined edge (the border), a black bezel, the screen, then .glass on top with
+   the reflection, the pointer highlight (::before) and the specular sweep (::after). */
+.phone { position: relative; width: 280px; aspect-ratio: 720 / 1564; isolation: isolate; container-type: inline-size; --pool: .5; --shade: #07111b; --shade-a: .5; }
+.phone::before { content: ''; position: absolute; z-index: -1; inset: -16% -48%; pointer-events: none; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--pool-c, var(--glow)) 70%, transparent), color-mix(in srgb, var(--pool-c, var(--glow)) 22%, transparent) 45%, transparent); opacity: calc(var(--pool) * var(--strength)); translate: calc(var(--sun-x) * -12%) calc(var(--sun-y) * -6%); }
+.phone::after { content: ''; position: absolute; z-index: -1; inset: 7% 6% 1.5%; border-radius: 44px; background: var(--shade); filter: blur(20px); opacity: calc(var(--shade-a) * (.45 + .55 * var(--strength))); translate: calc(var(--sun-x) * 18px - var(--hx, 0) * 8px) calc(var(--sun-y) * 20px + 14px - var(--hy, 0) * 6px); }
+.device { position: relative; height: 100%; padding: 7.5px; border: 2.5px solid transparent; border-radius: 17.9cqi; transform-origin: 50% 55%;
+  background: linear-gradient(#06090d, #06090d) padding-box, linear-gradient(var(--sun), #eef1f4, #8794a2 8%, #2e3c4b 22%, #111c28 46%, #1b2836 68%, #6b7a8a 88%, #d3dae1) border-box;
+  box-shadow: inset 0 0 0 1px #ffffff17, inset 0 0 0 2.5px #000, 0 0 0 .5px #00000059,
+    calc(var(--sun-x) * 1.5px) calc(var(--sun-y) * 1.5px + 1px) 2px -.5px #050b1259,
+    calc(var(--sun-x) * 8px) calc(var(--sun-y) * 10px + 6px) 18px -8px #050b1270; }
+.device img { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: calc(17.9cqi - 10px); background: var(--paper); }
+/* Side buttons: action, volume up and down on the left, the side button on the right. They stand 2.5px off the frame. */
+.device::before { content: ''; position: absolute; z-index: -1; left: -5px; right: -5px; top: 16%; height: 32%; pointer-events: none;
+  --key: linear-gradient(90deg, #3d4a58, #a7b2bd 55%, #46525f);
+  background: var(--key) left 0 top 0 / 2.5px 9% no-repeat, var(--key) left 0 top 30% / 2.5px 20% no-repeat, var(--key) left 0 top 62% / 2.5px 20% no-repeat, var(--key) right 0 top 36% / 2.5px 30% no-repeat; }
+/* The Dynamic Island: black glass with a faint top reflection and the camera lens on the right. */
+.device::after { content: ''; position: absolute; z-index: 1; top: 3.2%; left: 50%; width: 31%; aspect-ratio: 3.5; translate: -50% 0; border-radius: 99px;
+  background: radial-gradient(circle at 81% 50%, #3a5470 0, #16243380 1.4px, #070c12 2.6px, transparent 4px), radial-gradient(circle at 81% 50%, #0d1620 0 4.5px, transparent 5px), linear-gradient(#ffffff14, #fff0 40%, #fff0 70%, #ffffff08), #010204;
+  box-shadow: inset 0 0 0 .5px #ffffff1a, inset 0 1px 1px #ffffff0f, 0 0 0 .5px #0000006b; }
+.glass { position: absolute; z-index: 2; inset: 7.5px; border-radius: calc(17.9cqi - 10px); overflow: hidden; pointer-events: none;
+  background: linear-gradient(var(--sun), #ffffff24, #ffffff0b 20%, #fff0 36%, #fff0 74%, #ffffff09);
+  box-shadow: inset 0 0 0 1px #00000038, inset 0 0 16px #00000012; }
+.glass::before { content: ''; position: absolute; inset: -40%; background: radial-gradient(34% 24% at 50% 50%, #ffffff2e, #ffffff0d 55%, #fff0 75%); opacity: var(--hl, 0); translate: calc(var(--hx, 0) * 24%) calc(var(--hy, 0) * 20%); transition: opacity .6s var(--ease); }
+.glass::after { content: ''; position: absolute; inset: -30% -60%; background: linear-gradient(calc(var(--sun) - 30deg), #fff0 42%, #ffffff21 48.5%, #ffffff0a 51%, #fff0 57%); translate: -36% 0; opacity: calc(.4 + .6 * var(--strength)); }
+.phone.is-lit .glass::after { animation: sweep 12s var(--ease) var(--sweep-delay, 3s) infinite; }
+@keyframes sweep { 0% { translate: -36% 0; } 16%, 100% { translate: 36% 0; } }
+.phone.is-lit .device { animation: float 7s ease-in-out var(--phase, 0s) infinite alternate; }
+@keyframes float { from { translate: 0 0; } to { translate: 0 -6px; } }
 
 /* ---------------------------------------------------------------- hero */
 .hero { padding-top: clamp(24px, 4vw, 56px); padding-bottom: clamp(56px, 8vw, 112px); }
@@ -394,6 +437,66 @@ a:hover > .i-arrow { translate: 3px 0; }
 .lost h1 { font-size: clamp(56px, 8vw, 110px); }
 .lost .lede { margin: 20px auto 36px; }
 
+/* ---------------------------------------------------------------- light & texture
+   Warm, low light: pools behind the devices, light grazing the top edge of each section, a soft
+   glow on amber on navy, and a slow light sweep across the closing section. Grain is a background
+   layer, so it never sits on screenshots or text. */
+body { background-image: var(--grain); }
+/* Light pools reach past the phones; body's overflow propagates to the viewport, so clip here (clip keeps sticky working). */
+main { overflow-x: clip; }
+.moments, .playback, .plus-details, .library-art, .habit, .plan, .details-grid article, .facts li, .moment-chip { background-image: var(--grain); }
+.anatomy, .closing, .plan-plus, .stage { background-image: var(--grain-light); }
+.hero-art { background: var(--grain-light), radial-gradient(120% 90% at 70% 10%, var(--navy-2), var(--navy) 60%); }
+.plus-art { background: var(--grain-light), radial-gradient(120% 90% at 30% 0%, var(--navy-2), var(--navy) 60%); isolation: isolate; }
+
+/* Devices per backdrop: navy takes a stronger pool and a deeper shadow; warm surfaces cast warm shadows. */
+.hero-phone, .plus-art .phone { --pool: .5; --pool-c: var(--glow-deep); --shade: #01060b; --shade-a: .75; }
+.library-art .phone, .habit .phone, .moments-phone, .playback-art .phone { --shade: #4a3015; --shade-a: .42; --pool: .5; }
+.habit-1 .phone, .moments-phone, .playback-art .phone { --pool: .42; }
+.hero-phone { --depth: 36; --phase: -1.2s; --sweep-delay: 1.5s; }
+.lib-phone { --depth: 22; }
+.moments-phone { --depth: 30; --phase: -3s; }
+.habit-0 .phone { --depth: 14; --phase: -.6s; }
+.habit-1 .phone { --depth: 26; --phase: -4.2s; }
+.pb-a { --depth: 44; --phase: -2s; }
+.pb-b { --depth: 18; --phase: -5s; --sweep-delay: 4.5s; }
+.plus-art .phone { --depth: 30; --phase: -2.5s; --sweep-delay: 1.5s; }
+
+/* Window light on the navy panels, from the sun's side. */
+.hero-art::after, .plus-art::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: var(--strength);
+  mix-blend-mode: soft-light; background: radial-gradient(75% 60% at calc(50% - var(--sun-x) * 50%) calc(50% - var(--sun-y) * 56%), color-mix(in srgb, var(--glow) 34%, transparent), color-mix(in srgb, var(--glow) 12%, transparent) 50%, transparent 78%); }
+
+/* Light falling across the top edge of each light section: a bright catch on the border line
+   and a soft wash below it, both from the sun's side. */
+.library, .moments, .habits, .playback, .plus, .plus-details { position: relative; isolation: isolate; }
+.library::before, .moments::before, .habits::before, .playback::before, .plus::before, .plus-details::before { content: ''; position: absolute; z-index: -1; inset: 0 0 auto; height: min(560px, 80%); pointer-events: none; opacity: var(--strength); --edge: calc(50% - var(--sun-x) * 36%);
+  background: linear-gradient(90deg, transparent 5%, color-mix(in srgb, var(--glow) 75%, transparent) var(--edge), transparent 95%) top / 100% 1px no-repeat,
+    radial-gradient(60% 100% at var(--edge) 0, color-mix(in srgb, var(--glow) 11%, transparent), color-mix(in srgb, var(--glow) 3%, transparent) 55%, transparent 80%); }
+
+/* Amber that glows a little, where it sits on navy. */
+.anatomy h2 em, .closing h2 em { text-shadow: 0 0 .55em #e49a2138; }
+.stage-nav button[aria-current=step] { box-shadow: 0 0 0 4px #e49a211a, 0 0 18px #e49a214d; }
+.plan-plus .tag { box-shadow: 0 0 18px #e49a2147; }
+.ribbon-dot::after { content: ''; position: absolute; inset: -70%; border-radius: 50%; background: radial-gradient(closest-side, color-mix(in srgb, var(--glow) 34%, transparent), transparent); opacity: calc(.7 * var(--strength)); }
+.hero-art.is-lit .ribbon-dot::after { animation: breathe 6s ease-in-out infinite alternate; }
+@keyframes breathe { to { opacity: calc(.35 * var(--strength)); scale: .86; } }
+.closing-icon { box-shadow: 0 0 0 1px #ffffff14, 0 30px 60px -20px #000c, 0 0 90px -6px color-mix(in srgb, var(--glow-deep) 30%, transparent); }
+
+/* Paper stock: a lit top edge and a warm lift on the light cards. */
+.plan:not(.plan-plus), .details-grid article { box-shadow: inset 0 1px 0 #fffffff2, inset 0 0 0 1px var(--line), 0 1px 2px #5a3d1c0d, 0 22px 44px -32px #5a3d1c47; }
+.habit { box-shadow: inset 0 1px 0 #ffffff99, 0 1px 2px #5a3d1c0a, 0 26px 50px -36px #5a3d1c40; }
+.habit-1 { box-shadow: inset 0 1px 0 #fff, inset 0 0 0 1px var(--line), 0 1px 2px #5a3d1c0a, 0 26px 50px -36px #5a3d1c40; }
+.plan-plus { box-shadow: inset 0 1px 0 #ffffff14, 0 30px 50px -30px #12223180; }
+
+/* A slow band of light crossing the closing section. Its static state is the band at rest, left of centre. */
+.closing { isolation: isolate; }
+.closing::before { z-index: -1; opacity: calc(.4 + .6 * var(--strength)); background: radial-gradient(color-mix(in srgb, var(--glow-deep) 12%, transparent), transparent 60%); }
+.closing::after { content: ''; position: absolute; z-index: -1; inset: -10% -60%; pointer-events: none; translate: -12% 0; opacity: var(--strength);
+  mix-blend-mode: soft-light;
+  background: linear-gradient(calc(var(--sun) - 30deg), transparent 41%, color-mix(in srgb, var(--glow) 12%, transparent) 46.5%, color-mix(in srgb, var(--glow) 20%, transparent) 49%, color-mix(in srgb, var(--glow) 7%, transparent) 52.5%, transparent 58%); }
+.closing.is-lit::after { animation: drift 16s var(--ease) infinite alternate; }
+@keyframes drift { from { translate: -30% 0; } to { translate: 22% 0; } }
+
 /* ---------------------------------------------------------------- motion */
 .js .reveal { opacity: 0; translate: 0 28px; transition: opacity .8s var(--ease), translate .9s var(--ease); transition-delay: var(--d, 0s); }
 .js .reveal.is-in { opacity: 1; translate: 0 0; }
@@ -402,22 +505,37 @@ a:hover > .i-arrow { translate: 3px 0; }
 .js .hero .lede { animation-delay: .18s; } .js .hero .actions { animation-delay: .26s; } .js .hero .facts { animation-delay: .34s; }
 .js .hero-art .ribbon-body { animation: drop 1.1s var(--ease) both .15s; }
 .js .hero-art .ribbon-dot { animation: dot-in .7s var(--spring) both .95s; }
-.js .hero-phone { animation: phone-in 1.1s var(--ease) both .2s; }
+.js .hero-phone { animation: phone-in 1.6s var(--settle) both .2s; }
+.js .hero-phone::before { animation: bloom 2.2s var(--ease) both .1s; }
+.js .hero-phone::after { animation: land 1.6s var(--ease) both .2s; }
 .js .hero .moment-chip { animation: chip-in .8s var(--spring) both 1.2s; }
 @keyframes rise { from { opacity: 0; translate: 0 22px; } }
 @keyframes drop { from { clip-path: polygon(0 0, 100% 0, 100% 0, 50% 0, 0 0); } }
 @keyframes dot-in { from { opacity: 0; scale: .2; } }
-@keyframes phone-in { from { opacity: 0; translate: 22% 14%; rotate: 8deg; } }
+/* The hero phone swings up out of the panel and lands: it rights itself in 3D as its shadow
+   tightens beneath it and the light pool comes up behind it. */
+@keyframes phone-in { from { opacity: 0; translate: 26% 26%; rotate: 9deg; transform: perspective(1400px) rotateX(32deg) rotateY(-16deg) scale(.92); } 35% { opacity: 1; } }
+@keyframes bloom { from { opacity: 0; scale: .55; } }
+@keyframes land { from { opacity: 0; scale: .8 .6; } }
+/* Phones further down settle into place as their section reveals: they tip up from lying back, on a light spring. */
+.js .reveal .phone { transition: transform 1.5s var(--settle) var(--pd, .12s); }
+.js .reveal .lib-phone { transition: opacity .45s var(--ease), translate .6s var(--ease), scale .6s var(--ease), transform 1.5s var(--settle) .12s; }
+.js .reveal:not(.is-in) .phone { transform: perspective(1400px) translateY(56px) rotateX(24deg) scale(.95); }
+.pb-b { --pd: .3s; }
 @keyframes chip-in { from { opacity: 0; translate: 0 18px; scale: .92; } }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
   .js .reveal { opacity: 1; translate: none; }
+  .js .reveal .phone { transform: none !important; }
+  .phone .device, .phone .glass::after, .ribbon-dot::after, .closing::after { animation: none !important; }
 }
 .reduce-motion { scroll-behavior: auto; }
 .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; transition-delay: 0s !important; }
 .reduce-motion .reveal { opacity: 1 !important; translate: none !important; }
+.reduce-motion .reveal .phone { transform: none !important; }
+.reduce-motion .phone .device, .reduce-motion .phone .glass::after, .reduce-motion .ribbon-dot::after, .reduce-motion .closing::after { animation: none !important; }
 
 /* ---------------------------------------------------------------- responsive */
 @media (max-width: 1100px) {
