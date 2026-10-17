@@ -31,7 +31,7 @@ a root `404.html` that swaps in the visitor's locale by path prefix, and
 ## Design rules
 
 - Colors follow the app: cream `#f7f3ed`, paper `#fffcf7`, sand `#efe8dc`, ink `#15202b`,
-  amber `#cc8632` / `#e49a21` (text `#9a5c16`), navy `#122231` for the closing section.
+  amber `#cc8632` / `#e49a21` (text `#8a5212`, darker than the app so small amber text passes AA on cream and the amber wash), navy `#122231` for the closing section.
 - Type: self-hosted Newsreader (OFL) for display, the system sans for text.
 - Imagery is real app screenshots only. No invented testimonials, ratings or usage numbers.
 - The moment anatomy shows how on-device Apple Intelligence fills each moment field.
