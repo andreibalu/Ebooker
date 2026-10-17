@@ -1,0 +1,202 @@
+/* Live sky: the visitor's own weather and time of day behind the header and the hero, like a window
+   over the reader's shoulder. sky.mjs fills in the details; this file alone already draws a calm sky.
+
+   Published on <html> for any lighting that wants to follow the sky:
+     data-daypart     dawn | day | dusk | night
+     data-weather     clear | cloudy | fog | rain | snow | storm
+     --sun-angle      the CSS gradient angle light travels along (135deg = light from the top left)
+     --light-warmth   0 (cool moonlight) to 1 (low amber sun)
+     --light-strength 0 (night, storm) to 1 (clear day)
+   The head script sets the two attributes from the clock (or the session's last sky) before first paint. */
+
+@property --sun-angle { syntax: '<angle>'; inherits: true; initial-value: 135deg; }
+@property --light-warmth { syntax: '<number>'; inherits: true; initial-value: .6; }
+@property --light-strength { syntax: '<number>'; inherits: true; initial-value: 1; }
+@property --sky-top { syntax: '<color>'; inherits: false; initial-value: #b4cde0; }
+@property --sky-mid { syntax: '<color>'; inherits: false; initial-value: #dfe8ec; }
+@property --sky-low { syntax: '<color>'; inherits: false; initial-value: #f5efe4; }
+@property --sky-glow { syntax: '<color>'; inherits: false; initial-value: #fff6dc; }
+
+:root {
+  --sun-angle: 135deg;
+  --light-warmth: clamp(0, calc(var(--dp-warmth) + var(--wx-warmth)), 1);
+  --light-strength: calc(var(--dp-strength) * var(--wx-strength));
+  --dp-warmth: .6; --dp-strength: 1; --wx-warmth: 0; --wx-strength: 1;
+
+  /* Day is the default, so a page without JS shows a quiet daytime sky. */
+  --dp-top: #b4cde0; --dp-mid: #dfe8ec; --dp-low: #f5efe4; --dp-glow: #fff6dc;
+  --tint-cloudy: #cfd2d3; --tint-fog: #d9d8d5; --tint-rain: #aeb7be; --tint-snow: #cdd5dc; --tint-storm: #36404b;
+  --wx-tint: var(--dp-mid); --wx-amt: 0%; --glow-amt: 100%;
+  --sky-header: 76px;
+  --sky-fade: 56px;
+}
+@media (max-width: 720px) { :root { --sky-header: 64px; } }
+
+html[data-daypart=day] { --dp-warmth: .5; }
+html[data-daypart=dawn] {
+  --dp-warmth: .85; --dp-strength: .8;
+  --dp-top: #b2c0db; --dp-mid: #ead6d2; --dp-low: #f7dfc4; --dp-glow: #ffcf9c;
+  --tint-cloudy: #d2cccd; --tint-fog: #ddd6d2; --tint-rain: #b3b5bd; --tint-snow: #d3d6df; --tint-storm: #383d4c;
+}
+html[data-daypart=dusk] {
+  --dp-warmth: 1; --dp-strength: .65;
+  --dp-top: #162036; --dp-mid: #302f4c; --dp-low: #4b3c58; --dp-glow: #ee9256;
+  --tint-cloudy: #2a2e3e; --tint-fog: #3e3f4d; --tint-rain: #232a38; --tint-snow: #343b4a; --tint-storm: #1c222c;
+}
+html[data-daypart=night] {
+  --dp-warmth: .2; --dp-strength: .3;
+  --dp-top: #0b1422; --dp-mid: #122135; --dp-low: #1b2a42; --dp-glow: #2e3b55;
+  --tint-cloudy: #182130; --tint-fog: #252c38; --tint-rain: #101823; --tint-snow: #1d2735; --tint-storm: #0a0f17;
+}
+html[data-weather=cloudy] { --wx-tint: var(--tint-cloudy); --wx-amt: 55%; --glow-amt: 50%; --wx-warmth: -.1; --wx-strength: .7; }
+html[data-weather=fog] { --wx-tint: var(--tint-fog); --wx-amt: 75%; --glow-amt: 35%; --wx-warmth: -.15; --wx-strength: .5; }
+html[data-weather=rain] { --wx-tint: var(--tint-rain); --wx-amt: 65%; --glow-amt: 20%; --wx-warmth: -.25; --wx-strength: .5; }
+html[data-weather=snow] { --wx-tint: var(--tint-snow); --wx-amt: 60%; --glow-amt: 35%; --wx-warmth: -.3; --wx-strength: .7; }
+html[data-weather=storm] { --wx-tint: var(--tint-storm); --wx-amt: 88%; --glow-amt: 0%; --wx-warmth: -.3; --wx-strength: .35; }
+
+/* ---------------------------------------------------------------- the sky */
+.hero, .plus-hero { position: relative; isolation: isolate; }
+body:is([data-page=doc], [data-page='404']) main { position: relative; isolation: isolate; }
+
+.sky {
+  --sky-top: color-mix(in oklab, var(--dp-top), var(--wx-tint) var(--wx-amt));
+  --sky-mid: color-mix(in oklab, var(--dp-mid), var(--wx-tint) var(--wx-amt));
+  --sky-low: color-mix(in oklab, var(--dp-low), var(--wx-tint) calc(var(--wx-amt) * .8));
+  --sky-glow: color-mix(in oklab, var(--dp-glow) var(--glow-amt), transparent);
+  --sun-x: calc(8% + var(--sun-p, .3) * 84%);
+  --sun-y: calc(84% - var(--sun-lift, .8) * 66%);
+  position: absolute; z-index: -1; left: 0; right: 0; top: calc(-1 * var(--sky-header)); bottom: 0;
+  overflow: hidden; pointer-events: none;
+  background:
+    radial-gradient(70% 55% at var(--sun-x) var(--sun-y), var(--sky-glow), transparent 72%),
+    linear-gradient(180deg, var(--sky-top), var(--sky-mid) 58%, var(--sky-low));
+  mask-image: linear-gradient(#000 calc(100% - var(--sky-fade)), transparent);
+  -webkit-mask-image: linear-gradient(#000 calc(100% - var(--sky-fade)), transparent);
+  transition: --sky-top 1.6s var(--ease), --sky-mid 1.6s var(--ease), --sky-low 1.6s var(--ease), --sky-glow 1.6s var(--ease);
+}
+/* Documents and the 404 get a strip behind the header only, so their titles stay on cream. */
+.sky-strip { bottom: auto; height: calc(var(--sky-header) + 32px); --sky-fade: 40px; }
+.sky > * { position: absolute; }
+.sky-canvas { inset: 0; width: 100%; height: 100%; }
+.sky-end { top: 78%; left: 0; width: 1px; height: 1px; }
+
+/* Stars: two hand-placed tiles of different sizes, so the pattern never visibly repeats. */
+.sky-stars, .sky-echo-stars { inset: 0 0 25% 0; opacity: 0; transition: opacity 1.6s var(--ease); mask-image: linear-gradient(#000 40%, transparent); -webkit-mask-image: linear-gradient(#000 40%, transparent); }
+.sky-stars::before, .sky-stars::after, .sky-echo-stars::before, .sky-echo-stars::after { content: ''; position: absolute; inset: 0; }
+.sky-stars::before, .sky-echo-stars::before {
+  background-image:
+    radial-gradient(circle at 7% 12%, #fff 0 .8px, transparent 1.4px), radial-gradient(circle at 23% 41%, #fff 0 .6px, transparent 1.2px),
+    radial-gradient(circle at 38% 8%, #fff8e8 0 1px, transparent 1.6px), radial-gradient(circle at 52% 63%, #fff 0 .6px, transparent 1.2px),
+    radial-gradient(circle at 66% 27%, #fff 0 .8px, transparent 1.4px), radial-gradient(circle at 81% 52%, #e8efff 0 .7px, transparent 1.3px),
+    radial-gradient(circle at 93% 18%, #fff 0 .6px, transparent 1.2px), radial-gradient(circle at 14% 78%, #fff 0 .7px, transparent 1.3px),
+    radial-gradient(circle at 74% 86%, #fff 0 .6px, transparent 1.2px);
+  background-size: 410px 330px;
+  opacity: .75;
+}
+.sky-stars::after, .sky-echo-stars::after {
+  background-image:
+    radial-gradient(circle at 18% 22%, #fff 0 1.1px, transparent 1.8px), radial-gradient(circle at 47% 71%, #fff 0 .7px, transparent 1.3px),
+    radial-gradient(circle at 61% 14%, #fff 0 .9px, transparent 1.5px), radial-gradient(circle at 88% 44%, #fff8e8 0 1px, transparent 1.7px),
+    radial-gradient(circle at 33% 55%, #fff 0 .6px, transparent 1.2px);
+  background-size: 587px 463px;
+  background-position: 120px 60px;
+  animation: twinkle 5.5s ease-in-out infinite alternate;
+}
+@keyframes twinkle { from { opacity: .25; } to { opacity: .95; } }
+
+.sky-sun {
+  left: var(--sun-x); top: var(--sun-y); width: clamp(52px, 4.6vw, 72px); aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(circle, #fffbf1 0 54%, #fff3d4 62%, #fff3d400 72%);
+  box-shadow: 0 0 60px 18px #fff4d466, 0 0 160px 70px #ffeccc33;
+  opacity: 0; transition: opacity 1.6s var(--ease), left 1.6s var(--ease), top 1.6s var(--ease);
+}
+html[data-daypart=dusk] .sky-sun, html[data-daypart=dawn] .sky-sun { background: radial-gradient(circle, #ffe2b8 0 54%, #ffc98a 62%, #ffc98a00 72%); box-shadow: 0 0 60px 20px #ffb46a55, 0 0 180px 80px #ff9f5a2e; }
+html:not([data-daypart=night]) .sky-sun { opacity: 1; }
+html:not([data-daypart=night])[data-weather=cloudy] .sky-sun { opacity: .5; }
+html:not([data-daypart=night]):is([data-weather=fog], [data-weather=snow]) .sky-sun { opacity: .32; }
+html:not([data-daypart=night])[data-weather=rain] .sky-sun { opacity: 0; }
+html:not([data-daypart=night])[data-weather=storm] .sky-sun { opacity: 0; }
+.sky-strip :is(.sky-sun, .sky-moon) { display: none; }
+
+/* The moon keeps to the band between the header and the hero art, clear of the headline. */
+.sky-moon {
+  left: calc(58% + var(--moon-q, .5) * 32%); top: calc(var(--sky-header) + 46px - var(--moon-lift, .5) * 16px);
+  width: clamp(26px, 2.3vw, 34px); aspect-ratio: 1; translate: -50% -50%; border-radius: 50%;
+  box-shadow: 0 0 34px 8px #dfe6f522, 0 0 90px 30px #c9d4ea14;
+  opacity: 0; transition: opacity 1.6s var(--ease);
+}
+.sky-moon svg { width: 100%; height: 100%; overflow: visible; }
+.sky-moon .moon-dark { fill: #f1ece2; opacity: .12; }
+.sky-moon .moon-lit { fill: #f1ece2; }
+html[data-daypart=night] .sky-moon { opacity: 1; }
+html[data-daypart=night][data-weather=cloudy] .sky-moon { opacity: .45; }
+html[data-daypart=night][data-weather=fog] .sky-moon { opacity: .25; }
+html[data-daypart=night]:is([data-weather=rain], [data-weather=snow], [data-weather=storm]) .sky-moon { opacity: 0; }
+
+html[data-daypart=night]:is([data-weather=clear], :not([data-weather])) :is(.sky-stars, .sky-echo-stars) { opacity: 1; }
+html[data-daypart=night][data-weather=cloudy] :is(.sky-stars, .sky-echo-stars) { opacity: .3; }
+html[data-daypart=dusk][data-weather=clear] .sky-stars { opacity: .3; }
+
+.sky-fog { inset: 0; opacity: 0; transition: opacity 1.6s var(--ease); --fog: #f4f0e9; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .sky-fog { --fog: #8c95a3; }
+.sky-fog::before, .sky-fog::after {
+  content: ''; position: absolute; left: -50%; width: 200%;
+  background: radial-gradient(28% 50% at 22% 50%, color-mix(in srgb, var(--fog) 70%, transparent), transparent 72%),
+              radial-gradient(24% 46% at 58% 46%, color-mix(in srgb, var(--fog) 55%, transparent), transparent 72%),
+              radial-gradient(30% 50% at 86% 54%, color-mix(in srgb, var(--fog) 65%, transparent), transparent 72%);
+  animation: fog-drift 80s linear infinite alternate;
+}
+.sky-fog::before { top: 18%; height: 46%; }
+.sky-fog::after { top: 48%; height: 44%; animation-duration: 110s; animation-direction: alternate-reverse; }
+@keyframes fog-drift { from { translate: -12% 0; } to { translate: 12% 0; } }
+html[data-weather=fog] .sky-fog { opacity: 1; }
+html:is([data-daypart=dusk], [data-daypart=night]):is([data-weather=fog]) .sky-fog { opacity: .3; }
+html[data-weather=rain] .sky-fog { opacity: .3; }
+html[data-weather=snow] .sky-fog { opacity: .25; }
+
+/* Lightning lights the clouds above the hero art, away from the headline. */
+.sky-flash { inset: 0; opacity: 0; background: radial-gradient(70% 60% at 72% 0%, #e9ecff, #c9d0f000 70%); }
+
+/* ---------------------------------------------------------------- text over the sky */
+/* Light skies keep dark text; the amber and the muted grey step darker to hold AA on blue-grey. */
+:is(.hero, .plus-hero) .eyebrow { color: #6b3c0e; }
+:is(.hero, .plus-hero) h1 em { color: #8a4f12; }
+:is(.hero, .plus-hero) .lede { color: #3b4148; }
+:is(.hero, .plus-hero) :is(.eyebrow, h1, h1 em, .lede, .text-link, .facts li) { transition: color .9s var(--ease), background .9s var(--ease), border-color .9s var(--ease); }
+
+/* Dusk, night and storm skies are dark: the copy turns to the app's light-on-navy palette. */
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) { color: #f6f1ea; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) .eyebrow { color: #f0c27a; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) h1 em { color: #f2b860; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) .lede { color: #dfe3e7; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) .text-link { border-color: #ffffff4d; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) .text-link:hover { border-color: var(--amber-bright); }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) :is(.hero, .plus-hero) .store-badge { outline: 1px solid #ffffff40; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .hero .facts li { background: #ffffff14; border-color: #ffffff2e; color: #eef0f2; }
+
+/* The header follows: light text over the dark sky, and dark glass once it scrolls while the sky is still behind it. */
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header:not(.is-scrolled):not(.is-dark),
+html.sky-behind-header:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header.is-scrolled { color: var(--on-navy); }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header:not(.is-scrolled):not(.is-dark) nav,
+html.sky-behind-header:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header.is-scrolled nav { color: #cfd6dd; }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header:not(.is-scrolled):not(.is-dark) nav a:hover,
+html.sky-behind-header:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header.is-scrolled nav a:hover { color: var(--on-navy); }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header:not(.is-scrolled):not(.is-dark) .pill,
+html.sky-behind-header:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header.is-scrolled .pill { background: var(--on-navy); color: var(--navy); }
+html:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header:not(.is-scrolled):not(.is-dark) .logo-mark,
+html.sky-behind-header:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header.is-scrolled .logo-mark { box-shadow: 0 0 0 1px #ffffff26; }
+html.sky-behind-header:is([data-daypart=dusk], [data-daypart=night], [data-weather=storm]) .header.is-scrolled { background: color-mix(in srgb, var(--navy) 72%, transparent); box-shadow: 0 1px 0 #ffffff14; }
+
+/* ---------------------------------------------------------------- the closing echo */
+/* The same weather, faintly, behind the closing section's navy: rain, snow, fog or the night's stars. */
+.sky-echo { position: absolute; inset: 0; pointer-events: none; mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent); -webkit-mask-image: linear-gradient(transparent, #000 25%, #000 75%, transparent); }
+.sky-echo > * { position: absolute; }
+.sky-echo canvas { inset: 0; width: 100%; height: 100%; opacity: .7; }
+.sky-echo-stars { inset: 0; mask-image: none; -webkit-mask-image: none; }
+.sky-echo .sky-flash { background: radial-gradient(60% 50% at 50% 0%, #e9ecff, #c9d0f000 70%); }
+
+@media (max-width: 720px) {
+  /* Phones stack the copy full width, so the sun keeps to the upper right beside the headline. */
+  .sky { --sun-x: calc(64% + var(--sun-p, .3) * 26%); --sun-y: calc(var(--sky-header) + 150px - var(--sun-lift, .8) * 80px); }
+  .sky-moon { left: calc(80% + var(--moon-q, .5) * 12%); top: calc(var(--sky-header) + 30px - var(--moon-lift, .5) * 8px); }
+}
