@@ -40,6 +40,72 @@ if ('IntersectionObserver' in window) {
   });
 }
 
+// ------------------------------------------------------------------ devices
+// One loop moves every phone. With a fine pointer the phone turns toward it on a spring and the
+// glass highlight follows; on touch, the scroll position leans the phone instead (no orientation
+// permission). Each phone also drifts by its --depth as it crosses the viewport. The loop runs only
+// while a visible phone is moving, and offscreen phones and lights pause their CSS loops via .is-lit.
+const fine = matchMedia('(hover: hover) and (pointer: fine)');
+const onScreen = new Set();
+const devices = [...document.querySelectorAll('.phone')].map(el => ({
+  el, body: el.querySelector('.device'),
+  depth: parseFloat(getComputedStyle(el).getPropertyValue('--depth')) || 0,
+  x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, held: false
+}));
+const lit = new IntersectionObserver(entries => {
+  for (const en of entries) {
+    en.target.classList.toggle('is-lit', en.isIntersecting);
+    const d = devices.find(x => x.el === en.target);
+    if (d) en.isIntersecting ? onScreen.add(d) : onScreen.delete(d);
+  }
+  kick();
+}, { rootMargin: '12% 0px' });
+document.querySelectorAll('.phone, .hero-art, .closing').forEach(el => lit.observe(el));
+
+const clamp = v => Math.max(-1, Math.min(1, v));
+let frame = 0, last = 0;
+function kick() { if (!frame && !reduced() && onScreen.size) { last = performance.now(); frame = requestAnimationFrame(tick); } }
+function tick(now) {
+  frame = 0;
+  if (reduced()) return;
+  const dt = Math.min(.034, (now - last) / 1000); last = now;
+  let moving = false;
+  for (const d of onScreen) {
+    const r = d.el.getBoundingClientRect();
+    // 0 when the phone is centred in the viewport, toward -1 as it sits below and 1 above.
+    const p = clamp((innerHeight / 2 - (r.top + r.height / 2)) / (innerHeight / 2 + r.height / 2));
+    if (!fine.matches) { d.tx = 0; d.ty = -p * .5; }
+    // A critically damped-ish spring (response about .45 s): a = k(target - x) - c·v.
+    for (const [k, v, t] of [['x', 'vx', 'tx'], ['y', 'vy', 'ty']]) {
+      d[v] += (190 * (d[t] - d[k]) - 22 * d[v]) * dt;
+      d[k] += d[v] * dt;
+      if (Math.abs(d[t] - d[k]) > .001 || Math.abs(d[v]) > .001) moving = true;
+    }
+    d.body.style.transform = `perspective(1200px) translate3d(0, ${(p * d.depth).toFixed(1)}px, 0) rotateX(${(-d.y * 8).toFixed(2)}deg) rotateY(${(d.x * 11).toFixed(2)}deg)`;
+    d.el.style.setProperty('--hx', d.x.toFixed(3));
+    d.el.style.setProperty('--hy', d.y.toFixed(3));
+    d.el.style.setProperty('--hl', fine.matches ? (d.held ? 1 : 0) : .6);
+  }
+  if (moving) frame = requestAnimationFrame(tick);
+}
+for (const d of devices) {
+  const area = d.el.closest('.hero-art, .library-art, .moments-art, .habit, .playback-art, .plus-art') || d.el;
+  area.addEventListener('pointermove', ev => {
+    if (!fine.matches || ev.pointerType !== 'mouse' && ev.pointerType !== 'pen') return;
+    const r = d.el.getBoundingClientRect();
+    d.tx = clamp((ev.clientX - r.left - r.width / 2) / (r.width * .9));
+    d.ty = clamp((ev.clientY - r.top - r.height / 2) / (r.height * .6));
+    d.held = true; kick();
+  });
+  area.addEventListener('pointerleave', () => { d.tx = d.ty = 0; d.held = false; kick(); });
+}
+addEventListener('scroll', kick, { passive: true });
+addEventListener('resize', kick, { passive: true });
+// Reduced motion leaves every phone at rest.
+const rest = () => { if (reduced()) devices.forEach(d => { d.body.style.transform = ''; ['--hx', '--hy', '--hl'].forEach(p => d.el.style.removeProperty(p)); }); else kick(); };
+toggle?.addEventListener('click', rest);
+systemReduce.addEventListener('change', rest);
+
 // ------------------------------------------------------------------ library tabs
 const tabs = [...document.querySelectorAll('[role=tab]')];
 const phones = [...document.querySelectorAll('.lib-phone')];
