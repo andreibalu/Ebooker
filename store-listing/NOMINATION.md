@@ -5,12 +5,14 @@ Not submitted. Submit it in App Store Connect → Apps → Unpaged → Featuring
 ## Fields
 
 - **Nomination name:** Unpaged: free iCloud Sync and smarter on-device moments
-- **Type:** App Enhancements
-- **Publish start date:** the release date (not set yet)
-- **Platforms:** iOS (iPhone only)
-- **Locales:** English (U.S.), German, French, Spanish (Spain), Italian, Portuguese (Brazil). The app UI is English; the App Store listing is localized.
-- **Related apps:** none
-- **In-app events:** none
+- **Type:** App Enhancements (can't be changed after submitting)
+- **Related apps:** Unpaged (6761081641) only (can't be changed after submitting)
+- **Publish date (start):** the release date (not set yet). No end date.
+- **Countries or regions:** every storefront where Unpaged is available. Launch in certain markets first: No.
+- **Platforms:** iOS (iPhone)
+- **Localizations:** English (U.S.), German, French, Spanish (Spain), Italian, Portuguese (Brazil). The app UI is English; the App Store listing is localized.
+- **In-app events:** none, and no new in-app event for this nomination
+- **Pre-order:** No
 - **Supplemental materials (up to 5 URLs):** https://andreibalu.github.io/Ebooker/ and the App Store page https://apps.apple.com/app/id6761081641
 
 ## Description

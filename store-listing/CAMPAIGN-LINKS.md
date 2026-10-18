@@ -4,11 +4,12 @@ Campaign links attribute first-time downloads to a channel in App Store Connect 
 
 ## The one missing value
 
-A link needs two tokens: the provider token `pt` (the same for every link from this developer account) and a campaign token `ct` (one per channel, up to 40 characters). The App Store Connect API doesn't expose the provider token or create campaign links ([developer forums](https://developer.apple.com/forums/thread/765763)), so read it once in the web UI:
+A link needs two tokens: the provider token `pt` (the same for every link from this developer account) and a campaign token `ct` (one per channel, up to 30 characters, no leading or trailing space). The App Store Connect API doesn't expose the provider token or create campaign links ([developer forums](https://developer.apple.com/forums/thread/765763)), so read it once in the web UI:
 
-1. App Store Connect → Apps → Unpaged → Analytics → Acquisition → Campaigns → **+**.
-2. Enter the campaign token `website` and generate the link.
-3. Copy the number after `pt=` and replace `PROVIDER_TOKEN` in the links below. Every other link works without generating it in the UI.
+1. App Store Connect → Apps → Unpaged → **Analytics** tab → **Acquisition** → **Campaigns**, then click **+** next to Campaigns.
+2. In the **Campaign** field, type `website`. The field's text becomes the campaign token.
+3. Copy the generated link. Copy the number after `pt=` and replace `PROVIDER_TOKEN` in the table below.
+4. Optionally repeat steps 1–3 with `audiobookshelf-directory`, `reddit` and `custom-page`, so each campaign is listed by name. A hand-built link with the same `pt` attributes downloads either way.
 
 ## Links
 
