@@ -39,7 +39,7 @@ enum MomentAnalysisParser {
 
         let note = AIResponseText.isPlaceholder(fields["note"] ?? "")
             ? ""
-            : AIResponseText.trimToCompleteSentences(fields["note"] ?? "")
+            : AIResponseText.capitalizingFirstLetter(AIResponseText.trimToCompleteSentences(fields["note"] ?? ""))
         let quote = AIResponseText.isPlaceholder(fields["quote"] ?? "")
             ? ""
             : verifiedQuote(fields["quote"] ?? "", transcript: transcript)

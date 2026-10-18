@@ -1,7 +1,7 @@
 import { expect, type Screen } from 'e2e';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { test, tapVisibleCenter } from './native-actions.js';
-import { bundle } from '../support/simulator.js';
+import { bundle, iosMajorVersion } from '../support/simulator.js';
 
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
 // The app reads transcript files straight from the host; keep them outside the repo.
@@ -17,11 +17,22 @@ function transcriptFile(name: string, text: string): string {
 async function smartSave(screen: Screen, timeout = 30_000) {
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
   await screen.getByTestId('book.play').tap();
-  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
-  await screen.getByTestId('player.playPause').tap();
   await expect(screen.getByText('Smart Save Moment').first()).toBeVisible();
+  // Smart save needs only a loaded track. On a loaded simulator the fixture audio sometimes
+  // never starts, so pause only when it is playing.
+  if (await screen.getByRole('button', 'Pause playback').count() > 0) {
+    await screen.getByTestId('player.playPause').tap();
+  }
   await screen.getByTestId('player.saveMoment').tap();
   await expect(screen.getByTestId('moment.name')).toBeVisible({ timeout });
+}
+
+/** The sheet opens at its half-height detent; the cast section sits below that fold. */
+async function expandSheet(screen: Screen) {
+  const grabber = await screen.getByRole('button', 'Sheet Grabber').boundingBox();
+  if (!grabber) throw new Error('Sheet grabber has no bounds');
+  const x = grabber.x + grabber.width / 2;
+  await screen.swipe({ from: { x, y: grabber.y + grabber.height / 2 }, to: { x, y: 80 } });
 }
 
 const letterPassage = 'Elizabeth turned the letter over twice before she opened it. Jane watched her from the window. '
@@ -34,11 +45,18 @@ test('smart save: a declined passage still gets a name and a calm notice', async
     '-e2e-moment-transcript-file', transcriptFile('letter', letterPassage)];
   await device.openApp(bundle, { relaunch: true, launchArguments: [...args, '-e2e-reset-fixture'] });
   await smartSave(screen);
-  await expect(screen.getByTestId('moment.name')).toHaveValue('Elizabeth in E2E Chapter 1');
+  // Lead character and current chapter. The chapter is wherever the stalled or playing fixture
+  // audio left the player.
+  await expect(screen.getByTestId('moment.name')).toHaveValue(/^Elizabeth in E2E Chapter \d$/);
+  const name = await screen.getByTestId('moment.name').inputValue();
   await expect(screen.getByTestId('moment.notice')).toContainText("Apple Intelligence couldn't summarize this passage");
   await expect(screen.getByText(/unsafe/).first()).toBeHidden();
-  await expect(screen.getByRole('button', 'Remove Elizabeth')).toBeVisible();
   await app.screenshot('smart-save-declined-fallback');
+  // The fallback fills the cast from the transcript, so the character filter still works.
+  await expandSheet(screen);
+  await screen.scrollUntilVisible(screen.getByRole('button', 'Remove Elizabeth'));
+  await expect(screen.getByRole('button', 'Remove Elizabeth')).toBeVisible();
+  await app.screenshot('smart-save-declined-fallback-cast');
   await expect(screen.getByTestId('moment.done').last()).toBeEnabled();
   await tapVisibleCenter(screen.getByTestId('moment.done').last());
   await expect(screen.getByTestId('moment.done')).toBeHidden();
@@ -46,8 +64,8 @@ test('smart save: a declined passage still gets a name and a calm notice', async
   await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
   await screen.getByText(/^\d+ moments?$/).first().tap();
-  await screen.scrollUntilVisible(screen.getByText('Elizabeth in E2E Chapter 1').first());
-  await expect(screen.getByText('Elizabeth in E2E Chapter 1').first()).toBeVisible();
+  await screen.scrollUntilVisible(screen.getByText(name).first());
+  await expect(screen.getByText(name).first()).toBeVisible();
 });
 
 // Opt in: needs Apple Intelligence on the host Mac (simulators use its model). Passages come from
@@ -57,6 +75,7 @@ test('smart save: the on-device model names fiction passages', {
   timeout: 1_800_000,
   skip: process.env.E2E_REAL_MODEL === '1' ? false : 'Set E2E_REAL_MODEL=1 to exercise the on-device model',
 }, async ({ app, device, screen }) => {
+  expect(iosMajorVersion(), 'the on-device model needs iOS 26 or later').toBeGreaterThanOrEqual(26);
   type Passage = { id: string; book: string; moment: string };
   const ids = (process.env.E2E_AI_IDS ?? '').split(',').filter(Boolean);
   const corpus: Passage[] = process.env.E2E_AI_CORPUS

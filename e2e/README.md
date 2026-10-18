@@ -68,7 +68,7 @@ DEBUG-only launch hooks:
 | Hook | Effect |
 | --- | --- |
 | `-e2e-fake-recap <text>` | Uses a deterministic recap provider and segment transcriber, bypassing AI/Plus/local-AI gates only for welcome-back recaps on iOS 26+. `welcomeBack.providerCalls` exposes generation calls. |
-| `-e2e-transcript-file <path>` | Replaces only the welcome-back segment transcriber with the file's text. The recap model and the Plus, local-AI and setting gates stay real. Use it to qualify the on-device model on a simulator without a speech asset. |
+| `-e2e-transcript-file <path>` | Replaces only the welcome-back segment transcriber with the file's text, and shows the card without Plus or the local-AI setting. The recap model and its availability stay real. Use it to qualify the on-device model on a simulator without a speech asset. |
 | `-e2e-moment-transcript-file <path>` | Smart save transcribes to the file's text instead of the audio, and turns on without Plus or the AI settings. The model and its availability stay real. |
 | `-e2e-moment-analysis declined` | Every smart-save analysis declines, on any iOS, for the fallback name and notice. Turns smart save on like the transcript hook. |
 | `-e2e-welcome-days <n>` | On initial fixture seeding, sets the listening book's last-played date n days ago and saved/current progress to 200 seconds. |
@@ -106,14 +106,16 @@ This covers all seven onboarding scenes, local playback/manual moment persistenc
 
 ## Optional on-device model check
 
-`smart-save.e2e.ts` has an opt-in test that runs smart save through the real model. Simulators use the host Mac's model, so Apple Intelligence must be on for the Mac and the runtime must be iOS 26 or later. The test fails, rather than skipping, when a passage gets the fallback name.
+`smart-save.e2e.ts` and `welcome-back.e2e.ts` each have an opt-in test that runs the real model: smart save names passages, the welcome-back card recaps them. Simulators use the host Mac's model, so Apple Intelligence must be on for the Mac and the runtime must be iOS 26 or later. Match the runtime to the host: on macOS 27, an iOS 26.5 simulator reports the model available but fails every request, so every passage falls back. iOS 27.0 runs the model. The smart-save test fails, rather than skipping, when a passage gets the fallback name. The recap test fails when the card hides (a failed recap) or the headline ends mid-phrase.
 
 ```sh
 E2E_REAL_MODEL=1 E2E_AI_CORPUS=<passages.json> E2E_AI_IDS=<id,id> E2E_AI_RESULTS=<results.json> \
   npm --prefix e2e test -- tests/smart-save.e2e.ts
+E2E_REAL_MODEL=1 E2E_AI_CORPUS=<passages.json> E2E_AI_IDS=<id,id> E2E_AI_RESULTS=<recaps.json> \
+  npm --prefix e2e test -- tests/welcome-back.e2e.ts --grep 'on-device model'
 ```
 
-`E2E_AI_CORPUS` is a JSON array of `{ "id", "book", "moment" }`. Without it the test uses one built-in passage. `E2E_AI_RESULTS` receives each name. Keep the corpus and results outside Git.
+`E2E_AI_CORPUS` is a JSON array of `{ "id", "book", "moment", "recap" }`: smart save reads `moment`, the recap test `recap`. Without it each test uses one built-in passage. `E2E_AI_RESULTS` receives each name or recap. Keep the corpus and results outside Git.
 
 ## Optional live catalog check
 

@@ -13,6 +13,16 @@ export const udid = (): string => {
 };
 
 export const bundle = 'andreibaludev.Pageless';
+
+/** The selected simulator's iOS major version, for features gated on the runtime. */
+export function iosMajorVersion(): number {
+  const inventory = JSON.parse(execFileSync('xcrun', ['simctl', 'list', 'devices', '-j'], { encoding: 'utf8', timeout: 60_000 })) as
+    { devices: Record<string, { udid: string }[]> };
+  const runtime = Object.entries(inventory.devices).find(([, devices]) => devices.some((d) => d.udid === udid()))?.[0];
+  const major = runtime?.match(/iOS-(\d+)/)?.[1];
+  if (!major) throw new Error(`No iOS runtime found for simulator ${udid()}`);
+  return Number(major);
+}
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 function simctl(...args: string[]): string {

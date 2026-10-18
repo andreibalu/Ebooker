@@ -213,6 +213,32 @@ struct FoundationModelGenerationTests {
         }
     }
 
+    /// A retry before the reported reset would be rate limited again, so a reset further out
+    /// than the wait the user tolerates fails at once (smart save then names the moment itself).
+    @Test func iOS27RateLimitHonorsTheResetDate() async throws {
+        guard #available(iOS 27, *) else { return }
+
+        let now = Date()
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: nil, now: now) == .milliseconds(700))
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: now.addingTimeInterval(1.5), now: now) == .milliseconds(1_600))
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: now.addingTimeInterval(-5), now: now) == .milliseconds(100))
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: now.addingTimeInterval(30), now: now) == nil)
+
+        var attempts = 0
+        do {
+            _ = try await FoundationModelGeneration.run(transcript: "excerpt") { _ -> Int in
+                attempts += 1
+                throw LanguageModelError.rateLimited(
+                    .init(resetDate: Date().addingTimeInterval(60), debugDescription: "test rate limit")
+                )
+            }
+            Issue.record("A distant reset should fail without waiting")
+        } catch FoundationModelGeneration.Failure.failed {
+            // Expected.
+        }
+        #expect(attempts == 1)
+    }
+
     @Test func iOS27UnsupportedGenerationFailsWithoutRetry() async throws {
         guard #available(iOS 27, *) else { return }
 

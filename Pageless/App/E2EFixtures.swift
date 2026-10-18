@@ -19,7 +19,8 @@ enum E2EFixtures {
 
     static var fakeRecapText: String? { argument("-e2e-fake-recap") }
     /// Replaces only the welcome-back transcriber, for qualifying the real model where the
-    /// simulator has no on-device speech asset.
+    /// simulator has no on-device speech asset. The card then shows without Plus or the AI
+    /// setting; the model stays real.
     static var transcriptText: String? {
         argument("-e2e-transcript-file").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
     }

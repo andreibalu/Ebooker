@@ -112,7 +112,9 @@ struct PlayerViewModelTests {
     // MARK: - applyAnalysis
 
     private let context = AIPassageContext(bookTitle: "Book", author: "Author", chapterTitle: "Chapter 3")
-    private let transcript = "Elizabeth opened the letter. Elizabeth read it twice."
+    /// "Elizabeth" recurs mid-sentence, so the name is found with or without the name tagger's
+    /// language asset (simulators often lack it).
+    private let transcript = "The letter came for Elizabeth at noon. Jane watched as Elizabeth read it twice."
 
     @Test func applyAnalysisPopulatesPendingFields() async {
         let analyzer = MockMomentAnalyzer()

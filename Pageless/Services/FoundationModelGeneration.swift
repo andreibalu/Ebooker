@@ -31,6 +31,20 @@ enum FoundationModelGeneration {
 
     private static let defaultRetryDelay = Duration.milliseconds(700)
 
+    /// The longest a rate-limited request waits before its one retry. The user is looking at a
+    /// spinner, and a fallback name is better than a long wait.
+    private static let maxRetryDelay: TimeInterval = 3
+
+    /// How long to wait before retrying a rate-limited request: until the reset the system
+    /// reports, plus a small margin. Nil when the reset is further out than `maxRetryDelay`,
+    /// because a retry before it would be rate limited again.
+    static func rateLimitDelay(resetDate: Date?, now: Date = .now) -> Duration? {
+        guard let resetDate else { return defaultRetryDelay }
+        let wait = max(resetDate.timeIntervalSince(now), 0)
+        guard wait <= maxRetryDelay else { return nil }
+        return .milliseconds(Int(((wait + 0.1) * 1000).rounded()))
+    }
+
     /// Sends `prompt(passage)` and parses the reply. A refusal reply counts as `.declined`,
     /// any other reply `parse` rejects as `.failed`. The first attempt may use a prewarmed
     /// session; a retry always starts a fresh one, because a failed session's context is polluted.
@@ -159,10 +173,7 @@ enum FoundationModelGeneration {
             case .contextSizeExceeded:
                 return .retryWithPassageTail
             case .rateLimited(let info):
-                // Wait for the reset the system reports, within reason.
-                guard let reset = info.resetDate else { return .retryAfterDelay(defaultRetryDelay) }
-                let seconds = min(max(reset.timeIntervalSinceNow, 0.7), 3)
-                return .retryAfterDelay(.milliseconds(Int(seconds * 1000)))
+                return rateLimitDelay(resetDate: info.resetDate).map { .retryAfterDelay($0) }
             case .guardrailViolation,
                  .refusal,
                  .unsupportedCapability,

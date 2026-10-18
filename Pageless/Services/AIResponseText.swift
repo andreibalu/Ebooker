@@ -90,25 +90,39 @@ nonisolated enum AIResponseText {
     }
 
     /// Strips quotes, markdown and trailing punctuation, and keeps at most `maxWords` words.
-    /// The model often overshoots a word count, so a cut can leave a dangling "and" or "at";
-    /// those trailing joiners go too.
+    /// The model often overshoots a word count. A plain cut ends mid-phrase ("Bingley's arrival
+    /// and Jane's", "Jane and Elizabeth near"), so an over-long title is cut just before the last
+    /// joiner that fits ("Bingley's arrival", "Jane and Elizabeth"). A joiner or article still
+    /// left at the end goes too.
     static func cleanTitle(_ raw: String, maxWords: Int = 7) -> String {
         let trimmed = raw.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(.init(charactersIn: "\"“”'‘’*_#")))
         guard !isPlaceholder(trimmed) else { return "" }
-        var words = trimmed.split(whereSeparator: \.isWhitespace).prefix(maxWords).map {
-            String($0).trimmingCharacters(in: CharacterSet(charactersIn: ".,;:—–-"))
+        let all = trimmed.split(whereSeparator: \.isWhitespace)
+            .map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: ".,;:—–-")) }
+            .filter { !$0.isEmpty }
+        var words = all
+        if all.count > maxWords {
+            let cut = (1...maxWords).last { phraseJoiners.contains(all[$0].lowercased()) } ?? maxWords
+            words = Array(all.prefix(cut))
         }
-        while words.count > 1, let last = words.last, last.isEmpty || danglingWords.contains(last.lowercased()) {
+        while words.count > 1, let last = words.last, danglingWords.contains(last.lowercased()) {
             words.removeLast()
         }
         return words.joined(separator: " ")
     }
 
-    private static let danglingWords: Set<String> = [
-        "a", "an", "the", "and", "or", "but", "of", "at", "in", "on", "to", "from", "for", "with",
-        "by", "about", "as", "into", "her", "his", "their", "its", "my", "our", "your", "while",
-        "after", "before", "&",
+    /// Words that open a new phrase, so a title cut just before one still reads whole.
+    private static let phraseJoiners: Set<String> = [
+        "and", "or", "but", "nor", "&", "with", "without", "near", "at", "in", "on", "to", "from",
+        "for", "of", "by", "about", "as", "into", "onto", "upon", "after", "before", "while", "during",
+        "under", "over", "through", "toward", "towards", "against", "between", "beside", "behind",
+        "among", "across", "beyond", "within", "than", "that", "which", "who", "where", "when",
     ]
+
+    /// Words a title can't end on.
+    private static let danglingWords: Set<String> = phraseJoiners.union([
+        "a", "an", "the", "her", "his", "their", "its", "my", "our", "your",
+    ])
 
     // MARK: - Refusals
 
@@ -125,6 +139,12 @@ nonisolated enum AIResponseText {
     }
 
     // MARK: - Prose repair
+
+    /// The model sometimes starts a sentence or label in lowercase, echoing a transcript that
+    /// opened mid-sentence ("the creator confronts the monster").
+    static func capitalizingFirstLetter(_ text: String) -> String {
+        text.prefix(1).uppercased() + text.dropFirst()
+    }
 
     /// The token cap can stop prose mid-sentence. Trims back to the last complete sentence, or
     /// ends with an ellipsis when no complete sentence is long enough to keep.

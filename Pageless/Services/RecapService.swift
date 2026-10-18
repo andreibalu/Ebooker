@@ -64,16 +64,16 @@ struct RecapService: RecapProviding {
     static func parse(_ reply: String) -> RecapGenerationResult? {
         guard !AIResponseText.isRefusal(reply) else { return nil }
         let fields = AIResponseText.labeledFields(in: reply, labels: ["Headline", "Recap"], overflowLabel: "Recap")
-        let recap = AIResponseText.trimToCompleteSentences(fields["recap"] ?? "")
+        let recap = AIResponseText.capitalizingFirstLetter(AIResponseText.trimToCompleteSentences(fields["recap"] ?? ""))
         guard !recap.isEmpty, !AIResponseText.isRefusal(recap) else { return nil }
         let headline = sanitizeHeadline(fields["headline"] ?? "")
         return RecapGenerationResult(recap: recap, progressHeadline: headline.isEmpty ? nil : headline)
     }
 
-    /// At most four words for a single-line UI label, starting with a capital: the headline
-    /// replaces a section title, and the model often writes it in lowercase.
+    /// A short label starting with a capital: the headline replaces a section title, and the
+    /// model often writes it in lowercase. The prompt asks for 2 to 4 words; one word of slack
+    /// keeps a slight overshoot ("Dusk at the river mouth") whole instead of cutting it short.
     static func sanitizeHeadline(_ raw: String) -> String {
-        let headline = AIResponseText.cleanTitle(raw, maxWords: 4)
-        return headline.prefix(1).uppercased() + headline.dropFirst()
+        AIResponseText.capitalizingFirstLetter(AIResponseText.cleanTitle(raw, maxWords: 5))
     }
 }

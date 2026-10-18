@@ -67,6 +67,12 @@ struct AIResponseTextTests {
         #expect(AIResponseText.cleanTitle("none") == "")
         // Seen on device: a 4-word cut of a longer headline ended on a joiner.
         #expect(AIResponseText.cleanTitle("Catherine and Heathcliff at the door", maxWords: 4) == "Catherine and Heathcliff")
+        // Seen on the real model: a plain cut stopped mid-phrase on a possessive or a preposition.
+        #expect(AIResponseText.cleanTitle("Bingley's arrival and Jane's reaction", maxWords: 4) == "Bingley's arrival")
+        #expect(AIResponseText.cleanTitle("Jane and Elizabeth near the window", maxWords: 4) == "Jane and Elizabeth")
+        #expect(AIResponseText.cleanTitle("dinner in the living room", maxWords: 4) == "dinner")
+        // A title within the limit stays whole.
+        #expect(AIResponseText.cleanTitle("Mina's vow to Van", maxWords: 4) == "Mina's vow to Van")
     }
 
     @Test func clippedProseTrimsBackToLastSentence() {
