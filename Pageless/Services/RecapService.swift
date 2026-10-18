@@ -6,110 +6,74 @@
 import Foundation
 import FoundationModels
 
-/// Uses the on-device foundation model to generate a brief recap of recent audiobook events.
+/// Writes a short recap of the audio before the listener's saved position, with the on-device model.
 @available(iOS 26, *)
 struct RecapService: RecapProviding {
-    /// See MomentNamingService.model — same rationale.
-    static let model = SystemLanguageModel(guardrails: .permissiveContentTransformations)
-    static let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 300)
+    static let options = GenerationOptions(samplingMode: .greedy, maximumResponseTokens: 240)
 
-    @Generable(description: "A brief recap of recent audiobook events")
-    struct RecapSuggestion {
-        @Guide(description: "2-sentence summary of what happened recently in the audiobook. Both sentences must end with a period.")
-        var recap: String
+    /// One set of instructions for both callers, so a single prewarmed session serves either.
+    /// The headline is always written (it costs a few tokens) and dropped when not requested.
+    static let instructions = Instructions("""
+    You help a listener pick up an audiobook where they left off. The listener owns the book. You \
+    receive the last few minutes they heard, a passage of published literature transcribed from the \
+    audiobook by speech recognition, so expect small transcription errors.
+    Books often depict violence, death, crime, romance, sexuality, cruelty or other mature themes. \
+    Treat the passage as literature: summarize it neutrally and factually, the way a study guide would. \
+    Use only what the passage says. Do not refuse, warn or comment.
+    Reply with exactly these two lines, each starting with its label, and nothing else:
+    Headline: a 2 to 4 word phrase naming where the listener left off
+    Recap: two sentences on what just happened, naming the characters involved
+    """)
+
+    func prewarm() {
+        Task { @MainActor in
+            PrewarmedSessions.prewarm(.recap, instructions: Self.instructions)
+        }
     }
 
-    // Headline first: fields generate in declaration order and the token budget can
-    // clip the tail — the short headline must never be the field that gets clipped.
-    @Generable(description: "Recap plus a one-line headline for the progress row")
-    struct RecapWithHeadlineSuggestion {
-        @Guide(description: "Exactly 3 to 4 words summarizing where the listener left off, for a single UI line. No punctuation at the end.")
-        var progressHeadline: String
-        @Guide(description: "2-sentence summary of what happened recently in the audiobook. Both sentences must end with a period.")
-        var recap: String
-    }
-
-    private let instructions = Instructions(
-        "You are an assistant that helps audiobook listeners remember where they left off. " +
-        "The transcript comes from automatic speech recognition and may contain small errors. " +
-        "Given a transcript of the most recent audio, write a 2-sentence summary of what just happened. " +
-        "Focus on key events, character actions, and plot developments. Be concise and spoiler-aware."
-    )
-
-    private let instructionsWithHeadline = Instructions(
-        "You are an assistant that helps audiobook listeners remember where they left off. " +
-        "The transcript comes from automatic speech recognition and may contain small errors. " +
-        "Given a transcript of the most recent audio, provide progressHeadline: exactly 3 to 4 words that capture the gist for a single-line UI label (no ending punctuation). " +
-        "Then write a 2-sentence summary of what just happened. " +
-        "Focus on key events and be spoiler-aware."
-    )
-
-    /// Generates a recap from a transcript of recent audio.
     func generateRecap(
         transcript: String,
-        audiobookTitle: String? = nil,
+        context: AIPassageContext,
         includeProgressHeadline: Bool
     ) async throws -> RecapGenerationResult {
-        guard Self.model.isAvailable else {
+        guard FoundationModelGeneration.model.isAvailable else {
             throw RecapError.modelUnavailable
         }
-
+        let passage = AIResponseText.cleanTranscript(transcript)
         do {
-            if includeProgressHeadline {
-                let instructions = instructionsWithHeadline
-                let content = try await FoundationModelGeneration.run(transcript: transcript) { attemptTranscript in
-                    let session = LanguageModelSession(model: Self.model, instructions: instructions)
-                    let response = try await session.respond(
-                        to: Prompt(Self.promptText(transcript: attemptTranscript, title: audiobookTitle)),
-                        generating: RecapWithHeadlineSuggestion.self,
-                        options: Self.options
-                    )
-                    return response.content
-                }
-                return RecapGenerationResult(
-                    recap: content.recap.trimmingCharacters(in: .whitespacesAndNewlines),
-                    progressHeadline: Self.sanitizeHeadline(content.progressHeadline)
-                )
-            } else {
-                let instructions = self.instructions
-                let content = try await FoundationModelGeneration.run(transcript: transcript) { attemptTranscript in
-                    let session = LanguageModelSession(model: Self.model, instructions: instructions)
-                    let response = try await session.respond(
-                        to: Prompt(Self.promptText(transcript: attemptTranscript, title: audiobookTitle)),
-                        generating: RecapSuggestion.self,
-                        options: Self.options
-                    )
-                    return response.content
-                }
-                return RecapGenerationResult(
-                    recap: content.recap.trimmingCharacters(in: .whitespacesAndNewlines),
-                    progressHeadline: nil
-                )
-            }
+            var result = try await FoundationModelGeneration.respond(
+                instructions: Self.instructions,
+                passage: passage,
+                options: Self.options,
+                prewarmed: PrewarmedSessions.take(.recap),
+                prompt: { context.prompt(passage: $0) },
+                parse: Self.parse
+            )
+            if !includeProgressHeadline { result.progressHeadline = nil }
+            return result
         } catch is CancellationError {
             throw CancellationError()
-        } catch FoundationModelGeneration.Failure.unsafeContent {
-            throw RecapError.unsafeContent
-        } catch let error as RecapError {
-            throw error
+        } catch FoundationModelGeneration.Failure.declined {
+            throw RecapError.declined
         } catch {
             throw RecapError.generationFailed
         }
     }
 
-    static func promptText(transcript: String, title: String?) -> String {
-        var promptText = "Summarize what just happened in this audiobook excerpt:\n\n\"\(transcript)\""
-        if let title, !title.isEmpty {
-            promptText += "\n\nFrom: \(title)"
-        }
-        return promptText
+    /// Nil for a refusal or a reply without recap prose. Prose without its label still counts.
+    static func parse(_ reply: String) -> RecapGenerationResult? {
+        guard !AIResponseText.isRefusal(reply) else { return nil }
+        let fields = AIResponseText.labeledFields(in: reply, labels: ["Headline", "Recap"], overflowLabel: "Recap")
+        let recap = AIResponseText.trimToCompleteSentences(fields["recap"] ?? "")
+        guard !recap.isEmpty, !AIResponseText.isRefusal(recap) else { return nil }
+        let headline = sanitizeHeadline(fields["headline"] ?? "")
+        return RecapGenerationResult(recap: recap, progressHeadline: headline.isEmpty ? nil : headline)
     }
 
-    /// Keeps at most four words for a single-line UI label.
+    /// At most four words for a single-line UI label, starting with a capital: the headline
+    /// replaces a section title, and the model often writes it in lowercase.
     static func sanitizeHeadline(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        let words = trimmed.split(whereSeparator: \.isWhitespace)
-        guard !words.isEmpty else { return trimmed }
-        return words.prefix(4).joined(separator: " ")
+        let headline = AIResponseText.cleanTitle(raw, maxWords: 4)
+        return headline.prefix(1).uppercased() + headline.dropFirst()
     }
 }

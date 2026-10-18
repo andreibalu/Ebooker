@@ -111,12 +111,16 @@ struct PlayerViewModelTests {
 
     // MARK: - applyAnalysis
 
+    private let context = AIPassageContext(bookTitle: "Book", author: "Author", chapterTitle: "Chapter 3")
+    private let transcript = "Elizabeth opened the letter. Elizabeth read it twice."
+
     @Test func applyAnalysisPopulatesPendingFields() async {
         let analyzer = MockMomentAnalyzer()
         let vm = makeViewModel(analyzer: analyzer)
 
-        await vm.applyAnalysis(transcript: "some transcript", audiobookTitle: "Book", savedTime: 42)
+        await vm.applyAnalysis(transcript: transcript, context: context, savedTime: 42)
 
+        #expect(analyzer.lastContext == context)
         #expect(vm.momentNameInput == "Test Moment")
         #expect(vm.momentNoteInput == "Test note")
         #expect(vm.pendingMomentAiGenerated == true)
@@ -125,31 +129,24 @@ struct PlayerViewModelTests {
         #expect(vm.pendingCharacters == ["Alice"])
         #expect(vm.pendingMood == .mysterious)
         #expect(vm.pendingMomentTime == 42)
-        #expect(vm.pendingSmartSaveUnsafeWarning == false)
+        #expect(vm.pendingSmartSaveNotice == nil)
     }
 
-    @Test func applyAnalysisSetsUnsafeWarningOnUnsafeContent() async {
-        let analyzer = MockMomentAnalyzer()
-        analyzer.errorToThrow = MomentNamingError.unsafeContent
-        let vm = makeViewModel(analyzer: analyzer)
+    /// The owner's bug: a declined passage opened the sheet as "Saved Moment" under a warning
+    /// that the audiobook was unsafe. Every failure now yields a fallback name and a calm notice.
+    @Test func applyAnalysisFallsBackToANamedDraftOnAnyFailure() async {
+        for error in [MomentNamingError.declined, .generationFailed, .modelUnavailable] {
+            let analyzer = MockMomentAnalyzer()
+            analyzer.errorToThrow = error
+            let vm = makeViewModel(analyzer: analyzer)
 
-        await vm.applyAnalysis(transcript: "some transcript", audiobookTitle: "Book", savedTime: 42)
+            await vm.applyAnalysis(transcript: transcript, context: context, savedTime: 42)
 
-        #expect(vm.pendingSmartSaveUnsafeWarning == true)
-        #expect(vm.pendingMomentTranscript == "some transcript")
-        #expect(vm.pendingMomentTime == 42)
-        #expect(vm.pendingMomentAiGenerated == false)
-    }
-
-    @Test func applyAnalysisClearsUnsafeWarningOnOtherErrors() async {
-        let analyzer = MockMomentAnalyzer()
-        analyzer.errorToThrow = MomentNamingError.generationFailed
-        let vm = makeViewModel(analyzer: analyzer)
-
-        await vm.applyAnalysis(transcript: "some transcript", audiobookTitle: "Book", savedTime: 42)
-
-        #expect(vm.pendingSmartSaveUnsafeWarning == false)
-        #expect(vm.pendingMomentTranscript == "some transcript")
-        #expect(vm.pendingMomentTime == 42)
+            #expect(vm.momentNameInput == "Elizabeth in Chapter 3")
+            #expect(vm.pendingSmartSaveNotice == .couldNotSummarize)
+            #expect(vm.pendingMomentTranscript == transcript)
+            #expect(vm.pendingMomentTime == 42)
+            #expect(vm.pendingMomentAiGenerated == false)
+        }
     }
 }

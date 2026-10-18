@@ -298,9 +298,9 @@ struct AudiobookDetailViewModelTests {
         #expect(transcription.transcribeCallCount == 0)
     }
 
-    @Test func produceRecapSurfacesUnsafeContentCopy() async {
+    @Test func produceRecapSurfacesDeclinedCopy() async {
         let recap = MockRecapService()
-        recap.errorToThrow = RecapError.unsafeContent
+        recap.errorToThrow = RecapError.declined
         let vm = AudiobookDetailViewModel(
             audiobook: makeAudiobook(),
             transcription: MockTranscriptionService(),
@@ -314,7 +314,7 @@ struct AudiobookDetailViewModelTests {
             anchorTrackIndex: 0, anchorTime: 1, modelContext: nil, onSuccessfulRecap: nil
         )
 
-        #expect(vm.recapError == "Apple Intelligence declined to summarize this passage.")
+        #expect(vm.recapError == RecapError.declined.errorDescription)
         #expect(vm.recapText == nil)
     }
 }

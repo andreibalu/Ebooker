@@ -16,25 +16,24 @@ struct MomentAnalysis: Sendable {
 
 enum MomentNamingError: LocalizedError, Equatable {
     case modelUnavailable
-    /// The on-device model declined the content (guardrail or refusal).
-    case unsafeContent
-    /// Generation failed after retry (transient model error, decoding failure, …).
+    /// The model refused the passage or tripped a guardrail, even after a retry on a shorter
+    /// passage. Smart save falls back to `MomentFallbackNamer`.
+    case declined
+    /// Generation failed after retry (transient model error, unreadable reply, …).
     case generationFailed
 
     var errorDescription: String? {
         switch self {
         case .modelUnavailable:
             "Apple Intelligence is not available."
-        case .unsafeContent:
-            "Apple Intelligence declined to analyze this passage."
-        case .generationFailed:
-            "Couldn't analyze this moment."
+        case .declined, .generationFailed:
+            "Apple Intelligence couldn't summarize this passage."
         }
     }
 }
 
 protocol MomentAnalyzing: Sendable {
-    func analyzeMoment(transcript: String, audiobookTitle: String?) async throws -> MomentAnalysis
+    func analyzeMoment(transcript: String, context: AIPassageContext) async throws -> MomentAnalysis
 
     /// Optional: load model resources ahead of the first `analyzeMoment` call.
     func prewarm()
@@ -48,7 +47,7 @@ extension MomentAnalyzing {
 /// `.modelUnavailable`; never invoked at runtime because `AppleIntelligenceCapability`
 /// reports the AI features as unsupported there.
 struct UnavailableMomentAnalyzer: MomentAnalyzing {
-    func analyzeMoment(transcript: String, audiobookTitle: String?) async throws -> MomentAnalysis {
+    func analyzeMoment(transcript: String, context: AIPassageContext) async throws -> MomentAnalysis {
         throw MomentNamingError.modelUnavailable
     }
 }

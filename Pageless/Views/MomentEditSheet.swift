@@ -20,7 +20,8 @@ struct MomentEditSheet: View {
     @Binding var characters: [String]
     @Binding var mood: MomentMood?
 
-    let warningMessage: String?
+    /// Why a smart-save draft has a fallback name. Informational, not an error.
+    let notice: String?
     let onSave: () -> Void
     let onCancel: () -> Void
 
@@ -38,7 +39,7 @@ struct MomentEditSheet: View {
         quoteLine: Binding<String?>,
         characters: Binding<[String]>,
         mood: Binding<MomentMood?>,
-        warningMessage: String? = nil,
+        notice: String? = nil,
         onSave: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -50,7 +51,7 @@ struct MomentEditSheet: View {
         self._quoteLine = quoteLine
         self._characters = characters
         self._mood = mood
-        self.warningMessage = warningMessage
+        self.notice = notice
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -58,18 +59,21 @@ struct MomentEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let warning = warningMessage {
+                if let notice {
                     Section {
-                        HStack(spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.orange)
-                            Text(warning)
-                                .font(.subheadline.weight(.medium))
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(systemName: "info.circle")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            Text(notice)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.vertical, 4)
+                        .padding(.vertical, 2)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("moment.notice")
                     }
                 }
 

@@ -69,6 +69,8 @@ DEBUG-only launch hooks:
 | --- | --- |
 | `-e2e-fake-recap <text>` | Uses a deterministic recap provider and segment transcriber, bypassing AI/Plus/local-AI gates only for welcome-back recaps on iOS 26+. `welcomeBack.providerCalls` exposes generation calls. |
 | `-e2e-transcript-file <path>` | Replaces only the welcome-back segment transcriber with the file's text. The recap model and the Plus, local-AI and setting gates stay real. Use it to qualify the on-device model on a simulator without a speech asset. |
+| `-e2e-moment-transcript-file <path>` | Smart save transcribes to the file's text instead of the audio, and turns on without Plus or the AI settings. The model and its availability stay real. |
+| `-e2e-moment-analysis declined` | Every smart-save analysis declines, on any iOS, for the fallback name and notice. Turns smart save on like the transcript hook. |
 | `-e2e-welcome-days <n>` | On initial fixture seeding, sets the listening book's last-played date n days ago and saved/current progress to 200 seconds. |
 | `-e2e-persisted-recap <text>` | With welcome-days seeding, stores a matching recap at the saved position. |
 | `-e2e-persisted-recap-anchor <seconds>` | Anchors that recap at this position instead (saved progress is 200 s). |
@@ -101,6 +103,17 @@ npm --prefix e2e test -- --grep 'onboarding Shelves|local playback advances|offl
 ```
 
 This covers all seven onboarding scenes, local playback/manual moment persistence, offline Shelves, purchase/restore surface reachability, and EQ reachability. See the coverage matrix for actual run evidence. These checks do not exercise Apple Intelligence on iOS 18.
+
+## Optional on-device model check
+
+`smart-save.e2e.ts` has an opt-in test that runs smart save through the real model. Simulators use the host Mac's model, so Apple Intelligence must be on for the Mac and the runtime must be iOS 26 or later. The test fails, rather than skipping, when a passage gets the fallback name.
+
+```sh
+E2E_REAL_MODEL=1 E2E_AI_CORPUS=<passages.json> E2E_AI_IDS=<id,id> E2E_AI_RESULTS=<results.json> \
+  npm --prefix e2e test -- tests/smart-save.e2e.ts
+```
+
+`E2E_AI_CORPUS` is a JSON array of `{ "id", "book", "moment" }`. Without it the test uses one built-in passage. `E2E_AI_RESULTS` receives each name. Keep the corpus and results outside Git.
 
 ## Optional live catalog check
 

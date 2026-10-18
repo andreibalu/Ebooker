@@ -14,7 +14,7 @@ final class MockRecapService: RecapProviding, @unchecked Sendable {
 
     func generateRecap(
         transcript: String,
-        audiobookTitle: String?,
+        context: AIPassageContext,
         includeProgressHeadline: Bool
     ) async throws -> RecapGenerationResult {
         if let errorToThrow { throw errorToThrow }
