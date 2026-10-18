@@ -307,7 +307,7 @@ a:hover > .i-arrow { translate: 3px 0; }
 .footer-inner { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
 .footer .brand { font-size: 21px; color: var(--ink); }
 .footer .logo-mark { width: 28px; height: 28px; border-radius: 7px; }
-.footer nav { display: flex; gap: 24px; margin-left: auto; }
+.footer nav { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-left: auto; }
 .footer nav a:hover, .motion-toggle:hover { color: var(--ink); }
 .motion-toggle { font-size: 14px; color: var(--muted); padding: 8px 0; }
 .motion-toggle[aria-pressed=true] { color: var(--amber-text); }

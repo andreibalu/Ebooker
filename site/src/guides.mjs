@@ -100,7 +100,7 @@ export const guides = [
         body: [
           'Tap **Play** on a book (it says **Resume** once you have started it). Unpaged adds it to your Library as a streaming book and starts playing, using the chapters your server knows. The player, chapter list and CarPlay show the same chapters.',
           'Unpaged sends your position back to the server when you pause, leave the app or finish a book, so other Audiobookshelf apps pick up where you stopped. If you are offline, the latest position waits on the iPhone and is sent when the connection returns.',
-          'Before resuming, Unpaged asks the server whether a newer position exists, with a short timeout. If you listened on another device after your last play here, it continues from there. If the check fails, it simply resumes from the position it has.'
+          'When you open a book, or press play after a long pause, Unpaged first asks the server whether a newer position exists, with a short timeout. If you listened on another device after your last play here, it continues from there. If the check fails, it simply resumes from the position it has.'
         ]
       },
       {
