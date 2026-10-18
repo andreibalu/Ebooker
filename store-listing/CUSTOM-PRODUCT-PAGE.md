@@ -5,7 +5,7 @@ A second App Store page for people who already run an Audiobookshelf server. It 
 - **Name in App Store Connect:** Audiobookshelf users
 - **Page id (`ppid`):** `0acf5796-9bc2-40d1-ac4a-eac2b3b583cb`
 - **URL:** https://apps.apple.com/us/app/unpaged-audiobook-player/id6761081641?ppid=0acf5796-9bc2-40d1-ac4a-eac2b3b583cb
-- **Version:** 1, created 2026-10-18 through the API. Read its state with `scripts/asc-api.sh GET /v1/appCustomProductPages/0acf5796-9bc2-40d1-ac4a-eac2b3b583cb/appCustomProductPageVersions`.
+- **Version:** 1, created 2026-10-18 through the API and submitted for review the same day (review submission `9c485754-a12e-4786-8944-c3f2ce56d2ce`). Read its state with `scripts/asc-api.sh GET /v1/appCustomProductPages/0acf5796-9bc2-40d1-ac4a-eac2b3b583cb/appCustomProductPageVersions`.
 - **Localization:** en-US only. Other storefronts fall back to it, and the app UI is English.
 - **Search keywords:** `audiobookshelf`, `offline`. A custom page can be associated only with words from the live keyword field ([Apple](https://developer.apple.com/app-store/custom-product-pages/)); see `NOTES.md` for the change needed when the next version's keywords ship.
 - **Campaign link:** the `custom-page` row in `CAMPAIGN-LINKS.md`.
@@ -22,7 +22,7 @@ Uploaded as `APP_IPHONE_67`, the display type the API accepts for the 6.9" set (
 
 1. **Audiobookshelf.** "Your server's library, on your iPhone." The Shelves tab connected to a server: Continue Listening with server progress, Recently Added.
 2. **Listen.** "Pick up right where you left off." The player resumed at the server's saved position in a chaptered book.
-3. **Offline.** "Download books for offline listening." The book page with its download.
+3. **Offline.** "Download books for offline listening." The book page with a download in progress.
 4. **Browse.** "Series in reading order." A series page sorted by sequence.
 
 ## How the screenshots were made
