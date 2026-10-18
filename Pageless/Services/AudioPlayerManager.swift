@@ -141,6 +141,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     /// Receives Audiobookshelf progress at the recorder flush points. Fire-and-forget by contract.
     var audiobookshelfProgressSink: @MainActor (ABSProgressSnapshot) -> Void = { ABSProgressReporter.report($0) }
+    /// Called when a book plays to its end. The default feeds the rating prompt's positive-moment history.
+    var bookFinishedSink: @MainActor () -> Void = { RatingPromptStore.standard.recordFinishedBook() }
     /// One silent re-resolve per load when an Audiobookshelf stream fails (e.g. its token aged out
     /// mid-listen); a second failure surfaces the error.
     private var audiobookshelfRecoveryLoadToken: UInt64?
@@ -1099,6 +1101,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         sessionRecorder.end(context: modelContext)
         currentTime = duration
         reportAudiobookshelfProgress(isFinished: true)
+        bookFinishedSink()
         updateNowPlayingInfo()
     }
 

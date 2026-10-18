@@ -251,6 +251,11 @@ struct ContentView: View {
                 .transition(.opacity)
             }
         }
+        .ratingPrompt(
+            isOnboardingComplete: onboarding.isComplete,
+            isPlayerOpen: isPlayerVisible,
+            isPlaying: player.isPlaying
+        )
         .alert(
             deleteAlertTitle,
             isPresented: deleteConfirmationBinding
