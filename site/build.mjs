@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { site as english } from './src/content.mjs';
+import { guides, guideNav, guideStrip, guidesIndex } from './src/guides.mjs';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(root, '..');
@@ -69,14 +70,14 @@ const badgeFor = site => (cls = '') => `<a class="store-badge ${cls}" href="${co
 
 // ---------------------------------------------------------------- layout
 // `route` is the path below the locale prefix ('' for home, 'plus/'). Pages with `alternates` exist in every locale.
-function layout(site, code, { title, description, body, route = '', type = 'home', noindex = false, alternates = false }) {
+function layout(site, code, { title, description, body, route = '', type = 'home', noindex = false, alternates = false, jsonld = null }) {
   const t = site.ui;
   const prefix = prefixOf(code);
   const home = `${base}${prefix}`;
   const url = `${origin}/${prefix}${route}`;
   const pill = (text, cls = '') => `<a class="pill ${cls}" href="${config.appStoreUrl}"><span>${e(text)}</span>${arrow}</a>`;
   const wordmark = `<a class="brand" href="${home}" aria-label="${e(t.home)}">${logoMark()}<span>Unpaged</span></a>`;
-  const nav = [[t.nav[0], `${home}#library`], [t.nav[1], `${home}#moments`], [t.nav[2], `${home}#listening`], [t.nav[3], `${home}plus/`]];
+  const nav = [[t.nav[0], `${home}#library`], [t.nav[1], `${home}#moments`], [t.nav[2], `${home}#listening`], [t.nav[3], `${home}plus/`], [guideNav[code], `${base}guides/`]];
   const links = alternates
     ? Object.keys(localeNames).map(c => `<link rel="alternate" hreflang="${htmlLang(c)}" href="${origin}/${prefixOf(c)}${route}">`).join('') + `<link rel="alternate" hreflang="x-default" href="${origin}/${route}">`
     : '';
@@ -93,14 +94,85 @@ ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <link rel="preload" href="${asset('fonts/newsreader.woff2')}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="${asset('style.css')}">
 <script>document.documentElement.classList.add('js');try{if(localStorage.getItem('unpaged-reduce-motion')==='1')document.documentElement.classList.add('reduce-motion')}catch{}</script>
+${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` : ''}
 ${type === 'home' ? `<script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'MobileApplication', name: 'Unpaged', operatingSystem: 'iOS 18 or later', applicationCategory: 'MultimediaApplication', url, downloadUrl: config.appStoreUrl, offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, author: { '@type': 'Person', name: 'Andrei Baluta' } })}</script>` : ''}
 </head><body data-page="${type}">
 <a class="skip-link" href="#main">${e(t.skip)}</a>
-<header class="header"><div class="wrap header-inner">${wordmark}<nav aria-label="${e(t.primaryNav)}">${nav.map(([label, href], i) => `<a href="${href}"${type === 'plus' && i === 3 ? ' aria-current="page"' : ''}>${e(label)}</a>`).join('')}</nav>${pill(t.getApp, 'pill-small')}</div></header>
+<header class="header"><div class="wrap header-inner">${wordmark}<nav aria-label="${e(t.primaryNav)}">${nav.map(([label, href], i) => `<a href="${href}"${(type === 'plus' && i === 3) || (type === 'guide' && i === 4) ? ' aria-current="page"' : ''}>${e(label)}</a>`).join('')}</nav>${pill(t.getApp, 'pill-small')}</div></header>
 <main id="main" tabindex="-1">${body}</main>
-<footer class="footer"><div class="wrap footer-inner">${wordmark}<p>${e(site.footer.credit)}</p><nav aria-label="${e(t.legalNav)}">${site.footer.links.map(([label, slug]) => `<a href="${base}${slug}/">${e(label)}</a>`).join('')}</nav>${languages}<button type="button" class="motion-toggle" data-motion-toggle aria-pressed="false">${e(t.reduceMotion)}</button></div></footer>
+<footer class="footer"><div class="wrap footer-inner">${wordmark}<p>${e(site.footer.credit)}</p><nav aria-label="${e(t.legalNav)}">${[...site.footer.links, [guideNav[code], 'guides']].map(([label, slug]) => `<a href="${base}${slug}/">${e(label)}</a>`).join('')}</nav>${languages}<button type="button" class="motion-toggle" data-motion-toggle aria-pressed="false">${e(t.reduceMotion)}</button></div></footer>
 <script type="module" src="${asset('app.mjs')}"></script>
 </body></html>`;
+}
+
+// ---------------------------------------------------------------- guides
+// English-only how-to pages. Content lives in src/guides.mjs; the nav label and the home strip are translated.
+const inl = s => e(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+const guideThumb = g => `<img src="${asset(g.video.poster)}" width="${g.video.width}" height="${g.video.height}" alt="" loading="lazy" decoding="async">`;
+const guideCard = (g, label, lang) => `<a class="guide-card" href="${base}guides/${g.slug}/"${lang ? ' lang="en"' : ''}><span class="guide-thumb">${guideThumb(g)}</span><span class="guide-card-text"><span class="eyebrow">${e(g.eyebrow)}</span><span class="guide-card-title">${e(g.short)}</span><span class="guide-card-sum">${e(g.summary)}</span><span class="text-link">${e(label)}${arrow}</span></span></a>`;
+
+function guidesStrip(code) {
+  const s = guideStrip[code];
+  return `
+<section class="section guides-strip" id="guides" aria-labelledby="guides-title"><div class="wrap">
+  ${head(s.eyebrow, s.heading, 'guides-title', s.text)}
+  <div class="guide-cards">${guides.map(g => guideCard(g, guidesIndex.read, true)).join('')}</div>
+  <a class="text-link guides-all" href="${base}guides/">${e(s.all)}${arrow}</a>
+</div></section>`;
+}
+
+function guidesIndexPage(site) {
+  return `
+<section class="guide-hero"><div class="wrap">
+  <a class="text-link back" href="${base}">← ${e(guidesIndex.back)}</a>
+  <p class="eyebrow">${e(guidesIndex.eyebrow)}</p><h1>${rich(guidesIndex.heading)}</h1><p class="lede">${e(guidesIndex.text)}</p>
+</div></section>
+<section class="section guides-list"><div class="wrap"><div class="guide-cards">${guides.map(g => guideCard(g, guidesIndex.read, false)).join('')}</div></div></section>`;
+}
+
+function guidePage(site, g) {
+  const t = site.ui;
+  const v = g.video;
+  const other = guides.find(x => x !== g);
+  const block = b => {
+    if (typeof b === 'string') return `<p>${inl(b)}</p>`;
+    if (b.ul) return `<ul>${b.ul.map(x => `<li>${inl(x)}</li>`).join('')}</ul>`;
+    if (b.ol) return `<ol>${b.ol.map(x => `<li>${inl(x)}</li>`).join('')}</ol>`;
+    if (b.note) return `<p class="guide-note">${inl(b.note)}</p>`;
+    throw new Error(`unknown guide block in ${g.slug}`);
+  };
+  const sections = g.sections.map(sec => `
+    <section class="guide-section" id="${sec.id}" aria-labelledby="${sec.id}-h"><h2 id="${sec.id}-h">${e(sec.title)}</h2>${sec.body.map(block).join('')}${sec.figure ? `<figure class="guide-shot"><div class="phone"><img src="${asset(sec.figure.src)}" width="${W}" height="${H}" alt="${e(sec.figure.alt)}" loading="lazy" decoding="async"></div><figcaption>${e(sec.figure.caption)}</figcaption></figure>` : ''}</section>`).join('');
+  const toc = g.sections.map(sec => `<li><a href="#${sec.id}">${e(sec.title)}</a></li>`).join('');
+  return `
+<article class="guide" lang="en"><div class="wrap guide-grid">
+    <header class="guide-hero">
+      <a class="text-link back" href="${base}guides/" lang="${htmlLang('en')}">← ${e(guidesIndex.eyebrow)}</a>
+      <p class="eyebrow">${e(g.eyebrow)}</p>
+      <h1>${rich(g.heading)}</h1>
+      <p class="lede">${e(g.intro)}</p>
+      <div class="actions">${badgeFor(english)()}</div>
+      <p class="fine guide-tested">${e(g.tested)}</p>
+    </header>
+    <aside class="guide-aside">
+      <figure class="guide-video">
+        <div class="phone"><video muted loop playsinline preload="none" controls poster="${asset(v.poster)}" width="${v.width}" height="${v.height}" aria-label="${e(v.label)}" data-guide-video><source src="${asset(v.src)}" type="video/mp4"></video><button type="button" class="vid-toggle" data-vid-toggle aria-label="Pause recording" hidden><span aria-hidden="true"></span></button></div>
+        <figcaption>${e(v.caption)}</figcaption>
+      </figure>
+      <nav class="guide-toc" aria-label="On this page"><p class="eyebrow">On this page</p><ul>${toc}</ul></nav>
+    </aside>
+    <div class="guide-main">${sections}
+      <aside class="guide-next"><p class="eyebrow">Next guide</p><a class="text-link" href="${base}guides/${other.slug}/">${e(other.short)}${arrow}</a></aside>
+    </div>
+  </div>
+</article>`;
+}
+
+write('guides/index.html', layout(english, 'en', { title: guidesIndex.title, description: guidesIndex.description, body: guidesIndexPage(english), route: 'guides/', type: 'guide' }));
+for (const g of guides) {
+  const url = `${origin}/guides/${g.slug}/`;
+  const jsonld = { '@context': 'https://schema.org', '@type': 'TechArticle', headline: g.short, description: g.description, datePublished: g.published, dateModified: g.published, inLanguage: 'en', url, image: `${origin}/${g.video.poster}`, author: { '@type': 'Person', name: 'Andrei Baluta' }, about: { '@type': 'MobileApplication', name: 'Unpaged', operatingSystem: 'iOS 18 or later', url: config.appStoreUrl } };
+  write(`guides/${g.slug}/index.html`, layout(english, 'en', { title: g.title, description: g.description, body: guidePage(english, g), route: `guides/${g.slug}/`, type: 'guide', jsonld }));
 }
 
 // ---------------------------------------------------------------- home
@@ -229,7 +301,7 @@ function homePage(site, code) {
   </div>
 </div></section>`;
 
-  return hero + library + moments + anatomy + habits + playback + plus + closing(site);
+  return hero + library + moments + anatomy + habits + playback + plus + guidesStrip(code) + closing(site);
 }
 
 function closing(site) {
@@ -401,7 +473,7 @@ for (const doc of DOCS) {
 }
 
 // ---------------------------------------------------------------- crawl files
-const pages = [...Object.keys(locales).flatMap(c => [prefixOf(c), `${prefixOf(c)}plus/`]), ...DOCS.map(d => d.path)];
+const pages = [...Object.keys(locales).flatMap(c => [prefixOf(c), `${prefixOf(c)}plus/`]), 'guides/', ...guides.map(g => `guides/${g.slug}/`), ...DOCS.map(d => d.path)];
 fs.writeFileSync(path.join(out, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${pages.map(p => `  <url><loc>${origin}/${p}</loc></url>`).join('\n')}\n</urlset>\n`);
 fs.writeFileSync(path.join(out, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${origin}/sitemap.xml\n`);
 fs.writeFileSync(path.join(out, '.nojekyll'), '');
@@ -412,7 +484,7 @@ let broken = 0;
 const idsOf = file => new Set([...fs.readFileSync(file, 'utf8').matchAll(/\sid="([^"]+)"/g)].map(m => m[1]));
 for (const file of written) {
   const html = fs.readFileSync(file, 'utf8');
-  for (const [, attr, ref] of html.matchAll(/\s(href|src)="([^"]+)"/g)) {
+  for (const [, attr, ref] of html.matchAll(/\s(href|src|poster)="([^"]+)"/g)) {
     if (/^(https?:|mailto:|data:)/.test(ref)) continue;
     const [refPath, frag] = ref.split('#');
     let target = refPath ? (refPath.startsWith('/') ? path.join(out, refPath.slice(base.length - 1)) : path.resolve(path.dirname(file), refPath)) : file;

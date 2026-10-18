@@ -78,6 +78,16 @@ enum E2EFixtures {
         let marker = try storeDirectoryWithoutReset()
             .appendingPathComponent("seeded")
         guard !FileManager.default.fileExists(atPath: marker.path) else { return }
+        if ProcessInfo.processInfo.arguments.contains("-guide-clean-library") {
+            for row in catalogRows {
+                context.insert(LibriVoxBook(id: row.id, title: row.title, authorDisplay: row.author,
+                                            bookDescription: row.description, language: row.language,
+                                            totalTimeSecs: row.seconds, genres: row.genres))
+            }
+            try context.save()
+            try Data().write(to: marker)
+            return
+        }
         let book = Audiobook(title: "E2E The Listening Book", author: "Fixture Author",
                              folderName: "E2E-Listening-Book", totalDuration: 600,
                              isFavorite: true)

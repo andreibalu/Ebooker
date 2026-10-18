@@ -80,6 +80,7 @@ DEBUG-only launch hooks:
 | `-e2e-online` | Lets NetworkMonitor report a connection. The fixture is offline otherwise. |
 | `-e2e-librivox-feed <url>` | Sends LibriVox feed requests to `<url>`. |
 | `-e2e-sleep-timer-seconds <n>` | Makes every sleep-timer choice last n seconds. |
+| `-guide-clean-library` | On initial seeding, adds only the LibriVox catalog rows and no audiobooks, so the library starts empty. Used for marketing-site screen recordings. |
 | `-e2e-import` | Makes the import button hand a file to the import pipeline instead of opening the Files picker. |
 | `-e2e-import-file <name>` | Picks `<name>` from the fixture folder for `-e2e-import`. Without it, the app generates a 123-second WAV. |
 
