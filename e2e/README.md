@@ -115,7 +115,7 @@ E2E_REAL_MODEL=1 E2E_AI_CORPUS=<passages.json> E2E_AI_IDS=<id,id> E2E_AI_RESULTS
   npm --prefix e2e test -- tests/welcome-back.e2e.ts --grep 'on-device model'
 ```
 
-`E2E_AI_CORPUS` is a JSON array of `{ "id", "book", "moment", "recap" }`: smart save reads `moment`, the recap test `recap`. Without it each test uses one built-in passage. `E2E_AI_RESULTS` receives each name or recap. Keep the corpus and results outside Git.
+`E2E_AI_CORPUS` is a JSON array of `{ "id", "book", "moment", "recap" }`: smart save reads `moment`, the recap test `recap`. Without it each test uses one built-in passage. The passage sets in `tools/ai-harness/corpus/` have this shape, so a few ids from `heldout.json` make a quick in-app check. `E2E_AI_RESULTS` receives each name or recap. Keep results outside Git.
 
 ## Optional live catalog check
 
