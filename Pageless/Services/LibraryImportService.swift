@@ -295,6 +295,7 @@ enum LibraryImportService {
         modelContext: ModelContext,
         mutationEnvironment: LibraryMutationEnvironment = .live()
     ) throws {
+        let downloads = DeviceDownloadState.shared.snapshot([audiobook.id])
         let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
         do {
             let folderURL = try LibraryMutationTransaction.folderURL(
@@ -317,7 +318,8 @@ enum LibraryImportService {
             try LibraryMutationTransaction.rollbackAndRethrow(
                 error,
                 modelContext: modelContext,
-                transaction: transaction
+                transaction: transaction,
+                downloads: downloads
             )
         }
     }
@@ -333,6 +335,7 @@ enum LibraryImportService {
         modelContext: ModelContext,
         mutationEnvironment: LibraryMutationEnvironment = .live()
     ) throws {
+        let downloads = DeviceDownloadState.shared.snapshot([audiobook.id])
         let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
         do {
             let folderURL = try LibraryMutationTransaction.folderURL(
@@ -356,7 +359,8 @@ enum LibraryImportService {
             try LibraryMutationTransaction.rollbackAndRethrow(
                 error,
                 modelContext: modelContext,
-                transaction: transaction
+                transaction: transaction,
+                downloads: downloads
             )
         }
     }

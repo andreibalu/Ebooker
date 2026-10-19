@@ -14,6 +14,9 @@ nonisolated protocol CloudAudioBackend: Sendable {
     func audiobooksRoot() async -> URL?
     /// Copies a local file in, creating its folder. The destination must not exist.
     func copyIn(_ source: URL, to destination: URL) throws
+    /// After a failed `copyIn`: the destination already holds this file, as when another device
+    /// stored the same book at the same moment.
+    func hasSameFile(at destination: URL, as source: URL) -> Bool
     /// Deletes a file or folder from iCloud on every device.
     func remove(_ url: URL) throws
     func startDownloading(_ url: URL) throws

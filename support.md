@@ -78,7 +78,7 @@ AI generation and transcription run entirely on your iPhone. If primary transcri
 
 ### Do AI features require a paid unlock?
 
-Apple Intelligence moment naming and recaps are included with **Unpaged Plus**, an auto-renewing monthly (US$2.99) or yearly (US$14.99) subscription. Each plan includes a seven-day introductory offer when Apple makes it available to your Apple ID; the price and offer shown by Apple at purchase apply. The rest of the app — playback, bookmarks without AI, library, Shelves, CarPlay, EQ and iCloud Sync — is always free. Existing AI Features unlock purchases remain recognized without expiration, and active legacy iCloud Sync subscriptions remain recognized as Unpaged Plus while active.
+Apple Intelligence moment naming and recaps are included with **Unpaged Plus**, an auto-renewing monthly (US$2.99) or yearly (US$14.99) subscription. Each plan includes a seven-day introductory offer when Apple makes it available to your Apple ID; the price and offer shown by Apple at purchase apply. The rest of the app — playback, bookmarks without AI, library, Shelves, CarPlay, EQ and iCloud Sync — is always free. Existing AI Features unlock purchases remain recognized without expiration, and active legacy iCloud Sync subscriptions remain recognized as Unpaged Plus while active. Plus features work only on an iPhone that supports Apple Intelligence; on other iPhones the Plus screen says so above the plans.
 
 ### Which devices support the AI features?
 
@@ -123,7 +123,7 @@ With sync off, removing a free book simply takes it out of your library; you can
 
 ### Will my bookmarks and progress sync to other devices?
 
-Yes, for free. iCloud Sync needs no subscription, only an iCloud account on your iPhone. Turn on **Sync library with iCloud** when the welcome tour offers it, or later in **Settings → iCloud Sync**. Sync is off until you turn it on. The toggle controls the next launch: after either turning sync on or turning it off, quit and reopen Unpaged so its iCloud-backed store can be selected. Until relaunch, this launch keeps its existing sync state and its backup/delete behavior stays unchanged. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. Audio files stay on each device unless you store them in iCloud — see the next FAQ.
+Yes, for free. iCloud Sync needs no subscription, only an iCloud account on your iPhone. Turn on **Sync library with iCloud** when the welcome tour offers it, or later in **Settings → iCloud Sync**. Sync is off until you turn it on. The toggle controls the next launch: after either turning sync on or turning it off, quit and reopen Unpaged so its iCloud-backed store can be selected. Until relaunch, this launch keeps its existing sync state and its backup/delete behavior stays unchanged. Your titles, covers, progress, bookmarks (moments), recaps, equalizer settings, favorites, and listening-activity history then sync privately to the iPhones you're signed in to with the same Apple ID. Audio files stay on each device unless you store them in iCloud — see the next FAQ. Which books are downloaded is up to each iPhone: downloading a book on one iPhone, or removing it from one, never changes what another iPhone has.
 
 If you subscribed to Unpaged Plus or the older iCloud Sync subscription for sync, nothing changes for you: sync keeps working, and your subscription keeps the Apple Intelligence features until it ends. You can manage or cancel it in your Apple ID subscription settings.
 
@@ -137,6 +137,7 @@ Yes. With iCloud Sync on, open **Settings → iCloud Sync** and turn on **Store 
 - Free LibriVox books and Audiobookshelf books aren't copied, because they download again from their source.
 - The setting applies to the iPhone you turn it on. A book stored from one iPhone can be downloaded on any of them.
 - Turning the setting off asks whether to keep the audio already in iCloud or remove it from iCloud on all your devices. Removing a book's audio never removes the book or this iPhone's copy.
+- Turning iCloud Sync off asks the same question when audio is stored. With sync off, **Settings → iCloud Sync** still shows audio left in iCloud and offers **Remove Audio from iCloud**.
 
 ### How do I know a book is backed up to iCloud?
 

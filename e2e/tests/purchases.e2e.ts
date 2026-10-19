@@ -180,3 +180,19 @@ test('AI settings stay reachable from the Plus hub without a purchase (Apple 3.1
   await tapVisibleCenter(screen.getByRole('button', 'Settings'));
   await expect(screen.getByRole('button', 'Settings')).toBeHidden();
 });
+
+test('on an iPhone without Apple Intelligence, Plus says so above the plans before any purchase', async ({ device, screen, app }) => {
+  resetStoreKitLedger();
+  await openPlusCard(device, screen, ['-e2e-reset-fixture', '-e2e-ai-unsupported-device']);
+  const note = screen.getByTestId('plus.unsupportedDeviceNote');
+  await expect(note).toBeVisible();
+  await expect(note).toContainText('Requires an iPhone with Apple Intelligence');
+  // Reachable for App Review (3.1.1), and the notice comes first.
+  const purchase = screen.getByRole('button', /^Try (1 week|7 days) free$/);
+  await screen.scrollUntilVisible(purchase);
+  const [noteBox, purchaseBox] = [await note.boundingBox(), await purchase.boundingBox()];
+  if (!noteBox || !purchaseBox) throw new Error('Plus card has no bounds');
+  expect(noteBox.y + noteBox.height).toBeLessThan(purchaseBox.y);
+  await expect(screen.getByRole('button', /^Apple Intelligence, /)).toBeHidden();
+  await app.screenshot('plus-unsupported-device');
+});

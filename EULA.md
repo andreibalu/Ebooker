@@ -44,7 +44,8 @@ The Application offers the following optional paid features, purchased and
 managed through your Apple ID:
 
 - **Unpaged Plus** — an **auto-renewable subscription** that includes on-device
-  Apple Intelligence moment naming and recaps. Plus is offered monthly (US$2.99/month) and yearly
+  Apple Intelligence moment naming and recaps, which work only on an iPhone that
+  supports Apple Intelligence. Plus is offered monthly (US$2.99/month) and yearly
   (US$14.99/year); prices vary by region and the price shown by Apple at purchase
   applies. Each plan may show a seven-day free trial when Apple offers it to your
   account. After any displayed trial, the subscription automatically renews at
@@ -60,13 +61,6 @@ managed through your Apple ID:
   subscription continues to include Plus while that subscription is active.
   These existing entitlements do not require a new Plus purchase.
 
-iCloud Sync is free and is not part of any purchase. It is opt-in, requires an
-iCloud account on the device, and keeps your library, progress, bookmarks,
-recaps, equalizer settings and listening history in your private iCloud
-account. If you choose to store audio in iCloud, the audio of books you
-imported is kept in the Application's private iCloud Drive folder and counts
-toward your iCloud storage, which Apple provides under its own terms.
-
 - **Buy me a coffee** — an **optional, one-time consumable purchase** that lets
   you support the Developer. It does not unlock features, add content, provide
   priority, or provide any other benefit. It creates no entitlement and cannot be
@@ -76,6 +70,13 @@ toward your iCloud storage, which Apple provides under its own terms.
 All payments are processed by Apple. Restore purchases in Unpaged Plus settings
 on a new device using the same Apple ID. The consumable coffee tip is
 intentionally not restorable.
+
+iCloud Sync is free and is not part of any purchase. It is opt-in, requires an
+iCloud account on the device, and keeps your library, progress, bookmarks,
+recaps, equalizer settings and listening history in your private iCloud
+account. If you choose to store audio in iCloud, the audio of books you
+imported is kept in the Application's private iCloud Drive folder and counts
+toward your iCloud storage, which Apple provides under its own terms.
 
 ## 4. Maintenance and Support
 

@@ -32,7 +32,9 @@ enum E2EFixtures {
     }
 
     /// `-e2e-icloud-drive` turns on a local folder that plays the iCloud Drive container. Without it
-    /// iCloud Drive reads as off. `-e2e-icloud-full` fails every upload on quota.
+    /// iCloud Drive reads as off. `-e2e-icloud-full` fails every upload on quota. `-e2e-icloud-race`
+    /// has another device's identical copy land at each destination just before this one.
+    /// `-e2e-icloud-drive-delay <seconds>` holds the container lookup, as a slow first launch does.
     static func cloudAudioBackend() -> CloudAudioBackend {
         let arguments = ProcessInfo.processInfo.arguments
         let root = arguments.contains("-e2e-icloud-drive") ? try? fakeICloudDriveRoot() : nil
@@ -40,7 +42,9 @@ enum E2EFixtures {
             root: root,
             uploadSeconds: argument("-e2e-icloud-upload-seconds").flatMap(Double.init) ?? 1.5,
             downloadSeconds: argument("-e2e-icloud-download-seconds").flatMap(Double.init) ?? 2,
-            quotaFull: arguments.contains("-e2e-icloud-full")
+            quotaFull: arguments.contains("-e2e-icloud-full"),
+            anotherDeviceCopiesFirst: arguments.contains("-e2e-icloud-race"),
+            rootDelaySeconds: argument("-e2e-icloud-drive-delay").flatMap(Double.init) ?? 0
         )
     }
 
@@ -75,7 +79,8 @@ enum E2EFixtures {
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
                         "absSelectedLibraryID", "abs.progressOutbox",
-                        IcloudSyncGate.preferenceKey, CloudAudioStore.preferenceKey] {
+                        IcloudSyncGate.preferenceKey, CloudAudioStore.preferenceKey,
+                        CloudAudioStore.pendingUploadsKey, CloudAudioStore.pendingDeletesKey] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
@@ -215,6 +220,54 @@ enum E2EFixtures {
         }
         try context.save()
         try Data().write(to: marker)
+    }
+
+    /// Another device's sync, as CloudKit would deliver it. The synced record still carries the
+    /// legacy download flag, and another iPhone (or an older app) writes its own answer there.
+    /// `-e2e-other-device-flags` writes the opposite of this device's files into every record,
+    /// the worst case. `-e2e-forget-device-downloads` also drops this device's own answers, as on
+    /// the first launch after the update. `-e2e-other-device-import-after <seconds>` repeats the
+    /// flags mid-session and runs what a finished CloudKit import runs. Each pass appends what it
+    /// saw to `E2EFixtures/other-device-imports.json`.
+    static func applyOtherDeviceSync(_ container: ModelContainer) throws {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-e2e-other-device-flags") else { return }
+        try writeOtherDeviceFlags(container.mainContext, pass: "launch")
+        if arguments.contains("-e2e-forget-device-downloads") {
+            DeviceDownloadState.shared.e2eForgetAll()
+        }
+        if let delay = argument("-e2e-other-device-import-after").flatMap(Double.init) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(delay))
+                try? writeOtherDeviceFlags(container.mainContext, pass: "import")
+                await OrphanDetectionService.run(modelContainer: container)
+                try? recordOtherDeviceImport(container.mainContext, pass: "after-import")
+            }
+        }
+    }
+
+    private static func writeOtherDeviceFlags(_ context: ModelContext, pass: String) throws {
+        for book in try context.fetch(FetchDescriptor<Audiobook>()) {
+            book.e2eSetSyncedDownloadedFlag(!book.hasLocalAudio())
+        }
+        try context.save()
+        try recordOtherDeviceImport(context, pass: pass)
+    }
+
+    private static func recordOtherDeviceImport(_ context: ModelContext, pass: String) throws {
+        let url = try storeDirectoryWithoutReset().appendingPathComponent("other-device-imports.json")
+        var log = (try? JSONSerialization.jsonObject(with: Data(contentsOf: url))) as? [[String: Any]] ?? []
+        let books = try context.fetch(FetchDescriptor<Audiobook>()).sorted { $0.folderName < $1.folderName }
+        log.append([
+            "pass": pass,
+            "books": books.map { book in
+                ["folder": book.folderName,
+                 "filesHere": book.hasLocalAudio(),
+                 "downloadedHere": book.isDownloaded,
+                 "inLibrary": book.isInActiveLibrary] as [String: Any]
+            },
+        ])
+        try JSONSerialization.data(withJSONObject: log, options: [.prettyPrinted, .sortedKeys]).write(to: url)
     }
 
     /// Two own books synced from another device without their audio: one whose audio that device

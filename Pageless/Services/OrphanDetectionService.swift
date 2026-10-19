@@ -7,10 +7,14 @@ import Foundation
 import OSLog
 import SwiftData
 
-/// At launch, books that synced down from iCloud may carry `isDownloaded == true` even though
-/// the audio files don't exist on this device. This service reconciles that: any book whose
-/// storage folder is empty or missing gets flipped to `isDownloaded = false` so the rest of the
-/// app treats own imports as Cloud Library orphans and server books as streaming entries.
+/// Keeps this device's `DeviceDownloadState` true to the files on disk. Runs at launch and, while
+/// sync is on, after each CloudKit import:
+/// - A book with no entry yet (first launch after the update, or a record that just arrived from
+///   another device) gets one from its files, whatever the legacy synced flag says.
+/// - A downloaded book whose files are gone flips to not downloaded, so own imports become Cloud
+///   Library orphans and server books streaming entries.
+/// - Entries for deleted books are dropped.
+/// Nothing here writes a synced field, so two devices can't undo each other's answer.
 enum OrphanDetectionService {
     private static let log = Logger(subsystem: "andreibaludev.Pageless", category: "OrphanDetection")
 
@@ -32,46 +36,32 @@ enum OrphanDetectionService {
         needsLocalFileCheck(book) && !hasLocalFiles
     }
 
-    private static func run(modelContainer: ModelContainer) async {
+    static func run(modelContainer: ModelContainer, state: DeviceDownloadState = .shared) async {
         let context = ModelContext(modelContainer)
         guard let books = try? context.fetch(FetchDescriptor<Audiobook>()) else { return }
 
-        let fm = FileManager.default
-        guard let appSupport = try? fm.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: false
-        ) else { return }
-        let libraryURL = appSupport.appendingPathComponent("Audiobooks", isDirectory: true)
-
+        var settled = 0
         var flipped = 0
-        for book in books where needsLocalFileCheck(book) {
-            let folderURL = libraryURL.appendingPathComponent(book.folderName, isDirectory: true)
-            let exists = fm.fileExists(atPath: folderURL.path(percentEncoded: false))
-            let contents = exists
-                ? ((try? fm.contentsOfDirectory(at: folderURL, includingPropertiesForKeys: nil)) ?? [])
-                : []
-            // A partial ABS folder would fail playback, so ABS books need every track file.
-            let hasFiles = book.isAudiobookshelfBook
-                ? !book.tracks.isEmpty && book.tracks.allSatisfy { track in
-                    !track.storedFileName.isEmpty
-                        && fm.fileExists(atPath: folderURL.appendingPathComponent(track.storedFileName).path)
-                }
-                : !contents.isEmpty
-
-            log.info("Inspect local audiobook storage exists=\(exists, privacy: .public) hasFiles=\(hasFiles, privacy: .public) fileCount=\(contents.count, privacy: .public) trackCount=\(book.tracks.count, privacy: .public)")
-
-            if shouldMarkOrphan(book, hasLocalFiles: hasFiles) {
+        for book in books {
+            if !state.hasEntry(book.id) {
+                state.set(book.hasLocalAudio(), for: book.id)
+                settled += 1
+            } else if needsLocalFileCheck(book), shouldMarkOrphan(book, hasLocalFiles: book.hasLocalAudio()) {
+                log.info("Downloaded book lost its local audio trackCount=\(book.tracks.count, privacy: .public)")
                 book.isDownloaded = false
                 flipped += 1
             }
         }
-        if flipped > 0 {
-            try? context.save()
+        state.retainOnly(Set(books.map(\.id)))
+        if settled > 0 {
+            log.info("Set this device's download state for \(settled, privacy: .public) book(s) from their files")
+        }
+        if flipped > 0 || settled > 0 {
             // A book that lost its audio leaves the library, so the widget may need the next one.
             await MainActor.run { ContinueListeningSnapshotWriter.shared.refresh(context: modelContainer.mainContext) }
-            log.info("Marked \(flipped, privacy: .public) book(s) as iCloud orphans missing local files")
+        }
+        if flipped > 0 {
+            log.info("Marked \(flipped, privacy: .public) book(s) as missing local files")
         }
     }
 }

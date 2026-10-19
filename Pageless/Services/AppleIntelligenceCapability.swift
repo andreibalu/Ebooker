@@ -53,6 +53,12 @@ enum AppleIntelligenceCapability {
     /// High-level state for AI Settings UI. Collapses `.modelNotReady` and "AI off in Settings"
     /// into a single `.needsActivation` bucket because both resolve via the same user action.
     static var availabilityState: AIAvailabilityState {
+        #if DEBUG
+        // Fixture launches can play an iPhone without Apple Intelligence on any simulator.
+        if E2EFixtures.enabled, ProcessInfo.processInfo.arguments.contains("-e2e-ai-unsupported-device") {
+            return .unsupportedDevice
+        }
+        #endif
         guard #available(iOS 26, *) else {
             return hardwareSupportsAppleIntelligence ? .needsIOSUpgrade : .unsupportedDevice
         }

@@ -37,6 +37,35 @@ nonisolated struct ICloudDriveAudioBackend: CloudAudioBackend {
         }
     }
 
+    /// Same name in the same book's folder means the same track of the same record; the size
+    /// confirms it when the system knows it. A legacy `.name.icloud` placeholder has no readable
+    /// size, so its presence is enough.
+    func hasSameFile(at destination: URL, as source: URL) -> Bool {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .totalFileSizeKey]
+        guard let sourceSize = (try? source.resourceValues(forKeys: keys))?.fileSize else { return false }
+        var matches = false
+        var coordinationError: NSError?
+        NSFileCoordinator(filePresenter: nil).coordinate(
+            readingItemAt: destination,
+            options: .immediatelyAvailableMetadataOnly,
+            error: &coordinationError
+        ) { url in
+            if FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) {
+                let values = try? url.resourceValues(forKeys: keys)
+                if let size = values?.fileSize ?? values?.totalFileSize {
+                    matches = size == sourceSize
+                } else {
+                    matches = true
+                }
+            } else {
+                let placeholder = url.deletingLastPathComponent()
+                    .appendingPathComponent(".\(url.lastPathComponent).icloud")
+                matches = FileManager.default.fileExists(atPath: placeholder.path(percentEncoded: false))
+            }
+        }
+        return coordinationError == nil && matches
+    }
+
     func remove(_ url: URL) throws {
         try coordinate(writing: url, options: .forDeleting) { url in
             do {

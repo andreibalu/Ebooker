@@ -1,6 +1,9 @@
 import { expect, type Locator, type Screen } from 'e2e';
 import { test, tapVisibleCenter, longPressVisibleTop } from './native-actions.js';
-import { bundle } from '../support/simulator.js';
+import { appDataPath, bundle } from '../support/simulator.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
 // Free iCloud sync and audio in iCloud, without CloudKit or a real iCloud account.
 // `-e2e-icloud-account` stands in for a signed-in account, so the real sync gate, its
@@ -23,6 +26,14 @@ async function scrollTo(screen: Screen, target: Locator): Promise<void> {
   } catch {
     await screen.scrollUntilVisible(target, { direction: 'up' });
   }
+}
+
+/** Opens a library card's context menu and taps Delete once the menu has finished animating in. */
+async function tapDeleteInMenu(screen: Screen, card: Locator): Promise<void> {
+  await longPressVisibleTop(card);
+  await expect(screen.getByRole('button', 'Delete')).toBeVisible();
+  await delay(1_000);
+  await screen.getByRole('button', 'Delete').tap();
 }
 
 /** A tap that lands while the list is still settling can miss the row; try once more. */
@@ -177,8 +188,7 @@ test('storing audio in iCloud uploads every book, survives Remove from this iPho
   await back(screen).tap();
 
   // Remove from this iPhone keeps the record and, now, the audio in iCloud.
-  await longPressVisibleTop(screen.getByTestId('book.card.E2E-Listening-Book'));
-  await screen.getByRole('button', 'Delete').tap();
+  await tapDeleteInMenu(screen, screen.getByTestId('book.card.E2E-Listening-Book'));
   await expect(screen.getByText(/The book and its audio stay in iCloud/).first()).toBeVisible();
   await app.screenshot('icloud-remove-from-iphone');
   await screen.getByRole('button', 'Remove from this iPhone').tap();
@@ -307,4 +317,182 @@ test('with the setting on, an imported book uploads; a full iCloud says so', {
   await tapVisibleCenter(screen.getByTestId('book.cloudAudio.store'));
   await expect(screen.getByTestId('book.cloudAudio.status')).toHaveText(/^iCloud storage is full/, { timeout: 10_000 });
   await app.screenshot('icloud-quota-full');
+});
+
+const fixtureStore = () => join(appDataPath(), 'Library', 'Application Support', 'E2EFixtures');
+
+type ImportPass = { pass: string; books: { folder: string; filesHere: boolean; downloadedHere: boolean; inLibrary: boolean }[] };
+
+/** What the fixture's simulated CloudKit imports saw (Pageless/App/E2EFixtures.swift). */
+async function otherDeviceImport(pass: string): Promise<ImportPass> {
+  const path = join(fixtureStore(), 'other-device-imports.json');
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (existsSync(path)) {
+      const found = (JSON.parse(readFileSync(path, 'utf8')) as ImportPass[]).find((entry) => entry.pass === pass);
+      if (found) return found;
+    }
+    await delay(500);
+  }
+  throw new Error(`No "${pass}" pass in ${path}`);
+}
+
+test('another iPhone\'s sync never moves the books this iPhone has downloaded', {
+  timeout: 300_000,
+}, async ({ device, screen, app }) => {
+  // The worst case on the first launch after the update: this iPhone has forgotten its own
+  // answers, and every synced record carries the opposite of its files (books here say "not
+  // downloaded", books missing here say "downloaded"), as another device's sync would leave them.
+  const args = [...base, ...syncOn, ...drive, '-e2e-cloud-audio'];
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: [...args, '-e2e-reset-fixture', '-e2e-other-device-flags', '-e2e-forget-device-downloads',
+      '-e2e-other-device-import-after', '8'],
+  });
+  // The library opens on Favorites; the whole library is under Library.
+  await screen.getByTestId('libraryTab').tap();
+  await expect(screen.getByTestId('book.card.E2E-Listening-Book')).toBeVisible();
+  await expect(screen.getByTestId('book.card.E2E-Another-Book')).toBeVisible();
+  await expect(screen.getByTestId('book.card.E2E-Cloud-Book')).toBeHidden();
+  await expect(screen.getByTestId('book.card.E2E-Locate-Book')).toBeHidden();
+
+  // A CloudKit import mid-session carries the same flags again; nothing moves.
+  const imported = await otherDeviceImport('after-import');
+  // Keep the pass in the run log as machine-readable evidence.
+  console.log(`other-device-import ${JSON.stringify(imported)}`);
+  for (const book of imported.books) {
+    expect(book.downloadedHere, book.folder).toBe(book.filesHere);
+    expect(book.inLibrary, book.folder).toBe(book.filesHere);
+  }
+  expect(imported.books.filter((book) => book.filesHere).map((book) => book.folder).sort())
+    .toEqual(['E2E-Another-Book', 'E2E-Listening-Book']);
+  await expect(screen.getByTestId('book.card.E2E-Listening-Book')).toBeVisible();
+  await expect(screen.getByTestId('book.card.E2E-Another-Book')).toBeVisible();
+  await expect(screen.getByTestId('book.card.E2E-Cloud-Book')).toBeHidden();
+  await app.screenshot('icloud-other-device-library');
+
+  await openCloudLibrary(screen);
+  await expect(screen.getByText(inICloudOnly).first()).toBeVisible();
+  await expect(screen.getByTestId('cloudLibrary.download.E2E-Cloud-Book')).toBeVisible();
+  await expect(screen.getByTestId('cloudLibrary.download.E2E-Listening-Book')).toBeHidden();
+  await app.screenshot('icloud-other-device-cloud-library');
+  await tapVisibleCenter(back(screen));
+  await tapVisibleCenter(screen.getByRole('button', /^(Close|Done)$/).first());
+
+  // Remove from this iPhone stays this iPhone's answer even when the record says "downloaded".
+  await tapDeleteInMenu(screen, screen.getByTestId('book.card.E2E-Another-Book'));
+  await screen.getByRole('button', 'Remove from this iPhone').tap();
+  await expect(screen.getByTestId('book.card.E2E-Another-Book')).toBeHidden();
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...args, '-e2e-other-device-flags'] });
+  await screen.getByTestId('libraryTab').tap();
+  await expect(screen.getByTestId('book.card.E2E-Listening-Book')).toBeVisible();
+  await expect(screen.getByTestId('book.card.E2E-Another-Book')).toBeHidden();
+  await expect(screen.getByTestId('book.card.E2E-Cloud-Book')).toBeHidden();
+});
+
+test('a book imported before iCloud Drive answers is stored once it does, even after relaunch', {
+  timeout: 300_000,
+}, async ({ device, screen, app }) => {
+  const args = [...base, ...syncOn, ...drive, '-iCloudAudioEnabled', 'YES', '-e2e-import'];
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: [...args, '-e2e-reset-fixture', '-e2e-icloud-drive-delay', '120'],
+  });
+  await screen.getByTestId('importButton').tap();
+  await screen.getByPlaceholder('Title').fill('E2E Early Import');
+  await screen.getByRole('button', 'Save').tap();
+  await screen.getByTestId('libraryTab').tap();
+  await expect(screen.getByText('E2E Early Import').first()).toBeVisible();
+  await openICloudSettings(screen);
+  await expect(screen.getByText('Checking iCloud Drive…').first()).toBeVisible();
+  await app.screenshot('icloud-import-while-checking');
+
+  // The queue outlives this launch: the next one, with iCloud Drive answering, stores the book.
+  await device.openApp(bundle, { relaunch: true, launchArguments: args });
+  await openICloudSettings(screen);
+  await expect(screen.getByTestId('icloud.audioUsage')).toHaveText(/^1 book · .+ in iCloud$/, { timeout: 20_000 });
+  await app.screenshot('icloud-import-stored-later');
+});
+
+test('two devices storing the same book at once is not an error', {
+  timeout: 240_000,
+}, async ({ device, screen, app }) => {
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: [...base, ...syncOn, ...drive, '-e2e-icloud-race', '-e2e-reset-fixture'],
+  });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.scrollUntilVisible(screen.getByTestId('book.cloudAudio.store'));
+  await tapVisibleCenter(screen.getByTestId('book.cloudAudio.store'));
+  await expect(screen.getByTestId('book.cloudAudio.status')).toHaveText(/^Stored in iCloud/, { timeout: 15_000 });
+  await expect(screen.getByText(/couldn’t copy/)).toBeHidden();
+  await app.screenshot('icloud-same-book-race');
+});
+
+test('turning sync off asks about stored audio, and audio left in iCloud stays visible and removable', {
+  timeout: 300_000,
+}, async ({ device, screen, app }) => {
+  const args = [...base, ...syncOn, ...drive, '-e2e-icloud-upload-seconds', '1'];
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...args, '-e2e-reset-fixture'] });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.scrollUntilVisible(screen.getByTestId('book.cloudAudio.store'));
+  await tapVisibleCenter(screen.getByTestId('book.cloudAudio.store'));
+  await expect(screen.getByTestId('book.cloudAudio.status')).toHaveText(/^Stored in iCloud/, { timeout: 15_000 });
+  await back(screen).tap();
+
+  await openICloudSettings(screen);
+  await tapVisibleCenter(syncSwitch(screen));
+  await expect(screen.getByText('Turn off iCloud sync?').first()).toBeVisible();
+  await expect(screen.getByText(/keeps counting toward your iCloud storage after sync is off/).first()).toBeVisible();
+  await app.screenshot('icloud-sync-off-prompt');
+  // iOS 26 shows this dialog as a popover with no Cancel button. Keeping the audio turns sync off
+  // for the next launch; this launch's launch argument still reads as on.
+  await tapVisibleCenter(screen.getByRole('button', 'Keep Audio in iCloud'));
+  await expect(screen.getByText('Relaunch Required').first()).toBeVisible();
+  await tapVisibleCenter(screen.getByRole('button', 'OK'));
+  expect(existsSync(join(fixtureStore(), 'FakeICloudDrive', 'Audiobooks', 'E2E-Listening-Book'))).toBe(true);
+
+  // Sync off: the audio is still in iCloud, and Settings says so.
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...base, ...account, ...drive] });
+  await openICloudSettings(screen);
+  await expect(syncSwitch(screen)).toBeChecked({ checked: false });
+  await expect(screen.getByTestId('icloud.leftoverAudio')).toContainText(/^1 book · .+ still in iCloud/, { timeout: 15_000 });
+  await app.screenshot('icloud-leftover-audio');
+  await tapVisibleCenter(screen.getByTestId('icloud.removeLeftoverAudio'));
+  await expect(screen.getByText(/Deletes the audio of 1 book from iCloud on all your devices/).first()).toBeVisible();
+  await tapVisibleCenter(screen.getByRole('button', 'Remove Audio from iCloud').last());
+  await expect(screen.getByTestId('icloud.leftoverAudio')).toBeHidden({ timeout: 10_000 });
+  expect(existsSync(join(fixtureStore(), 'FakeICloudDrive', 'Audiobooks', 'E2E-Listening-Book'))).toBe(false);
+  // This iPhone's copy stays.
+  await tapVisibleCenter(screen.getByRole('button', /^(Close|Done)$/).first());
+  await expect(screen.getByTestId('book.card.E2E-Listening-Book')).toBeVisible();
+});
+
+test('deleting a book before iCloud Drive answers names its audio, and the audio goes once it does', {
+  timeout: 300_000,
+}, async ({ device, screen, app }) => {
+  const args = [...base, ...syncOn, ...drive, '-e2e-cloud-audio'];
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: [...args, '-e2e-reset-fixture', '-e2e-icloud-drive-delay', '120'],
+  });
+  const cloudFolder = join(fixtureStore(), 'FakeICloudDrive', 'Audiobooks', 'E2E-Cloud-Book');
+  expect(existsSync(cloudFolder)).toBe(true);
+  await openCloudLibrary(screen);
+  const title = await screen.getByText('E2E Cloud Book', { exact: true }).first().boundingBox();
+  if (!title) throw new Error('Cloud Library row has no bounds');
+  const y = title.y + title.height / 2;
+  await screen.swipe({ from: { x: title.x + title.width, y }, to: { x: 20, y } });
+  await tapVisibleCenter(screen.getByRole('button', 'Delete').first());
+  await expect(screen.getByText(/and any of its audio stored in iCloud, from iCloud and all your devices/).first()).toBeVisible();
+  await app.screenshot('icloud-delete-before-drive');
+  await tapVisibleCenter(screen.getByRole('button', 'Delete Permanently'));
+  await expect(screen.getByText('E2E Cloud Book')).toBeHidden();
+  expect(existsSync(cloudFolder)).toBe(true);
+
+  // The delete waited in a queue; the next launch with iCloud Drive answering carries it out.
+  await device.openApp(bundle, { relaunch: true, launchArguments: args });
+  const deadline = Date.now() + 20_000;
+  while (existsSync(cloudFolder) && Date.now() < deadline) await delay(500);
+  expect(existsSync(cloudFolder)).toBe(false);
 });

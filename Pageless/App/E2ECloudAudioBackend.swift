@@ -11,13 +11,18 @@ nonisolated final class E2ECloudAudioBackend: CloudAudioBackend, @unchecked Send
     private let uploadSeconds: Double
     private let downloadSeconds: Double
     private let quotaFull: Bool
+    private let anotherDeviceCopiesFirst: Bool
+    private let rootDelaySeconds: Double
     private let lock = NSLock()
     private var uploadStarts: [String: Date] = [:]
     private var downloadStarts: [String: Date] = [:]
     private var remoteOnly: Set<String>
 
-    init(root: URL?, uploadSeconds: Double, downloadSeconds: Double, quotaFull: Bool) {
+    init(root: URL?, uploadSeconds: Double, downloadSeconds: Double, quotaFull: Bool,
+         anotherDeviceCopiesFirst: Bool = false, rootDelaySeconds: Double = 0) {
         self.root = root
+        self.anotherDeviceCopiesFirst = anotherDeviceCopiesFirst
+        self.rootDelaySeconds = rootDelaySeconds
         self.remoteOnlyURL = root?.deletingLastPathComponent().appendingPathComponent("remote-only.json")
         self.uploadSeconds = uploadSeconds
         self.downloadSeconds = downloadSeconds
@@ -37,6 +42,7 @@ nonisolated final class E2ECloudAudioBackend: CloudAudioBackend, @unchecked Send
     }
 
     func audiobooksRoot() async -> URL? {
+        if rootDelaySeconds > 0 { try? await Task.sleep(for: .seconds(rootDelaySeconds)) }
         guard let root else { return nil }
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         return root
@@ -47,8 +53,21 @@ nonisolated final class E2ECloudAudioBackend: CloudAudioBackend, @unchecked Send
             at: destination.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        if anotherDeviceCopiesFirst, !FileManager.default.fileExists(atPath: destination.path(percentEncoded: false)) {
+            // Another device's copy of the same file lands first; this copy then fails as it would.
+            try FileManager.default.copyItem(at: source, to: destination)
+        }
         try FileManager.default.copyItem(at: source, to: destination)
         lock.withLock { uploadStarts[key(destination)] = .now }
+    }
+
+    func hasSameFile(at destination: URL, as source: URL) -> Bool {
+        func size(_ url: URL) -> Int64? {
+            ((try? FileManager.default.attributesOfItem(atPath: url.path(percentEncoded: false)))?[.size] as? NSNumber)?
+                .int64Value
+        }
+        guard let existing = size(destination) else { return false }
+        return existing == size(source)
     }
 
     func remove(_ url: URL) throws {

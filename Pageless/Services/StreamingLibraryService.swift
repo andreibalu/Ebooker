@@ -20,7 +20,6 @@ enum StreamingLibraryService {
         ) {
             if match.classification == .archived {
                 match.audiobook.isArchived = false
-                match.audiobook.isDownloaded = false
                 try modelContext.save()
             }
             return match.audiobook

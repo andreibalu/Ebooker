@@ -87,6 +87,12 @@ DEBUG-only launch hooks:
 | `-e2e-icloud-upload-seconds <n>` / `-e2e-icloud-download-seconds <n>` | Sets how long one fake upload or download takes (defaults 1.5 and 2). |
 | `-e2e-icloud-full` | Fails every fake upload with iCloud's quota error. |
 | `-e2e-cloud-audio` | On seeding, adds two own books synced without audio: `E2E Cloud Book`, whose audio another device stored in the fake container, and `E2E Locate Book`, whose audio it didn't. |
+| `-e2e-icloud-drive-delay <n>` | Holds the fake container lookup for `n` seconds, as iCloud Drive does early in a launch. Work from that window waits in `CloudAudioStore`'s queue. |
+| `-e2e-icloud-race` | Lands an identical copy at each destination just before this device's copy, as when another device stores the same book at the same moment. |
+| `-e2e-other-device-flags` | Each launch, writes into every synced record the opposite of what this device's files say, the way another device's sync (or an older app) leaves the legacy download flag. |
+| `-e2e-forget-device-downloads` | With `-e2e-other-device-flags`, drops this device's per-device download answers, as on the first launch after the update. |
+| `-e2e-other-device-import-after <n>` | With `-e2e-other-device-flags`, writes the flags again after `n` seconds and runs what a finished CloudKit import runs. Each pass is logged to `E2EFixtures/other-device-imports.json` with every book's files, download answer and library membership. |
+| `-e2e-ai-unsupported-device` | Reports an iPhone that can't run Apple Intelligence to `AppleIntelligenceCapability`. |
 
 Fixture mode Settings also shows "Seed Reading Activity · 7/30/113 days" and "Clear Reading Activity".
 

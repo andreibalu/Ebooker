@@ -27,6 +27,8 @@ final class PlusEntitlementStore: ObservableObject {
     @Published private(set) var currentPlusSubscriptionProductID: String?
     @Published private(set) var currentPlusSubscriptionExpirationDate: Date?
     @Published private(set) var currentPlusSubscriptionHasIntroductoryOffer = false
+    /// An active legacy iCloud Sync subscription is what grants Plus (no Plus plan is active).
+    @Published private(set) var isPlusFromLegacyICloudSubscription = false
     @Published private(set) var isLoadingProduct = false
     @Published private(set) var loadError: String?
     @Published private(set) var isPurchasing = false
@@ -141,6 +143,9 @@ final class PlusEntitlementStore: ObservableObject {
         currentPlusSubscriptionProductID = activePlusSubscription?.productID
         currentPlusSubscriptionExpirationDate = activePlusSubscription?.expirationDate
         currentPlusSubscriptionHasIntroductoryOffer = activePlusSubscription?.isIntroductory ?? false
+        isPlusFromLegacyICloudSubscription = activePlusSubscription == nil
+            && !records.contains { $0.productID == AIProductID.unlock && $0.revocationDate == nil }
+            && records.contains { $0.productID == ICloudSyncProductID.monthly && Self.recordGrantsPlus($0, now: now) }
     }
 
     func purchase(productID: String) async {

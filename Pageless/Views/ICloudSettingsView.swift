@@ -20,6 +20,8 @@ struct ICloudSettingsView: View {
     @State private var showRelaunchAlert = false
     @State private var showAudioOnPrompt = false
     @State private var showAudioOffPrompt = false
+    @State private var showSyncOffPrompt = false
+    @State private var showLeftoverRemovePrompt = false
     @State private var audioStore = CloudAudioStore.shared
 
     var body: some View {
@@ -58,6 +60,8 @@ struct ICloudSettingsView: View {
         .settingsInteractiveBackGesture()
         .task {
             hasUbiquityIdentity = IcloudSyncGate.hasUbiquityIdentity()
+            // With sync off, audio stored earlier still uses iCloud storage. Show it, so it can go.
+            audioStore.inspectWithoutSync()
         }
         .alert("Relaunch Required", isPresented: $showRelaunchAlert) {
             Button("OK", role: .cancel) {}
@@ -75,6 +79,27 @@ struct ICloudSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Unpaged copies your imported books’ audio to iCloud Drive, so your other devices, or this iPhone after a reinstall, can download it. \(booksToStore.count == 1 ? "The book" : "The \(booksToStore.count) books") on this iPhone use about \(Self.byteCount(booksToStoreBytes)) of iCloud storage.")
+        }
+        .confirmationDialog("Turn off iCloud sync?", isPresented: $showSyncOffPrompt, titleVisibility: .visible) {
+            Button("Keep Audio in iCloud") {
+                turnSyncOff()
+            }
+            Button("Remove Audio from iCloud", role: .destructive) {
+                storesAudio = false
+                audioStore.removeAllCloudAudio()
+                turnSyncOff()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(syncOffMessage)
+        }
+        .confirmationDialog("Remove audio from iCloud?", isPresented: $showLeftoverRemovePrompt, titleVisibility: .visible) {
+            Button("Remove Audio from iCloud", role: .destructive) {
+                audioStore.removeAllCloudAudio()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Deletes the audio of \(Self.bookCount(audioStore.usage.books)) from iCloud on all your devices, freeing \(Self.byteCount(audioStore.usage.bytes)). Books stay in your library, and iPhones that downloaded them keep their copies.")
         }
         .confirmationDialog("Stop storing audio in iCloud?", isPresented: $showAudioOffPrompt, titleVisibility: .visible) {
             Button("Keep Audio in iCloud") {
@@ -135,6 +160,11 @@ struct ICloudSettingsView: View {
                     get: { iCloudSyncEnabled },
                     set: { newValue in
                         guard newValue != iCloudSyncEnabled else { return }
+                        // Audio in iCloud keeps using storage after sync is off, so ask what to do with it.
+                        if !newValue, audioStore.isActive, audioStore.usage.books > 0 {
+                            showSyncOffPrompt = true
+                            return
+                        }
                         iCloudSyncEnabled = newValue
                         if newValue != IcloudSyncGate.isEnabled() {
                             showRelaunchAlert = true
@@ -207,6 +237,13 @@ struct ICloudSettingsView: View {
                         .padding(.horizontal, 4)
                 }
 
+                if audioStore.inspectsWithoutSync && audioStore.usage.books > 0 {
+                    SettingsHairline().padding(.leading, 4)
+                    leftoverAudioRow
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 4)
+                }
+
                 if let error = audioStore.errorMessage {
                     SettingsHairline().padding(.leading, 4)
                     CloudAudioErrorRow(message: error) { audioStore.errorMessage = nil }
@@ -223,6 +260,34 @@ struct ICloudSettingsView: View {
                     .padding(.horizontal, 4)
             }
             .padding(12)
+        }
+    }
+
+    /// Sync is off, but audio stored while it was on is still in iCloud.
+    private var leftoverAudioRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(Self.bookCount(audioStore.usage.books)) · \(Self.byteCount(audioStore.usage.bytes)) of audio is still in iCloud and counts toward your iCloud storage.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(SettingsDesign.secondaryLabel)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("icloud.leftoverAudio")
+            Button("Remove Audio from iCloud", role: .destructive) {
+                showLeftoverRemovePrompt = true
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .buttonStyle(.plain)
+            .foregroundStyle(.red)
+            .accessibilityIdentifier("icloud.removeLeftoverAudio")
+        }
+    }
+
+    private func turnSyncOff() {
+        iCloudSyncEnabled = false
+        guard IcloudSyncGate.isEnabled() else { return }
+        // Let the confirmation dialog finish dismissing before the alert presents.
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            showRelaunchAlert = true
         }
     }
 
@@ -275,6 +340,11 @@ struct ICloudSettingsView: View {
         return parts.joined(separator: " · ")
     }
 
+    private var syncOffMessage: String {
+        let usage = audioStore.usage
+        return "The audio of \(Self.bookCount(usage.books)) (\(Self.byteCount(usage.bytes))) is stored in iCloud and keeps counting toward your iCloud storage after sync is off. You can keep it for your other devices, or remove it from iCloud on all of them. Books on this iPhone stay either way."
+    }
+
     private var audioOffMessage: String {
         var message = "New books’ audio stays on this device. Audio already in iCloud can stay, or be removed from iCloud on all your devices. Books stay in your library either way."
         if cloudOnlyStoredCount > 0 {
@@ -313,6 +383,10 @@ struct ICloudSettingsView: View {
 
     private var cloudOnlyStoredCount: Int {
         books.filter { $0.isCloudOnlyOrphan && audioStore.state(for: $0) != .none }.count
+    }
+
+    static func bookCount(_ count: Int) -> String {
+        count == 1 ? "1 book" : "\(count) books"
     }
 
     static func byteCount(_ bytes: Int64) -> String {

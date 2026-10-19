@@ -163,3 +163,29 @@ test('large text with Button Shapes and Bold Text keeps the iCloud screens reada
   await expectReadable(screen, /Sync with iCloud · Free/);
   await app.screenshot('a11y-layout-onboarding-icloud');
 });
+
+test('large text with Button Shapes and Bold Text keeps the Plus notice and leftover iCloud audio readable', async ({ device, screen, app }) => {
+  setAccessibility(true);
+  // Sync off, with audio another device stored still in iCloud.
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO',
+      '-e2e-icloud-account', '-e2e-icloud-drive', '-e2e-cloud-audio', '-e2e-ai-unsupported-device'],
+  });
+  await screen.getByTestId('settingsButton').tap();
+  await screen.scrollUntilVisible(screen.getByTestId('settings.icloud'));
+  await tapVisibleCenter(screen.getByTestId('settings.icloud'));
+  const remove = screen.getByTestId('icloud.removeLeftoverAudio');
+  await screen.scrollUntilVisible(remove);
+  await expectReadable(screen, /still in iCloud/);
+  await expectReadable(screen, 'Remove Audio from iCloud');
+  await app.screenshot('a11y-layout-icloud-leftover');
+  await tapVisibleCenter(screen.getByRole('button', 'Settings'));
+  await dismiss(screen);
+
+  await screen.getByTestId('plusButton').tap();
+  const note = screen.getByTestId('plus.unsupportedDeviceNote');
+  await screen.scrollUntilVisible(note);
+  await expectReadable(screen, 'Requires an iPhone with Apple Intelligence');
+  await app.screenshot('a11y-layout-plus-unsupported');
+});

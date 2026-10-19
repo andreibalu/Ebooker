@@ -259,6 +259,10 @@ struct CloudLibraryView: View {
         } message: {
             if let book = deleteCandidate, audioStore.state(for: book) != .none {
                 Text("Permanently removes ‘\(book.title)’ and its progress, moments, EQ and audio from iCloud and all your devices. This can’t be undone.")
+            } else if let book = deleteCandidate, CloudAudioStore.isEligible(book),
+                      audioStore.syncsThisLaunch, !audioStore.knowsCloudContents {
+                // iCloud Drive hasn't said yet whether it holds audio; any that's there goes too.
+                Text("Permanently removes ‘\(book.title)’, its progress, moments and EQ, and any of its audio stored in iCloud, from iCloud and all your devices. This can’t be undone.")
             } else {
                 Text("Permanently removes ‘\(deleteCandidate?.title ?? "this book")’ and its progress, moments, and EQ from iCloud and all your devices. This can’t be undone.")
             }
@@ -519,9 +523,11 @@ struct CloudLibraryView: View {
         streamRestoreInFlight.insert(book.id)
         defer { streamRestoreInFlight.remove(book.id) }
         book.isArchived = false
-        book.isDownloaded = false
         try? modelContext.save()
-        alertMessage = "‘\(book.title)’ is back in your library — open it to stream."
+        // Removed on another iPhone, the book may still be downloaded on this one.
+        alertMessage = book.isDownloaded
+            ? "‘\(book.title)’ is back in your library."
+            : "‘\(book.title)’ is back in your library — open it to stream."
     }
 
     private func handleFileSelection(_ result: Result<[URL], Error>) {

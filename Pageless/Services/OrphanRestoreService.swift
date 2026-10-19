@@ -52,6 +52,7 @@ enum OrphanRestoreService {
         modelContext: ModelContext,
         mutationEnvironment: LibraryMutationEnvironment = .live()
     ) throws -> Audiobook {
+        let downloads = DeviceDownloadState.shared.snapshot([orphan.id])
         let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
         do {
             let prepared = try prepareAdoption(
@@ -78,7 +79,8 @@ enum OrphanRestoreService {
             try LibraryMutationTransaction.rollbackAndRethrow(
                 error,
                 modelContext: modelContext,
-                transaction: transaction
+                transaction: transaction,
+                downloads: downloads
             )
         }
     }
@@ -113,6 +115,7 @@ enum OrphanRestoreService {
             tracks: previews
         )
 
+        let downloads = DeviceDownloadState.shared.snapshot([cloudEntry.id, localBook.id])
         let transaction = try LibraryMutationTransaction(environment: mutationEnvironment)
         do {
             let prepared = try prepareAdoption(
@@ -147,7 +150,8 @@ enum OrphanRestoreService {
             try LibraryMutationTransaction.rollbackAndRethrow(
                 error,
                 modelContext: modelContext,
-                transaction: transaction
+                transaction: transaction,
+                downloads: downloads
             )
         }
     }
@@ -172,8 +176,9 @@ enum OrphanRestoreService {
         with backup: Audiobook,
         modelContext: ModelContext
     ) throws {
+        // Whether the backup's audio is on this device stays as it is: it may still be downloaded
+        // here if it was removed on another device.
         backup.isArchived = false
-        backup.isDownloaded = false
         try LibraryImportService.deleteAudiobook(current, deleteFiles: current.isDownloaded, modelContext: modelContext)
         log.info("Restored free backup by catalogId match and discarded duplicate")
     }

@@ -8,8 +8,9 @@ import SwiftUI
 
 struct UnpagedPlusCard: View {
     @ObservedObject var store: PlusEntitlementStore
-    /// False on an iPhone that can't run Apple Intelligence. Plus stays reachable (App Review must
-    /// find it, and a subscription follows the Apple ID to iPhones that can), with a plain note.
+    /// False on an iPhone that can't run Apple Intelligence (`AppleIntelligenceCapability`). Plus
+    /// stays reachable there (App Review must find it, guideline 3.1.1), but the card says before
+    /// the purchase buttons that its features need an iPhone that can.
     let includesAI: Bool
     let onAISettings: () -> Void
 
@@ -79,13 +80,35 @@ struct UnpagedPlusCard: View {
             featureRow("Apple Intelligence moment naming and recaps")
             featureRow("Future Plus features")
             if !includesAI {
-                Text("This iPhone can’t run Apple Intelligence. Plus features work on iPhones that can, with the same Apple ID.")
+                unsupportedDeviceNotice
+            }
+        }
+    }
+
+    /// Shown above the plans, so nobody buys Plus on this iPhone without knowing it does nothing here.
+    private var unsupportedDeviceNotice: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Requires an iPhone with Apple Intelligence")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("This iPhone can’t run Apple Intelligence, so Plus features don’t work on it. Plus works on an iPhone that supports Apple Intelligence, signed in with the same Apple ID.")
                     .font(.system(size: 12))
                     .foregroundStyle(SettingsDesign.secondaryLabel)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("plus.unsupportedDeviceNote")
             }
         }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("plus.unsupportedDeviceNote")
+        .padding(.top, 4)
     }
 
     private func featureRow(_ title: String) -> some View {
@@ -120,12 +143,23 @@ struct UnpagedPlusCard: View {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 17))
                     .foregroundStyle(Color.amber)
-                Text(store.hasManageableSubscription
+                Text(store.isPlusFromLegacyICloudSubscription
+                     ? "Your iCloud Sync subscription includes Plus"
+                     : store.hasManageableSubscription
                      ? "Unpaged Plus is active"
                      : "Your earlier purchase includes Plus")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(SettingsDesign.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
+            }
+            if store.isPlusFromLegacyICloudSubscription {
+                Text("iCloud sync is now free for everyone. While your subscription runs it keeps Plus, and you can cancel it anytime.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.leading, 27)
+                    .accessibilityIdentifier("plus.legacyICloudNote")
             }
             if store.hasManageableSubscription {
                 manageSubscriptionLink

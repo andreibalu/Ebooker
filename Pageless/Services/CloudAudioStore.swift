@@ -21,6 +21,10 @@ final class CloudAudioStore {
 
     /// Per-device choice: store each new book's audio in iCloud as it is added.
     static let preferenceKey = "iCloudAudioEnabled"
+    /// Work that arrived before iCloud Drive answered this launch: book id → `QueuedUpload`.
+    static let pendingUploadsKey = "iCloudAudioPendingUploads"
+    /// Folders of books deleted before iCloud Drive answered, whose audio must go too.
+    static let pendingDeletesKey = "iCloudAudioPendingDeletes"
 
     enum Availability: Equatable {
         /// Library sync is off this launch.
@@ -35,13 +39,16 @@ final class CloudAudioStore {
     private(set) var files: [String: CloudAudioFileStatus] = [:]
     private(set) var downloadProgress: [String: Double] = [:]
     private(set) var copyingFolders: Set<String> = []
+    /// The monitor has reported at least once since connecting, so `files` is complete.
+    private(set) var hasReported = false
+    /// Sync is off this launch, but Settings asked to see (and maybe remove) audio left in iCloud.
+    private(set) var inspectsWithoutSync = false
     var errorMessage: String?
 
     @ObservationIgnored private var backend: CloudAudioBackend = ICloudDriveAudioBackend()
     @ObservationIgnored private var root: URL?
     @ObservationIgnored private var monitor: CloudAudioMonitoring?
     @ObservationIgnored private var modelContainer: ModelContainer?
-    @ObservationIgnored private var hasReported = false
     /// Files this device copied in that the monitor hasn't reported yet, by folder.
     @ObservationIgnored private var awaitingReport: [String: Set<String>] = [:]
     @ObservationIgnored private var pendingDownloads: [String: UUID] = [:]
@@ -53,6 +60,12 @@ final class CloudAudioStore {
     private init() {}
 
     var isActive: Bool { availability == .available }
+
+    /// Library sync is on this launch, whether or not iCloud Drive has answered yet.
+    var syncsThisLaunch: Bool { availability != .syncOff }
+
+    /// `files` lists everything in iCloud, so "no audio" can be told apart from "not known yet".
+    var knowsCloudContents: Bool { (isActive || inspectsWithoutSync) && hasReported }
 
     var storesNewBooks: Bool { UserDefaults.standard.bool(forKey: Self.preferenceKey) }
 
@@ -89,6 +102,24 @@ final class CloudAudioStore {
             }
             self.root = root
             availability = .available
+            monitor = backend.startMonitoring(root: root) { [weak self] statuses in
+                self?.apply(statuses)
+            }
+        }
+    }
+
+    /// With sync off this launch nothing is stored or downloaded, but audio stored earlier still
+    /// counts against the user's iCloud storage. Settings calls this to show it and offer removal.
+    func inspectWithoutSync() {
+        guard availability == .syncOff, !inspectsWithoutSync, IcloudSyncGate.hasUbiquityIdentity() else { return }
+        inspectsWithoutSync = true
+        let backend = backend
+        Task {
+            guard let root = await backend.audiobooksRoot() else {
+                inspectsWithoutSync = false
+                return
+            }
+            self.root = root
             monitor = backend.startMonitoring(root: root) { [weak self] statuses in
                 self?.apply(statuses)
             }
@@ -148,28 +179,54 @@ final class CloudAudioStore {
         advanceDownloads()
         if !hasReported {
             hasReported = true
-            runMaintenance()
+            if isActive {
+                runQueuedWork()
+                runMaintenance()
+            }
         }
     }
 
     // MARK: - Upload
 
-    /// A book was just added on this device.
+    /// A book was just added on this device. Before iCloud Drive answers (the first seconds after
+    /// launch, or while it is off) the book waits in a queue that survives relaunch.
     func bookAdded(_ book: Audiobook) {
-        guard storesNewBooks else { return }
-        store(book)
+        guard storesNewBooks, Self.isEligible(book) else { return }
+        if isActive {
+            store(book)
+        } else if syncsThisLaunch {
+            enqueue(.add, for: book.id)
+        }
     }
 
     /// This device replaced a book's audio (Locate…, restore on import, merge). Its old files in
     /// iCloud no longer match, so the cloud copy starts over when there is one or the setting is on.
     /// `keepsCloudCopy` is set when the audio came from another book that was in iCloud (merge).
     func bookAudioReplaced(_ book: Audiobook, keepsCloudCopy: Bool = false) {
-        guard isActive, Self.isEligible(book) else { return }
+        guard Self.isEligible(book) else { return }
+        guard isActive, hasReported else {
+            if syncsThisLaunch { enqueue(keepsCloudCopy ? .replaceKeepingCloudCopy : .replace, for: book.id) }
+            return
+        }
         if hasAnyFile(in: book.folderName) {
             upload(book, replacing: true)
         } else if storesNewBooks || keepsCloudCopy {
             upload(book, replacing: false)
         }
+    }
+
+    /// A local book merged into `merged` and its record was deleted everywhere. Its audio in iCloud
+    /// goes, and the merged book is stored when the local book's audio was in iCloud.
+    func bookMerged(_ merged: Audiobook, fromFolder localFolder: String) {
+        guard isActive, hasReported else {
+            guard syncsThisLaunch else { return }
+            enqueueDelete(localFolder)
+            enqueue(.mergedFrom(localFolder), for: merged.id)
+            return
+        }
+        let localHadCloudAudio = hasAnyFile(in: localFolder)
+        bookDeleted(folderName: localFolder)
+        bookAudioReplaced(merged, keepsCloudCopy: localHadCloudAudio)
     }
 
     /// Copies every track file iCloud lacks. Safe to call again; never overwrites.
@@ -213,7 +270,15 @@ final class CloudAudioStore {
             let failure: String? = await Task.detached(priority: .utility) {
                 do {
                     if replacing { try backend.remove(cloudFolder) }
-                    for (local, cloud) in pairs { try backend.copyIn(local, to: cloud) }
+                    for (local, cloud) in pairs {
+                        do {
+                            try backend.copyIn(local, to: cloud)
+                        } catch {
+                            // Another device stored the same book at the same moment, and its copy
+                            // arrived before the metadata reported it. The bytes are the same.
+                            guard backend.hasSameFile(at: cloud, as: local) else { throw error }
+                        }
+                    }
                     return nil
                 } catch {
                     return error.localizedDescription
@@ -261,9 +326,10 @@ final class CloudAudioStore {
         }
     }
 
-    /// Deletes every book's audio from iCloud, including folders whose book is gone.
+    /// Deletes every book's audio from iCloud, including folders whose book is gone. Works with
+    /// sync off too, after `inspectWithoutSync`.
     func removeAllCloudAudio() {
-        guard isActive, let root else { return }
+        guard isActive || inspectsWithoutSync, let root else { return }
         files = [:]
         awaitingReport = [:]
         let backend = backend
@@ -285,7 +351,12 @@ final class CloudAudioStore {
 
     /// A synced record was permanently deleted on this device, which deletes it on every device.
     /// Its audio goes with it. With sync off the record still exists in iCloud, so nothing is touched.
+    /// Before iCloud Drive has reported what it holds, the delete waits in a queue.
     func bookDeleted(folderName: String) {
+        guard isActive, hasReported else {
+            if syncsThisLaunch { enqueueDelete(folderName) }
+            return
+        }
         guard hasAnyFile(in: folderName) else { return }
         removeCloudAudio(folderName: folderName)
     }
@@ -423,6 +494,7 @@ final class CloudAudioStore {
         into book: Audiobook,
         modelContext: ModelContext
     ) throws {
+        let downloads = DeviceDownloadState.shared.snapshot([book.id])
         let transaction = try LibraryMutationTransaction()
         do {
             for name in names {
@@ -440,7 +512,93 @@ final class CloudAudioStore {
             }
         } catch {
             if case LibraryMutationError.modelCommittedButTransactionMarkerFailed = error { throw error }
-            try LibraryMutationTransaction.rollbackAndRethrow(error, modelContext: modelContext, transaction: transaction)
+            try LibraryMutationTransaction.rollbackAndRethrow(error, modelContext: modelContext, transaction: transaction, downloads: downloads)
+        }
+    }
+
+    // MARK: - Queue
+
+    enum QueuedUpload: Equatable {
+        case add
+        case replace
+        case replaceKeepingCloudCopy
+        /// Merged from the book whose folder this was; keeps a cloud copy if that folder had one.
+        case mergedFrom(String)
+
+        var rawValue: String {
+            switch self {
+            case .add: "add"
+            case .replace: "replace"
+            case .replaceKeepingCloudCopy: "replaceKeep"
+            case .mergedFrom(let folder): "merged:\(folder)"
+            }
+        }
+
+        init?(rawValue: String) {
+            switch rawValue {
+            case "add": self = .add
+            case "replace": self = .replace
+            case "replaceKeep": self = .replaceKeepingCloudCopy
+            default:
+                guard rawValue.hasPrefix("merged:") else { return nil }
+                self = .mergedFrom(String(rawValue.dropFirst("merged:".count)))
+            }
+        }
+    }
+
+    private func enqueue(_ upload: QueuedUpload, for id: UUID) {
+        var queue = UserDefaults.standard.dictionary(forKey: Self.pendingUploadsKey) as? [String: String] ?? [:]
+        // A replace outranks an add queued earlier for the same book.
+        if let existing = queue[id.uuidString].flatMap(QueuedUpload.init(rawValue:)), upload == .add, existing != .add {
+            return
+        }
+        queue[id.uuidString] = upload.rawValue
+        UserDefaults.standard.set(queue, forKey: Self.pendingUploadsKey)
+    }
+
+    private func enqueueDelete(_ folderName: String) {
+        var folders = UserDefaults.standard.stringArray(forKey: Self.pendingDeletesKey) ?? []
+        guard !folders.contains(folderName) else { return }
+        folders.append(folderName)
+        UserDefaults.standard.set(folders, forKey: Self.pendingDeletesKey)
+    }
+
+    /// Runs at the first report once iCloud Drive is available, before maintenance, so a queued
+    /// replace clears a folder before maintenance would resume it.
+    private func runQueuedWork() {
+        let defaults = UserDefaults.standard
+        let uploads = defaults.dictionary(forKey: Self.pendingUploadsKey) as? [String: String] ?? [:]
+        let deletes = defaults.stringArray(forKey: Self.pendingDeletesKey) ?? []
+        guard !uploads.isEmpty || !deletes.isEmpty,
+              let context = modelContainer?.mainContext,
+              let books = try? context.fetch(FetchDescriptor<Audiobook>()) else { return }
+        defaults.removeObject(forKey: Self.pendingUploadsKey)
+        defaults.removeObject(forKey: Self.pendingDeletesKey)
+
+        // Read before the deletes below empty those folders.
+        var mergedKeeps: [UUID: Bool] = [:]
+        for (key, raw) in uploads {
+            if case .mergedFrom(let folder) = QueuedUpload(rawValue: raw), let id = UUID(uuidString: key) {
+                mergedKeeps[id] = hasAnyFile(in: folder)
+            }
+        }
+        let liveFolders = Set(books.map(\.folderName))
+        for folder in deletes where !liveFolders.contains(folder) && hasAnyFile(in: folder) {
+            removeCloudAudio(folderName: folder)
+        }
+        for (key, raw) in uploads {
+            guard let id = UUID(uuidString: key), let upload = QueuedUpload(rawValue: raw),
+                  let book = books.first(where: { $0.id == id }) else { continue }
+            switch upload {
+            case .add:
+                if storesNewBooks { store(book) }
+            case .replace:
+                bookAudioReplaced(book)
+            case .replaceKeepingCloudCopy:
+                bookAudioReplaced(book, keepsCloudCopy: true)
+            case .mergedFrom:
+                bookAudioReplaced(book, keepsCloudCopy: mergedKeeps[id] ?? false)
+            }
         }
     }
 
