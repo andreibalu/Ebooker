@@ -26,6 +26,32 @@ toggle?.addEventListener('click', () => {
 systemReduce.addEventListener('change', syncToggle);
 syncToggle();
 
+// ------------------------------------------------------------------ guide videos
+// A muted screen recording plays while it is on screen, unless the visitor prefers reduced motion.
+// Without script the native controls stay; with script a single pause/play button replaces them.
+for (const video of document.querySelectorAll('[data-guide-video]')) {
+  const button = video.parentElement.querySelector('[data-vid-toggle]');
+  video.removeAttribute('controls');
+  button.hidden = false;
+  let userPaused = false;
+  const sync = () => {
+    const paused = video.paused;
+    button.classList.toggle('is-paused', paused);
+    button.setAttribute('aria-label', paused ? 'Play recording' : 'Pause recording');
+  };
+  video.addEventListener('play', sync);
+  video.addEventListener('pause', sync);
+  sync();
+  button.addEventListener('click', () => {
+    userPaused = !video.paused;
+    if (video.paused) video.play().catch(() => {}); else video.pause();
+  });
+  new IntersectionObserver(([entry]) => {
+    if (entry.isIntersecting && entry.intersectionRatio >= 0.6) { if (!userPaused && !reduced() && video.paused) video.play().catch(() => {}); }
+    else if (!video.paused) video.pause();
+  }, { threshold: [0, 0.6] }).observe(video);
+}
+
 // ------------------------------------------------------------------ reveals
 const revealTargets = document.querySelectorAll('main > section:not(.hero) .section-head, .library-art, .moments-art, .habit, .playback-art, .plan, .features li, .points div, .details-grid article, .closing-inner > *, .plus-art');
 if ('IntersectionObserver' in window) {
