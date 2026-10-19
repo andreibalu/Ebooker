@@ -140,6 +140,8 @@ test('large text with Button Shapes and Bold Text keeps the iCloud screens reada
   await expectReadable(screen, 'E2E Cloud Book');
   await expect(screen.getByRole('button', 'Locate…').first()).toBeVisible();
   await app.screenshot('a11y-layout-cloud-library');
+  // Back to the Settings root first: iOS 18 exposes no sheet dismiss button on a pushed page.
+  await tapVisibleCenter(screen.getByRole('button', 'Back').first());
   await dismiss(screen);
 
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
