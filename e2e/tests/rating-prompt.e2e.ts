@@ -1,6 +1,7 @@
 import { expect, type Screen } from 'e2e';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test, tapVisibleCenter } from './native-actions.js';
+import { startFakeLibriVox } from '../support/fake-librivox.js';
 import { bundle } from '../support/simulator.js';
 
 // `-e2e-rating-stub` counts requests in `ratingPrompt.requests` instead of raising Apple's sheet.
@@ -104,6 +105,44 @@ test('playing audio holds the request until playback pauses', async ({ device, s
   await screen.getByTestId('miniPlayer.playPause').tap();
   await expect(screen.getByTestId('miniPlayer.playPause')).toHaveAccessibleName('Play playback');
   await requests(screen, '1', 20_000);
+});
+
+test('a stream still loading holds the request until playback is stopped', { timeout: 300_000 }, async ({ device, screen }) => {
+  // First launch: stream Jane Eyre once, so it becomes the latest-played book.
+  let feed = await startFakeLibriVox();
+  try {
+    await device.openApp(bundle, { relaunch: true, launchArguments: [...aged, '-e2e-online', '-e2e-librivox-feed', feed.feedURL] });
+    await screen.getByTestId('shelvesTab').tap();
+    await screen.getByRole('textbox').fill('Jane Eyre');
+    await screen.getByRole('textbox').press('Enter');
+    const row = screen.getByRole('button', /^\d+, Jane Eyre, /).first();
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await tapVisibleCenter(row);
+    await screen.scrollUntilVisible(screen.getByRole('button', 'Add to Library'));
+    await tapVisibleCenter(screen.getByRole('button', 'Add to Library'));
+    await tapVisibleCenter(screen.getByRole('button', 'View in Library'));
+    await screen.getByTestId('book.play').tap();
+    await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback', { timeout: 30_000 });
+  } finally {
+    await feed.close();
+  }
+
+  // Second launch: "play latest book" (Siri, widget) starts the stream with the player closed, and the
+  // same audio URLs now take seven seconds to answer, so playback is loading but not yet playing.
+  feed = await startFakeLibriVox({ audioDelayMs: 7_000 });
+  try {
+    const relaunch = [...finished.filter((a) => a !== '-e2e-reset-fixture'), '-e2e-online', '-e2e-librivox-feed', feed.feedURL,
+      '-intent.playLatestBook', 'YES', '-e2e-rating-poll-seconds', '3'];
+    await device.openApp(bundle, { relaunch: true, launchArguments: relaunch });
+    // Two calm 3-second polls fall inside the load; loading must not count as calm.
+    await expect(screen.getByTestId('miniPlayer.playPause')).toHaveAccessibleName('Pause playback', { timeout: 30_000 });
+    expect(feed.audioRequests('133').length).toBeGreaterThan(0);
+    await requests(screen, '0');
+    await screen.getByTestId('miniPlayer.playPause').tap();
+    await requests(screen, '1', 20_000);
+  } finally {
+    await feed.close();
+  }
 });
 
 test('onboarding never asks', async ({ device, screen }) => {

@@ -254,7 +254,8 @@ struct ContentView: View {
         .ratingPrompt(
             isOnboardingComplete: onboarding.isComplete,
             isPlayerOpen: isPlayerVisible,
-            isPlaying: player.isPlaying
+            // A stream still loading has not set `isPlaying` yet, but playback is starting.
+            isPlaying: player.isPlaying || player.isPreparingPlayback
         )
         .alert(
             deleteAlertTitle,
