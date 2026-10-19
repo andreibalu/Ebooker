@@ -35,11 +35,11 @@ struct AudiobookDetailView: View {
     @State private var showFreeRestoreConfirm = false
     @State private var catalogBook: LibriVoxBook?
     @State private var isABSOffline = false
+    @State private var cloudAudio = CloudAudioStore.shared
 
-    /// The "Match with iCloud backup" affordance only appears when sync is active (which itself
-    /// requires an active iCloud subscription), this is a downloaded own book, and there's at least
-    /// one cloud-only backup to match against. When the user isn't subscribed, `IcloudSyncGate` is
-    /// false and the button is simply absent.
+    /// The "Match with iCloud backup" affordance only appears when sync is active, this is a
+    /// downloaded own book, and there's at least one cloud-only backup to match against. With sync
+    /// off, `IcloudSyncGate` is false and the button is simply absent.
     private var canMatchWithCloud: Bool {
         IcloudSyncGate.isEnabled()
             && audiobook.isDownloaded
@@ -106,6 +106,9 @@ struct AudiobookDetailView: View {
                 }
                 if (audiobook.isStreamingOnly && !audiobook.isAudiobookshelfBook) || downloadEntry != nil {
                     streamingDownloadSection
+                }
+                if cloudAudio.isActive && CloudAudioStore.isEligible(audiobook) && audiobook.isDownloaded {
+                    CloudAudioBookCard(audiobook: audiobook)
                 }
                 resumeAnchorRow
                 momentsSection

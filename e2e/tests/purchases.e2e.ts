@@ -159,19 +159,23 @@ test('a coffee tip can be cancelled, then bought, and unlocks nothing', {
   await screen.scrollUntilVisible(screen.getByRole('button', 'Try 1 week free'));
 });
 
-test('AI and iCloud settings stay reachable from the Plus hub without a purchase (Apple 3.1.1)', async ({ device, screen }) => {
+test('AI settings stay reachable from the Plus hub without a purchase (Apple 3.1.1), and iCloud is not sold there', async ({ device, screen }) => {
   resetStoreKitLedger();
   await openPlusCard(device, screen, ['-e2e-reset-fixture']);
-  for (const [row, header] of [['Apple Intelligence', 'AI Features'], ['iCloud Sync', 'iCloud Sync']] as const) {
-    const link = screen.getByRole('button', new RegExp(`^${row}, `));
-    await screen.scrollUntilVisible(link);
-    await tapVisibleCenter(link);
-    await expect(screen.getByText(header, { exact: true }).first()).toBeVisible();
-    if (row === 'iCloud Sync') {
-      // The paywall is reachable here without an iCloud account.
-      await screen.scrollUntilVisible(screen.getByText('View Unpaged Plus').first());
-    }
-    await tapVisibleCenter(screen.getByRole('button', 'Settings'));
-    await expect(screen.getByRole('button', 'Settings')).toBeHidden();
+  // iCloud sync is free: the hub neither lists it as a Plus feature nor links to its settings.
+  await expect(screen.getByText(/iCloud/)).toBeHidden();
+  await expect(screen.getByRole('button', /^iCloud Sync, /)).toBeHidden();
+  const link = screen.getByRole('button', /^Apple Intelligence, /);
+  const purchase = screen.getByRole('button', 'Try 1 week free');
+  await screen.scrollUntilVisible(purchase);
+  if (await screen.getByTestId('plus.unsupportedDeviceNote').isVisible()) {
+    // An iPhone that can't run Apple Intelligence still offers Plus, with a note and no AI link.
+    await expect(link).toBeHidden();
+    return;
   }
+  await screen.scrollUntilVisible(link);
+  await tapVisibleCenter(link);
+  await expect(screen.getByText('AI Features', { exact: true }).first()).toBeVisible();
+  await tapVisibleCenter(screen.getByRole('button', 'Settings'));
+  await expect(screen.getByRole('button', 'Settings')).toBeHidden();
 });

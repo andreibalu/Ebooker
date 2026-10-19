@@ -76,13 +76,15 @@ final class CloudLibraryRestoreFlow {
 ///   • "On this iPhone"     — downloaded own + free books (audio present locally).
 ///   • "Streaming"          — active free books and Audiobookshelf books kept as streaming entries
 ///                            (backed up, no local files; ABS books are never orphans).
-///   • "In iCloud only"     — own books synced without their audio; restore via a "Locate…" picker.
+///   • "In iCloud only"     — own books synced without their audio here. "Download" when their audio
+///                            is in iCloud (`CloudAudioStore`), otherwise a "Locate…" picker.
 ///   • "Removed free books" — free books the user removed; one-tap "Stream" brings them back.
 /// A row is only ever removed from iCloud by an explicit swipe-to-delete here.
 struct CloudLibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var player: AudioPlayerManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Query private var allBooks: [Audiobook]
 
     @State private var pickingForBook: Audiobook?
@@ -91,7 +93,9 @@ struct CloudLibraryView: View {
     @State private var streamRestoreInFlight: Set<UUID> = []
     @State private var navigateToBook: Audiobook?
     @State private var deleteCandidate: Audiobook?
+    @State private var removeAudioCandidate: Audiobook?
     @State private var restoreFlow = CloudLibraryRestoreFlow()
+    @State private var audioStore = CloudAudioStore.shared
 
     static func restoreDecision(
         pending: PendingImportSelection,
@@ -133,10 +137,16 @@ struct CloudLibraryView: View {
         List {
             if !IcloudSyncGate.isEnabled() {
                 Section {
-                    Text("Turn on iCloud sync in Settings to back up your library and see it across devices.")
+                    Text("Turn on iCloud sync in Settings to back up your library and see it across devices. It’s free.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
+                }
+            }
+
+            if let error = audioStore.errorMessage {
+                Section {
+                    CloudAudioErrorRow(message: error) { audioStore.errorMessage = nil }
                 }
             }
 
@@ -144,6 +154,7 @@ struct CloudLibraryView: View {
                 Section("On this iPhone") {
                     ForEach(onThisPhone) { book in
                         downloadedRow(book)
+                            .contextMenu { cloudAudioMenu(for: book) }
                             .swipeActions(edge: .trailing) {
                                 Button("Delete", role: .destructive) {
                                     deleteCandidate = book
@@ -162,14 +173,27 @@ struct CloudLibraryView: View {
             }
 
             if !ownOrphans.isEmpty {
-                Section("In iCloud only") {
+                Section {
                     ForEach(ownOrphans) { book in
                         ownBookRow(book)
+                            .contextMenu {
+                                Button("Locate Files…", systemImage: "folder") {
+                                    pickingForBook = book
+                                    fileImporterPresented = true
+                                }
+                                cloudAudioMenu(for: book)
+                            }
                             .swipeActions(edge: .trailing) {
                                 Button("Delete", role: .destructive) {
                                     deleteCandidate = book
                                 }
                             }
+                    }
+                } header: {
+                    Text("In iCloud only")
+                } footer: {
+                    if audioStore.isActive {
+                        Text("Download brings back a book whose audio is in iCloud. For any other book, Locate… its audio file.")
                     }
                 }
             }
@@ -233,7 +257,27 @@ struct CloudLibraryView: View {
             }
             Button("Cancel", role: .cancel) { deleteCandidate = nil }
         } message: {
-            Text("Permanently removes ‘\(deleteCandidate?.title ?? "this book")’ and its progress, moments, and EQ from iCloud and all your devices. This can’t be undone.")
+            if let book = deleteCandidate, audioStore.state(for: book) != .none {
+                Text("Permanently removes ‘\(book.title)’ and its progress, moments, EQ and audio from iCloud and all your devices. This can’t be undone.")
+            } else {
+                Text("Permanently removes ‘\(deleteCandidate?.title ?? "this book")’ and its progress, moments, and EQ from iCloud and all your devices. This can’t be undone.")
+            }
+        }
+        .confirmationDialog(
+            "Remove audio from iCloud?",
+            isPresented: Binding(
+                get: { removeAudioCandidate != nil },
+                set: { if !$0 { removeAudioCandidate = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove Audio from iCloud", role: .destructive) {
+                if let book = removeAudioCandidate { audioStore.removeCloudAudio(folderName: book.folderName) }
+                removeAudioCandidate = nil
+            }
+            Button("Cancel", role: .cancel) { removeAudioCandidate = nil }
+        } message: {
+            Text(CloudAudioCopy.removeMessage(for: removeAudioCandidate))
         }
         .alert("iCloud Library", isPresented: Binding(
             get: { alertMessage != nil },
@@ -260,6 +304,7 @@ struct CloudLibraryView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 metaLine(for: book)
+                cloudAudioLine(for: book)
             }
             Spacer()
             Label("Saved", systemImage: "checkmark.icloud")
@@ -267,6 +312,36 @@ struct CloudLibraryView: View {
                 .foregroundStyle(.primary)
         }
         .padding(.vertical, 4)
+    }
+
+    /// One line under an own book's metadata saying where its audio is. Empty when audio in iCloud
+    /// isn't available, so sync-only users see the rows as before.
+    @ViewBuilder
+    private func cloudAudioLine(for book: Audiobook) -> some View {
+        if audioStore.isActive, CloudAudioStore.isEligible(book),
+           let text = CloudAudioCopy.rowStatus(audioStore.state(for: book)) {
+            Text(text)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(audioStore.state(for: book) == .quotaExceeded ? Color.orange : Color.secondary)
+                .accessibilityIdentifier("cloudLibrary.audioStatus.\(book.folderName)")
+        }
+    }
+
+    @ViewBuilder
+    private func cloudAudioMenu(for book: Audiobook) -> some View {
+        if audioStore.isActive, CloudAudioStore.isEligible(book) {
+            let state = audioStore.state(for: book)
+            if book.isDownloaded, state != .stored {
+                Button("Store Audio in iCloud", systemImage: "icloud.and.arrow.up") {
+                    audioStore.store(book)
+                }
+            }
+            if state != .none {
+                Button("Remove Audio from iCloud", systemImage: "icloud.slash", role: .destructive) {
+                    removeAudioCandidate = book
+                }
+            }
+        }
     }
 
     @ViewBuilder
@@ -298,6 +373,8 @@ struct CloudLibraryView: View {
 
     @ViewBuilder
     private func ownBookRow(_ book: Audiobook) -> some View {
+        // At accessibility sizes the action moves under the text, so the title keeps its width.
+        let stacksAction = dynamicTypeSize.isAccessibilitySize
         HStack(spacing: 12) {
             cover(for: book)
             VStack(alignment: .leading, spacing: 3) {
@@ -308,16 +385,56 @@ struct CloudLibraryView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 metaLine(for: book)
+                if !audioStore.isDownloading(book) {
+                    cloudAudioLine(for: book)
+                }
+                if stacksAction {
+                    ownBookAction(book)
+                        .padding(.top, 4)
+                }
             }
-            Spacer()
+            .layoutPriority(1)
+            Spacer(minLength: 0)
+            if !stacksAction {
+                ownBookAction(book)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    /// Download when the book's audio is in iCloud, progress while it comes down, otherwise Locate….
+    @ViewBuilder
+    private func ownBookAction(_ book: Audiobook) -> some View {
+        if let progress = audioStore.downloadProgress[book.folderName] {
+            VStack(alignment: .trailing, spacing: 3) {
+                ProgressView(value: progress)
+                    .frame(width: 64)
+                    .tint(Color.amber)
+                Text("\(TimeFormatter.percentValue(progress))%")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Downloading from iCloud")
+            .accessibilityValue("\(TimeFormatter.percentValue(progress)) percent")
+            .accessibilityIdentifier("cloudLibrary.downloading.\(book.folderName)")
+        } else if audioStore.state(for: book) == .stored {
+            Button("Download") {
+                audioStore.download(book)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
+            .accessibilityIdentifier("cloudLibrary.download.\(book.folderName)")
+        } else {
             Button("Locate…") {
                 pickingForBook = book
                 fileImporterPresented = true
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+            .fixedSize()
         }
-        .padding(.vertical, 4)
     }
 
     @ViewBuilder
@@ -350,15 +467,19 @@ struct CloudLibraryView: View {
         .padding(.vertical, 4)
     }
 
+    @ViewBuilder
     private func metaLine(for book: Audiobook) -> some View {
         let count = book.moments.count
         let pieces: [String] = [
             count > 0 ? "\(count) moment\(count == 1 ? "" : "s")" : nil,
             book.progress > 0 ? "\(TimeFormatter.percentValue(book.progress))%" : nil,
         ].compactMap { $0 }
-        return Text(pieces.joined(separator: " · "))
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
+        // An empty Text still takes a line, which shows as a gap above the audio status.
+        if !pieces.isEmpty {
+            Text(pieces.joined(separator: " · "))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
     }
 
     @ViewBuilder
@@ -383,8 +504,10 @@ struct CloudLibraryView: View {
     private func permanentlyDelete(_ book: Audiobook) {
         deleteCandidate = nil
         player.unloadIfCurrent(book)
+        let folderName = book.folderName
         do {
             try LibraryImportService.deleteAudiobook(book, deleteFiles: true, modelContext: modelContext)
+            CloudAudioStore.shared.bookDeleted(folderName: folderName)
         } catch {
             alertMessage = error.localizedDescription
         }
@@ -462,7 +585,8 @@ struct CloudLibraryView: View {
     }
 
     private func adoptRestore(_ book: Audiobook, _ pending: PendingImportSelection) throws {
-        _ = try OrphanRestoreService.adopt(orphan: book, pending: pending, modelContext: modelContext)
+        let adopted = try OrphanRestoreService.adopt(orphan: book, pending: pending, modelContext: modelContext)
+        CloudAudioStore.shared.bookAudioReplaced(adopted)
     }
 
     private func stopSecurityScopedAccess(_ url: URL) {

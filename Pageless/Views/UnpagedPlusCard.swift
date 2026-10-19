@@ -8,9 +8,10 @@ import SwiftUI
 
 struct UnpagedPlusCard: View {
     @ObservedObject var store: PlusEntitlementStore
+    /// False on an iPhone that can't run Apple Intelligence. Plus stays reachable (App Review must
+    /// find it, and a subscription follows the Apple ID to iPhones that can), with a plain note.
     let includesAI: Bool
     let onAISettings: () -> Void
-    let onICloudSettings: () -> Void
 
     @State private var selectedProductID = PlusProductID.monthly
 
@@ -36,7 +37,9 @@ struct UnpagedPlusCard: View {
                     purchaseOptions
                 }
 
-                featureSettingsLinks
+                if includesAI {
+                    featureSettingsLinks
+                }
             }
             .padding(16)
         }
@@ -62,9 +65,7 @@ struct UnpagedPlusCard: View {
                 Text("Unpaged Plus")
                     .font(SettingsDesign.displayFont(17, weight: .bold))
                     .foregroundStyle(.primary)
-                Text(includesAI
-                     ? "A little more from every listen."
-                     : "Your library, in sync across devices.")
+                Text("A little more from every listen.")
                     .font(.system(size: 12))
                     .foregroundStyle(SettingsDesign.secondaryLabel)
                     .fixedSize(horizontal: false, vertical: true)
@@ -75,11 +76,15 @@ struct UnpagedPlusCard: View {
 
     private var features: some View {
         VStack(alignment: .leading, spacing: 9) {
-            if includesAI {
-                featureRow("Apple Intelligence moment naming and recaps")
-            }
-            featureRow("iCloud Sync across your devices")
+            featureRow("Apple Intelligence moment naming and recaps")
             featureRow("Future Plus features")
+            if !includesAI {
+                Text("This iPhone can’t run Apple Intelligence. Plus features work on iPhones that can, with the same Apple ID.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(SettingsDesign.secondaryLabel)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("plus.unsupportedDeviceNote")
+            }
         }
     }
 
@@ -142,20 +147,11 @@ struct UnpagedPlusCard: View {
     private var featureSettingsLinks: some View {
         VStack(spacing: 0) {
             SettingsHairline()
-            if includesAI {
-                featureSettingsRow(
-                    title: "Apple Intelligence",
-                    caption: "Choose which local AI features to use",
-                    symbol: "sparkles",
-                    action: onAISettings
-                )
-                SettingsHairline().padding(.leading, 34)
-            }
             featureSettingsRow(
-                title: "iCloud Sync",
-                caption: "Manage your library sync settings",
-                symbol: "icloud",
-                action: onICloudSettings
+                title: "Apple Intelligence",
+                caption: "Choose which local AI features to use",
+                symbol: "sparkles",
+                action: onAISettings
             )
         }
         .padding(.top, 1)

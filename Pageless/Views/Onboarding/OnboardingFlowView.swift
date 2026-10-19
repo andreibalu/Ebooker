@@ -30,6 +30,7 @@ struct OnboardingFlowView: View {
     // Persists the Shelves home choice so relaunched users open there and get the reordered
     // tab layout (Favorites / Shelves / Library). Keep the existing key for returning users.
     @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
+    @AppStorage(IcloudSyncGate.preferenceKey) private var iCloudSyncEnabled = false
 
     @State private var choice: OnboardingChoice?
     @State private var activeID: Int? = 0
@@ -76,7 +77,8 @@ struct OnboardingFlowView: View {
                         OBIntelligenceScene(isActive: isActive(4), reduceMotion: reduceMotion)
                     }
                     scene(5) {
-                        OBCloudScene(isActive: isActive(5), reduceMotion: reduceMotion)
+                        OBCloudScene(isActive: isActive(5), reduceMotion: reduceMotion,
+                                     syncEnabled: $iCloudSyncEnabled)
                     }
                     scene(6) {
                         OBDoneScene(isActive: isActive(6), reduceMotion: reduceMotion,

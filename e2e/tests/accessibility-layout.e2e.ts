@@ -102,3 +102,60 @@ test('large text with Button Shapes and Bold Text keeps the header, tabs and She
   expect(headingBox.width).toBeGreaterThan(headingBox.height * 2);
   await app.screenshot('a11y-layout-shelves');
 });
+
+// The iCloud chrome added with free sync and audio in iCloud: the Settings section and page, the
+// book's audio card, Cloud Library's Download row and the onboarding toggle.
+const iCloudFixture = ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO',
+  '-e2e-icloud-account', '-iCloudSyncEnabled', 'YES', '-e2e-icloud-drive', '-e2e-cloud-audio'];
+
+/** A label squeezed by fixed-size neighbours wraps a letter per line: narrow and very tall. */
+async function expectReadable(screen: Screen, text: string | RegExp): Promise<void> {
+  const label = screen.getByText(text).first();
+  await expect(label).toBeVisible();
+  const box = await label.boundingBox();
+  if (!box) throw new Error(`${text} has no bounds`);
+  expect(box.width).toBeGreaterThan(80);
+  expect(box.width).toBeGreaterThan(box.height);
+}
+
+test('large text with Button Shapes and Bold Text keeps the iCloud screens readable', async ({ device, screen, app }) => {
+  setAccessibility(true);
+  await device.openApp(bundle, { relaunch: true, launchArguments: iCloudFixture });
+
+  await screen.getByTestId('settingsButton').tap();
+  await screen.scrollUntilVisible(screen.getByTestId('settings.icloud'));
+  await expectReadable(screen, 'iCloud Sync');
+  await app.screenshot('a11y-layout-settings-icloud-section');
+  await tapVisibleCenter(screen.getByTestId('settings.icloud'));
+  await screen.scrollUntilVisible(screen.getByTestId('icloud.audioToggle'));
+  await expectReadable(screen, 'Store audio in iCloud');
+  await expect(screen.getByTestId('icloud.audioToggle').getByRole('switch').last()).toBeEnabled();
+  await app.screenshot('a11y-layout-icloud-settings');
+  await tapVisibleCenter(screen.getByRole('button', 'Settings'));
+
+  await screen.scrollUntilVisible(screen.getByTestId('settings.cloudLibrary'));
+  await tapVisibleCenter(screen.getByTestId('settings.cloudLibrary'));
+  const download = screen.getByTestId('cloudLibrary.download.E2E-Cloud-Book');
+  await screen.scrollUntilVisible(download);
+  await expectReadable(screen, 'E2E Cloud Book');
+  await expect(screen.getByRole('button', 'Locate…').first()).toBeVisible();
+  await app.screenshot('a11y-layout-cloud-library');
+  await dismiss(screen);
+
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.scrollUntilVisible(screen.getByTestId('book.cloudAudio.store'));
+  await expectReadable(screen, 'Audio in iCloud');
+  await app.screenshot('a11y-layout-book-cloud-audio');
+
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'NO', '-startOnFreeBooks', 'NO', '-e2e-icloud-account'],
+  });
+  await screen.getByTestId('onboarding.choice.own').tap();
+  await screen.getByTestId('onboarding.page.5').tap();
+  const toggle = screen.getByTestId('onboarding.icloud.toggle').getByRole('switch').last();
+  await screen.scrollUntilVisible(toggle);
+  await expect(toggle).toBeEnabled();
+  await expectReadable(screen, /Sync with iCloud · Free/);
+  await app.screenshot('a11y-layout-onboarding-icloud');
+});

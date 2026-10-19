@@ -58,7 +58,7 @@ final class StoreKitTransactionTests {
 
     // MARK: - Unpaged Plus
 
-    @Test func monthlyPurchaseStartsTheTrialAndWritesTheLaunchCache() async throws {
+    @Test func monthlyPurchaseStartsTheTrial() async throws {
         let store = await freshPlusStore()
 
         await store.purchase(productID: PlusProductID.monthly)
@@ -69,7 +69,6 @@ final class StoreKitTransactionTests {
         #expect(store.trialDaysRemaining == 7)
         #expect(store.hasManageableSubscription)
         #expect(store.currentPlusSubscriptionProductID == PlusProductID.monthly)
-        #expect(PlusEntitlementStore.isSubscribedAtLaunch())
         let finished = await Self.waitUntil { await Self.unfinishedTransactionCount() == 0 }
         let ledger = await Self.describeLedger(session)
         #expect(finished, "A delivered Plus purchase must be finished: \(ledger)")
@@ -105,7 +104,6 @@ final class StoreKitTransactionTests {
         let ledger = await Self.describeLedger(session)
         #expect(store.isPlus == false, "\(ledger)")
         #expect(store.hasManageableSubscription == false)
-        #expect(PlusEntitlementStore.isSubscribedAtLaunch() == false)
     }
 
     @Test func refundedSubscriptionIsRevoked() async throws {
@@ -139,7 +137,6 @@ final class StoreKitTransactionTests {
         let ledger = await Self.describeLedger(session)
         #expect(store.isPlus, "\(ledger)")
         #expect(store.hasManageableSubscription == false, "A one-time unlock has nothing to manage")
-        #expect(PlusEntitlementStore.isSubscribedAtLaunch())
     }
 
     @Test func legacyICloudSubscriptionStillGrantsPlus() async throws {

@@ -11,8 +11,8 @@ import OSLog
 ///
 /// Owns the shared `AudiobookshelfClient` and mirrors only the *display* half of the Keychain
 /// record (server URL + username) — the token itself is never copied out of the client/Keychain.
-/// A singleton for the same reason as `ICloudSubscriptionStore`: `AudioPlayerManager` and the
-/// Shelves source registry need it outside the SwiftUI environment.
+/// A singleton because `AudioPlayerManager` and the Shelves source registry need it outside the
+/// SwiftUI environment.
 @MainActor
 @Observable
 final class ABSAccount {

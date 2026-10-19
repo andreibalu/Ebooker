@@ -84,12 +84,13 @@ final class LibraryViewModel {
 
     func importAudiobook(_ pending: PendingImportSelection, title: String, author: String, modelContext: ModelContext) throws {
         do {
-            _ = try LibraryImportService.importAudiobook(
+            let book = try LibraryImportService.importAudiobook(
                 from: pending,
                 title: title,
                 author: author,
                 modelContext: modelContext
             )
+            CloudAudioStore.shared.bookAdded(book)
             pendingImport = nil
             releaseSecurityScopedAccess()
         } catch LibraryImportError.alreadyInLibrary {
@@ -103,11 +104,12 @@ final class LibraryViewModel {
     func adoptRestoreMatch(modelContext: ModelContext) {
         guard let candidate = restoreMatch else { return }
         do {
-            _ = try OrphanRestoreService.adopt(
+            let book = try OrphanRestoreService.adopt(
                 orphan: candidate.orphan,
                 pending: candidate.pending,
                 modelContext: modelContext
             )
+            CloudAudioStore.shared.bookAudioReplaced(book)
             restoreMatch = nil
             releaseSecurityScopedAccess()
         } catch {
@@ -158,6 +160,7 @@ final class LibraryViewModel {
         guard let deleteCandidate else { return }
         do {
             try LibraryImportService.softDeleteAudiobook(deleteCandidate, modelContext: modelContext)
+            CloudAudioStore.shared.evictLocalCopies(folderName: deleteCandidate.folderName)
             self.deleteCandidate = nil
         } catch {
             presentAlert(message: error.localizedDescription)

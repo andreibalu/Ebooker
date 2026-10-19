@@ -195,6 +195,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         ABSDownloadManager.shared.configure(context: modelContainer.mainContext)
         FingerprintBackfillService.runIfNeeded(modelContainer: modelContainer)
         OrphanDetectionService.runIfNeeded(modelContainer: modelContainer)
+        CloudAudioStore.shared.start(modelContainer: modelContainer)
 
         // Re-run orphan detection whenever CloudKit finishes an import. Books synced from
         // iCloud arrive with isDownloaded = true; we need to flip that flag for any book

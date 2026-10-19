@@ -326,7 +326,7 @@ struct ContentView: View {
                     Text("This will remove the downloaded audiobook. You can download it again from Shelves.")
                 }
             } else if IcloudSyncGate.isEnabled() {
-                Text("Removes the audio from this iPhone. The book stays in your iCloud Library, and you can restore it anytime.")
+                Text(softDeleteMessage)
             } else {
                 Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
             }
@@ -473,9 +473,8 @@ struct ContentView: View {
                 .accessibilityLabel("Search saved moments")
                 .accessibilityIdentifier("momentSearchButton")
 
-                // Unpaged Plus hub — always shown. It is the purchase entry point (keeps the iCloud
-                // Sync purchase reachable without iCloud sign-in, Apple 3.1.1) and, for users whose
-                // sync is on, holds the iCloud Library.
+                // Unpaged Plus hub — always shown. It is the purchase entry point, reachable without
+                // iCloud sign-in (Apple 3.1.1).
                 Button {
                     isPlusHubPresented = true
                 } label: {
@@ -991,6 +990,21 @@ struct ContentView: View {
     /// Deleting the loaded book must also unload it from the player first.
     private func unloadDeleteCandidateFromPlayer() {
         if let book = viewModel.deleteCandidate { player.unloadIfCurrent(book) }
+    }
+
+    /// Own book, sync on: whether its audio stays in iCloud decides how it comes back.
+    private var softDeleteMessage: String {
+        let state = viewModel.deleteCandidate.map { CloudAudioStore.shared.state(for: $0) } ?? .none
+        switch state {
+        case .stored:
+            return "Removes the audio from this iPhone. The book and its audio stay in iCloud, so you can download it again from iCloud Library."
+        case .uploading, .failed:
+            return "Removes the audio from this iPhone. The book stays in your iCloud Library, and its audio keeps uploading to iCloud."
+        case .quotaExceeded:
+            return "Removes the audio from this iPhone. The book stays in your iCloud Library. Its audio finishes uploading once your iCloud storage has room."
+        case .none, .partial:
+            return "Removes the audio from this iPhone. The book stays in your iCloud Library, and you can restore it anytime."
+        }
     }
 
     private var deleteAlertTitle: String {

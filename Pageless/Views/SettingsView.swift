@@ -33,6 +33,7 @@ struct SettingsView: View {
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
     @AppStorage("startOnFreeBooks") private var startOnFreeBooks = false
     @AppStorage(AppAppearance.storageKey) private var appearance = AppAppearance.system
+    @AppStorage(IcloudSyncGate.preferenceKey) private var iCloudSyncEnabled = false
 
     /// Identifies which inline playback picker (if any) is currently expanded, so only one
     /// option tray is open at a time.
@@ -53,17 +54,12 @@ struct SettingsView: View {
                             onShowPlusCard: showPlusCard
                         )
                     case .icloud:
-                        ICloudSettingsView(
-                            onDismissSheet: { dismiss() },
-                            onShowPlusCard: showPlusCard
-                        )
+                        ICloudSettingsView(onDismissSheet: { dismiss() })
                     case .plus:
                         PlusHubScreen(
                             backLabel: "Settings",
                             onDismissSheet: { dismiss() },
-                            onAISettings: { navigationPath.append(.ai) },
-                            onICloudSettings: { navigationPath.append(.icloud) },
-                            onCloudLibrary: { navigationPath.append(.cloudLibrary) }
+                            onAISettings: { navigationPath.append(.ai) }
                         )
                     case .cloudLibrary:
                         CloudLibraryView()
@@ -93,6 +89,7 @@ struct SettingsView: View {
                     sourcesSection
                     playbackSection
                     appSection
+                    iCloudSection
                     plusSection
                     supportSection
                     aboutSection
@@ -115,7 +112,7 @@ struct SettingsView: View {
         .plusPurchaseErrorAlert(store: plusEntitlement)
     }
 
-    /// "View Unpaged Plus" from the AI / iCloud pages: show the Plus hub inside Settings.
+    /// "View Unpaged Plus" from the AI page: show the Plus hub inside Settings.
     private func showPlusCard() {
         navigationPath = [.plus]
     }
@@ -147,17 +144,48 @@ struct SettingsView: View {
                             identifier: "settings.ai"
                         )
                     }
-                    SettingsHairline().padding(.leading, 50)
+                }
+            }
+        }
+    }
+
+    // MARK: - iCloud
+
+    /// Free for everyone, so it sits apart from the Plus section.
+    private var iCloudSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSectionHeader(eyebrow: "iCloud", title: "Sync & backup.")
+
+            SettingsCard {
+                VStack(spacing: 0) {
                     navigationRow(
                         title: "iCloud Sync",
-                        caption: "Manage your library sync settings",
+                        caption: iCloudSyncCaption,
                         symbol: "icloud",
                         destination: .icloud,
                         identifier: "settings.icloud"
                     )
+                    if IcloudSyncGate.isEnabled() {
+                        SettingsHairline().padding(.leading, 50)
+                        navigationRow(
+                            title: "iCloud Library",
+                            caption: "Everything backed up to iCloud",
+                            symbol: "books.vertical",
+                            destination: .cloudLibrary,
+                            identifier: "settings.cloudLibrary"
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private var iCloudSyncCaption: String {
+        let active = IcloudSyncGate.isEnabled()
+        if iCloudSyncEnabled != active {
+            return iCloudSyncEnabled ? "Turns on after you reopen Unpaged" : "Turns off after you reopen Unpaged"
+        }
+        return active ? "On · free with your iCloud account" : "Off · free with your iCloud account"
     }
 
     private func navigationRow(

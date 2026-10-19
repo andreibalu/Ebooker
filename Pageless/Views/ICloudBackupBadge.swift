@@ -7,9 +7,9 @@ import SwiftUI
 
 /// A subtle "this book is safely backed up to iCloud" affordance.
 ///
-/// It renders **nothing** unless an active iCloud Sync subscription *and* the sync toggle are on
-/// (`IcloudSyncGate.isEnabled()`), so it never promises a backup the user isn't actually getting —
-/// non-subscribers and sync-off users simply see no badge.
+/// It renders **nothing** unless sync is on this launch (`IcloudSyncGate.isEnabled()`), so it
+/// never promises a backup the user isn't actually getting. It speaks for the synced record, not
+/// the audio; `CloudAudioBookCard` says where the audio is.
 ///
 /// `NSPersistentCloudKitContainer` exposes no per-object "synced right now" flag, so this is an
 /// honest *static* assurance rather than a real-time pulse: when sync is on, every record in the

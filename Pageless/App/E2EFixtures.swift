@@ -25,6 +25,31 @@ enum E2EFixtures {
     }
     static var welcomeRecapCalls = 0
 
+    /// `-e2e-icloud-account` stands in for a signed-in iCloud account, so the sync toggle and the
+    /// sync-on UI run. The store itself stays local: fixture launches never use CloudKit.
+    static var simulatesICloudAccount: Bool {
+        enabled && ProcessInfo.processInfo.arguments.contains("-e2e-icloud-account")
+    }
+
+    /// `-e2e-icloud-drive` turns on a local folder that plays the iCloud Drive container. Without it
+    /// iCloud Drive reads as off. `-e2e-icloud-full` fails every upload on quota.
+    static func cloudAudioBackend() -> CloudAudioBackend {
+        let arguments = ProcessInfo.processInfo.arguments
+        let root = arguments.contains("-e2e-icloud-drive") ? try? fakeICloudDriveRoot() : nil
+        return E2ECloudAudioBackend(
+            root: root,
+            uploadSeconds: argument("-e2e-icloud-upload-seconds").flatMap(Double.init) ?? 1.5,
+            downloadSeconds: argument("-e2e-icloud-download-seconds").flatMap(Double.init) ?? 2,
+            quotaFull: arguments.contains("-e2e-icloud-full")
+        )
+    }
+
+    private static func fakeICloudDriveRoot() throws -> URL {
+        try storeDirectoryWithoutReset()
+            .appendingPathComponent("FakeICloudDrive", isDirectory: true)
+            .appendingPathComponent("Audiobooks", isDirectory: true)
+    }
+
     static func storeDirectory(in support: URL) throws -> URL {
         let directory = support.appendingPathComponent("E2EFixtures", isDirectory: true)
         if ProcessInfo.processInfo.arguments.contains("-e2e-reset-fixture") {
@@ -49,7 +74,8 @@ enum E2EFixtures {
             try? FileManager.default.removeItem(at: cache.appendingPathComponent("Audiobookshelf"))
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
-                        "absSelectedLibraryID", "abs.progressOutbox"] {
+                        "absSelectedLibraryID", "abs.progressOutbox",
+                        IcloudSyncGate.preferenceKey, CloudAudioStore.preferenceKey] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
@@ -175,6 +201,9 @@ enum E2EFixtures {
                 entry.audiobook?.moments.append(entry)
             }
         }
+        if ProcessInfo.processInfo.arguments.contains("-e2e-cloud-audio") {
+            try seedCloudOnlyBooks(context)
+        }
         let today = Calendar.current.startOfDay(for: .now)
         context.insert(ReadingSession(date: today, dayKey: ReadingSession.makeDayKey(date: today),
                                       hour: 10, minutes: 42, bookID: book.id,
@@ -186,6 +215,33 @@ enum E2EFixtures {
         }
         try context.save()
         try Data().write(to: marker)
+    }
+
+    /// Two own books synced from another device without their audio: one whose audio that device
+    /// stored in iCloud (Download), and one it didn't (Locate…).
+    private static func seedCloudOnlyBooks(_ context: ModelContext) throws {
+        let root = try fakeICloudDriveRoot()
+        var remoteKeys: [String] = []
+        for (title, folder, inCloud) in [("E2E Cloud Book", "E2E-Cloud-Book", true),
+                                         ("E2E Locate Book", "E2E-Locate-Book", false)] {
+            let book = Audiobook(title: title, author: "Fixture Author", folderName: folder,
+                                 totalDuration: 60, isDownloaded: false)
+            context.insert(book)
+            let cloudFolder = root.appendingPathComponent(folder, isDirectory: true)
+            if inCloud { try FileManager.default.createDirectory(at: cloudFolder, withIntermediateDirectories: true) }
+            for index in 0..<2 {
+                let name = "00\(index + 1)-part-\(index + 1).wav"
+                let track = AudioTrack(title: "\(title) Part \(index + 1)", originalFileName: "part-\(index + 1).wav",
+                                       storedFileName: name, orderIndex: index, duration: 30, audiobook: book)
+                context.insert(track)
+                book.tracks.append(track)
+                if inCloud {
+                    try silenceWAV(seconds: 30).write(to: cloudFolder.appendingPathComponent(name))
+                    remoteKeys.append(CloudAudioPlan.key(folder, name))
+                }
+            }
+        }
+        try E2ECloudAudioBackend.writeRemoteOnly(remoteKeys, root: root)
     }
 
     /// Every curated classic (so any day's pick resolves), the full Love & Society shelf, an

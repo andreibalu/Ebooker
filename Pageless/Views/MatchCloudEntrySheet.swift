@@ -98,8 +98,12 @@ struct MatchCloudEntrySheet: View {
 
     private func performMerge(into candidate: Audiobook) {
         confirmCandidate = nil
+        let localFolderName = localBook.folderName
         do {
-            _ = try OrphanRestoreService.merge(localBook: localBook, into: candidate, modelContext: modelContext)
+            let merged = try OrphanRestoreService.merge(localBook: localBook, into: candidate, modelContext: modelContext)
+            // The merge deletes the local record everywhere, and the cloud entry now has its audio.
+            CloudAudioStore.shared.bookDeleted(folderName: localFolderName)
+            CloudAudioStore.shared.bookAudioReplaced(merged)
             dismiss()
             onMerged()
         } catch {

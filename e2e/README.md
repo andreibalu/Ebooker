@@ -76,12 +76,17 @@ DEBUG-only launch hooks:
 | `-e2e-abs-rewind-current <seconds>` | Saves each Audiobookshelf book's current position as its marker, then sets the current position to this value. |
 | `-e2e-welcome-threshold-days <n>` | Overrides the three-day return threshold for this DEBUG fixture launch. |
 | `-e2e-fixture` | Opens the separate fixture store and seeds it once. |
-| `-e2e-reset-fixture` | Deletes the fixture store, saved scene state, the fixture Audiobookshelf login and onboarding preference keys before seeding. |
+| `-e2e-reset-fixture` | Deletes the fixture store (fake iCloud Drive folder included), saved scene state, the fixture Audiobookshelf login, onboarding preference keys and the iCloud sync and audio preferences before seeding. |
 | `-e2e-online` | Lets NetworkMonitor report a connection. The fixture is offline otherwise. |
 | `-e2e-librivox-feed <url>` | Sends LibriVox feed requests to `<url>`. |
 | `-e2e-sleep-timer-seconds <n>` | Makes every sleep-timer choice last n seconds. |
 | `-e2e-import` | Makes the import button hand a file to the import pipeline instead of opening the Files picker. |
 | `-e2e-import-file <name>` | Picks `<name>` from the fixture folder for `-e2e-import`. Without it, the app generates a 123-second WAV. |
+| `-e2e-icloud-account` | Reports a signed-in iCloud account to `IcloudSyncGate`, so the free sync toggle, its relaunch rule and every sync-on surface run. The store stays local: fixture launches never use CloudKit. Without it the fixture reads as signed out. |
+| `-e2e-icloud-drive` | Swaps the iCloud Drive container for `E2EFixtures/FakeICloudDrive/Audiobooks/` (`E2ECloudAudioBackend`). Copied-in files upload on a clock and evicted or seeded files download on a clock. Without it iCloud Drive reads as off. |
+| `-e2e-icloud-upload-seconds <n>` / `-e2e-icloud-download-seconds <n>` | Sets how long one fake upload or download takes (defaults 1.5 and 2). |
+| `-e2e-icloud-full` | Fails every fake upload with iCloud's quota error. |
+| `-e2e-cloud-audio` | On seeding, adds two own books synced without audio: `E2E Cloud Book`, whose audio another device stored in the fake container, and `E2E Locate Book`, whose audio it didn't. |
 
 Fixture mode Settings also shows "Seed Reading Activity · 7/30/113 days" and "Clear Reading Activity".
 

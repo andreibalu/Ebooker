@@ -29,7 +29,9 @@ This scene is the app's only up-front permission request (see `AGENTS.md` → Pl
 
 ## Informational scenes
 
-The Apple Intelligence and iCloud scenes explain features only. Purchase and sync state stay out of them: no paywall, no toggles.
+The Apple Intelligence scene explains features only: no paywall, no toggles. Purchase state stays out of every scene.
+
+The iCloud scene ends with a "Sync with iCloud · Free" toggle bound to `iCloudSyncEnabled`, the key Settings uses. Its caption follows the sync gate's relaunch rule ("Starts the next time you open Unpaged."), and without a signed-in iCloud account the toggle is disabled and says how to sign in. Audio in iCloud needs sync to be active, so it is mentioned there and offered only in Settings.
 
 ## Visual rules
 

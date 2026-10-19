@@ -118,7 +118,7 @@ Each file in `docs/ios/` records what the code can't tell you about one area: it
 - `playback.md`: `AudioPlayerManager`, chapters, sleep timer, Now Playing and remote commands, titles and rename, equalizer, reading sessions and stats.
 - `ai.md`: Apple Intelligence, smart save, moment naming, transcription, recaps, welcome-back cards, `FoundationModels` limits.
 - `purchases.md`: StoreKit products, Unpaged Plus, legacy unlocks, the coffee tip, trial and price copy, App Review reachability.
-- `icloud-sync.md`: the sync gate, CloudKit, orphans, fingerprints, restore and merge, archived free books, Cloud Library, deleting synced records.
+- `icloud-sync.md`: the sync gate, CloudKit, orphans, fingerprints, restore and merge, archived free books, Cloud Library, audio in iCloud, deleting synced records.
 - `free-books.md`: LibriVox browse and design, catalog sync, search, streaming, downloads and Live Activity, samples, collections, other recordings, the legacy CarPlay catalog.
 - `audiobookshelf.md`: the Audiobookshelf source, login and tokens, item decoding, browse cache, downloads, progress sync, plain-http hosts.
 - `onboarding.md`: the welcome flow, its scenes and permission requests, home-tab choice.

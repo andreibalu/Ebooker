@@ -84,7 +84,7 @@
       "id" : "E1F2A3B4-C5D6-4789-8ABC-DEF012345678",
       "localizations" : [
         {
-          "description" : "Apple Intelligence features and private iCloud sync across your devices.",
+          "description" : "On-device Apple Intelligence features: smart moment naming and recaps.",
           "displayName" : "Unpaged Plus",
           "locale" : "en_US"
         }
@@ -109,7 +109,7 @@
           },
           "localizations" : [
             {
-              "description" : "Monthly access to Apple Intelligence features and iCloud sync, with a seven-day free trial.",
+              "description" : "Monthly access to Apple Intelligence features, with a seven-day free trial.",
               "displayName" : "Unpaged Plus monthly",
               "locale" : "en_US"
             }
@@ -138,7 +138,7 @@
           },
           "localizations" : [
             {
-              "description" : "Annual access to Apple Intelligence features and iCloud sync, with a seven-day free trial.",
+              "description" : "Annual access to Apple Intelligence features, with a seven-day free trial.",
               "displayName" : "Unpaged Plus yearly",
               "locale" : "en_US"
             }
