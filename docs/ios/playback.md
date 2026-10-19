@@ -1,6 +1,6 @@
 # Playback
 
-Read this before changing `AudioPlayerManager` or anything that reads its state: chapters, the sleep timer, Now Playing, titles and rename, the equalizer, reading sessions and stats.
+Read this before changing `AudioPlayerManager` or anything that reads its state: chapters, the sleep timer, Now Playing, titles and rename, the equalizer, reading sessions and stats, and the rating prompt.
 
 ## AudioPlayerManager
 
@@ -55,3 +55,14 @@ Per book, persisted in `Audiobook.equalizerConfiguration`. Bands, presets and ra
 - `ReadingStats.compute(sessions:booksFinished:)` is a pure aggregate, computed inline from the sessions `@Query`. Nothing derived is stored.
 - The Favorites tab shows `ReadingActivityCard` above the grid once there is any activity, and it zooms into `ReadingStatsView` (sections in `ReadingStatsSections.swift`). `ReadingHeatmapView` and `HeatmapPalette` serve both.
 - `ReadingActivitySeeder` generates synthetic history from Settings in DEBUG builds only. Seeding and "Clear Reading Activity" delete every `ReadingSession` row first, real ones included.
+
+## Rating prompt
+
+The app asks for an App Store rating at most once per app version, at a calm, positive moment. The rules are pure functions in `Services/RatingPromptPolicy.swift` (`RatingPromptPolicy.decide`, with `RatingPromptSettling` and the UserDefaults-backed `RatingPromptStore`); `Views/RatingPromptModifier.swift` gathers the inputs and calls the SwiftUI `requestReview` action. Thresholds are constants on the policy, so change them there and in `RatingPromptPolicyTests` together.
+
+- **Positive moment**: a book played to its end within the last 48 hours (`AudioPlayerManager.markCurrentBookFinished` calls `bookFinishedSink`, which stamps the store, so a book finished from CarPlay or a locked phone still counts), or a listening habit read from `ReadingSession` rows of the last `habitWindow` (enough minutes over enough different days, still listening in the last few days). The fetch carries a date predicate, so older history is never loaded.
+- **Never**: before the first launch recorded by this feature is two days old (the clock starts the first time the phone UI appears, so existing users start it on their first launch after updating), during onboarding, while the scene is not active, over any presented sheet, alert, picker or paywall (the modifier asks UIKit whether the key window's root controller is presenting), while the full player is open, audio is playing, a stream is loading to play (`isPreparingPlayback`) or an Audiobookshelf resume is waiting on its server (`isAwaitingServerResume`), the keyboard is up, while a CarPlay scene is connected, twice in one `CFBundleShortVersionString`, or within 90 days of the previous request. Apple's own limit (three prompts a year, and it may show nothing) applies on top, and the app cannot tell whether the sheet appeared.
+- **Where it can fire**: only from the phone UI. The modifier hangs on `ContentView`, so CarPlay and background launches never reach it.
+- **Settling**: the watch polls every two seconds while a moment exists (every 30 s while it waits for one, since a play, pause or finish restarts it) and asks only after two consecutive calm polls, so a sheet that has just dismissed does not trigger it. Any input change restarts the watch.
+- **A request is recorded the moment it is made**, so a version is never asked twice even if the system shows nothing.
+- E2E hooks (DEBUG fixture launches only) are in `e2e/README.md`: `-e2e-rating-stub` counts requests on screen instead of raising the system sheet.
