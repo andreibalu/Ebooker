@@ -73,7 +73,23 @@ final class PlusEntitlementStore: ObservableObject {
         guard isInFreeTrial, let expirationDate = currentPlusSubscriptionExpirationDate else {
             return 0
         }
-        return max(1, Int(ceil(expirationDate.timeIntervalSinceNow / 86_400)))
+        return Self.calendarDaysRemaining(until: expirationDate)
+    }
+
+    /// Whole calendar days between today and the expiry's day, never below 1. Dividing the
+    /// interval by 86,400 counts a 25-hour DST day as an extra day, so this counts days
+    /// on the calendar instead.
+    nonisolated static func calendarDaysRemaining(
+        until expirationDate: Date,
+        now: Date = .now,
+        calendar: Calendar = .current
+    ) -> Int {
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: now),
+            to: calendar.startOfDay(for: expirationDate)
+        ).day ?? 0
+        return max(1, days)
     }
 
     var hasManageableSubscription: Bool {

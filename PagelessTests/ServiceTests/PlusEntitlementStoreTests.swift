@@ -10,6 +10,29 @@ import Testing
 struct PlusEntitlementStoreTests {
     private let now = Date(timeIntervalSince1970: 10_000)
 
+    /// Wall-clock trial lengths across a DST change must not gain or lose a day, which an
+    /// interval / 86,400 count does (7 days spanning the fall-back is 169 hours).
+    @Test(arguments: [
+        ("Europe/Bucharest", 2026, 10, 22),
+        ("America/New_York", 2026, 11, 1),
+        ("Europe/Bucharest", 2026, 3, 27),
+        ("Pacific/Auckland", 2026, 9, 25),
+        ("UTC", 2026, 6, 1)
+    ])
+    func trialDaysRemainingIgnoresDaylightSavingChanges(zone: String, year: Int, month: Int, day: Int) throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: zone))
+        let start = try #require(calendar.date(from: DateComponents(year: year, month: month, day: day, hour: 15, minute: 30)))
+        for hour in [0, 15, 23] {
+            let expiry = try #require(calendar.date(byAdding: .day, value: 7, to: start))
+            let late = try #require(calendar.date(bySettingHour: hour, minute: 0, second: 0, of: expiry))
+            #expect(PlusEntitlementStore.calendarDaysRemaining(until: late, now: start, calendar: calendar) == 7)
+        }
+        let nextDay = try #require(calendar.date(byAdding: .day, value: 1, to: start))
+        #expect(PlusEntitlementStore.calendarDaysRemaining(until: nextDay, now: start, calendar: calendar) == 1)
+        #expect(PlusEntitlementStore.calendarDaysRemaining(until: start.addingTimeInterval(60), now: start, calendar: calendar) == 1)
+    }
+
     @Test func noRecognizedEntitlementReturnsFalse() {
         let records = [
             PlusEntitlementRecord(
