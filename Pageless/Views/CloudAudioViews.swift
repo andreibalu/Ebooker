@@ -48,13 +48,16 @@ struct CloudAudioBookCard: View {
                 Image(systemName: symbol(for: state))
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(state == .quotaExceeded ? Color.orange : Color.amber)
+                    // The glyph sits in a fixed frame; past xxxLarge it would spill out of it.
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 3) {
+                    // One line beside the button; the stacked accessibility layout lets it wrap.
                     Text("Audio in iCloud")
                         .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                     Text(caption(for: state))
                         .font(.caption)
                         .foregroundStyle(.secondary)
