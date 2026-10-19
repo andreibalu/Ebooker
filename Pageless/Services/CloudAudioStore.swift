@@ -111,6 +111,11 @@ final class CloudAudioStore {
         )
     }
 
+    /// This device is still copying the book's files in. Files not yet copied exist only locally.
+    func isCopyingIn(_ book: Audiobook) -> Bool {
+        copyingFolders.contains(book.folderName)
+    }
+
     func isDownloading(_ book: Audiobook) -> Bool {
         downloadProgress[book.folderName] != nil
     }
@@ -157,11 +162,12 @@ final class CloudAudioStore {
 
     /// This device replaced a book's audio (Locate…, restore on import, merge). Its old files in
     /// iCloud no longer match, so the cloud copy starts over when there is one or the setting is on.
-    func bookAudioReplaced(_ book: Audiobook) {
+    /// `keepsCloudCopy` is set when the audio came from another book that was in iCloud (merge).
+    func bookAudioReplaced(_ book: Audiobook, keepsCloudCopy: Bool = false) {
         guard isActive, Self.isEligible(book) else { return }
         if hasAnyFile(in: book.folderName) {
             upload(book, replacing: true)
-        } else if storesNewBooks {
+        } else if storesNewBooks || keepsCloudCopy {
             upload(book, replacing: false)
         }
     }

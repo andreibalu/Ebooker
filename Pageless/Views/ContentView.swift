@@ -994,6 +994,10 @@ struct ContentView: View {
 
     /// Own book, sync on: whether its audio stays in iCloud decides how it comes back.
     private var softDeleteMessage: String {
+        // Files not yet copied in exist only here, so removing them now leaves iCloud short.
+        if let book = viewModel.deleteCandidate, CloudAudioStore.shared.isCopyingIn(book) {
+            return "Removes the audio from this iPhone. Unpaged is still copying it to iCloud, so iCloud won’t have the whole book. To keep it in iCloud, wait until the copy finishes."
+        }
         let state = viewModel.deleteCandidate.map { CloudAudioStore.shared.state(for: $0) } ?? .none
         switch state {
         case .stored:
