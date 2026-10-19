@@ -3,7 +3,7 @@
 **App:** Unpaged
 **Developer:** Andrei Baluta
 **Contact:** andrei.baluta@yahoo.com
-**Last updated:** October 12, 2026
+**Last updated:** October 18, 2026
 
 This End User License Agreement ("Agreement") is a legal agreement between you
 ("you") and Andrei Baluta ("Developer," "we," "us") for the use of the Unpaged
@@ -44,9 +44,7 @@ The Application offers the following optional paid features, purchased and
 managed through your Apple ID:
 
 - **Unpaged Plus** — an **auto-renewable subscription** that includes on-device
-  Apple Intelligence moment naming and recaps, plus optional private iCloud Sync
-  for your library, progress, bookmarks, recaps, equalizer settings, and
-  listening history. Plus is offered monthly (US$2.99/month) and yearly
+  Apple Intelligence moment naming and recaps. Plus is offered monthly (US$2.99/month) and yearly
   (US$14.99/year); prices vary by region and the price shown by Apple at purchase
   applies. Each plan may show a seven-day free trial when Apple offers it to your
   account. After any displayed trial, the subscription automatically renews at
@@ -55,14 +53,19 @@ managed through your Apple ID:
   within 24 hours before the current period ends. You can manage or cancel the
   subscription in your Apple ID account settings; cancellation takes effect at
   the end of the current period, and no refund is provided for the unused
-  portion of a term except as required by law. iCloud Sync is opt-in and requires
-  an iCloud account on the device. Audio files themselves are not synced and
-  remain on each device.
+  portion of a term except as required by law.
 
 - **Earlier paid purchases** — an owned, non-consumable AI Features unlock
   continues to include Plus without an expiration. An active legacy iCloud Sync
   subscription continues to include Plus while that subscription is active.
   These existing entitlements do not require a new Plus purchase.
+
+iCloud Sync is free and is not part of any purchase. It is opt-in, requires an
+iCloud account on the device, and keeps your library, progress, bookmarks,
+recaps, equalizer settings and listening history in your private iCloud
+account. If you choose to store audio in iCloud, the audio of books you
+imported is kept in the Application's private iCloud Drive folder and counts
+toward your iCloud storage, which Apple provides under its own terms.
 
 - **Buy me a coffee** — an **optional, one-time consumable purchase** that lets
   you support the Developer. It does not unlock features, add content, provide
@@ -136,8 +139,8 @@ Developer. AI generation runs on-device using Apple Intelligence. Primary AI
 requests support free-book browsing, streaming, and downloads through
   LibriVox/Internet Archive, purchases through Apple (including the optional
   coffee tip), your connected Audiobookshelf server for browsing, streaming,
-  downloads and listening progress, and optional Plus iCloud Sync in your private
-  iCloud account. Downloaded server audio can use the same on-device AI as
+  downloads and listening progress, and optional free iCloud Sync (with optional
+  audio storage in iCloud Drive) in your private iCloud account. Downloaded server audio can use the same on-device AI as
   imported audio. The Developer operates no backend server.
 Full details are in the Privacy Policy:
 <https://gist.github.com/andreibalu/aca2af2e2176cc453175f708b2481262>

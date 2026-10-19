@@ -1,6 +1,6 @@
 # Unpaged — Privacy Policy
 
-_Last updated: October 12, 2026_
+_Last updated: October 18, 2026_
 
 Unpaged ("the app") is an audiobook player developed by Andrei Baluta. This policy describes what data the app handles and how. The short version: **Unpaged does not collect, sell, or share personal data with the developer, and the app has no backend server of its own.** Optional features communicate directly with Apple (iCloud, purchases, speech services, and system asset downloads) with LibriVox/Internet Archive (free-book browsing, streaming, and downloads), and — only if you connect one — with your own Audiobookshelf server. Unpaged never receives your name, email, or payment details. Unpaged is available for iPhone and Android. Most of this policy describes the iPhone app; [Unpaged for Android](#unpaged-for-android) explains where the Android app differs.
 
@@ -28,9 +28,9 @@ This data is stored in the app's private container on your iPhone. The Continue 
 
 On iOS 26 and later, the AI features (moment naming and recaps) first use Apple's newer on-device speech engine, which does not require the Speech Recognition permission. Permission is requested only if the app falls back to the older Speech path. That fallback also requires on-device recognition support. If you decline these permissions, CarPlay voice search is disabled and fallback AI transcription cannot run. The rest of the app continues to work.
 
-## iCloud Sync (optional, included with Unpaged Plus)
+## iCloud Sync (optional, free)
 
-Unpaged Plus is an auto-renewing subscription that includes optional iCloud Sync and on-device Apple Intelligence features. Plus is offered monthly (US$2.99/month) and yearly (US$14.99/year), with a seven-day introductory free trial configured for each plan; prices and offer eligibility vary by region and Apple ID. Apple processes purchases and introductory offers through StoreKit — Unpaged never sees your payment information. When you enable sync, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
+iCloud Sync is free and needs no purchase, only an iCloud account on your iPhone. When you enable sync, the app uses your **private** iCloud database (visible only to you) to keep your library aligned across the iPhones signed in to the same Apple ID. The data uploaded is:
 
 - Audiobook titles, authors, cover art, and your favorite/finished flags
 - Per-book progress, playback rate, equalizer state, and progress recaps
@@ -40,9 +40,9 @@ Unpaged Plus is an auto-renewing subscription that includes optional iCloud Sync
 - For Audiobookshelf books: the server's item ID and the book's audio addresses on your server. These addresses never contain your sign-in token or API key, which stay in this iPhone's Keychain and are not synced
 - For your own imports: a short content fingerprint (a SHA-256 digest derived from a small portion of each audio file) used solely to recognize the same file when you re-import it on another device
 
-The audio files themselves are **never** uploaded — they stay on each device. Audio you imported continues to be local-only; on a new device you re-add the file and Unpaged matches it to the synced book record using the fingerprint described above.
+Audio files are uploaded only if you turn on **Store audio in iCloud** (Settings → iCloud Sync), or store a single book from its detail screen. Unpaged then copies the audio of books you imported into the app's private folder in your iCloud Drive, so your other devices, or this one after a reinstall, can download them. Only you can access that folder; the Files app does not show it. iCloud Drive uploads and downloads these files in the background, over Wi-Fi or over cellular when your iCloud Drive settings allow it, and they count toward your iCloud storage. Free LibriVox books and Audiobookshelf books are never uploaded. Turning the setting off can remove the stored audio from iCloud, and deleting a book from your iCloud Library deletes its stored audio too. Without this setting, imported audio stays on each device; on a new device you re-add the file and Unpaged matches it to the synced book record using the fingerprint described above.
 
-Sync is off by default and is gated by an active Unpaged Plus or recognized legacy entitlement, your iCloud account on the device, and the Settings toggle. Purchasing Plus does not require signing in to iCloud; an iCloud account is required only to turn on sync. When sync is off (or you have no qualifying entitlement), Unpaged behaves exactly as the original local-only experience. The Settings toggle records your desired state for the next launch; the active iCloud/local store choice stays fixed until you quit and reopen Unpaged. This relaunch is required both after enabling and after disabling sync, so current-launch backup and deletion behavior cannot contradict its store. Once disabled after relaunch, Unpaged stops further uploads but does not delete previously synced data from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
+Sync is off by default and is gated by your iCloud account on the device and the Settings toggle, which the welcome tour also offers. Storing audio additionally needs iCloud Drive turned on. When sync is off, Unpaged behaves exactly as the original local-only experience. The Settings toggle records your desired state for the next launch; the active iCloud/local store choice stays fixed until you quit and reopen Unpaged. This relaunch is required both after enabling and after disabling sync, so current-launch backup and deletion behavior cannot contradict its store. Once disabled after relaunch, Unpaged stops further uploads but does not delete previously synced data or stored audio from your iCloud account. To delete the synced data, sign in to iCloud.com or System Settings → Apple ID → iCloud and remove the Unpaged data.
 
 Apple's [iCloud privacy](https://www.apple.com/legal/privacy/data/en/icloud/) covers transport, storage, and access on Apple's side. Unpaged never sees a backend copy of this data — there is no Unpaged server.
 
@@ -56,7 +56,7 @@ The first time transcription runs, iOS may download Apple's on-device speech-rec
 
 Unpaged offers two types of in-app purchases, both processed by Apple via StoreKit:
 
-- **Unpaged Plus** — auto-renewing monthly and yearly subscriptions (US$2.99/month or US$14.99/year; prices vary by region) that include Apple Intelligence features and optional iCloud Sync. Each plan has a seven-day introductory free trial configured; Apple determines offer eligibility.
+- **Unpaged Plus** — auto-renewing monthly and yearly subscriptions (US$2.99/month or US$14.99/year; prices vary by region) that include the Apple Intelligence features. Each plan has a seven-day introductory free trial configured; Apple determines offer eligibility. iCloud Sync is not part of Plus; it is free.
 - **Buy me a coffee** — an optional one-time consumable tip. It does not unlock features, add content, or provide any other benefit. Consumable tips are not entitlements and cannot be restored; a user can purchase one again.
 
 Previously purchased AI Features unlocks and active legacy iCloud Sync subscriptions continue to be recognized as Plus entitlements under their existing terms. Unpaged never sees your payment information, and no purchase data is sent to any third party. Apple's [Privacy Policy](https://www.apple.com/legal/privacy/) governs the purchase transaction.
@@ -73,7 +73,7 @@ Unsent listening progress is kept locally as the latest item ID, server address,
 
 Your login is stored only in the iOS Keychain on this iPhone. When you sign in with a password, Unpaged exchanges it for a session token and does not keep the password. Books you add from your server are stored in your library without any credential; the token is attached only at the moment audio is requested. **Settings → Audiobookshelf Server → Disconnect** deletes the stored login. Books you added stay in your library (and, with iCloud Sync on, in your iCloud Library). Disconnect asks whether to keep or remove downloaded audio. Kept downloads play offline; streaming requires reconnecting.
 
-Server library lists, series and collections with their book order, author and narrator browsing results, book metadata, item details, and listening positions are cached under this iPhone's Caches directory for offline browsing, separately for each server and username. These caches contain no login tokens or API keys and may be cleared by iOS. Downloaded audio stays in Application Support; background download manifests store only token-less audio addresses and transfer status. Audio files do not sync through iCloud. Remove Download deletes the local audio while keeping library metadata, progress, moments, and EQ. Downloaded books can use the same on-device AI processing as imported books.
+Server library lists, series and collections with their book order, author and narrator browsing results, book metadata, item details, and listening positions are cached under this iPhone's Caches directory for offline browsing, separately for each server and username. These caches contain no login tokens or API keys and may be cleared by iOS. Downloaded audio stays in Application Support; background download manifests store only token-less audio addresses and transfer status. Audiobookshelf audio is never stored in iCloud. Remove Download deletes the local audio while keeping library metadata, progress, moments, and EQ. Downloaded books can use the same on-device AI processing as imported books.
 
 ## Network usage
 
@@ -82,7 +82,7 @@ Network requests are made only:
 - To LibriVox/Internet Archive when you browse, sample, or download a free book
 - To stream a streaming-only audiobook you've added to your library
 - To the Audiobookshelf server you connect, when you browse it, stream or download audio, or pause/finish listening (to send your position back)
-- To Apple iCloud when you enable iCloud Sync
+- To Apple iCloud when you enable iCloud Sync, and to iCloud Drive when you store audio in iCloud or download it from there
 - To Apple (App Store / StoreKit) for in-app purchase and restore
 - Through Apple's Speech framework when CarPlay voice search runs or AI transcription uses the legacy fallback; Unpaged requires processing to stay on-device
 - To Apple, once per language, when iOS downloads its on-device speech-recognition model the first time AI transcription runs (no audio or content is sent)
