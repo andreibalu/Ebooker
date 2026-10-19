@@ -477,8 +477,9 @@ test('deleting a book before iCloud Drive answers names its audio, and the audio
     launchArguments: [...args, '-e2e-reset-fixture', '-e2e-icloud-drive-delay', '120'],
   });
   const cloudFolder = join(fixtureStore(), 'FakeICloudDrive', 'Audiobooks', 'E2E-Cloud-Book');
-  expect(existsSync(cloudFolder)).toBe(true);
   await openCloudLibrary(screen);
+  // Seeded by the launch, before any queued work could run.
+  expect(existsSync(cloudFolder)).toBe(true);
   const title = await screen.getByText('E2E Cloud Book', { exact: true }).first().boundingBox();
   if (!title) throw new Error('Cloud Library row has no bounds');
   const y = title.y + title.height / 2;

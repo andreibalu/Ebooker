@@ -51,6 +51,8 @@ test('a denied permission routes to Settings and a grant there is picked up on r
 test('playback choices in onboarding show in the summary and become the Settings values', async ({ device, screen }) => {
   await device.openApp(bundle, { relaunch: true, launchArguments: [...onboarding, '-e2e-reset-fixture'] });
   await screen.getByTestId('onboarding.choice.own').tap();
+  // Picking animates to Permissions; a rail tap during that animation can land on the wrong page.
+  await expect(screen.getByText('Two quick permissions.').first()).toBeVisible();
   await screen.getByTestId('onboarding.page.2').tap();
   await expect(screen.getByText('Set up listening.').first()).toBeVisible();
 
