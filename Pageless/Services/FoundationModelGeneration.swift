@@ -174,15 +174,9 @@ enum FoundationModelGeneration {
                 return .retryWithPassageTail
             case .rateLimited(let info):
                 return rateLimitDelay(resetDate: info.resetDate).map { .retryAfterDelay($0) }
-            case .guardrailViolation,
-                 .refusal,
-                 .unsupportedCapability,
-                 .unsupportedTranscriptContent,
-                 .unsupportedGenerationGuide,
-                 .unsupportedLanguageOrLocale,
-                 .timeout:
-                return nil
-            @unknown default:
+            default:
+                // Guardrail violations and refusals never get here: `isDeclined` already sent
+                // them to the passage tail. A retry can't fix the rest.
                 return nil
             }
         }

@@ -2,6 +2,7 @@ import { expect, type Screen } from 'e2e';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { test, tapVisibleCenter } from './native-actions.js';
 import { bundle, iosMajorVersion } from '../support/simulator.js';
+import { ABS_PASSWORD, ABS_USERNAME, startFakeAudiobookshelf } from '../support/fake-audiobookshelf.js';
 
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
 // The app reads transcript files straight from the host; keep them outside the repo.
@@ -66,6 +67,48 @@ test('smart save: a declined passage still gets a name and a calm notice', async
   await screen.getByText(/^\d+ moments?$/).first().tap();
   await screen.scrollUntilVisible(screen.getByText(name).first());
   await expect(screen.getByText(name).first()).toBeVisible();
+});
+
+// Smart save reads the local file, so a streamed book can't be transcribed. It still gets the
+// chapter-and-time name, with a notice that says why, instead of a bare "Saved Moment".
+test('smart save: a streamed book gets a chapter name and a download notice', {
+  timeout: 300_000,
+}, async ({ app, device, screen, nativeKeyboard }) => {
+  const server = await startFakeAudiobookshelf();
+  try {
+    const args = ['-e2e-fixture', '-e2e-online', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO',
+      '-shelvesSource', 'librivox', '-e2e-moment-analysis', 'declined'];
+    await device.openApp(bundle, { relaunch: true, launchArguments: [...args, '-e2e-reset-fixture'] });
+    // The first tap selects Shelves; tapping the selected tab opens its source menu.
+    const source = screen.getByRole('button', /Audiobookshelf/);
+    for (let attempt = 0; attempt < 4 && !(await source.isVisible()); attempt++) {
+      await screen.getByTestId('shelvesTab').tap();
+      await expect.poll(() => source.isVisible(), { timeout: 3_000 }).toBe(true).catch(() => undefined);
+    }
+    await source.tap();
+    await screen.getByTestId('abs.connect.server').fill(server.serverURL);
+    await screen.getByTestId('abs.connect.username').fill(ABS_USERNAME);
+    await screen.getByTestId('abs.connect.username').press('Enter');
+    await nativeKeyboard.typeFocusedText(ABS_PASSWORD);
+    await nativeKeyboard.submitFocused();
+    const hobbit = screen.getByRole('button', 'The Fixture Hobbit, by E2E Tolkien').first();
+    await expect(hobbit).toBeVisible({ timeout: 30_000 });
+    await tapVisibleCenter(hobbit);
+    await screen.getByTestId('abs.detail.add').tap();
+    await expect(screen.getByText('In your Library', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await screen.getByTestId('abs.detail.play').tap();
+    await expect(screen.getByText('Smart Save Moment').first()).toBeVisible({ timeout: 30_000 });
+    await screen.getByTestId('player.saveMoment').tap();
+
+    await expect(screen.getByTestId('moment.name')).toHaveValue(/ at \d+:\d\d$/, { timeout: 30_000 });
+    await expect(screen.getByTestId('moment.name')).not.toHaveValue('Saved Moment');
+    await expect(screen.getByTestId('moment.notice')).toContainText('Smart naming needs a downloaded book');
+    await app.screenshot('smart-save-streamed-book');
+    await screen.getByRole('button', 'Cancel').tap();
+    await expect(screen.getByTestId('moment.name')).toBeHidden();
+  } finally {
+    await server.close();
+  }
 });
 
 // Opt in: needs Apple Intelligence on the host Mac (simulators use its model). Passages come from

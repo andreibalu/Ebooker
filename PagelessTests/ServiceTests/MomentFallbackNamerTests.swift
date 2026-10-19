@@ -9,8 +9,8 @@ import Testing
 
 /// When the model can't name a passage, smart save still offers a name built from the
 /// transcript, chapter and position. Ways it can go wrong: every fallback reads "Saved Moment",
-/// a name picked from a single passing mention, and an empty chapter title producing a
-/// dangling "in".
+/// a name picked from a single passing mention, a place or a day taken for a person, and an
+/// empty chapter title producing a dangling "in".
 struct MomentFallbackNamerTests {
     private let transcript = """
     Elizabeth turned the letter over twice before she opened it. Jane watched her from the window. \
@@ -44,6 +44,19 @@ struct MomentFallbackNamerTests {
     @Test func firstPersonContractionsAreNotNames() {
         let text = "He looked at me. \"Well, I'm not sure,\" I said, and I'm certain he heard. Later I'm alone, and I'll wait."
         #expect(!MomentFallbackNamer.capitalizedNames(in: text).contains { $0.name.hasPrefix("I") })
+    }
+
+    /// Without the tagger, places and days are capitalized mid-sentence too, so a first-person
+    /// passage could be named "London in Chapter 3".
+    @Test func placesAndDaysAreNotNames() {
+        let text = """
+        I'm alone in London on Monday. Later I walked to Baker Street, and back to London. \
+        On a Monday in January I wrote to Herbert, and Herbert's answer came by return. \
+        I found Herbert at the inn.
+        """
+        let names = MomentFallbackNamer.capitalizedNames(in: text).map(\.name)
+        #expect(names == ["Herbert"])
+        #expect(MomentFallbackNamer.analysis(transcript: text, chapterTitle: "Chapter 3", time: 0).name == "Herbert in Chapter 3")
     }
 
     @Test func timeAloneWithoutTranscriptOrChapter() {

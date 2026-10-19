@@ -11,11 +11,14 @@ import SwiftUI
 /// Why a smart-save draft carries a fallback name instead of the model's. Shown calmly above
 /// the name field: the passage is ordinary, the name is just simpler.
 enum SmartSaveNotice: Equatable {
+    case notDownloaded
     case couldNotTranscribe
     case couldNotSummarize
 
     var message: String {
         switch self {
+        case .notDownloaded:
+            "Smart naming needs a downloaded book, so Unpaged suggested a simple name. You can change it."
         case .couldNotTranscribe:
             "Unpaged couldn't transcribe this passage, so it suggested a simple name. You can change it."
         case .couldNotSummarize:
@@ -139,10 +142,13 @@ final class PlayerViewModel {
         isProcessingSmartSave = true
         defer { isProcessingSmartSave = false }
 
-        guard audiobook.isDownloaded,
-              let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
-            resetMomentState()
-            pendingMomentTime = savedTime
+        // Transcription reads the local file, so a streamed book gets the chapter-and-time name.
+        guard audiobook.isDownloaded else {
+            applyFallback(transcript: nil, context: context, savedTime: savedTime, notice: .notDownloaded)
+            return
+        }
+        guard let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
+            applyFallback(transcript: nil, context: context, savedTime: savedTime, notice: .couldNotTranscribe)
             return
         }
 
