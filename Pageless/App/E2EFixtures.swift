@@ -19,7 +19,8 @@ enum E2EFixtures {
 
     static var fakeRecapText: String? { argument("-e2e-fake-recap") }
     /// Replaces only the welcome-back transcriber, for qualifying the real model where the
-    /// simulator has no on-device speech asset.
+    /// simulator has no on-device speech asset. The card then shows without Plus or the AI
+    /// setting; the model stays real.
     static var transcriptText: String? {
         argument("-e2e-transcript-file").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
     }
@@ -52,6 +53,31 @@ enum E2EFixtures {
         try storeDirectoryWithoutReset()
             .appendingPathComponent("FakeICloudDrive", isDirectory: true)
             .appendingPathComponent("Audiobooks", isDirectory: true)
+    }
+
+    /// Smart save transcribes to this file's text instead of the audio (fixture audio is
+    /// silence and simulators lack the speech asset). The model stays real.
+    static var momentTranscriptText: String? {
+        argument("-e2e-moment-transcript-file").flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+    }
+
+    /// `-e2e-moment-analysis declined` makes every analysis decline, for the fallback-name path.
+    static var momentAnalysisDeclines: Bool { argument("-e2e-moment-analysis") == "declined" }
+
+    /// Either moment hook turns smart save on without Plus or the AI settings. Only the real
+    /// model still needs Apple Intelligence; the declining analyzer runs on any iOS.
+    static var smartSaveEnabled: Bool {
+        guard momentTranscriptText != nil || momentAnalysisDeclines else { return false }
+        return momentAnalysisDeclines || AppleIntelligenceCapability.isSmartNamingAvailable
+    }
+
+    static var momentAnalyzer: (any MomentAnalyzing)? {
+        momentAnalysisDeclines ? E2EDecliningMomentAnalyzer() : nil
+    }
+
+    static var momentTranscriber: (any SegmentTranscribing)? {
+        guard smartSaveEnabled else { return nil }
+        return E2EWelcomeTranscriber(text: momentTranscriptText ?? "The traveller reached the harbour.")
     }
 
     /// Counts rating requests on screen (`ratingPrompt.requests`) instead of raising the system sheet.
@@ -427,9 +453,15 @@ enum E2EFixtures {
 
 struct E2EWelcomeRecapProvider: RecapProviding {
     let text: String
-    func generateRecap(transcript: String, audiobookTitle: String?, includeProgressHeadline: Bool) async throws -> RecapGenerationResult {
+    func generateRecap(transcript: String, context: AIPassageContext, includeProgressHeadline: Bool) async throws -> RecapGenerationResult {
         await MainActor.run { E2EFixtures.welcomeRecapCalls += 1 }
         return RecapGenerationResult(recap: text, progressHeadline: "At the harbour")
+    }
+}
+
+struct E2EDecliningMomentAnalyzer: MomentAnalyzing {
+    func analyzeMoment(transcript: String, context: AIPassageContext) async throws -> MomentAnalysis {
+        throw MomentNamingError.declined
     }
 }
 

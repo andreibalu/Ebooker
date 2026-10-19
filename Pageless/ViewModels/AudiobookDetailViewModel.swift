@@ -146,6 +146,7 @@ final class AudiobookDetailViewModel {
 
         let startSeconds = max(0, progressTime - 200)
         guard progressTime > startSeconds else { return }
+        recapProvider.prewarm() // overlap model load with transcription
 
         let transcript: String?
         do {
@@ -229,11 +230,16 @@ final class AudiobookDetailViewModel {
         onSuccessfulRecap: (() -> Void)?
     ) async {
         guard !Task.isCancelled else { return }
+        let tracks = audiobook.sortedTracks
 
         do {
             let result = try await recapProvider.generateRecap(
                 transcript: transcript,
-                audiobookTitle: audiobook.title,
+                context: AIPassageContext(
+                    bookTitle: audiobook.title,
+                    author: audiobook.author,
+                    chapterTitle: tracks.indices.contains(anchorTrackIndex) ? tracks[anchorTrackIndex].title : nil
+                ),
                 includeProgressHeadline: includeProgressHeadline
             )
             guard !Task.isCancelled else { return }

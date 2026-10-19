@@ -98,19 +98,22 @@ struct FoundationModelGenerationTests {
         #expect(attempts == 1)
     }
 
-    @Test func iOS26GuardrailAndContextErrorsKeepTheirPolicy() async throws {
+    @Test func iOS26GuardrailRetriesOnceOnTheTailThenDeclines() async throws {
         guard #available(iOS 26, *) else { return }
 
+        var passages: [String] = []
         do {
-            _ = try await FoundationModelGeneration.run(transcript: "excerpt") { _ -> Int in
+            _ = try await FoundationModelGeneration.run(transcript: "one two three four") { passage -> Int in
+                passages.append(passage)
                 throw LanguageModelSession.GenerationError.guardrailViolation(
                     .init(debugDescription: "test guardrail")
                 )
             }
-            Issue.record("Guardrail violations should map to unsafe content")
-        } catch FoundationModelGeneration.Failure.unsafeContent {
+            Issue.record("Guardrail violations should end as declined")
+        } catch FoundationModelGeneration.Failure.declined {
             // Expected.
         }
+        #expect(passages == ["one two three four", "three four"])
 
         var attempts = 0
         let contextOverflow = LanguageModelSession.GenerationError.exceededContextWindowSize(
@@ -129,7 +132,7 @@ struct FoundationModelGenerationTests {
         #expect(attempts == 2)
     }
 
-    @Test func iOS27GuardrailAndRefusalMapToUnsafeContent() async throws {
+    @Test func iOS27GuardrailAndRefusalRetryOnceThenDecline() async throws {
         guard #available(iOS 27, *) else { return }
 
         let errors = [
@@ -138,15 +141,34 @@ struct FoundationModelGenerationTests {
         ]
 
         for error in errors {
+            var attempts = 0
             do {
-                _ = try await FoundationModelGeneration.run(transcript: "excerpt") { _ -> Int in
+                _ = try await FoundationModelGeneration.run(transcript: "one two three four") { _ -> Int in
+                    attempts += 1
                     throw error
                 }
-                Issue.record("Unsafe content should not be retried")
-            } catch FoundationModelGeneration.Failure.unsafeContent {
+                Issue.record("A repeated refusal should end as declined")
+            } catch FoundationModelGeneration.Failure.declined {
                 // Expected.
             }
+            #expect(attempts == 2)
         }
+    }
+
+    /// A refusal written as text (permissive guardrails never throw for text) must not become a
+    /// name or a recap: it counts as declined, and the shorter passage gets one more try.
+    @Test func refusalTextIsDeclinedAndRetriedOnTheTail() async throws {
+        guard #available(iOS 26, *) else { return }
+
+        var passages: [String] = []
+        let result = try await FoundationModelGeneration.run(transcript: "one two three four") { passage -> String in
+            passages.append(passage)
+            let reply = passages.count == 1 ? "I'm sorry, but I can't help with that." : "Title: Arrival"
+            guard !AIResponseText.isRefusal(reply) else { throw FoundationModelGeneration.Failure.declined }
+            return reply
+        }
+        #expect(result == "Title: Arrival")
+        #expect(passages == ["one two three four", "three four"])
     }
 
     @Test func iOS27ContextOverflowRetriesWithTranscriptTail() async throws {
@@ -189,6 +211,32 @@ struct FoundationModelGenerationTests {
             #expect(result == 2)
             #expect(attempts == 2)
         }
+    }
+
+    /// A retry before the reported reset would be rate limited again, so a reset further out
+    /// than the wait the user tolerates fails at once (smart save then names the moment itself).
+    @Test func iOS27RateLimitHonorsTheResetDate() async throws {
+        guard #available(iOS 27, *) else { return }
+
+        let now = Date()
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: nil, now: now) == .milliseconds(700))
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: now.addingTimeInterval(1.5), now: now) == .milliseconds(1_600))
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: now.addingTimeInterval(-5), now: now) == .milliseconds(100))
+        #expect(FoundationModelGeneration.rateLimitDelay(resetDate: now.addingTimeInterval(30), now: now) == nil)
+
+        var attempts = 0
+        do {
+            _ = try await FoundationModelGeneration.run(transcript: "excerpt") { _ -> Int in
+                attempts += 1
+                throw LanguageModelError.rateLimited(
+                    .init(resetDate: Date().addingTimeInterval(60), debugDescription: "test rate limit")
+                )
+            }
+            Issue.record("A distant reset should fail without waiting")
+        } catch FoundationModelGeneration.Failure.failed {
+            // Expected.
+        }
+        #expect(attempts == 1)
     }
 
     @Test func iOS27UnsupportedGenerationFailsWithoutRetry() async throws {

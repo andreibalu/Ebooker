@@ -90,10 +90,17 @@ test('a failed purchase reports an error and leaves Plus locked', {
     await openPlusCard(device, screen, ['-e2e-reset-fixture']);
     await screen.scrollUntilVisible(screen.getByRole('button', 'Try 1 week free'));
     await tapVisibleCenter(screen.getByRole('button', 'Try 1 week free'));
-    // The armed network failure fails before the payment sheet; the app's own alert explains it.
-    await expect(screen.getByText('Unable to Complete Request').first()).toBeVisible({ timeout: 20_000 });
+    // The armed network failure fails before the payment sheet on iOS 27, and StoreKit's own
+    // "Unable to Complete Request" reads fine. iOS 18 shows the sheet first, fails once it is
+    // confirmed and describes the failure only as an NSURLErrorDomain code, so the app words it.
+    const message = /^(Unable to Complete Request|Couldn’t reach the App Store\. .*)$/;
+    const failure = screen.getByText(message).first();
+    const failedBeforeSheet = await failure.waitFor({ state: 'visible', timeout: 6_000 }).then(() => true, () => false);
+    if (!failedBeforeSheet) await pressSheet(sheet.confirm);
+    await expect(failure).toBeVisible({ timeout: 20_000 });
+    await expect(screen.getByText(/NSURLErrorDomain/)).toBeHidden();
     await tapVisibleCenter(screen.getByRole('button', 'OK'));
-    await expect(screen.getByText('Unable to Complete Request')).toBeHidden();
+    await expect(screen.getByText(message)).toBeHidden();
     await expect(screen.getByRole('button', 'Try 1 week free')).toBeEnabled();
     await expect(screen.getByText(/days? remaining/)).toBeHidden();
   } finally {

@@ -21,6 +21,8 @@ struct WelcomeBackRecapCard: View {
         guard #available(iOS 26, *), welcomeBackRecaps else { return false }
         #if DEBUG
         if E2EFixtures.fakeRecapText != nil { return true }
+        // The transcript hook skips Plus and the AI setting; the model and its availability stay real.
+        if E2EFixtures.transcriptText != nil { return AppleIntelligenceCapability.isSmartNamingAvailable }
         #endif
         return useLocalAIFeatures && plusEntitlement.isPlus && AppleIntelligenceCapability.isSmartNamingAvailable
     }

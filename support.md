@@ -205,6 +205,8 @@ Voice search needs Microphone and Speech Recognition permissions. Unpaged asks f
 
 Confirm your iPhone supports Apple Intelligence (iPhone 15 Pro/Pro Max or any iPhone 16+) and that it's turned on in **Settings → Apple Intelligence & Siri**. The feature also requires the on-device model to be fully downloaded — this can take time after a fresh iOS install or update. The first AI bookmark or recap can be slower while iOS downloads its on-device speech model for your language; once installed, the primary AI path works offline.
 
+If Apple Intelligence can't summarize a particular passage, the bookmark still opens with a simple name built from the chapter and the character mentioned most (for example "Elizabeth in Chapter 34"), and a short note explains why. You can edit the name or save it as is; the transcript is kept, so moment search still finds it. Smart naming needs the book downloaded: a bookmark in a streamed book opens with the chapter and time as its name.
+
 ### How do I manage the Unpaged Plus introductory offer?
 
 The offer and renewal price for the selected monthly or yearly plan are shown by Apple before purchase. Manage or cancel it from the **Plus** button at the top of the library → **Manage Subscription**, or in your Apple ID subscription settings. Existing AI Features unlock purchases remain recognized without expiration; an older iCloud Sync subscription grants Plus while active.

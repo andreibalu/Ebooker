@@ -8,6 +8,25 @@ import Speech
 import SwiftData
 import SwiftUI
 
+/// Why a smart-save draft carries a fallback name instead of the model's. Shown calmly above
+/// the name field: the passage is ordinary, the name is just simpler.
+enum SmartSaveNotice: Equatable {
+    case notDownloaded
+    case couldNotTranscribe
+    case couldNotSummarize
+
+    var message: String {
+        switch self {
+        case .notDownloaded:
+            "Smart naming needs a downloaded book, so Unpaged suggested a simple name. You can change it."
+        case .couldNotTranscribe:
+            "Unpaged couldn't transcribe this passage, so it suggested a simple name. You can change it."
+        case .couldNotSummarize:
+            "Apple Intelligence couldn't summarize this passage, so Unpaged suggested a simple name. You can change it."
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class PlayerViewModel {
@@ -19,7 +38,7 @@ final class PlayerViewModel {
     var momentNameInput: String = "Saved Moment"
     var momentNoteInput: String = ""
     var isProcessingSmartSave = false
-    var pendingSmartSaveUnsafeWarning = false
+    var pendingSmartSaveNotice: SmartSaveNotice?
     var pendingCategories: [MomentCategory] = []
     var pendingQuoteLine: String?
     var pendingCharacters: [String] = []
@@ -49,7 +68,14 @@ final class PlayerViewModel {
         segmentTranscriber: (any SegmentTranscribing)? = nil
     ) {
         self.transcription = transcription ?? TranscriptionService()
-        if let momentAnalyzer {
+        #if DEBUG
+        let fixtureAnalyzer = momentAnalyzer == nil ? E2EFixtures.momentAnalyzer : nil
+        let fixtureTranscriber = segmentTranscriber == nil ? E2EFixtures.momentTranscriber : nil
+        #else
+        let fixtureAnalyzer: (any MomentAnalyzing)? = nil
+        let fixtureTranscriber: (any SegmentTranscribing)? = nil
+        #endif
+        if let momentAnalyzer = momentAnalyzer ?? fixtureAnalyzer {
             self.momentAnalyzer = momentAnalyzer
         } else if #available(iOS 26, *) {
             self.momentAnalyzer = MomentNamingService()
@@ -57,7 +83,7 @@ final class PlayerViewModel {
             self.momentAnalyzer = UnavailableMomentAnalyzer()
         }
         self.audioExtractor = audioExtractor ?? AudioExtractionService()
-        if let segmentTranscriber {
+        if let segmentTranscriber = segmentTranscriber ?? fixtureTranscriber {
             self.segmentTranscriber = segmentTranscriber
         } else if #available(iOS 26, *) {
             self.segmentTranscriber = SpeechAnalyzerTranscriptionService()
@@ -105,16 +131,24 @@ final class PlayerViewModel {
     ) async {
         guard let audiobook = player.currentAudiobook,
               let track = player.currentTrack else { return }
+        let context = AIPassageContext(
+            bookTitle: audiobook.title,
+            author: audiobook.author,
+            chapterTitle: player.currentChapter?.title ?? track.title
+        )
 
         guard !Task.isCancelled else { return }
 
         isProcessingSmartSave = true
         defer { isProcessingSmartSave = false }
 
-        guard audiobook.isDownloaded,
-              let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
-            resetMomentState()
-            pendingMomentTime = savedTime
+        // Transcription reads the local file, so a streamed book gets the chapter-and-time name.
+        guard audiobook.isDownloaded else {
+            applyFallback(transcript: nil, context: context, savedTime: savedTime, notice: .notDownloaded)
+            return
+        }
+        guard let fileURL = try? LibraryImportService.fileURL(for: track, in: audiobook) else {
+            applyFallback(transcript: nil, context: context, savedTime: savedTime, notice: .couldNotTranscribe)
             return
         }
 
@@ -135,14 +169,13 @@ final class PlayerViewModel {
 
         guard !Task.isCancelled else { return }
         guard let transcript, !transcript.isEmpty else {
-            resetMomentState()
-            pendingMomentTime = savedTime
+            applyFallback(transcript: nil, context: context, savedTime: savedTime, notice: .couldNotTranscribe)
             return
         }
 
         await applyAnalysis(
             transcript: transcript,
-            audiobookTitle: audiobook.title,
+            context: context,
             savedTime: savedTime,
             onSuccessfulSmartAI: onSuccessfulSmartAI
         )
@@ -192,10 +225,11 @@ final class PlayerViewModel {
         }
     }
 
-    /// Runs the analyzer and fills the pending-moment fields. Internal for tests.
+    /// Runs the analyzer and fills the pending-moment fields. Any failure but cancellation
+    /// still opens the sheet, with a fallback name. Internal for tests.
     func applyAnalysis(
         transcript: String,
-        audiobookTitle: String,
+        context: AIPassageContext,
         savedTime: Double,
         onSuccessfulSmartAI: (() -> Void)? = nil
     ) async {
@@ -204,7 +238,7 @@ final class PlayerViewModel {
         do {
             let analysis = try await momentAnalyzer.analyzeMoment(
                 transcript: transcript,
-                audiobookTitle: audiobookTitle
+                context: context
             )
             try Task.checkCancellation()
             momentNameInput = analysis.name
@@ -215,7 +249,7 @@ final class PlayerViewModel {
             pendingQuoteLine = analysis.quoteLine
             pendingCharacters = analysis.characters
             pendingMood = analysis.mood
-            pendingSmartSaveUnsafeWarning = false
+            pendingSmartSaveNotice = nil
             pendingMomentTime = savedTime
             onSuccessfulSmartAI?()
         } catch is CancellationError {
@@ -223,11 +257,22 @@ final class PlayerViewModel {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            resetMomentState()
-            pendingMomentTranscript = transcript
-            pendingSmartSaveUnsafeWarning = (error as? MomentNamingError) == .unsafeContent
-            pendingMomentTime = savedTime
+            applyFallback(transcript: transcript, context: context, savedTime: savedTime, notice: .couldNotSummarize)
         }
+    }
+
+    /// A draft named from the transcript, chapter and time, never "Saved Moment". The
+    /// transcript is kept so moment search still finds the words.
+    private func applyFallback(transcript: String?, context: AIPassageContext, savedTime: Double, notice: SmartSaveNotice) {
+        let fallback = MomentFallbackNamer.analysis(
+            transcript: transcript, chapterTitle: context.chapterTitle, time: savedTime
+        )
+        resetMomentState()
+        momentNameInput = fallback.name
+        pendingCharacters = fallback.characters
+        pendingMomentTranscript = transcript
+        pendingSmartSaveNotice = notice
+        pendingMomentTime = savedTime
     }
 
     func commitMoment(player: AudioPlayerManager, modelContext: ModelContext) {
@@ -261,7 +306,7 @@ final class PlayerViewModel {
         pendingQuoteLine = nil
         pendingCharacters = []
         pendingMood = nil
-        pendingSmartSaveUnsafeWarning = false
+        pendingSmartSaveNotice = nil
 
         withAnimation(.spring(duration: 0.2)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
@@ -288,6 +333,6 @@ final class PlayerViewModel {
         pendingQuoteLine = nil
         pendingCharacters = []
         pendingMood = nil
-        pendingSmartSaveUnsafeWarning = false
+        pendingSmartSaveNotice = nil
     }
 }

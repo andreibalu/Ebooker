@@ -16,7 +16,9 @@ There is no synchronous Plus launch cache. It existed only so `AppDelegate` coul
 ## Copy
 
 - Derive trial length and price from the loaded `Product`. `freeTrialDisplay` returns nil unless the introductory offer is `.freeTrial`. Swift code holds no price literals.
+- Day counts (`trialDaysRemaining`) count calendar days between start-of-day dates, never an interval divided by 86,400: a DST change inside the trial would add or drop a day. `PlusEntitlementStoreTests` pins this across time zones.
 - The subscribe button reads "Try …" when a trial exists and "Subscribe" otherwise.
+- Plus load, purchase and restore errors go through `PlusEntitlementStore.message(for:fallback:)`, never a bare `localizedDescription`. On iOS 18 a StoreKit network failure describes itself as "The operation couldn’t be completed. (NSURLErrorDomain error -1009.)", and only after the payment sheet is confirmed. iOS 27 fails before the sheet with StoreKit's readable "Unable to Complete Request", which passes through unchanged.
 - The local `Products.storekit` carries a free-trial introductory offer on both Plus plans (`paymentMode: "free"`) and a test price for the tip; neither says anything about production.
 
 ## App Review reachability (guideline 3.1.1)

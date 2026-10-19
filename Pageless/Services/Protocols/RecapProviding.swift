@@ -13,20 +13,18 @@ struct RecapGenerationResult: Sendable {
 
 enum RecapError: LocalizedError, Equatable {
     case modelUnavailable
-    case noAudioAvailable
-    /// The on-device model declined the content (guardrail or refusal).
-    case unsafeContent
-    /// Generation failed after retry (transient model error, decoding failure, …).
+    /// The model refused the passage or tripped a guardrail, even after a retry on a shorter
+    /// passage.
+    case declined
+    /// Generation failed after retry (transient model error, unreadable reply, …).
     case generationFailed
 
     var errorDescription: String? {
         switch self {
         case .modelUnavailable:
             "Apple Intelligence is not available."
-        case .noAudioAvailable:
-            "No audio available for recap."
-        case .unsafeContent:
-            "Apple Intelligence declined to summarize this passage."
+        case .declined:
+            "Apple Intelligence couldn't summarize this part of the book. Try again after listening a little further."
         case .generationFailed:
             "Couldn't generate a recap. Please try again."
         }
@@ -36,9 +34,16 @@ enum RecapError: LocalizedError, Equatable {
 protocol RecapProviding: Sendable {
     func generateRecap(
         transcript: String,
-        audiobookTitle: String?,
+        context: AIPassageContext,
         includeProgressHeadline: Bool
     ) async throws -> RecapGenerationResult
+
+    /// Optional: load model resources while the transcript is still being made.
+    func prewarm()
+}
+
+extension RecapProviding {
+    func prewarm() {}
 }
 
 /// Default recap provider used on iOS versions without FoundationModels. Always throws;
@@ -46,7 +51,7 @@ protocol RecapProviding: Sendable {
 struct UnavailableRecapProvider: RecapProviding {
     func generateRecap(
         transcript: String,
-        audiobookTitle: String?,
+        context: AIPassageContext,
         includeProgressHeadline: Bool
     ) async throws -> RecapGenerationResult {
         throw RecapError.modelUnavailable

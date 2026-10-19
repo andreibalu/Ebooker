@@ -14,7 +14,10 @@ final class MockMomentAnalyzer: MomentAnalyzing, @unchecked Sendable {
 
     func prewarm() { prewarmCallCount += 1 }
 
-    func analyzeMoment(transcript: String, audiobookTitle: String?) async throws -> MomentAnalysis {
+    var lastContext: AIPassageContext?
+
+    func analyzeMoment(transcript: String, context: AIPassageContext) async throws -> MomentAnalysis {
+        lastContext = context
         if let errorToThrow { throw errorToThrow }
         if shouldThrow { throw MomentNamingError.modelUnavailable }
         return analysisToReturn ?? MomentAnalysis(

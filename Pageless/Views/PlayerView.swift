@@ -30,7 +30,10 @@ struct PlayerView: View {
     @State private var showChapters = false
 
     private var useSmartSave: Bool {
-        plusEntitlement.isPlus
+        #if DEBUG
+        if E2EFixtures.smartSaveEnabled { return true }
+        #endif
+        return plusEntitlement.isPlus
             && useLocalAIFeatures
             && useSmartMomentNaming
             && AppleIntelligenceCapability.isSmartNamingAvailable
@@ -79,9 +82,7 @@ struct PlayerView: View {
                 quoteLine: $viewModel.pendingQuoteLine,
                 characters: $viewModel.pendingCharacters,
                 mood: $viewModel.pendingMood,
-                warningMessage: viewModel.pendingSmartSaveUnsafeWarning
-                    ? "AI detected content likely to be unsafe and couldn't name this moment."
-                    : nil,
+                notice: viewModel.pendingSmartSaveNotice?.message,
                 onSave: { viewModel.commitMoment(player: player, modelContext: modelContext) },
                 onCancel: { viewModel.pendingMomentTime = nil }
             )
