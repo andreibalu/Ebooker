@@ -24,17 +24,35 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
     private var entries: [UUID: Bool]
     private var saveScheduled = false
     private var storedRevision = 0
+    /// True while the file exists but couldn't be read, as in a background launch after a reboot
+    /// before the first unlock (data protection). Saving then would replace every other book's
+    /// answer with only what this process knew, so `save()` waits until the file reads again.
+    private var diskUnreadable = false
 
     init(fileURL: URL?) {
         self.fileURL = fileURL
-        if let fileURL, let data = try? Data(contentsOf: fileURL),
-           let raw = try? PropertyListDecoder().decode([String: Bool].self, from: data) {
-            entries = Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
-                UUID(uuidString: key).map { ($0, value) }
-            })
-        } else {
-            entries = [:]
+        switch Self.read(fileURL) {
+        case .entries(let stored): entries = stored
+        case .unreadable: entries = [:]; diskUnreadable = true
+        case .missingOrCorrupt: entries = [:]
         }
+    }
+
+    private enum DiskRead {
+        case entries([UUID: Bool])
+        case unreadable
+        case missingOrCorrupt
+    }
+
+    private static func read(_ fileURL: URL?) -> DiskRead {
+        guard let fileURL, FileManager.default.fileExists(atPath: fileURL.path) else { return .missingOrCorrupt }
+        guard let data = try? Data(contentsOf: fileURL) else { return .unreadable }
+        guard let raw = try? PropertyListDecoder().decode([String: Bool].self, from: data) else {
+            return .missingOrCorrupt
+        }
+        return .entries(Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
+            UUID(uuidString: key).map { ($0, value) }
+        }))
     }
 
     /// Bumped on every change, so SwiftUI views that read `Audiobook.isDownloaded` redraw.
@@ -149,6 +167,19 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
     private func save() {
         guard let fileURL else { return }
         writeLock.withLock {
+            if lock.withLock({ diskUnreadable }) {
+                // Merge what the file holds under this process's newer answers, or keep waiting.
+                switch Self.read(fileURL) {
+                case .unreadable: return
+                case .entries(let stored):
+                    lock.withLock {
+                        entries.merge(stored) { current, _ in current }
+                        diskUnreadable = false
+                    }
+                case .missingOrCorrupt:
+                    lock.withLock { diskUnreadable = false }
+                }
+            }
             let raw = lock.withLock {
                 Dictionary(uniqueKeysWithValues: entries.map { ($0.key.uuidString, $0.value) })
             }
@@ -157,7 +188,7 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
                 at: fileURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
-            try? data.write(to: fileURL, options: .atomic)
+            try? data.write(to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         }
     }
 
