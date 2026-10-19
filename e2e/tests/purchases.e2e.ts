@@ -166,7 +166,8 @@ test('AI settings stay reachable from the Plus hub without a purchase (Apple 3.1
   await expect(screen.getByText(/iCloud/)).toBeHidden();
   await expect(screen.getByRole('button', /^iCloud Sync, /)).toBeHidden();
   const link = screen.getByRole('button', /^Apple Intelligence, /);
-  const purchase = screen.getByRole('button', 'Try 1 week free');
+  // iOS 26 formats the same trial as "7 days".
+  const purchase = screen.getByRole('button', /^Try (1 week|7 days) free$/);
   await screen.scrollUntilVisible(purchase);
   if (await screen.getByTestId('plus.unsupportedDeviceNote').isVisible()) {
     // An iPhone that can't run Apple Intelligence still offers Plus, with a note and no AI link.

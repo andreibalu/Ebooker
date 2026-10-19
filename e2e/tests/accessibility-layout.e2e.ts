@@ -154,6 +154,8 @@ test('large text with Button Shapes and Bold Text keeps the iCloud screens reada
     launchArguments: ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'NO', '-startOnFreeBooks', 'NO', '-e2e-icloud-account'],
   });
   await screen.getByTestId('onboarding.choice.own').tap();
+  // Picking animates to Permissions; let it settle so the rail tap lands on the iCloud scene.
+  await expect(screen.getByText('Two quick permissions.').first()).toBeVisible();
   await screen.getByTestId('onboarding.page.5').tap();
   const toggle = screen.getByTestId('onboarding.icloud.toggle').getByRole('switch').last();
   await screen.scrollUntilVisible(toggle);

@@ -53,6 +53,16 @@ async function openCloudLibrary(screen: Screen): Promise<void> {
 }
 
 const back = (screen: Screen) => screen.getByRole('button', 'Back').first();
+
+/**
+ * Picks own books, then jumps to the iCloud scene. Picking animates to Permissions; a rail tap
+ * during that animation can land on the wrong page, so wait for it to settle first.
+ */
+async function openOnboardingCloudScene(screen: Screen): Promise<void> {
+  await screen.getByTestId('onboarding.choice.own').tap();
+  await expect(screen.getByText('Two quick permissions.').first()).toBeVisible();
+  await push(screen.getByTestId('onboarding.page.5'), screen.getByText('Everything in sync.').first());
+}
 // iOS 18 reports List section headers in capitals.
 const inICloudOnly = /^In iCloud only$/i;
 
@@ -86,7 +96,8 @@ test('a free user turns iCloud sync on in Settings, and it takes effect after re
   await expect(screen.getByLabel('Backed up to iCloud').first()).toBeVisible();
   await openSettings(screen);
   await expect(screen.getByTestId('settings.icloud')).toContainText('On · free with your iCloud account');
-  await expect(screen.getByTestId('settings.cloudLibrary')).toBeVisible();
+  // A short screen (iPhone SE) shows the row only after scrolling.
+  await scrollTo(screen, screen.getByTestId('settings.cloudLibrary'));
   await push(screen.getByTestId('settings.icloud'), syncSwitch(screen));
   await expect(syncSwitch(screen)).toBeChecked();
   await expect(screen.getByText(/On — your library syncs across devices/).first()).toBeVisible();
@@ -114,9 +125,7 @@ test('without an iCloud account the sync toggle explains how to sign in', async 
 test('onboarding offers iCloud sync as a free opt-in that starts on the next launch', async ({ device, screen, app }) => {
   const onboarding = ['-e2e-fixture', '-onboardingComplete', 'NO', '-startOnFreeBooks', 'NO', ...account];
   await device.openApp(bundle, { relaunch: true, launchArguments: [...onboarding, '-e2e-reset-fixture'] });
-  await screen.getByTestId('onboarding.choice.own').tap();
-  await screen.getByTestId('onboarding.page.5').tap();
-  await expect(screen.getByText('Everything in sync.').first()).toBeVisible();
+  await openOnboardingCloudScene(screen);
   const toggle = screen.getByTestId('onboarding.icloud.toggle').getByRole('switch').last();
   await expect(toggle).toBeChecked({ checked: false });
   await expect(screen.getByText(/Off\. You can turn it on in Settings anytime\./).first()).toBeVisible();
@@ -138,8 +147,7 @@ test('onboarding without an iCloud account keeps the sync toggle off and says wh
     relaunch: true,
     launchArguments: ['-e2e-fixture', '-onboardingComplete', 'NO', '-startOnFreeBooks', 'NO', '-e2e-reset-fixture'],
   });
-  await screen.getByTestId('onboarding.choice.own').tap();
-  await screen.getByTestId('onboarding.page.5').tap();
+  await openOnboardingCloudScene(screen);
   await expect(screen.getByTestId('onboarding.icloud.toggle').getByRole('switch').last()).toBeDisabled();
   await expect(screen.getByText('Sign in to iCloud in Settings to use sync.').first()).toBeVisible();
 });
