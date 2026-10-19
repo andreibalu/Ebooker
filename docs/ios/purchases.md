@@ -19,6 +19,7 @@ All purchases use StoreKit 2 directly; there is no third-party purchase SDK. Pro
 ## Copy
 
 - Derive trial length and price from the loaded `Product`. `freeTrialDisplay` returns nil unless the introductory offer is `.freeTrial`. Swift code holds no price literals.
+- Day counts (`trialDaysRemaining`) count calendar days between start-of-day dates, never an interval divided by 86,400: a DST change inside the trial would add or drop a day. `PlusEntitlementStoreTests` pins this across time zones.
 - The subscribe button reads "Try …" when a trial exists and "Subscribe" otherwise.
 - The local `Products.storekit` carries a free-trial introductory offer on both Plus plans (`paymentMode: "free"`) and a test price for the tip; neither says anything about production.
 
