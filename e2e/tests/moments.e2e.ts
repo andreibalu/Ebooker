@@ -77,6 +77,8 @@ test('quote, mood and cast survive relaunch and drive the character and mood fil
   await expect(screen.getByRole('button', 'Remove Tense')).toBeVisible();
   await screen.scrollUntilVisible(screen.getByRole('button', 'Remove Elizabeth'));
   await screen.getByRole('button', 'Cancel').tap();
+  // Wait out the dismissal: a scroll during it lands on the closing form, which can't move.
+  await expect(screen.getByTestId('moment.done')).toBeHidden();
 
   await filterBy(screen, 'Elizabeth');
   // The active-filter chip shows the name as typed, not the lower-cased match key.
