@@ -44,7 +44,8 @@ enum OrphanDetectionService {
         var flipped = 0
         for book in books {
             if !state.hasEntry(book.id) {
-                state.set(book.hasLocalAudio(), for: book.id)
+                // The fallback caches the files' answer with one batched write for the whole pass.
+                _ = state.isDownloaded(book.id) { book.hasLocalAudio() }
                 settled += 1
             } else if needsLocalFileCheck(book), shouldMarkOrphan(book, hasLocalFiles: book.hasLocalAudio()) {
                 log.info("Downloaded book lost its local audio trackCount=\(book.tracks.count, privacy: .public)")

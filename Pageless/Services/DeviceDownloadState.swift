@@ -18,6 +18,7 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
 
     private let fileURL: URL?
     private let lock = NSLock()
+    private let writeLock = NSLock()
     private let registrar = ObservationRegistrar()
     private let saveQueue = DispatchQueue(label: "andreibaludev.Pageless.DeviceDownloadState", qos: .utility)
     private var entries: [UUID: Bool]
@@ -67,7 +68,10 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
             return changed
         }
         guard changed else { return }
-        scheduleSave()
+        // Written now, not batched: a background download finishes, calls the system's completion
+        // handler and is suspended or killed at once, and a lost `true` never comes back (files
+        // appearing never flip a book to downloaded).
+        save()
         notify()
     }
 
@@ -93,7 +97,7 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
                     state.set(value, for: id)
                 } else {
                     state.lock.withLock { _ = state.entries.removeValue(forKey: id) }
-                    state.scheduleSave()
+                    state.save()
                     state.notify()
                 }
             }
@@ -127,7 +131,7 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
     }
 
     private func scheduleSave() {
-        guard let fileURL else { return }
+        guard fileURL != nil else { return }
         let shouldSchedule = lock.withLock {
             guard !saveScheduled else { return false }
             saveScheduled = true
@@ -135,9 +139,18 @@ nonisolated final class DeviceDownloadState: Observable, @unchecked Sendable {
         }
         guard shouldSchedule else { return }
         saveQueue.asyncAfter(deadline: .now() + 0.2) { [self] in
+            lock.withLock { saveScheduled = false }
+            save()
+        }
+    }
+
+    /// Writes the current entries. Taking the snapshot inside `writeLock` keeps a slower, older
+    /// write from landing after a newer one.
+    private func save() {
+        guard let fileURL else { return }
+        writeLock.withLock {
             let raw = lock.withLock {
-                saveScheduled = false
-                return Dictionary(uniqueKeysWithValues: entries.map { ($0.key.uuidString, $0.value) })
+                Dictionary(uniqueKeysWithValues: entries.map { ($0.key.uuidString, $0.value) })
             }
             guard let data = try? PropertyListEncoder().encode(raw) else { return }
             try? FileManager.default.createDirectory(
