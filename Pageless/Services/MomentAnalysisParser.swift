@@ -35,7 +35,7 @@ enum MomentAnalysisParser {
         guard !AIResponseText.isRefusal(reply) else { return nil }
         let fields = AIResponseText.labeledFields(in: reply, labels: labels, overflowLabel: "Note")
         let name = AIResponseText.cleanTitle(fields["title"] ?? "")
-        guard !name.isEmpty, !AIResponseText.isRefusal(name) else { return nil }
+        guard !name.isEmpty, !AIResponseText.isRefusalTitle(fields["title"] ?? "") else { return nil }
 
         let note = AIResponseText.isPlaceholder(fields["note"] ?? "")
             ? ""

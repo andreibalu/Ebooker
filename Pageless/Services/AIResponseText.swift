@@ -53,6 +53,10 @@ nonisolated enum AIResponseText {
             } else if let label = splitLabel(line)?.label, label.split(separator: " ").count <= 2 {
                 // A label the reply invented ("Rating:") ends the previous value.
                 current = nil
+            } else if line.hasSuffix(":") {
+                // A header or preamble ("Here is the analysis:") is never a value, and must not
+                // claim the overflow field: unlabeled prose after it would join the title.
+                current = nil
             } else if let overflow, current == overflow || fields[overflow] == nil {
                 append(line, to: overflow)
                 current = overflow
@@ -136,6 +140,15 @@ nonisolated enum AIResponseText {
             "i'm unable", "i am unable", "i won't", "i will not", "as an ai", "i'm not able", "i am not able",
         ]
         return openers.contains { head.hasPrefix($0) }
+    }
+
+    /// A title or headline that is really a refusal. Stricter than `isRefusal`, because fiction
+    /// titles open the same way ("I Won't Go Back", "I Cannot Forgive Him"): the text must also
+    /// use a refusal's wording.
+    static func isRefusalTitle(_ text: String) -> Bool {
+        guard isRefusal(text) else { return false }
+        let lower = text.lowercased()
+        return ["sorry", "apolog", "as an ai", "help with", "assist", "comply", "provide"].contains { lower.contains($0) }
     }
 
     // MARK: - Prose repair

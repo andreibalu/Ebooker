@@ -79,7 +79,9 @@ enum MomentFallbackNamer {
         var pendingHonorific: String?
         for token in text.split(whereSeparator: \.isWhitespace) {
             let word = token.trimmingCharacters(in: .punctuationCharacters.union(.symbols))
-            let startsUpper = word.first?.isUppercase == true && word.count > 1
+            // "I'm", "I'll" and "I've" are capitalized mid-sentence too, and lead first-person passages.
+            let isFirstPerson = word.hasPrefix("I'") || word.hasPrefix("I’")
+            let startsUpper = word.first?.isUppercase == true && word.count > 1 && !isFirstPerson
             if startsUpper, honorifics.contains(word) {
                 pendingHonorific = word
             } else if startsUpper, !common.contains(word) {

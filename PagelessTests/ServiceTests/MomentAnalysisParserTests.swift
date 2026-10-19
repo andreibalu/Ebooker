@@ -116,5 +116,16 @@ struct MomentAnalysisParserTests {
     @Test func parseRejectsRefusalsAndRepliesWithoutTitle() {
         #expect(MomentAnalysisParser.parse("I'm sorry, but I can't help with that.", transcript: "t") == nil)
         #expect(MomentAnalysisParser.parse("Mood: tense\nNote: Something happens.", transcript: "t") == nil)
+        #expect(MomentAnalysisParser.parse("Title: I'm sorry, but I can't help with that.", transcript: "t") == nil)
+        // Fiction titles open like refusals; they are still names.
+        #expect(MomentAnalysisParser.parse("Title: I Won't Go Back\nMood: tense", transcript: "t")?.name == "I Won't Go Back")
+    }
+
+    /// A preamble must not claim the note, or the unlabeled note joins the title.
+    @Test func preambleLineDoesNotPushTheNoteIntoTheTitle() {
+        let reply = "Here is the analysis:\nTitle: The Proposal\nDarcy proposes and Elizabeth refuses.\nMood: tense"
+        let analysis = MomentAnalysisParser.parse(reply, transcript: "t")
+        #expect(analysis?.name == "The Proposal")
+        #expect(analysis?.note == "Darcy proposes and Elizabeth refuses.")
     }
 }

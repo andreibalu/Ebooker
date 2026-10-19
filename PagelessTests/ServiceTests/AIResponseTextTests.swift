@@ -48,6 +48,15 @@ struct AIResponseTextTests {
         #expect(fields["note"] == "The town stays awake. Ariadne lights the lantern.")
     }
 
+    /// Seen as a failure mode: a preamble overflowed into the recap ("Here's a recap:…") and
+    /// the unlabeled prose then joined the headline.
+    @Test func preambleLinesAreNotValues() {
+        let reply = "Here's a recap:\nHeadline: At the river\nJane waits by the water. Bingley arrives late."
+        let fields = AIResponseText.labeledFields(in: reply, labels: ["Headline", "Recap"], overflowLabel: "Recap")
+        #expect(fields["headline"] == "At the river")
+        #expect(fields["recap"] == "Jane waits by the water. Bingley arrives late.")
+    }
+
     @Test func refusalsAreRecognized() {
         #expect(AIResponseText.isRefusal("I'm sorry, but I can't help with that request."))
         #expect(AIResponseText.isRefusal("I apologize, but I cannot assist with this."))

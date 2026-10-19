@@ -40,6 +40,12 @@ struct MomentFallbackNamerTests {
         #expect(analysis.name == "Chapter 2 at 12:34")
     }
 
+    /// First-person narration has no names, but "I'm" is capitalized mid-sentence.
+    @Test func firstPersonContractionsAreNotNames() {
+        let text = "He looked at me. \"Well, I'm not sure,\" I said, and I'm certain he heard. Later I'm alone, and I'll wait."
+        #expect(!MomentFallbackNamer.capitalizedNames(in: text).contains { $0.name.hasPrefix("I") })
+    }
+
     @Test func timeAloneWithoutTranscriptOrChapter() {
         let analysis = MomentFallbackNamer.analysis(transcript: nil, chapterTitle: "  ", time: 3_725)
         #expect(analysis.name == "Moment at 1:02:05")
