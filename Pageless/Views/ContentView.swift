@@ -254,8 +254,9 @@ struct ContentView: View {
         .ratingPrompt(
             isOnboardingComplete: onboarding.isComplete,
             isPlayerOpen: isPlayerVisible,
-            // A stream still loading has not set `isPlaying` yet, but playback is starting.
-            isPlaying: player.isPlaying || player.isPreparingPlayback
+            // A stream still loading, or an Audiobookshelf resume waiting on its server, has not set
+            // `isPlaying` yet, but playback is starting.
+            isPlaying: player.isPlaying || player.isPreparingPlayback || player.isAwaitingServerResume
         )
         .alert(
             deleteAlertTitle,

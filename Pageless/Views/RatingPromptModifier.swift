@@ -28,6 +28,7 @@ private struct RatingPromptModifier: ViewModifier {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.requestReview) private var requestReview
     @Environment(\.modelContext) private var modelContext
+    @State private var isKeyboardVisible = false
     #if DEBUG
     @State private var stubbedRequests = 0
     #endif
@@ -59,6 +60,12 @@ private struct RatingPromptModifier: ViewModifier {
                 #if DEBUG
                 E2EFixtures.applyRatingPromptOverrides(to: store)
                 #endif
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                isKeyboardVisible = true
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                isKeyboardVisible = false
             }
             .task(id: Trigger(
                 scenePhase: scenePhase, isOnboardingComplete: isOnboardingComplete,
@@ -100,6 +107,11 @@ private struct RatingPromptModifier: ViewModifier {
                 appVersion: Self.appVersion,
                 now: .now)
             if case .skip(let reason) = decision, reason.isTerminal { return }
+            // Nothing in a calm session changes these quickly; a play or pause restarts the watch.
+            if case .skip(let reason) = decision, reason == .noPositiveMoment || reason == .installTooNew {
+                try? await Task.sleep(for: Self.pollInterval * 14)
+                continue
+            }
             if settling.observe(decision) {
                 request()
                 return
@@ -111,15 +123,19 @@ private struct RatingPromptModifier: ViewModifier {
         RatingPromptSituation(
             isOnboardingComplete: isOnboardingComplete,
             isSceneActive: scenePhase == .active,
-            isModalPresented: Self.isModalPresented,
+            // A raised keyboard (search field) counts like a presented sheet.
+            isModalPresented: Self.isModalPresented || isKeyboardVisible,
             isPlayerOpen: isPlayerOpen,
             isPlaying: isPlaying,
             isCarPlayConnected: Self.isCarPlayConnected)
     }
 
     private func listeningSummary() -> RatingPromptListening {
-        let sessions = (try? modelContext.fetch(FetchDescriptor<ReadingSession>())) ?? []
-        return RatingPromptListening(sessions: sessions.map { ($0.date, $0.minutes) })
+        let now = Date.now
+        let start = RatingPromptPolicy.habitWindowStart(now: now)
+        let descriptor = FetchDescriptor<ReadingSession>(predicate: #Predicate { $0.date >= start })
+        let sessions = (try? modelContext.fetch(descriptor)) ?? []
+        return RatingPromptListening(sessions: sessions.map { ($0.date, $0.minutes) }, now: now)
     }
 
     private func request() {

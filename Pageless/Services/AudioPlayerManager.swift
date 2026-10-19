@@ -127,6 +127,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var isLoadingItem = false
     private var loadGeneration = PlaybackLoadGeneration()
     private var absResumeGeneration: UInt64 = 0
+    @Published private var absResumeWaiters = 0
     /// Set on pause. Resuming an ABS book after a long pause — or with no pause this session, i.e. a
     /// book restored after relaunch — checks the server for progress made on another device; a quick
     /// pause/play skips the round trip. Fresh loads reconcile in `startPlayback`.
@@ -296,6 +297,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         loadingPlaybackBookID != nil
     }
 
+    /// True while a play request waits on the Audiobookshelf server for newer progress, before
+    /// `isPlaying` or `loadingPlaybackBookID` is set. A count, because a superseded request still unwinds.
+    var isAwaitingServerResume: Bool {
+        absResumeWaiters > 0
+    }
+
     func isLoadingPlayback(for audiobook: Audiobook) -> Bool {
         loadingPlaybackBookID == audiobook.id
     }
@@ -336,6 +343,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private func reconcileAudiobookshelfBeforeResume(_ audiobook: Audiobook) async -> Bool? {
         absResumeGeneration &+= 1
         let resumeToken = absResumeGeneration
+        absResumeWaiters += 1
+        defer { absResumeWaiters -= 1 }
         let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(audiobook, context: modelContext)
         return resumeToken == absResumeGeneration ? adopted : nil
     }
@@ -379,7 +388,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
            NetworkMonitor.shared.isConnected {
             absResumeGeneration &+= 1
             let resumeToken = absResumeGeneration
+            absResumeWaiters += 1
             Task {
+                // Held through the follow-up load, so no gap opens before `loadingPlaybackBookID` is set.
+                defer { absResumeWaiters -= 1 }
                 let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(book, context: modelContext)
                 guard resumeToken == absResumeGeneration, currentAudiobook === book else { return }
                 if adopted {

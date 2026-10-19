@@ -28,7 +28,10 @@ struct RatingPromptListening: Equatable {
         self.lastListened = lastListened
     }
 
-    init(sessions: [(date: Date, minutes: Int)], calendar: Calendar = .current) {
+    /// Only sessions inside the habit window count, so a lapsed listener's old history never does.
+    init(sessions all: [(date: Date, minutes: Int)], now: Date, calendar: Calendar = .current) {
+        let start = RatingPromptPolicy.habitWindowStart(now: now)
+        let sessions = all.filter { $0.date >= start }
         totalMinutes = sessions.reduce(0) { $0 + $1.minutes }
         distinctDays = Set(sessions.map { calendar.startOfDay(for: $0.date) }).count
         lastListened = sessions.map(\.date).max()
@@ -83,13 +86,18 @@ enum RatingPromptPolicy {
     static let minimumInstallAge: TimeInterval = 2 * 86_400
     /// A finished book stays a positive moment this long.
     static let finishedBookWindow: TimeInterval = 2 * 86_400
-    /// The habit signal: this much listening on this many different days, and still listening.
+    /// The habit signal: this much listening on this many different days within the window, and still listening.
     static let habitMinutes = 180
     static let habitDays = 3
+    static let habitWindow: TimeInterval = 14 * 86_400
     static let habitRecency: TimeInterval = 3 * 86_400
     /// Apple allows three prompts a year per person. We stay under it with one per version and
     /// this gap between versions.
     static let minimumGapBetweenRequests: TimeInterval = 90 * 86_400
+
+    static func habitWindowStart(now: Date) -> Date {
+        now.addingTimeInterval(-habitWindow)
+    }
 
     /// `listening` is a closure because summing sessions is the only costly input.
     static func decide(

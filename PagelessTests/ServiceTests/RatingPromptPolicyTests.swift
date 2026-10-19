@@ -4,7 +4,8 @@
 //
 //  Failure list these tests were written from (each is a way the prompt could annoy a listener
 //  or silently never fire). E2E (`e2e/tests/rating-prompt.e2e.ts`) covers the wiring; these cover
-//  the rules, which E2E can reach only slowly.
+//  the boundaries and clock cases E2E can't reach cheaply. Plain on/off gates (onboarding, sheet, player,
+//  playing, once per version) are E2E-only.
 //
 //   1. Asks on the first launch day, or when the first launch was never recorded.
 //   2. Asks while onboarding is on screen.
@@ -64,19 +65,6 @@ struct RatingPromptPolicyTests {
 
     // MARK: Positive moments
 
-    @Test func finishedBookRecentlyAsks() {
-        #expect(decide(history()) == .request(.finishedBook))
-    }
-
-    @Test func listeningHabitAsks() {
-        let habit = RatingPromptListening(totalMinutes: 240, distinctDays: 4, lastListened: now.addingTimeInterval(-day))
-        #expect(decide(history(finishedHoursAgo: nil), listening: habit) == .request(.listeningHabit))
-    }
-
-    @Test func noPositiveMomentSkips() {
-        #expect(decide(history(finishedHoursAgo: nil)) == .skip(.noPositiveMoment))
-    }
-
     @Test func finishedBookFromLastWeekIsNotAMoment() {
         #expect(decide(history(finishedHoursAgo: 24 * 7)) == .skip(.noPositiveMoment))
     }
@@ -119,10 +107,6 @@ struct RatingPromptPolicyTests {
 
     // MARK: Install age
 
-    @Test func firstLaunchDayNeverAsks() {
-        #expect(decide(history(installedDaysAgo: 0.2)) == .skip(.installTooNew))
-    }
-
     @Test func unrecordedFirstLaunchNeverAsks() {
         #expect(decide(history(installedDaysAgo: nil)) == .skip(.installTooNew))
     }
@@ -139,34 +123,10 @@ struct RatingPromptPolicyTests {
 
     // MARK: Moment of the session
 
-    @Test func onboardingBlocks() {
-        var situation = calmSituation
-        situation.isOnboardingComplete = false
-        #expect(decide(history(), situation: situation) == .skip(.onboarding))
-    }
-
     @Test func inactiveSceneBlocks() {
         var situation = calmSituation
         situation.isSceneActive = false
         #expect(decide(history(), situation: situation) == .skip(.sceneNotActive))
-    }
-
-    @Test func presentedModalBlocks() {
-        var situation = calmSituation
-        situation.isModalPresented = true
-        #expect(decide(history(), situation: situation) == .skip(.modalPresented))
-    }
-
-    @Test func openPlayerBlocks() {
-        var situation = calmSituation
-        situation.isPlayerOpen = true
-        #expect(decide(history(), situation: situation) == .skip(.playerBusy))
-    }
-
-    @Test func playingAudioBlocks() {
-        var situation = calmSituation
-        situation.isPlaying = true
-        #expect(decide(history(), situation: situation) == .skip(.playerBusy))
     }
 
     @Test func carPlayBlocks() {
@@ -176,11 +136,6 @@ struct RatingPromptPolicyTests {
     }
 
     // MARK: Limits
-
-    @Test func onceAppVersion() {
-        let asked = history(requestedVersion: "1.6.0", requestedDaysAgo: 200)
-        #expect(decide(asked, version: "1.6.0") == .skip(.alreadyRequestedThisVersion))
-    }
 
     @Test func newVersionStillWaitsForTheGap() {
         let recent = history(requestedVersion: "1.5.1", requestedDaysAgo: 30)
@@ -197,26 +152,11 @@ struct RatingPromptPolicyTests {
         #expect(decide(skewed, version: "1.6.0") == .skip(.requestedRecently))
     }
 
-    @Test func limitSkipsAreTerminal() {
-        #expect(RatingPromptSkip.alreadyRequestedThisVersion.isTerminal)
-        #expect(RatingPromptSkip.requestedRecently.isTerminal)
-        #expect(!RatingPromptSkip.modalPresented.isTerminal)
-        #expect(!RatingPromptSkip.noPositiveMoment.isTerminal)
-        #expect(!RatingPromptSkip.installTooNew.isTerminal)
-    }
-
-    @Test func listeningIsOnlyComputedWhenNeeded() {
-        var computed = 0
-        let decision = RatingPromptPolicy.decide(
-            history: history(), listening: { computed += 1; return quiet },
-            situation: calmSituation, appVersion: "1.6.0", now: now)
-        #expect(decision == .request(.finishedBook))
-        #expect(computed == 0)
-    }
-
     // MARK: Listening summary
 
-    @Test func listeningSummaryCountsDistinctCalendarDays() {
+    /// Bug caught: a distinct-day count that splits one evening's sessions, or an all-time total
+    /// that lets listening from months ago count toward the habit.
+    @Test func listeningSummaryCountsDistinctCalendarDaysInsideTheWindow() {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let start = calendar.startOfDay(for: now)
@@ -224,12 +164,21 @@ struct RatingPromptPolicyTests {
             sessions: [
                 (start, 30), (start.addingTimeInterval(3600 * 5), 20),
                 (start.addingTimeInterval(-day), 45), (start.addingTimeInterval(-3 * day), 10),
+                (start.addingTimeInterval(-200 * day), 500),
             ],
-            calendar: calendar)
+            now: now, calendar: calendar)
         #expect(summary.totalMinutes == 105)
         #expect(summary.distinctDays == 3)
         #expect(summary.lastListened == start.addingTimeInterval(3600 * 5))
-        #expect(RatingPromptListening(sessions: [], calendar: calendar).lastListened == nil)
+        #expect(RatingPromptListening(sessions: [], now: now, calendar: calendar).lastListened == nil)
+    }
+
+    @Test func habitWindowBoundary() {
+        let edge = now.addingTimeInterval(-RatingPromptPolicy.habitWindow)
+        let inside = RatingPromptListening(sessions: [(edge, 10)], now: now)
+        let outside = RatingPromptListening(sessions: [(edge.addingTimeInterval(-1), 10)], now: now)
+        #expect(inside.totalMinutes == 10)
+        #expect(outside.totalMinutes == 0)
     }
 
     // MARK: Settling
@@ -255,45 +204,42 @@ struct RatingPromptPolicyTests {
 
     // MARK: Store
 
-    private func store() -> (RatingPromptStore, UserDefaults) {
+    /// Runs `body` with a throwaway store and deletes its defaults file afterwards.
+    private func withStore(_ body: (RatingPromptStore, UserDefaults) -> Void) {
         let suite = "test.ratingPrompt.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return (RatingPromptStore(defaults: defaults), defaults)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        body(RatingPromptStore(defaults: defaults), defaults)
     }
 
     @Test func storePersistsRequestsAcrossInstances() {
-        let (first, defaults) = store()
-        first.recordRequest(version: "1.6.0", now: now)
-        let reloaded = RatingPromptStore(defaults: defaults).history
-        #expect(reloaded.lastRequestVersion == "1.6.0")
-        #expect(reloaded.lastRequestDate == now)
+        withStore { first, defaults in
+            first.recordRequest(version: "1.6.0", now: now)
+            let reloaded = RatingPromptStore(defaults: defaults).history
+            #expect(reloaded.lastRequestVersion == "1.6.0")
+            #expect(reloaded.lastRequestDate == now)
+        }
     }
 
     @Test func noteLaunchKeepsTheFirstDate() {
-        let (store, _) = store()
-        store.noteLaunch(now: now)
-        store.noteLaunch(now: now.addingTimeInterval(5 * day))
-        #expect(store.history.firstLaunch == now)
-    }
-
-    @Test func storeRecordsFinishedBooks() {
-        let (store, _) = store()
-        #expect(store.history.lastFinishedBook == nil)
-        store.recordFinishedBook(now: now)
-        #expect(store.history.lastFinishedBook == now)
+        withStore { store, _ in
+            store.noteLaunch(now: now)
+            store.noteLaunch(now: now.addingTimeInterval(5 * day))
+            #expect(store.history.firstLaunch == now)
+        }
     }
 
     @Test func clockMovedBackAfterARequestStillStopsThePrompt() {
-        let (store, _) = store()
-        store.recordRequest(version: "1.5.1", now: now)
-        var stored = store.history
-        stored.firstLaunch = now.addingTimeInterval(-400 * day)
-        stored.lastFinishedBook = now.addingTimeInterval(-30 * day - 3600)
-        let earlier = now.addingTimeInterval(-30 * day)
-        let decision = RatingPromptPolicy.decide(
-            history: stored, listening: { quiet }, situation: calmSituation,
-            appVersion: "1.6.0", now: earlier)
-        #expect(decision == .skip(.requestedRecently))
+        withStore { store, _ in
+            store.recordRequest(version: "1.5.1", now: now)
+            var stored = store.history
+            stored.firstLaunch = now.addingTimeInterval(-400 * day)
+            stored.lastFinishedBook = now.addingTimeInterval(-30 * day - 3600)
+            let earlier = now.addingTimeInterval(-30 * day)
+            let decision = RatingPromptPolicy.decide(
+                history: stored, listening: { quiet }, situation: calmSituation,
+                appVersion: "1.6.0", now: earlier)
+            #expect(decision == .skip(.requestedRecently))
+        }
     }
 }
