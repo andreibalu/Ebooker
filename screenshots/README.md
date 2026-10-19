@@ -50,6 +50,13 @@ Before adding an asset, inspect its visual content, confirm its license/ownershi
 and verify it contains no personal information. Keep source/config/lockfile
 changes versioned; keep generated and private material ignored.
 
+## Audiobookshelf custom product page
+
+`abs-demo/` holds a local demo Audiobookshelf server with a public-domain library and
+generated covers, and `compose.mjs`, which frames raw captures into the custom product
+page slides with headless Chrome. It needs only Node and Google Chrome, not this Next.js
+app. `store-listing/CUSTOM-PRODUCT-PAGE.md` has the capture steps.
+
 ## Validation
 
 ```bash
