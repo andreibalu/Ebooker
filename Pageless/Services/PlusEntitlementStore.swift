@@ -13,18 +13,8 @@ nonisolated struct PlusEntitlementRecord: Equatable {
     let revocationDate: Date?
 }
 
-nonisolated struct PlusLaunchEntitlementCache: Codable, Equatable {
-    let isEntitled: Bool
-    let isPermanent: Bool
-    let verifiedAt: Date
-    let validUntil: Date?
-}
-
-/// StoreKit 2 state for the consolidated Unpaged Plus subscription.
-///
-/// This is a singleton because AppDelegate selects the SwiftData CloudKit database before
-/// SwiftUI environment objects exist. `isSubscribedAtLaunch()` reads the last StoreKit-verified
-/// cache synchronously; entitlement refreshes always come from `Transaction.currentEntitlements`.
+/// StoreKit 2 state for the consolidated Unpaged Plus subscription. Entitlement refreshes always
+/// come from `Transaction.currentEntitlements`.
 @MainActor
 final class PlusEntitlementStore: ObservableObject {
     static let shared = PlusEntitlementStore()
@@ -37,6 +27,8 @@ final class PlusEntitlementStore: ObservableObject {
     @Published private(set) var currentPlusSubscriptionProductID: String?
     @Published private(set) var currentPlusSubscriptionExpirationDate: Date?
     @Published private(set) var currentPlusSubscriptionHasIntroductoryOffer = false
+    /// An active legacy iCloud Sync subscription is what grants Plus (no Plus plan is active).
+    @Published private(set) var isPlusFromLegacyICloudSubscription = false
     @Published private(set) var isLoadingProduct = false
     @Published private(set) var loadError: String?
     @Published private(set) var isPurchasing = false
@@ -167,18 +159,9 @@ final class PlusEntitlementStore: ObservableObject {
         currentPlusSubscriptionProductID = activePlusSubscription?.productID
         currentPlusSubscriptionExpirationDate = activePlusSubscription?.expirationDate
         currentPlusSubscriptionHasIntroductoryOffer = activePlusSubscription?.isIntroductory ?? false
-
-        let hasPermanentLegacyUnlock = records.contains {
-            $0.productID == AIProductID.unlock && $0.revocationDate == nil
-        }
-        Self.writeLaunchEntitlementCache(
-            PlusLaunchEntitlementCache(
-                isEntitled: entitled,
-                isPermanent: hasPermanentLegacyUnlock,
-                verifiedAt: now,
-                validUntil: activeSubscriptionExpirationDates.max()
-            )
-        )
+        isPlusFromLegacyICloudSubscription = activePlusSubscription == nil
+            && !records.contains { $0.productID == AIProductID.unlock && $0.revocationDate == nil }
+            && records.contains { $0.productID == ICloudSyncProductID.monthly && Self.recordGrantsPlus($0, now: now) }
     }
 
     func purchase(productID: String) async {
@@ -342,38 +325,6 @@ final class PlusEntitlementStore: ObservableObject {
               let expirationDate = record.expirationDate else { return false }
         return expirationDate > now
     }
-
-    /// Synchronous launch hint used by AppDelegate before StoreKit's async APIs are available.
-    nonisolated static func isSubscribedAtLaunch(
-        now: Date = .now,
-        defaults: UserDefaults = .standard
-    ) -> Bool {
-        if let data = defaults.data(forKey: launchEntitlementCacheKey),
-           let cache = try? JSONDecoder().decode(PlusLaunchEntitlementCache.self, from: data) {
-            guard cache.isEntitled else { return false }
-            if cache.isPermanent { return true }
-            guard let validUntil = cache.validUntil else { return false }
-            return validUntil > now
-        }
-
-        // Preserve the old verified iCloud launch cache until Plus writes its own cache. This
-        // prevents an existing subscriber's first launch after upgrade from selecting a local
-        // SwiftData store before the asynchronous entitlement refresh completes.
-        return ICloudSubscriptionStore.isSubscribedAtLaunch(now: now, defaults: defaults)
-    }
-
-    nonisolated static func writeLaunchEntitlementCache(
-        _ cache: PlusLaunchEntitlementCache,
-        defaults: UserDefaults = .standard
-    ) {
-        do {
-            defaults.set(try JSONEncoder().encode(cache), forKey: launchEntitlementCacheKey)
-        } catch {
-            assertionFailure("Could not encode Unpaged Plus launch entitlement cache")
-        }
-    }
-
-    nonisolated private static let launchEntitlementCacheKey = "unpagedPlusLaunchEntitlement"
 
     nonisolated static func periodDescription(
         value: Int,

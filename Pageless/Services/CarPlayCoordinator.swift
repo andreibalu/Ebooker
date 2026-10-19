@@ -465,7 +465,6 @@ final class CarPlayCoordinator: NSObject {
     ) throws -> Audiobook {
         guard match.classification == .archived else { return match.audiobook }
         match.audiobook.isArchived = false
-        match.audiobook.isDownloaded = false
         try modelContext.save()
         return match.audiobook
     }
@@ -480,7 +479,6 @@ final class CarPlayCoordinator: NSObject {
         ) {
             if match.classification == .archived {
                 match.audiobook.isArchived = false
-                match.audiobook.isDownloaded = false
                 try context.save()
             }
             return match.audiobook
@@ -719,7 +717,6 @@ final class CarPlayCoordinator: NSObject {
                     // If it was removed (archived) but kept in iCloud, bring it back to the library.
                     if existing.isArchived {
                         existing.isArchived = false
-                        existing.isDownloaded = false
                         try context.save()
                     }
                     await self.audioPlayer.startPlaybackFromSavedProgress(for: existing, autoplay: true)

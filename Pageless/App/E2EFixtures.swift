@@ -26,6 +26,35 @@ enum E2EFixtures {
     }
     static var welcomeRecapCalls = 0
 
+    /// `-e2e-icloud-account` stands in for a signed-in iCloud account, so the sync toggle and the
+    /// sync-on UI run. The store itself stays local: fixture launches never use CloudKit.
+    static var simulatesICloudAccount: Bool {
+        enabled && ProcessInfo.processInfo.arguments.contains("-e2e-icloud-account")
+    }
+
+    /// `-e2e-icloud-drive` turns on a local folder that plays the iCloud Drive container. Without it
+    /// iCloud Drive reads as off. `-e2e-icloud-full` fails every upload on quota. `-e2e-icloud-race`
+    /// has another device's identical copy land at each destination just before this one.
+    /// `-e2e-icloud-drive-delay <seconds>` holds the container lookup, as a slow first launch does.
+    static func cloudAudioBackend() -> CloudAudioBackend {
+        let arguments = ProcessInfo.processInfo.arguments
+        let root = arguments.contains("-e2e-icloud-drive") ? try? fakeICloudDriveRoot() : nil
+        return E2ECloudAudioBackend(
+            root: root,
+            uploadSeconds: argument("-e2e-icloud-upload-seconds").flatMap(Double.init) ?? 1.5,
+            downloadSeconds: argument("-e2e-icloud-download-seconds").flatMap(Double.init) ?? 2,
+            quotaFull: arguments.contains("-e2e-icloud-full"),
+            anotherDeviceCopiesFirst: arguments.contains("-e2e-icloud-race"),
+            rootDelaySeconds: argument("-e2e-icloud-drive-delay").flatMap(Double.init) ?? 0
+        )
+    }
+
+    private static func fakeICloudDriveRoot() throws -> URL {
+        try storeDirectoryWithoutReset()
+            .appendingPathComponent("FakeICloudDrive", isDirectory: true)
+            .appendingPathComponent("Audiobooks", isDirectory: true)
+    }
+
     /// Smart save transcribes to this file's text instead of the audio (fixture audio is
     /// silence and simulators lack the speech asset). The model stays real.
     static var momentTranscriptText: String? {
@@ -101,7 +130,9 @@ enum E2EFixtures {
             for key in RatingPromptStore.allKeys { UserDefaults.standard.removeObject(forKey: key) }
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
-                        "absSelectedLibraryID", "abs.progressOutbox"] {
+                        "absSelectedLibraryID", "abs.progressOutbox",
+                        IcloudSyncGate.preferenceKey, CloudAudioStore.preferenceKey,
+                        CloudAudioStore.pendingUploadsKey, CloudAudioStore.pendingDeletesKey] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
@@ -255,6 +286,9 @@ enum E2EFixtures {
                 entry.audiobook?.moments.append(entry)
             }
         }
+        if ProcessInfo.processInfo.arguments.contains("-e2e-cloud-audio") {
+            try seedCloudOnlyBooks(context)
+        }
         let today = Calendar.current.startOfDay(for: .now)
         context.insert(ReadingSession(date: today, dayKey: ReadingSession.makeDayKey(date: today),
                                       hour: 10, minutes: 42, bookID: book.id,
@@ -266,6 +300,81 @@ enum E2EFixtures {
         }
         try context.save()
         try Data().write(to: marker)
+    }
+
+    /// Another device's sync, as CloudKit would deliver it. The synced record still carries the
+    /// legacy download flag, and another iPhone (or an older app) writes its own answer there.
+    /// `-e2e-other-device-flags` writes the opposite of this device's files into every record,
+    /// the worst case. `-e2e-forget-device-downloads` also drops this device's own answers, as on
+    /// the first launch after the update. `-e2e-other-device-import-after <seconds>` repeats the
+    /// flags mid-session and runs what a finished CloudKit import runs. Each pass appends what it
+    /// saw to `E2EFixtures/other-device-imports.json`.
+    static func applyOtherDeviceSync(_ container: ModelContainer) throws {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-e2e-other-device-flags") else { return }
+        try writeOtherDeviceFlags(container.mainContext, pass: "launch")
+        if arguments.contains("-e2e-forget-device-downloads") {
+            DeviceDownloadState.shared.e2eForgetAll()
+        }
+        if let delay = argument("-e2e-other-device-import-after").flatMap(Double.init) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(delay))
+                try? writeOtherDeviceFlags(container.mainContext, pass: "import")
+                await OrphanDetectionService.run(modelContainer: container)
+                try? recordOtherDeviceImport(container.mainContext, pass: "after-import")
+            }
+        }
+    }
+
+    private static func writeOtherDeviceFlags(_ context: ModelContext, pass: String) throws {
+        for book in try context.fetch(FetchDescriptor<Audiobook>()) {
+            book.e2eSetSyncedDownloadedFlag(!book.hasLocalAudio())
+        }
+        try context.save()
+        try recordOtherDeviceImport(context, pass: pass)
+    }
+
+    private static func recordOtherDeviceImport(_ context: ModelContext, pass: String) throws {
+        let url = try storeDirectoryWithoutReset().appendingPathComponent("other-device-imports.json")
+        var log = (try? JSONSerialization.jsonObject(with: Data(contentsOf: url))) as? [[String: Any]] ?? []
+        let books = try context.fetch(FetchDescriptor<Audiobook>()).sorted { $0.folderName < $1.folderName }
+        log.append([
+            "pass": pass,
+            "books": books.map { book in
+                ["folder": book.folderName,
+                 "filesHere": book.hasLocalAudio(),
+                 "downloadedHere": book.isDownloaded,
+                 "inLibrary": book.isInActiveLibrary] as [String: Any]
+            },
+        ])
+        try JSONSerialization.data(withJSONObject: log, options: [.prettyPrinted, .sortedKeys]).write(to: url)
+    }
+
+    /// Two own books synced from another device without their audio: one whose audio that device
+    /// stored in iCloud (Download), and one it didn't (Locate…).
+    private static func seedCloudOnlyBooks(_ context: ModelContext) throws {
+        let root = try fakeICloudDriveRoot()
+        var remoteKeys: [String] = []
+        for (title, folder, inCloud) in [("E2E Cloud Book", "E2E-Cloud-Book", true),
+                                         ("E2E Locate Book", "E2E-Locate-Book", false)] {
+            let book = Audiobook(title: title, author: "Fixture Author", folderName: folder,
+                                 totalDuration: 60, isDownloaded: false)
+            context.insert(book)
+            let cloudFolder = root.appendingPathComponent(folder, isDirectory: true)
+            if inCloud { try FileManager.default.createDirectory(at: cloudFolder, withIntermediateDirectories: true) }
+            for index in 0..<2 {
+                let name = "00\(index + 1)-part-\(index + 1).wav"
+                let track = AudioTrack(title: "\(title) Part \(index + 1)", originalFileName: "part-\(index + 1).wav",
+                                       storedFileName: name, orderIndex: index, duration: 30, audiobook: book)
+                context.insert(track)
+                book.tracks.append(track)
+                if inCloud {
+                    try silenceWAV(seconds: 30).write(to: cloudFolder.appendingPathComponent(name))
+                    remoteKeys.append(CloudAudioPlan.key(folder, name))
+                }
+            }
+        }
+        try E2ECloudAudioBackend.writeRemoteOnly(remoteKeys, root: root)
     }
 
     /// Every curated classic (so any day's pick resolves), the full Love & Society shelf, an

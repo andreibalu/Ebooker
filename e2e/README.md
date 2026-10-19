@@ -78,7 +78,7 @@ DEBUG-only launch hooks:
 | `-e2e-abs-rewind-current <seconds>` | Saves each Audiobookshelf book's current position as its marker, then sets the current position to this value. |
 | `-e2e-welcome-threshold-days <n>` | Overrides the three-day return threshold for this DEBUG fixture launch. |
 | `-e2e-fixture` | Opens the separate fixture store and seeds it once. |
-| `-e2e-reset-fixture` | Deletes the fixture store, saved scene state, the fixture Audiobookshelf login and onboarding preference keys before seeding. |
+| `-e2e-reset-fixture` | Deletes the fixture store (fake iCloud Drive folder included), saved scene state, the fixture Audiobookshelf login, onboarding preference keys and the iCloud sync and audio preferences before seeding. |
 | `-e2e-online` | Lets NetworkMonitor report a connection. The fixture is offline otherwise. |
 | `-e2e-librivox-feed <url>` | Sends LibriVox feed requests to `<url>`. |
 | `-e2e-rating-stub` | Counts rating-prompt requests in the on-screen `ratingPrompt.requests` label instead of raising the system sheet. |
@@ -91,6 +91,17 @@ DEBUG-only launch hooks:
 | `-guide-clean-library` | On initial seeding, adds only the LibriVox catalog rows and no audiobooks, so the library starts empty. Used for marketing-site screen recordings. |
 | `-e2e-import` | Makes the import button hand a file to the import pipeline instead of opening the Files picker. |
 | `-e2e-import-file <name>` | Picks `<name>` from the fixture folder for `-e2e-import`. Without it, the app generates a 123-second WAV. |
+| `-e2e-icloud-account` | Reports a signed-in iCloud account to `IcloudSyncGate`, so the free sync toggle, its relaunch rule and every sync-on surface run. The store stays local: fixture launches never use CloudKit. Without it the fixture reads as signed out. |
+| `-e2e-icloud-drive` | Swaps the iCloud Drive container for `E2EFixtures/FakeICloudDrive/Audiobooks/` (`E2ECloudAudioBackend`). Copied-in files upload on a clock and evicted or seeded files download on a clock. Without it iCloud Drive reads as off. |
+| `-e2e-icloud-upload-seconds <n>` / `-e2e-icloud-download-seconds <n>` | Sets how long one fake upload or download takes (defaults 1.5 and 2). |
+| `-e2e-icloud-full` | Fails every fake upload with iCloud's quota error. |
+| `-e2e-cloud-audio` | On seeding, adds two own books synced without audio: `E2E Cloud Book`, whose audio another device stored in the fake container, and `E2E Locate Book`, whose audio it didn't. |
+| `-e2e-icloud-drive-delay <n>` | Holds the fake container lookup for `n` seconds, as iCloud Drive does early in a launch. Work from that window waits in `CloudAudioStore`'s queue. |
+| `-e2e-icloud-race` | Lands an identical copy at each destination just before this device's copy, as when another device stores the same book at the same moment. |
+| `-e2e-other-device-flags` | Each launch, writes into every synced record the opposite of what this device's files say, the way another device's sync (or an older app) leaves the legacy download flag. |
+| `-e2e-forget-device-downloads` | With `-e2e-other-device-flags`, drops this device's per-device download answers, as on the first launch after the update. |
+| `-e2e-other-device-import-after <n>` | With `-e2e-other-device-flags`, writes the flags again after `n` seconds and runs what a finished CloudKit import runs. Each pass is logged to `E2EFixtures/other-device-imports.json` with every book's files, download answer and library membership. |
+| `-e2e-ai-unsupported-device` | Reports an iPhone that can't run Apple Intelligence to `AppleIntelligenceCapability`. |
 
 Fixture mode Settings also shows "Seed Reading Activity · 7/30/113 days" and "Clear Reading Activity".
 

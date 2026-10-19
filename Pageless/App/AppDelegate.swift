@@ -188,17 +188,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
         #if DEBUG
         if E2EFixtures.enabled {
-            do { try E2EFixtures.seedIfNeeded(modelContainer.mainContext) }
-            catch { fatalError("Could not seed E2E fixtures: \(error)") }
+            do {
+                try E2EFixtures.seedIfNeeded(modelContainer.mainContext)
+                try E2EFixtures.applyOtherDeviceSync(modelContainer)
+            } catch { fatalError("Could not seed E2E fixtures: \(error)") }
         }
         #endif
         ABSDownloadManager.shared.configure(context: modelContainer.mainContext)
         FingerprintBackfillService.runIfNeeded(modelContainer: modelContainer)
         OrphanDetectionService.runIfNeeded(modelContainer: modelContainer)
+        CloudAudioStore.shared.start(modelContainer: modelContainer)
 
-        // Re-run orphan detection whenever CloudKit finishes an import. Books synced from
-        // iCloud arrive with isDownloaded = true; we need to flip that flag for any book
-        // whose audio files don't exist locally, or they'll appear in the main library.
+        // Re-run orphan detection whenever CloudKit finishes an import: records that just arrived
+        // need this device's download answer from their files, and a book whose files went away
+        // leaves the library.
         if syncEnabled {
             cloudKitImportObserver = NotificationCenter.default.addObserver(
                 forName: NSPersistentCloudKitContainer.eventChangedNotification,

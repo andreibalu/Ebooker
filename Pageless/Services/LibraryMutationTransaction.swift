@@ -292,12 +292,15 @@ final class LibraryMutationTransaction {
         }
     }
 
+    /// `downloads` puts back this device's download state, which lives outside SwiftData.
     static func rollbackAndRethrow(
         _ operationError: Error,
         modelContext: ModelContext,
-        transaction: LibraryMutationTransaction
+        transaction: LibraryMutationTransaction,
+        downloads: DeviceDownloadState.Snapshot? = nil
     ) throws -> Never {
         modelContext.rollback()
+        downloads?.restore()
         do {
             try transaction.rollback()
         } catch {

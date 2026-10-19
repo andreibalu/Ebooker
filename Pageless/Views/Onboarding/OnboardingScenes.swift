@@ -1062,9 +1062,14 @@ private struct OBMomentNameCard: View {
 
 // MARK: - Scene 6 · iCloud sync
 
+/// Explains sync and offers it as an opt-in. Sync is free, so the toggle binds the same
+/// `iCloudSyncEnabled` key Settings uses; like Settings, it takes effect on the next launch.
 struct OBCloudScene: View {
     let isActive: Bool
     let reduceMotion: Bool
+    @Binding var syncEnabled: Bool
+
+    @State private var hasAccount = IcloudSyncGate.hasUbiquityIdentity()
 
     var body: some View {
         OBSceneShell(tint: true, verticalCenter: true, reduceMotion: reduceMotion) {
@@ -1080,16 +1085,66 @@ struct OBCloudScene: View {
                 .obReveal(active: isActive)
 
                 OBSyncGraphic(active: isActive, reduceMotion: reduceMotion)
-                    .padding(.top, 24)
-                    .padding(.bottom, 26)
+                    .padding(.top, 18)
+                    .padding(.bottom, 18)
                     .obReveal(active: isActive, delay: 0.12)
 
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
                     benefitRow("play.circle", "Progress, moments and history stay in sync.", delay: 0.18)
-                    benefitRow("internaldrive", "Audio files stay on each device.", delay: 0.26)
-                    benefitRow("icloud", "Private — through your own iCloud account.", delay: 0.34)
+                    benefitRow("icloud.and.arrow.up", "Your books’ audio can come along too.", delay: 0.26)
+                    benefitRow("lock", "Private — through your own iCloud account.", delay: 0.34)
                 }
+
+                syncCard
+                    .padding(.top, 16)
+                    .obReveal(active: isActive, delay: 0.42)
             }
+        }
+    }
+
+    private var syncCard: some View {
+        HStack(spacing: 14) {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(syncEnabled ? OB.accent : OB.accentSoft)
+                .frame(width: 44, height: 44)
+                .overlay(
+                    Image(systemName: "arrow.triangle.2.circlepath.icloud")
+                        .font(.system(size: 20))
+                        .foregroundStyle(syncEnabled ? Color.white : OB.accent)
+                )
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Sync with iCloud · Free")
+                    .font(.system(size: 16, weight: .semibold))
+                    .tracking(-0.3)
+                    .foregroundStyle(OB.label)
+                    .lineLimit(1)
+                Text(caption)
+                    .font(.system(size: 12.5))
+                    .foregroundStyle(OB.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle("Sync with iCloud", isOn: $syncEnabled)
+                .labelsHidden()
+                .tint(OB.accent)
+                .disabled(!hasAccount)
+                .accessibilityIdentifier("onboarding.icloud.toggle")
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color.cardWhite))
+        .shadow(color: .black.opacity(0.07), radius: 7, y: 4)
+        .animation(reduceMotion ? .easeOut(duration: 0.2) : OBMotion.selection, value: syncEnabled)
+    }
+
+    private var caption: String {
+        guard hasAccount else { return "Sign in to iCloud in Settings to use sync." }
+        let active = IcloudSyncGate.isEnabled()
+        switch (syncEnabled, active) {
+        case (true, false): return "Starts the next time you open Unpaged."
+        case (false, true): return "Stops the next time you open Unpaged."
+        case (true, true): return "On. Your library syncs across devices."
+        case (false, false): return "Off. You can turn it on in Settings anytime."
         }
     }
 

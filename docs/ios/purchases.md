@@ -6,15 +6,12 @@ Read this before changing StoreKit products, Unpaged Plus gating, the coffee tip
 
 All purchases use StoreKit 2 directly; there is no third-party purchase SDK. Product ids live in `Configuration/` (`PlusProductID`, `AIProductID` with `ICloudSyncProductID`, `CoffeeTipProductID`), and the local test catalog is `Configuration/Products.storekit`. App Store Connect is the production source of prices, offers and localizations.
 
-- **Unpaged Plus** (monthly and yearly subscriptions) unlocks AI features and iCloud sync. `PlusEntitlementStore.shared` owns it and reads `Transaction.currentEntitlements` and `Transaction.updates`.
-- **Legacy products** stay recognized for existing customers but are no longer sold: the AI Features unlock (non-consumable) and the iCloud Sync monthly subscription. An unrevoked AI unlock counts as permanent Plus, iCloud sync included; `PlusEntitlementStoreTests` lock that in. Changing it is a product decision for the owner.
+- **Unpaged Plus** (monthly and yearly subscriptions) unlocks the Apple Intelligence features. `PlusEntitlementStore.shared` owns it and reads `Transaction.currentEntitlements` and `Transaction.updates`.
+- **iCloud sync is free**, audio in iCloud included, and has no entitlement check (see `icloud-sync.md`). It used to be part of Plus, so no purchase copy, paywall or Plus hub row may describe it as a Plus feature.
+- **Legacy products** stay recognized for existing customers but are no longer sold: the AI Features unlock (non-consumable) and the iCloud Sync monthly subscription. An unrevoked AI unlock counts as permanent Plus, and an active legacy iCloud Sync subscription counts as Plus while it lasts; `PlusEntitlementStoreTests` lock that in. Both groups lost nothing when sync became free: they keep sync and keep Plus. When an active legacy iCloud Sync subscription is what grants Plus, the card says so and that sync itself is now free, so they can decide whether to keep paying. Changing either is a product decision for the owner.
 - **Buy me a coffee** is a repeatable consumable owned by `CoffeeTipStore`. It grants nothing and has no restore path, because consumables can't be restored.
 
-`ICloudSubscriptionStore` survives only for its static launch-cache helpers; nothing uses its shared instance.
-
-## Launch cache
-
-`AppDelegate` must choose the SwiftData CloudKit database before StoreKit's async APIs run, so `PlusEntitlementStore.isSubscribedAtLaunch()` reads a UserDefaults cache that the store writes after each refresh. With no Plus cache yet, it falls back to the old iCloud subscription cache, which honours only a short migration window. The gate built on it is fixed for the process (see `icloud-sync.md`).
+There is no synchronous Plus launch cache. It existed only so `AppDelegate` could choose the CloudKit database before StoreKit loaded; with sync free, nothing decided at launch depends on Plus.
 
 ## Copy
 
@@ -30,7 +27,8 @@ The Plus purchase must be reachable in the reviewed build without signing in to 
 
 - The library header's Plus button (`sparkles`, accessibility id `plusButton`) renders unconditionally and opens `PlusHubView` (`UnpagedPlusCard`).
 - Settings → "Unpaged Plus" pushes the same hub as a second path. Settings opens with real settings, and the offer comes after them.
-- Only the hub's iCloud Library row depends on sync being on.
+- Nothing in the hub depends on sync or an iCloud account. iCloud has its own Settings section.
+- On an iPhone that can't run Apple Intelligence (`AppleIntelligenceCapability.availabilityState == .unsupportedDevice`) the card still offers Plus, but a notice above the plans says the features require an Apple Intelligence–capable iPhone and work on one signed in with the same Apple ID. Hiding the offer there would leave a reviewer on such a device unable to find the purchase; selling it without the notice would sell nothing usable on the device in hand. `-e2e-ai-unsupported-device` plays such an iPhone in fixture launches.
 
 ## Coffee tip mechanics
 

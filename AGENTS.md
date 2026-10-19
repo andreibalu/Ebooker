@@ -85,7 +85,7 @@ Lightweight MVVM with protocol-typed services. The source tree shows what exists
 - **Services** without long-lived state are `struct`s behind protocols, or `enum`s of static functions (import, catalog, sync). Services that own long-lived state (playback, downloads, accounts, entitlements, network, the widget snapshot) are singletons (`static let shared`) or environment objects. Reuse them before adding another.
 - **`AudioPlayerManager`** owns playback state and is injected with `@EnvironmentObject`. Its `equalizer` is a separate environment object, so EQ views bind without the player.
 - **Navigation stays in SwiftUI views.** There are no navigation coordinators or DI containers. `CarPlayCoordinator` exists because CarPlay templates aren't SwiftUI.
-- **Library state** comes from computed properties on `Audiobook` (`isStreamingOnly`, `isCloudOnlyOrphan`, `isInActiveLibrary`, `isArchived`). Use them instead of combining raw flags, and check `isDownloaded` before touching a book's files.
+- **Library state** comes from computed properties on `Audiobook` (`isStreamingOnly`, `isCloudOnlyOrphan`, `isInActiveLibrary`, `isArchived`). Use them instead of combining raw flags, and check `isDownloaded` before touching a book's files. `isDownloaded` is per device and never syncs (`DeviceDownloadState`); keep any other this-device-only state out of synced models too.
 - **Covers.** Every cover view falls back to `GeneratedCoverView` when `coverArtData` is nil or unreadable. System surfaces use `GeneratedCoverView.renderImage(title:side:)`.
 - **Settings** are `@AppStorage` string keys written at each use site, with option enums and raw values in `Models/PlaybackSettings.swift`. Search for a key's string before renaming it, because every site must match.
 - **Appearance** goes through `.appAppearance(_:)`, which sets `overrideUserInterfaceStyle` on the scene's windows so sheets and covers follow. `.preferredColorScheme` can't return to the system scheme until relaunch.
@@ -106,7 +106,7 @@ Lightweight MVVM with protocol-typed services. The source tree shows what exists
 SwiftData, with one `ModelContainer` built in `AppDelegate` from two configurations. `"synced"` holds the user's library and goes to the CloudKit private database when sync is on. `"local"` holds the LibriVox catalog cache and never syncs. `AppDelegate` lists which models each holds.
 
 - **Synced models stay CloudKit-shaped.** They need explicit relationship inverses and no `@Attribute(.unique)`. Only local-store models may use `.unique`. `SchemaCompatibilityTests` validates the synced schema against CloudKit.
-- **Columns added after launch** are optional private backing fields (`_isFavorite`, `_isDownloaded`, …) behind computed accessors that supply the default. Lightweight migration and CloudKit both accept that shape.
+- **Columns added after launch** are optional private backing fields (`_isFavorite`, `_progressTime`, …) behind computed accessors that supply the default. Lightweight migration and CloudKit both accept that shape.
 - **Audio files** live in `Application Support/Audiobooks/<book UUID>/`. Covers use SwiftData external storage. Streaming books keep remote URLs on their `AudioTrack`s.
 - **Track order** comes from `Audiobook.sortedTracks`.
 - **`ReadingSession`** snapshots book metadata so stats survive book deletion.
@@ -118,7 +118,7 @@ Each file in `docs/ios/` records what the code can't tell you about one area: it
 - `playback.md`: `AudioPlayerManager`, chapters, sleep timer, Now Playing and remote commands, titles and rename, equalizer, reading sessions and stats.
 - `ai.md`: Apple Intelligence, smart save, moment naming, transcription, recaps, welcome-back cards, `FoundationModels` limits.
 - `purchases.md`: StoreKit products, Unpaged Plus, legacy unlocks, the coffee tip, trial and price copy, App Review reachability.
-- `icloud-sync.md`: the sync gate, CloudKit, orphans, fingerprints, restore and merge, archived free books, Cloud Library, deleting synced records.
+- `icloud-sync.md`: the sync gate, CloudKit, orphans, fingerprints, restore and merge, archived free books, Cloud Library, audio in iCloud, deleting synced records.
 - `free-books.md`: LibriVox browse and design, catalog sync, search, streaming, downloads and Live Activity, samples, collections, other recordings, the legacy CarPlay catalog.
 - `audiobookshelf.md`: the Audiobookshelf source, login and tokens, item decoding, browse cache, downloads, progress sync, plain-http hosts.
 - `onboarding.md`: the welcome flow, its scenes and permission requests, home-tab choice.

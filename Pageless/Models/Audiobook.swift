@@ -40,7 +40,9 @@ final class Audiobook: Identifiable {
     private var _isFreeBook: Bool?
     private var _catalogId: String?
 
-    // Nullable for lightweight migration. Defaults to true so existing books (all local) are correct.
+    // Legacy and synced, so it can't say anything about this device: written once when the record
+    // is created (older app versions on other devices still read it) and never read here. Whether
+    // the audio is on this device lives in `DeviceDownloadState`, which never syncs.
     private var _isDownloaded: Bool?
 
     var isFreeBook: Bool {
@@ -53,16 +55,42 @@ final class Audiobook: Identifiable {
         set { _catalogId = newValue }
     }
 
+    /// The book's audio is on this device. Per device and never synced (`DeviceDownloadState`);
+    /// with no cached answer yet, the files in the book's folder decide.
     var isDownloaded: Bool {
-        get { _isDownloaded ?? true }
-        set { _isDownloaded = newValue }
+        get { DeviceDownloadState.shared.isDownloaded(id) { hasLocalAudio() } }
+        set { DeviceDownloadState.shared.set(newValue, for: id) }
     }
 
-    // Nullable for lightweight migration. Marks a FREE book the user removed from this device's
-    // library while keeping its synced record (progress, moments, EQ, remote URLs) in the iCloud
-    // Library. Archived free books are hidden from the main grid and surface only in the iCloud
-    // Library, where "Stream" un-archives them. Own books never set this — they orphan via
-    // isDownloaded, which is unambiguous for them (an own book is only ever downloaded or orphaned).
+    /// Whether this device holds the audio. Audiobookshelf books need every track file (a partial
+    /// download would fail playback); a book with a streaming-only track has none; any other book
+    /// counts once its folder has a file.
+    func hasLocalAudio(root: URL = LibraryMutationTransaction.defaultAudiobooksRoot()) -> Bool {
+        guard let folderURL = try? LibraryMutationTransaction.folderURL(for: folderName, rootURL: root) else {
+            return false
+        }
+        let fileManager = FileManager.default
+        if isAudiobookshelfBook {
+            return !tracks.isEmpty && tracks.allSatisfy { track in
+                !track.storedFileName.isEmpty
+                    && fileManager.fileExists(atPath: folderURL.appendingPathComponent(track.storedFileName).path)
+            }
+        }
+        if tracks.contains(where: { $0.remoteURL != nil && $0.storedFileName.isEmpty }) { return false }
+        return !((try? fileManager.contentsOfDirectory(atPath: folderURL.path)) ?? []).isEmpty
+    }
+
+    #if DEBUG
+    /// E2E only: writes the legacy synced flag the way another device's (or an older app's) import would.
+    func e2eSetSyncedDownloadedFlag(_ value: Bool) { _isDownloaded = value }
+    #endif
+
+    // Nullable for lightweight migration. Marks a FREE book the user removed from their library
+    // while keeping its synced record (progress, moments, EQ, remote URLs) in the iCloud Library.
+    // It syncs on purpose: removing a book from the library removes it on every device. Archived
+    // free books are hidden from the main grid and surface only in the iCloud Library, where
+    // "Stream" un-archives them. Own books never set this — they orphan via isDownloaded, which is
+    // unambiguous for them (an own book is only ever downloaded or orphaned).
     private var _isArchived: Bool?
 
     var isArchived: Bool {
@@ -92,7 +120,7 @@ final class Audiobook: Identifiable {
     /// Missing audio returns to streaming, so orphan checks must exclude ABS identity.
     var isAudiobookshelfBook: Bool { !(absItemID ?? "").isEmpty }
 
-    // Own books that synced from iCloud but lack local files have isDownloaded==false too —
+    // Own books that synced from iCloud but lack local files on this device are not downloaded too —
     // isFreeBook / isAudiobookshelfBook distinguish them from genuinely streaming entries.
     var isStreamingOnly: Bool { !isDownloaded && (isFreeBook || isAudiobookshelfBook) }
 
@@ -244,6 +272,7 @@ final class Audiobook: Identifiable {
         self._absItemID = absItemID
         self._isDownloaded = isDownloaded
         self._tracks = tracks
+        DeviceDownloadState.shared.set(isDownloaded, for: id)
     }
 
     /// Play order. Ties on `orderIndex` (possible in merged iCloud records) break on file name and

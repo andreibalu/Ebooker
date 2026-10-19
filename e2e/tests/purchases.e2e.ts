@@ -166,19 +166,40 @@ test('a coffee tip can be cancelled, then bought, and unlocks nothing', {
   await screen.scrollUntilVisible(screen.getByRole('button', 'Try 1 week free'));
 });
 
-test('AI and iCloud settings stay reachable from the Plus hub without a purchase (Apple 3.1.1)', async ({ device, screen }) => {
+test('AI settings stay reachable from the Plus hub without a purchase (Apple 3.1.1), and iCloud is not sold there', async ({ device, screen }) => {
   resetStoreKitLedger();
   await openPlusCard(device, screen, ['-e2e-reset-fixture']);
-  for (const [row, header] of [['Apple Intelligence', 'AI Features'], ['iCloud Sync', 'iCloud Sync']] as const) {
-    const link = screen.getByRole('button', new RegExp(`^${row}, `));
-    await screen.scrollUntilVisible(link);
-    await tapVisibleCenter(link);
-    await expect(screen.getByText(header, { exact: true }).first()).toBeVisible();
-    if (row === 'iCloud Sync') {
-      // The paywall is reachable here without an iCloud account.
-      await screen.scrollUntilVisible(screen.getByText('View Unpaged Plus').first());
-    }
-    await tapVisibleCenter(screen.getByRole('button', 'Settings'));
-    await expect(screen.getByRole('button', 'Settings')).toBeHidden();
+  // iCloud sync is free: the hub neither lists it as a Plus feature nor links to its settings.
+  await expect(screen.getByText(/iCloud/)).toBeHidden();
+  await expect(screen.getByRole('button', /^iCloud Sync, /)).toBeHidden();
+  const link = screen.getByRole('button', /^Apple Intelligence, /);
+  // iOS 26 formats the same trial as "7 days".
+  const purchase = screen.getByRole('button', /^Try (1 week|7 days) free$/);
+  await screen.scrollUntilVisible(purchase);
+  if (await screen.getByTestId('plus.unsupportedDeviceNote').isVisible()) {
+    // An iPhone that can't run Apple Intelligence still offers Plus, with a note and no AI link.
+    await expect(link).toBeHidden();
+    return;
   }
+  await screen.scrollUntilVisible(link);
+  await tapVisibleCenter(link);
+  await expect(screen.getByText('AI Features', { exact: true }).first()).toBeVisible();
+  await tapVisibleCenter(screen.getByRole('button', 'Settings'));
+  await expect(screen.getByRole('button', 'Settings')).toBeHidden();
+});
+
+test('on an iPhone without Apple Intelligence, Plus says so above the plans before any purchase', async ({ device, screen, app }) => {
+  resetStoreKitLedger();
+  await openPlusCard(device, screen, ['-e2e-reset-fixture', '-e2e-ai-unsupported-device']);
+  const note = screen.getByTestId('plus.unsupportedDeviceNote');
+  await expect(note).toBeVisible();
+  await expect(note).toContainText('Requires an iPhone with Apple Intelligence');
+  // Reachable for App Review (3.1.1), and the notice comes first.
+  const purchase = screen.getByRole('button', /^Try (1 week|7 days) free$/);
+  await screen.scrollUntilVisible(purchase);
+  const [noteBox, purchaseBox] = [await note.boundingBox(), await purchase.boundingBox()];
+  if (!noteBox || !purchaseBox) throw new Error('Plus card has no bounds');
+  expect(noteBox.y + noteBox.height).toBeLessThan(purchaseBox.y);
+  await expect(screen.getByRole('button', /^Apple Intelligence, /)).toBeHidden();
+  await app.screenshot('plus-unsupported-device');
 });

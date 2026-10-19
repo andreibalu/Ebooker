@@ -131,27 +131,27 @@ export const site = {
   plus: {
     eyebrow: 'Free to listen',
     heading: 'Your library is personal.<br>So is the <em>intelligence.</em>',
-    text: 'No ads, no tracking, no account to create. The player is free, for good. Unpaged Plus adds iCloud sync and the Apple Intelligence features, and the AI runs on your iPhone.',
+    text: 'No ads, no tracking, no account to create. The player and iCloud sync are free, for good. Unpaged Plus adds the Apple Intelligence features, and the AI runs on your iPhone.',
     link: 'Meet Unpaged Plus',
-    free: ['Your own audiobook files', 'LibriVox classics and Audiobookshelf', 'Moments, search and listening stats', 'Chapters, sleep timer and equalizer', 'CarPlay, Siri and widgets'],
-    paid: ['Smart moment naming', 'Welcome-back recaps', 'iCloud sync for library, progress and moments', 'Reading activity on every device'],
-    note: 'AI features need iOS 26 or later and Apple Intelligence. iCloud sync keeps your library records, not audio files. Plans and any trial are shown in the app.'
+    free: ['Your own audiobook files', 'LibriVox classics and Audiobookshelf', 'Moments, search and listening stats', 'Chapters, sleep timer and equalizer', 'CarPlay, Siri and widgets', 'iCloud sync, with your audio if you like'],
+    paid: ['Smart moment naming', 'Welcome-back recaps', 'Future Plus features'],
+    note: 'AI features need iOS 26 or later and Apple Intelligence. iCloud sync is free with an iCloud account and can keep your own books’ audio too. Plans and any trial are shown in the app.'
   },
   close: { eyebrow: 'Good books go with you', title: 'Make room for<br>another <em>chapter.</em>', text: 'Free on the App Store, for iPhone with iOS 18 or later.' },
   footer: { credit: 'Made by Andrei Baluta.', links: [['Support', 'support'], ['Privacy', 'privacy'], ['Terms', 'terms']] },
   plusPage: {
     title: 'Unpaged Plus · Keep the place. Keep the moments.',
-    description: 'Unpaged Plus adds smart moment naming, welcome-back recaps and iCloud sync to your audiobook library. See what is included and which devices support Apple Intelligence.',
+    description: 'Unpaged Plus adds smart moment naming and welcome-back recaps to your audiobook library, with Apple Intelligence on your iPhone. See what is included and which devices support it.',
     eyebrow: 'Unpaged Plus',
     heading: 'Keep the place.<br>Keep the <em>moments.</em>',
-    intro: 'Plus carries your library across your devices and helps you remember the story, with Apple Intelligence running on your iPhone.',
+    intro: 'Plus helps you remember the story, with Apple Intelligence running on your iPhone. iCloud sync stays free for everyone.',
     details: [
       ['sparkles', 'Names for the moments you keep', 'Smart naming reads the passage around your bookmark on device and suggests a title, a note, categories, a mood, the characters, and a quote checked word for word against the transcript. You can edit all of it.'],
       ['recap', 'A reminder after time away', 'Come back after three days or more and the book page opens with a short recap of where you left the story. Dismiss it once and it stays dismissed until you listen again.'],
-      ['cloud', 'Your library, carried forward', 'iCloud sync backs up your library, listening progress, moments, equalizer settings and reading activity. Audio stays on each device: re-import your own book, or re-add a LibriVox title, and its place comes back.'],
+      ['cloud', 'iCloud sync, free for everyone', 'Without Plus too, iCloud sync backs up your library, listening progress, moments, equalizer settings and reading activity. Keep your own books’ audio in iCloud as well, and another iPhone downloads the whole book.'],
       ['plans', 'Choose the plan in the app', 'Monthly and yearly plans through the App Store. Current prices and any trial are shown before you subscribe. Earlier AI and iCloud purchases are still recognized.']
     ],
-    qualification: 'Apple Intelligence features require iOS 26 or later on a supported iPhone with Apple Intelligence turned on. Smart naming and recaps work on books stored on your iPhone, not while streaming. The player runs on iOS 18 and later. iCloud sync requires iCloud sign-in.'
+    qualification: 'Apple Intelligence features require iOS 26 or later on a supported iPhone with Apple Intelligence turned on. Smart naming and recaps work on books stored on your iPhone, not while streaming. The player runs on iOS 18 and later. iCloud sync is free and requires iCloud sign-in.'
   },
   notFound: { title: 'Lost your place? · Unpaged', heading: 'Lost your <em>place?</em>', text: 'This page isn’t in the book. Your next chapter starts back at the beginning.', cta: 'Back to Unpaged' }
 };
