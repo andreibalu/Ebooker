@@ -25,6 +25,31 @@ enum E2EFixtures {
     }
     static var welcomeRecapCalls = 0
 
+    /// Counts rating requests on screen (`ratingPrompt.requests`) instead of raising the system sheet.
+    static var ratingStubbed: Bool {
+        enabled && ProcessInfo.processInfo.arguments.contains("-e2e-rating-stub")
+    }
+
+    /// `-e2e-rating-poll-seconds <n>` slows the rating prompt's watch, which asks after two calm polls.
+    /// A test that must see "nothing yet" after closing a sheet needs that slack on a slow simulator.
+    static var ratingPollSeconds: Double? {
+        argument("-e2e-rating-poll-seconds").flatMap(Double.init)
+    }
+
+    /// `-e2e-rating-install-days <n>` backdates the first launch, which the rating prompt needs to
+    /// be at least two days old. Without it a fixture launch counts as a first day.
+    /// `-e2e-rating-finished-hours-ago <n>` records a finished book that long ago, so a test can reach
+    /// the prompt's positive moment without playing a book to its end.
+    static func applyRatingPromptOverrides(to store: RatingPromptStore) {
+        if let value = argument("-e2e-rating-install-days"), let days = Double(value) {
+            store.defaults.set(Date.now.addingTimeInterval(-days * 86_400).timeIntervalSince1970,
+                               forKey: "ratingPrompt.firstLaunch")
+        }
+        if let value = argument("-e2e-rating-finished-hours-ago"), let hours = Double(value) {
+            store.recordFinishedBook(now: Date.now.addingTimeInterval(-hours * 3_600))
+        }
+    }
+
     static func storeDirectory(in support: URL) throws -> URL {
         let directory = support.appendingPathComponent("E2EFixtures", isDirectory: true)
         if ProcessInfo.processInfo.arguments.contains("-e2e-reset-fixture") {
@@ -47,6 +72,7 @@ enum E2EFixtures {
             try? FileManager.default.removeItem(at: support.appendingPathComponent("ABSDownloads"))
             let cache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             try? FileManager.default.removeItem(at: cache.appendingPathComponent("Audiobookshelf"))
+            for key in RatingPromptStore.allKeys { UserDefaults.standard.removeObject(forKey: key) }
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
                         "absSelectedLibraryID", "abs.progressOutbox"] {
@@ -104,6 +130,24 @@ enum E2EFixtures {
             if let text = argument("-e2e-persisted-recap") {
                 let anchor = argument("-e2e-persisted-recap-anchor").flatMap(Double.init) ?? 200
                 book.storeProgressRecap(text: text, headline: "At the harbour", anchorTrackIndex: 0, anchorTime: anchor)
+            }
+        }
+        // Four seconds before the end of the last track, so one tap on Play finishes the book.
+        if ProcessInfo.processInfo.arguments.contains("-e2e-rating-near-end") {
+            book.currentTrackIndex = 1
+            book.currentTime = 296
+            book.progressTrackIndex = 1
+            book.progressTime = 296
+        }
+        // Four listening days (60 minutes each, the latest yesterday): the rating prompt's habit signal.
+        if ProcessInfo.processInfo.arguments.contains("-e2e-rating-seed-listening") {
+            let calendar = Calendar.current
+            for daysAgo in 1...4 {
+                let date = calendar.startOfDay(for: Date.now.addingTimeInterval(-Double(daysAgo) * 86_400))
+                context.insert(ReadingSession(
+                    date: date, dayKey: ReadingSession.makeDayKey(date: date, calendar: calendar), hour: 20,
+                    minutes: 60, bookID: book.id, bookTitle: book.title, bookAuthor: book.author,
+                    isFreeBook: false))
             }
         }
         let moment = Moment(trackIndex: 0, time: 30, label: "E2E First Moment",
