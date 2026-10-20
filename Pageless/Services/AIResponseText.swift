@@ -18,13 +18,25 @@ nonisolated enum AIResponseText {
         let collapsed = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         guard let first = collapsed.first, first.isLowercase else { return collapsed }
         let limit = collapsed.index(collapsed.startIndex, offsetBy: collapsed.count / 3)
-        guard let boundary = collapsed[..<limit].firstIndex(where: { ".!?".contains($0) }) else {
+        guard let boundary = collapsed[..<limit].indices.first(where: { isSentenceEnd(at: $0, in: collapsed) }) else {
             return collapsed
         }
         let rest = collapsed[collapsed.index(after: boundary)...]
             .drop(while: { $0.isWhitespace || "\"”’)".contains($0) })
         return rest.isEmpty ? collapsed : String(rest)
     }
+
+    /// A '.', '!' or '?' followed by a space or closing quote, and not the point of an
+    /// abbreviation ("Mr. Darcy") or a number ("3.5 miles").
+    private static func isSentenceEnd(at index: String.Index, in text: String) -> Bool {
+        guard ".!?".contains(text[index]) else { return false }
+        let next = text.index(after: index)
+        guard next < text.endIndex, text[next].isWhitespace || "\"”’)".contains(text[next]) else { return false }
+        let word = text[..<index].split(separator: " ").last.map { $0.lowercased() } ?? ""
+        return !abbreviations.contains(word)
+    }
+
+    private static let abbreviations: Set<String> = ["mr", "mrs", "ms", "dr", "st", "sr", "jr", "prof", "mt", "vs"]
 
     // MARK: - Labeled replies
 
@@ -69,8 +81,10 @@ nonisolated enum AIResponseText {
 
     private static func splitLabel(_ line: String) -> (label: String, value: String)? {
         guard let colon = line.firstIndex(of: ":") else { return nil }
-        let decoration = CharacterSet(charactersIn: "*_#-•>0123456789. ")
-        let label = line[..<colon].trimmingCharacters(in: decoration).lowercased()
+        // Bullets and numbering come off the front only, so "At 10:30" never reads as a label.
+        let label = String(line[..<colon].drop(while: { "*_#-•>0123456789. ".contains($0) }))
+            .trimmingCharacters(in: CharacterSet(charactersIn: "*_ "))
+            .lowercased()
         guard !label.isEmpty, label.count <= 24, label.allSatisfy({ $0.isLetter || $0 == " " }) else { return nil }
         // Only markdown emphasis comes off the value: its own punctuation is content.
         let value = line[line.index(after: colon)...].trimmingCharacters(in: CharacterSet(charactersIn: "*_ "))
@@ -138,6 +152,7 @@ nonisolated enum AIResponseText {
         let openers = [
             "i'm sorry", "i am sorry", "sorry, but", "sorry, i", "i apologize", "i can't", "i cannot",
             "i'm unable", "i am unable", "i won't", "i will not", "as an ai", "i'm not able", "i am not able",
+            "i'm afraid i", "i am afraid i", "unfortunately, i", "i must decline",
         ]
         return openers.contains { head.hasPrefix($0) }
     }

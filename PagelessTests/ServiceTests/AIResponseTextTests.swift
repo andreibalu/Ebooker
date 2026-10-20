@@ -46,6 +46,14 @@ struct AIResponseTextTests {
         let fields = AIResponseText.labeledFields(in: reply, labels: ["Quote", "Note"], overflowLabel: "Note")
         #expect(fields["quote"] == "\"The storm broke over the harbor.\"")
         #expect(fields["note"] == "The town stays awake. Ariadne lights the lantern.")
+
+        // A clock time is not a label: "At 10:30" once read as the label "At" and the line was lost.
+        let timed = AIResponseText.labeledFields(
+            in: "Title: Night\nAt 10:30 the clock struck. Everyone slept.",
+            labels: ["Title", "Note"],
+            overflowLabel: "Note"
+        )
+        #expect(timed["note"] == "At 10:30 the clock struck. Everyone slept.")
     }
 
     /// Seen as a failure mode: a preamble overflowed into the recap ("Here's a recap:…") and
@@ -61,6 +69,9 @@ struct AIResponseTextTests {
         #expect(AIResponseText.isRefusal("I'm sorry, but I can't help with that request."))
         #expect(AIResponseText.isRefusal("I apologize, but I cannot assist with this."))
         #expect(AIResponseText.isRefusal("As an AI language model, I can't describe this content."))
+        // Missed openers made a refusal `.failed`, which skips the retry on the passage tail.
+        #expect(AIResponseText.isRefusal("Unfortunately, I can't help with this passage."))
+        #expect(AIResponseText.isRefusal("I’m afraid I can’t describe this."))
         #expect(!AIResponseText.isRefusal("Title: Sorry Is the Hardest Word\nMood: sad"))
     }
 
@@ -94,5 +105,10 @@ struct AIResponseTextTests {
         #expect(AIResponseText.cleanTranscript(raw) == "The storm broke over the harbor at midnight, and nobody slept. Morning came slowly")
         // A window that starts on a sentence keeps it.
         #expect(AIResponseText.cleanTranscript("It was late. She waited.") == "It was late. She waited.")
+        // A decimal point or an honorific is not a sentence end: cutting there garbled the passage.
+        let decimal = "about 3.5 miles away it stood. The house was dark and silent and Elizabeth stood outside alone."
+        #expect(AIResponseText.cleanTranscript(decimal) == "The house was dark and silent and Elizabeth stood outside alone.")
+        let honorific = "and then Mr. Darcy entered the room. Elizabeth looked up from the letter at him. She said nothing for a long while."
+        #expect(AIResponseText.cleanTranscript(honorific) == "Elizabeth looked up from the letter at him. She said nothing for a long while.")
     }
 }
