@@ -18,12 +18,11 @@ New: iCloud Sync is free, and the audio of books you import can live in iCloud t
 
 ## What's New
 
-iCloud Sync is now free for everyone.
+Small fixes to Apple Intelligence and iCloud.
 
-• Keep your library, progress, moments, recaps and listening history in sync across your iPhones through your own iCloud account. No subscription needed.
-• New and optional: store the audio of books you import in iCloud Drive, so another iPhone, or this one after a reinstall, can download the whole book. Stored audio uses your iCloud storage.
-• Smart moments and recaps now work on more passages from novels, and a moment still gets a name when Apple Intelligence can't summarize it.
-• Unpaged Plus is now all about on-device Apple Intelligence: moments that name themselves and story-so-far recaps.
+• Moment names and story-so-far recaps are more reliable on Apple Intelligence devices.
+• The iCloud Sync screens no longer say your library is syncing or backed up when you're signed out of iCloud.
+• Other small fixes.
 
 ## Description
 

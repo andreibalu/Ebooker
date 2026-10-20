@@ -1,6 +1,6 @@
 # Localized App Store listing drafts
 
-Drafts for the **next** App Store version go here, one file per locale. The current drafts follow 1.5.1 (live) and were started from its App Store Connect text on 2026-10-18: `en-US.md`, `de-DE.md`, `es-ES.md`, `fr-FR.md`, `it.md` and `pt-BR.md`. `NOTES.md` explains the positioning and keyword choices behind them. App Store Connect holds the text of every submitted version.
+Drafts for the **next** App Store version go here, one file per locale. The current drafts follow 1.6.0 (live) for 1.6.1 and were started from App Store Connect text on 2026-10-18: `en-US.md`, `de-DE.md`, `es-ES.md`, `fr-FR.md`, `it.md` and `pt-BR.md`. `NOTES.md` explains the positioning and keyword choices behind them. App Store Connect holds the text of every submitted version.
 
 Each locale needs a name and subtitle (app info localization) plus promotional text, keywords, What's New, and description (version localization). The app UI is English-only, so localized copy must not quote translated UI labels and should say the app is in English. App Store Connect remains the source of truth for availability and localized prices.
 

@@ -18,12 +18,11 @@ Neu: iCloud-Synchronisierung ist kostenlos, und die Audiodateien importierter B�
 
 ## What's New
 
-iCloud-Synchronisierung ist jetzt für alle kostenlos.
+Kleine Verbesserungen bei Apple Intelligence und iCloud.
 
-• Bibliothek, Fortschritt, Momente, Zusammenfassungen und Hörverlauf bleiben über deinen eigenen iCloud-Account auf all deinen iPhones synchron. Ohne Abo.
-• Neu und optional: Speichere die Audiodateien deiner importierten Bücher in iCloud Drive. So kann ein anderes iPhone, oder dieses nach einer Neuinstallation, das ganze Buch laden. Der Speicher zählt zu deinem iCloud-Speicher.
-• Intelligente Momente und Zusammenfassungen funktionieren mit mehr Passagen aus Romanen, und ein Moment bekommt auch dann einen Namen, wenn Apple Intelligence ihn nicht zusammenfassen kann.
-• Unpaged Plus konzentriert sich jetzt ganz auf Apple Intelligence auf dem Gerät: Momente, die sich selbst benennen, und Zusammenfassungen der bisherigen Handlung.
+• Namen für Momente und Zusammenfassungen der bisherigen Handlung sind auf Geräten mit Apple Intelligence zuverlässiger.
+• Die Bildschirme zur iCloud-Synchronisierung sagen nicht mehr, dass deine Bibliothek synchronisiert oder gesichert wird, wenn du nicht bei iCloud angemeldet bist.
+• Weitere kleine Korrekturen.
 
 ## Description
 
