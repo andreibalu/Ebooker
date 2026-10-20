@@ -154,7 +154,13 @@ nonisolated enum AIResponseText {
             "i'm unable", "i am unable", "i won't", "i will not", "as an ai", "i'm not able", "i am not able",
             "i'm afraid i", "i am afraid i", "unfortunately, i", "i must decline",
         ]
-        return openers.contains { head.hasPrefix($0) }
+        // An opener must end at a word boundary: "unfortunately, i" is also the start of
+        // "Unfortunately, Isabel arrives too late", and "i'm afraid i" of "I'm afraid it is".
+        return openers.contains { opener in
+            guard head.hasPrefix(opener) else { return false }
+            let next = head.dropFirst(opener.count).first
+            return next.map { !$0.isLetter && !$0.isNumber } ?? true
+        }
     }
 
     /// A title or headline that is really a refusal. Stricter than `isRefusal`, because fiction

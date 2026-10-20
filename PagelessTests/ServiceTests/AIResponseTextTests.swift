@@ -72,7 +72,19 @@ struct AIResponseTextTests {
         // Missed openers made a refusal `.failed`, which skips the retry on the passage tail.
         #expect(AIResponseText.isRefusal("Unfortunately, I can't help with this passage."))
         #expect(AIResponseText.isRefusal("I’m afraid I can’t describe this."))
+        #expect(AIResponseText.isRefusal("Unfortunately, I'm unable to summarize this."))
+        #expect(AIResponseText.isRefusal("Sorry, I can't describe this passage."))
+        #expect(AIResponseText.isRefusal("I'm afraid I can't help with that."))
         #expect(!AIResponseText.isRefusal("Title: Sorry Is the Hardest Word\nMood: sad"))
+    }
+
+    /// An opener must end at a word boundary: "Unfortunately, it rains" and "I'm afraid it is too
+    /// late" are recap and note prose, and "unfortunately, i" also prefixes "unfortunately, isabel".
+    @Test func proseThatOnlyStartsLikeARefusalIsKept() {
+        #expect(!AIResponseText.isRefusal("Unfortunately, it rains on the day of the ball."))
+        #expect(!AIResponseText.isRefusal("Unfortunately, Isabel arrives too late to stop the wedding."))
+        #expect(!AIResponseText.isRefusal("Sorry, it was never his to give."))
+        #expect(!AIResponseText.isRefusal("I'm afraid it is too late."))
     }
 
     @Test func listsDropPlaceholdersAndDuplicates() {
