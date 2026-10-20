@@ -133,6 +133,22 @@ test('without an iCloud account the sync toggle explains how to sign in', async 
   await expect(audioSwitch(screen)).toBeDisabled();
 });
 
+// A former iCloud Syncing subscriber who is signed out of iCloud keeps the preference on through
+// the update. Sync can't start, so nothing may say it will on reopen or that books are backed up.
+test('signed out of iCloud with the sync preference on, nothing promises sync or backup', async ({ device, screen, app }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...base, '-iCloudSyncEnabled', 'YES', '-e2e-reset-fixture'] });
+  await openSettings(screen);
+  await expect(screen.getByTestId('settings.icloud')).toContainText('Off · sign in to iCloud to sync');
+  await push(screen.getByTestId('settings.icloud'), syncSwitch(screen));
+  await expect(screen.getByText(/Sign in to iCloud in System Settings/).first()).toBeVisible();
+  await push(screen.getByTestId('icloud.cloudLibrary'), screen.getByText('iCloud Library', { exact: true }).first());
+  await expect(screen.getByText(/Turn on iCloud sync in Settings to back up/).first()).toBeVisible();
+  await expect(screen.getByText('E2E The Listening Book').first()).toBeVisible();
+  await expect(screen.getByLabel('Saved')).toBeHidden();
+  await expect(screen.getByText('Backed up')).toBeHidden();
+  await app.screenshot('icloud-signed-out-preference-on');
+});
+
 test('onboarding offers iCloud sync as a free opt-in that starts on the next launch', async ({ device, screen, app }) => {
   const onboarding = ['-e2e-fixture', '-onboardingComplete', 'NO', '-startOnFreeBooks', 'NO', ...account];
   await device.openApp(bundle, { relaunch: true, launchArguments: [...onboarding, '-e2e-reset-fixture'] });

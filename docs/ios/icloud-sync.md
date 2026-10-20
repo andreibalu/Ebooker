@@ -6,7 +6,7 @@ iCloud sync is free for anyone signed in to iCloud; it is not part of Plus (see 
 
 ## The gate
 
-`IcloudSyncGate` is the single decision point: sync-sensitive behavior calls `IcloudSyncGate.isEnabled()` rather than reading the toggle. The deliberate exceptions are the captions in `ICloudSettingsView`, the Settings root and the onboarding iCloud scene, which compare the stored preference with the gate to say a change applies after relaunch. The gate requires the `iCloudSyncEnabled` preference and a signed-in iCloud account (`ubiquityIdentityToken`). It is computed once per process, so a toggle change takes effect after relaunch: the SwiftData container can't switch databases while it runs. When it is false, `AppDelegate` builds the container with `cloudKitDatabase: .none`.
+`IcloudSyncGate` is the single decision point: sync-sensitive behavior calls `IcloudSyncGate.isEnabled()` rather than reading the toggle. The deliberate exceptions are the captions in `ICloudSettingsView`, the Settings root and the onboarding iCloud scene, which compare the stored preference with the gate to say a change applies after relaunch. Each checks the account first: signed out, the preference can be on (an upgraded subscriber's) while sync never starts, so no caption may promise it on reopen. The gate requires the `iCloudSyncEnabled` preference and a signed-in iCloud account (`ubiquityIdentityToken`). It is computed once per process, so a toggle change takes effect after relaunch: the SwiftData container can't switch databases while it runs. When it is false, `AppDelegate` builds the container with `cloudKitDatabase: .none`.
 
 - **Opt-in.** The preference defaults to off. It is offered in Settings → iCloud Sync and on the onboarding iCloud scene, both bound to the same key. Turning sync on silently for existing users would start uploading covers and change what Remove does (archive and keep instead of delete), so nobody gets it without asking.
 - **Upgrading from Plus-gated sync.** Plus used to be a second condition. The preference key and its meaning didn't change, so a subscriber with sync on keeps syncing through the update. Someone whose Plus lapsed while the toggle was on gets sync back on the first launch after the update, because that was their last choice and the old screen hid the toggle from them. Records they deleted while sync was off come back from CloudKit as "In iCloud only" books; swipe-to-delete in Cloud Library removes them for good.
@@ -84,7 +84,7 @@ With sync on, deleting a record deletes it on every device, so its audio in iClo
 
 ## Backup badge
 
-`ICloudBackupBadge` ("Backed up to iCloud", as a cover overlay and inline on detail) renders whenever the gate is on. `NSPersistentCloudKitContainer` exposes no per-record sync status, so the badge is a static statement that synced-store records are backed up, gated so it never promises backup to someone without sync.
+`ICloudBackupBadge` ("Backed up to iCloud", as a cover overlay and inline on detail) renders whenever the gate is on. `NSPersistentCloudKitContainer` exposes no per-record sync status, so the badge is a static statement that synced-store records are backed up, gated so it never promises backup to someone without sync. Cloud Library's row labels ("Saved", "Backed up") follow the same gate: with sync off the page is still reachable from Settings → iCloud Sync, and its rows make no backup claim.
 
 ## Audio in iCloud
 

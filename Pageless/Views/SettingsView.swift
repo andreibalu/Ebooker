@@ -182,6 +182,10 @@ struct SettingsView: View {
 
     private var iCloudSyncCaption: String {
         let active = IcloudSyncGate.isEnabled()
+        // Signed out, a preference left on (an upgraded subscriber's) can't start on reopen.
+        if !active && !IcloudSyncGate.hasUbiquityIdentity() {
+            return iCloudSyncEnabled ? "Off · sign in to iCloud to sync" : "Off · free with your iCloud account"
+        }
         if iCloudSyncEnabled != active {
             return iCloudSyncEnabled ? "Turns on after you reopen Unpaged" : "Turns off after you reopen Unpaged"
         }
