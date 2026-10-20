@@ -311,9 +311,12 @@ struct CloudLibraryView: View {
                 cloudAudioLine(for: book)
             }
             Spacer()
-            Label("Saved", systemImage: "checkmark.icloud")
-                .labelStyle(.iconOnly)
-                .foregroundStyle(.primary)
+            // With sync off nothing reaches iCloud, so the row makes no backup claim.
+            if IcloudSyncGate.isEnabled() {
+                Label("Saved", systemImage: "checkmark.icloud")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.primary)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -366,9 +369,11 @@ struct CloudLibraryView: View {
                 Label("Streaming", systemImage: "antenna.radiowaves.left.and.right")
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
-                Label("Backed up", systemImage: "checkmark.icloud")
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.primary)
+                if IcloudSyncGate.isEnabled() {
+                    Label("Backed up", systemImage: "checkmark.icloud")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.primary)
+                }
             }
             .labelStyle(.titleAndIcon)
         }
