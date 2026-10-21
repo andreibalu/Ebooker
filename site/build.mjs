@@ -66,7 +66,7 @@ const check = `<svg class="i-check" viewBox="0 0 24 24" aria-hidden="true"><path
 const phone = (screen, alt, { cls = '', eager = false, hidden = false } = {}) => `<div class="phone ${cls}"${hidden ? ' aria-hidden="true"' : ''}><img src="${asset(`screens/${screen}.webp`)}" width="${W}" height="${H}" alt="${e(alt)}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"></div>`;
 const head = (eyebrow, heading, id, text = '', cls = '') => `<div class="section-head ${cls}"><p class="eyebrow">${e(eyebrow)}</p><h2 id="${id}">${rich(heading)}</h2>${text ? `<p class="lede">${e(text)}</p>` : ''}</div>`;
 const checks = arr => `<ul class="checks">${arr.map(t => `<li>${check}<span>${e(t)}</span></li>`).join('')}</ul>`;
-const badgeFor = site => (cls = '') => `<a class="store-badge ${cls}" href="${config.appStoreUrl}"><img src="${asset('img/app-store-badge.svg')}" width="156" height="52" alt="${e(site.ui.badgeAlt)}"></a>`;
+const badgeFor = site => (cls = '') => `<a class="store-badge ${cls}" href="${config.appStoreLink}"><img src="${asset('img/app-store-badge.svg')}" width="156" height="52" alt="${e(site.ui.badgeAlt)}"></a>`;
 
 // ---------------------------------------------------------------- layout
 // `route` is the path below the locale prefix ('' for home, 'plus/'). Pages with `alternates` exist in every locale.
@@ -75,7 +75,7 @@ function layout(site, code, { title, description, body, route = '', type = 'home
   const prefix = prefixOf(code);
   const home = `${base}${prefix}`;
   const url = `${origin}/${prefix}${route}`;
-  const pill = (text, cls = '') => `<a class="pill ${cls}" href="${config.appStoreUrl}"><span>${e(text)}</span>${arrow}</a>`;
+  const pill = (text, cls = '') => `<a class="pill ${cls}" href="${config.appStoreLink}"><span>${e(text)}</span>${arrow}</a>`;
   const wordmark = `<a class="brand" href="${home}" aria-label="${e(t.home)}">${logoMark()}<span>Unpaged</span></a>`;
   const nav = [[t.nav[0], `${home}#library`], [t.nav[1], `${home}#moments`], [t.nav[2], `${home}#listening`], [t.nav[3], `${home}plus/`], [guideNav[code], `${base}guides/`]];
   const links = alternates

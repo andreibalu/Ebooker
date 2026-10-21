@@ -14,7 +14,7 @@ cd site && npm install && npm run assets   # regenerate public/ images (sharp)
 | Path | Role |
 | --- | --- |
 | `build.mjs` | Zero-dependency build: pages, legal docs, sitemap, robots, link check |
-| `site.config.json` | Production URL, App Store URL, app id. `SITE_URL` overrides the URL |
+| `site.config.json` | Production URL, App Store URL (structured data), campaign-tagged App Store link (badges and buttons), app id. `SITE_URL` overrides the URL |
 | `src/content.mjs` | All English copy, including the `ui` strings and the moment anatomy |
 | `src/guides.mjs` | The two setup guides (English), the translated nav label and home strip |
 | `src/i18n/*.mjs` | de, es, fr, it, pt-br partial overrides, deep-merged over English (arrays replace wholesale) |

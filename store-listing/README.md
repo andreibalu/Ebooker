@@ -14,4 +14,3 @@ These describe things that live outside the binary and outlast a version. Keep t
 
 - `CUSTOM-PRODUCT-PAGE.md`: the Audiobookshelf custom product page, its id, URL, keywords and screenshots.
 - `CAMPAIGN-LINKS.md`: App Store campaign links per channel.
-- `NOMINATION.md`: the featuring nomination draft for the next release. Delete it once it is submitted.
