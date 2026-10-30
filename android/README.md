@@ -87,7 +87,7 @@ by the wrapper when fetching Gradle. Wrapper scripts/JAR come from the official
 
 ## Google Play
 
-The Play build is `app.unpaged`; debug builds keep `dev.unpaged.android.development`
+The Play build is `com.andreibaludev.unpaged`; debug builds keep `dev.unpaged.android.development`
 so both install side by side. Release bundles are signed with the upload key named in
 `~/.config/unpaged/upload-signing.properties` (or `-Punpaged.uploadSigning=<file>`);
 without that file `bundleRelease` produces an unsigned bundle. Google Play App

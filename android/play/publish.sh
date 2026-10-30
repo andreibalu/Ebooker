@@ -10,7 +10,7 @@
 # A new app accepts only status=draft until its first release is rolled out in Play Console.
 set -euo pipefail
 
-PACKAGE=app.unpaged
+PACKAGE=com.andreibaludev.unpaged
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="${PLAY_GCP_PROJECT:-$(cat "$HOME/.config/unpaged/play-gcp-project" 2>/dev/null || true)}"
 SA="${PLAY_SERVICE_ACCOUNT:-unpaged-play-publisher@${PROJECT}.iam.gserviceaccount.com}"
