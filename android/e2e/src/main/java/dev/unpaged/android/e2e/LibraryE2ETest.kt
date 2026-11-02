@@ -201,6 +201,17 @@ class LibraryE2ETest {
         assertEquals("Welcome card lines clipped in landscape", portraitHeights, welcomeLines.map { onboardingHeightInView(it) })
         screenshot("onboarding-landscape")
         device.setOrientationNatural()
+        // Issue #97: on a tablet the welcome content sat in the top half of the page.
+        // At an 800dp smallest width its block must center on the page.
+        try {
+            device.executeShellCommand("wm size 1600x2560")
+            device.executeShellCommand("wm density 320")
+            assertWelcomeCentered(displayWidth = 1600)
+            screenshot("onboarding-tablet")
+        } finally {
+            device.executeShellCommand("wm size reset")
+            device.executeShellCommand("wm density reset")
+        }
         field("onboarding.choice.My books").click()
         field("onboarding.page.1").click()
         field("onboarding.notifications")
@@ -1056,6 +1067,26 @@ class LibraryE2ETest {
             settleLayout()
         }
         throw AssertionError("Never fully on screen: $selector")
+    }
+
+    /**
+     * The welcome block (brand row top to scroll hint bottom) must center on the onboarding page
+     * within 5% of its height, once the page is [displayWidth] px wide (the resized display applied).
+     */
+    private fun assertWelcomeCentered(displayWidth: Int) {
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (true) {
+            settleLayout()
+            val page = visible(By.res("onboarding")).visibleBounds
+            if (page.width() == displayWidth || android.os.SystemClock.uptimeMillis() > deadline) {
+                assertEquals("Display never resized", displayWidth, page.width())
+                val top = visible(By.text("Unpaged")).visibleBounds.top
+                val bottom = visible(By.textStartsWith("Scroll to continue")).visibleBounds.bottom
+                val offset = kotlin.math.abs((top + bottom) / 2 - page.centerY())
+                assertTrue("Welcome content ${offset}px off center on a ${page.height()}px tablet page", offset < page.height() / 20)
+                return
+            }
+        }
     }
 
     private fun captureOnboardingPage(page: String) {
