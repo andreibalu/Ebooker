@@ -192,6 +192,15 @@ class LibraryE2ETest {
         field("onboarding.choice.My books")
         screenshot("onboarding-dark")
         device.executeShellCommand("cmd uimode night no")
+        // Issue #97: a landscape phone clipped the welcome cards to the page height.
+        // Every card line must scroll fully into view at its portrait height.
+        val welcomeLines = listOf("Shelves", "Thousands of free public-domain audiobooks, ready to play.", "No import needed",
+            "My books", "Bring audiobooks you already own. Import from Files.", "Your own library").map { By.text(it) }
+        val portraitHeights = welcomeLines.map { onboardingHeightInView(it) }
+        device.setOrientationLeft()
+        assertEquals("Welcome card lines clipped in landscape", portraitHeights, welcomeLines.map { onboardingHeightInView(it) })
+        screenshot("onboarding-landscape")
+        device.setOrientationNatural()
         field("onboarding.choice.My books").click()
         field("onboarding.page.1").click()
         field("onboarding.notifications")
@@ -211,6 +220,9 @@ class LibraryE2ETest {
         field("onboarding.page.6").click()
         visible(By.text("Skip forward: 45s"))
         captureOnboardingPage("done")
+        device.setOrientationLeft()
+        assertTrue("Open Library unreachable in landscape", onboardingHeightInView(By.res("onboarding.finish")) > 0)
+        device.setOrientationNatural()
         field("onboarding.finish").click()
         visible(By.text("Your Library Is Empty"))
         device.executeShellCommand("am force-stop $app")
@@ -1030,6 +1042,20 @@ class LibraryE2ETest {
     private fun selectLibraryTab() {
         selectTab("Library")
         visible(By.text("My Library"))
+    }
+
+    /** Height of [selector] once a short drag brings it fully inside the onboarding page; fails if it never does. */
+    private fun onboardingHeightInView(selector: BySelector): Int {
+        settleLayout()
+        repeat(8) {
+            val page = visible(By.res("onboarding")).visibleBounds
+            refreshAccessibility()
+            device.findObject(selector)?.visibleBounds?.let { if (it.top > page.top + 80 && it.bottom < page.bottom - 80) return it.height() }
+            // Slow quarter-page drags stay under the pager's distance and fling thresholds, so they never change pages.
+            device.swipe(page.centerX(), page.centerY() + page.height() / 8, page.centerX(), page.centerY() - page.height() / 8, 100)
+            settleLayout()
+        }
+        throw AssertionError("Never fully on screen: $selector")
     }
 
     private fun captureOnboardingPage(page: String) {
