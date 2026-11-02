@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -79,7 +81,9 @@ fun OnboardingScreen(preferences: UnpagedPreferences) {
                             listOf(ambientAmber.copy(alpha = .12f), androidx.compose.ui.graphics.Color.Transparent),
                             center = Offset(size.width / 2, size.height * .14f), radius = 340.dp.toPx()))
                     }, contentAlignment = Alignment.TopCenter) {
-                    Column(Modifier.fillMaxHeight().widthIn(max = 402.dp).fillMaxWidth().alpha(reveal.value).padding(horizontal = 26.dp).padding(top = if (page == 0) 8.dp else 24.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(if (page == 0) 0.dp else 16.dp)) {
+                    // Pages scroll when they outgrow the viewport (landscape phones). The scroll keeps
+                    // the viewport height as the content's minimum, so short pages lay out as before.
+                    Column(Modifier.fillMaxHeight().widthIn(max = 402.dp).fillMaxWidth().verticalScroll(rememberScrollState()).alpha(reveal.value).padding(horizontal = 26.dp).padding(top = if (page == 0) 8.dp else 24.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(if (page == 0) 0.dp else 16.dp)) {
                         when(page) {
                             0 -> {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
