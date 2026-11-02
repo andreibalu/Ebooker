@@ -201,17 +201,6 @@ class LibraryE2ETest {
         assertEquals("Welcome card lines clipped in landscape", portraitHeights, welcomeLines.map { onboardingHeightInView(it) })
         screenshot("onboarding-landscape")
         device.setOrientationNatural()
-        // Issue #97: on a tablet the welcome content sat in the top half of the page.
-        // At an 800dp smallest width its block must center on the page.
-        try {
-            device.executeShellCommand("wm size 1600x2560")
-            device.executeShellCommand("wm density 320")
-            assertWelcomeCentered(displayWidth = 1600)
-            screenshot("onboarding-tablet")
-        } finally {
-            device.executeShellCommand("wm size reset")
-            device.executeShellCommand("wm density reset")
-        }
         field("onboarding.choice.My books").click()
         field("onboarding.page.1").click()
         field("onboarding.notifications")
@@ -248,6 +237,24 @@ class LibraryE2ETest {
         device.executeShellCommand("am force-stop $app")
         launch()
         field("onboarding.choice.My books")
+        // Issue #97: on a tablet the welcome content sat in the top half of the page.
+        // At an 800dp smallest width its block must center on the page. This runs last:
+        // the back-to-back resets recreate the activity twice, and once in a full-suite
+        // run the pager came back on another page, so nothing after it depends on the page.
+        val phoneWidth = device.displayWidth
+        try {
+            device.executeShellCommand("wm size 1600x2560")
+            device.executeShellCommand("wm density 320")
+            assertWelcomeCentered(displayWidth = 1600)
+            screenshot("onboarding-tablet")
+        } finally {
+            device.executeShellCommand("wm size reset")
+            device.executeShellCommand("wm density reset")
+            // Let the display settle before the next test launches the app.
+            val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+            while (device.displayWidth != phoneWidth && android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(100)
+            settleLayout()
+        }
     }
 
     @Test fun seededActivityOpensStatsAndPersistsAcrossRelaunch() {
