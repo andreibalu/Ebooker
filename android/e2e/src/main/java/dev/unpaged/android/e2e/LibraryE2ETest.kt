@@ -47,6 +47,10 @@ class LibraryE2ETest {
         assertTrue(device.executeShellCommand("getprop ro.boot.qemu.avd_name").trim().startsWith("Unpaged_E2E_"))
         for (setting in listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale"))
             device.executeShellCommand("settings put global $setting 0")
+        // A failed test can leave the display rotated or resized; start every test from the natural phone display.
+        device.setOrientationNatural()
+        device.executeShellCommand("wm size reset")
+        device.executeShellCommand("wm density reset")
         device.pressHome()
         settleLayout()
         device.executeShellCommand("pm clear $app")
@@ -1069,8 +1073,9 @@ class LibraryE2ETest {
             val page = visible(By.res("onboarding")).visibleBounds
             refreshAccessibility()
             device.findObject(selector)?.visibleBounds?.let { if (it.top > page.top + 80 && it.bottom < page.bottom - 80) return it.height() }
-            // Slow quarter-page drags stay under the pager's distance and fling thresholds, so they never change pages.
-            device.swipe(page.centerX(), page.centerY() + page.height() / 8, page.centerX(), page.centerY() - page.height() / 8, 100)
+            // Slow quarter-page drags (about 1.5 s) stay under the pager's distance and fling thresholds in either
+            // orientation, so they never change pages.
+            device.swipe(page.centerX(), page.centerY() + page.height() / 8, page.centerX(), page.centerY() - page.height() / 8, 300)
             settleLayout()
         }
         throw AssertionError("Never fully on screen: $selector")

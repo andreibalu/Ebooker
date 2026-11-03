@@ -1,1 +1,1 @@
-Fixes the welcome screen on landscape phones, where option descriptions were cut off, and on tablets, where the content now sits centered.
+Fixes the welcome screens on landscape phones, where text was cut off and Open Library was out of reach, and centers them on tablets.
