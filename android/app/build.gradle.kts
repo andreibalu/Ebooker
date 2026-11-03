@@ -28,8 +28,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         targetSdk = 36
         // Raise versionCode for every Play upload.
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
     }
     signingConfigs {
         if (uploadSigning.isNotEmpty()) create("upload") {

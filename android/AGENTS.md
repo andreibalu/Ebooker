@@ -159,6 +159,9 @@ Packages under `dev.unpaged.android`: `library`, `playback`, `shelves`, `abs`,
 Seven scenes, like iOS. Permissions asks only for notifications (API 33+, never
 blocking playback). The moments and library scenes describe Android behavior. No
 purchase, Plus or iCloud controls.
+Pages scroll when they outgrow the screen (landscape phones). On tablets
+(smallest width 600dp+) each page centers vertically; iOS is iPhone-only, so
+this is Android's own rule.
 
 ## Known gaps
 

@@ -47,6 +47,10 @@ class LibraryE2ETest {
         assertTrue(device.executeShellCommand("getprop ro.boot.qemu.avd_name").trim().startsWith("Unpaged_E2E_"))
         for (setting in listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale"))
             device.executeShellCommand("settings put global $setting 0")
+        // A failed test can leave the display rotated or resized; start every test from the natural phone display.
+        device.setOrientationNatural()
+        device.executeShellCommand("wm size reset")
+        device.executeShellCommand("wm density reset")
         device.pressHome()
         settleLayout()
         device.executeShellCommand("pm clear $app")
@@ -192,6 +196,15 @@ class LibraryE2ETest {
         field("onboarding.choice.My books")
         screenshot("onboarding-dark")
         device.executeShellCommand("cmd uimode night no")
+        // Issue #97: a landscape phone clipped the welcome cards to the page height.
+        // Every card line must scroll fully into view at its portrait height.
+        val welcomeLines = listOf("Shelves", "Thousands of free public-domain audiobooks, ready to play.", "No import needed",
+            "My books", "Bring audiobooks you already own. Import from Files.", "Your own library").map { By.text(it) }
+        val portraitHeights = welcomeLines.map { onboardingHeightInView(it) }
+        device.setOrientationLeft()
+        assertEquals("Welcome card lines clipped in landscape", portraitHeights, welcomeLines.map { onboardingHeightInView(it) })
+        screenshot("onboarding-landscape")
+        device.setOrientationNatural()
         field("onboarding.choice.My books").click()
         field("onboarding.page.1").click()
         field("onboarding.notifications")
@@ -211,6 +224,9 @@ class LibraryE2ETest {
         field("onboarding.page.6").click()
         visible(By.text("Skip forward: 45s"))
         captureOnboardingPage("done")
+        device.setOrientationLeft()
+        assertTrue("Open Library unreachable in landscape", onboardingHeightInView(By.res("onboarding.finish")) > 0)
+        device.setOrientationNatural()
         field("onboarding.finish").click()
         visible(By.text("Your Library Is Empty"))
         device.executeShellCommand("am force-stop $app")
@@ -225,6 +241,24 @@ class LibraryE2ETest {
         device.executeShellCommand("am force-stop $app")
         launch()
         field("onboarding.choice.My books")
+        // Issue #97: on a tablet the welcome content sat in the top half of the page.
+        // At an 800dp smallest width its block must center on the page. This runs last:
+        // the back-to-back resets recreate the activity twice, and once in a full-suite
+        // run the pager came back on another page, so nothing after it depends on the page.
+        val phoneWidth = device.displayWidth
+        try {
+            device.executeShellCommand("wm size 1600x2560")
+            device.executeShellCommand("wm density 320")
+            assertWelcomeCentered(displayWidth = 1600)
+            screenshot("onboarding-tablet")
+        } finally {
+            device.executeShellCommand("wm size reset")
+            device.executeShellCommand("wm density reset")
+            // Let the display settle before the next test launches the app.
+            val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+            while (device.displayWidth != phoneWidth && android.os.SystemClock.uptimeMillis() < deadline) android.os.SystemClock.sleep(100)
+            settleLayout()
+        }
     }
 
     @Test fun seededActivityOpensStatsAndPersistsAcrossRelaunch() {
@@ -1030,6 +1064,41 @@ class LibraryE2ETest {
     private fun selectLibraryTab() {
         selectTab("Library")
         visible(By.text("My Library"))
+    }
+
+    /** Height of [selector] once a short drag brings it fully inside the onboarding page; fails if it never does. */
+    private fun onboardingHeightInView(selector: BySelector): Int {
+        settleLayout()
+        repeat(8) {
+            val page = visible(By.res("onboarding")).visibleBounds
+            refreshAccessibility()
+            device.findObject(selector)?.visibleBounds?.let { if (it.top > page.top + 80 && it.bottom < page.bottom - 80) return it.height() }
+            // Slow quarter-page drags (about 1.5 s) stay under the pager's distance and fling thresholds in either
+            // orientation, so they never change pages.
+            device.swipe(page.centerX(), page.centerY() + page.height() / 8, page.centerX(), page.centerY() - page.height() / 8, 300)
+            settleLayout()
+        }
+        throw AssertionError("Never fully on screen: $selector")
+    }
+
+    /**
+     * The welcome block (brand row top to scroll hint bottom) must center on the onboarding page
+     * within 5% of its height, once the page is [displayWidth] px wide (the resized display applied).
+     */
+    private fun assertWelcomeCentered(displayWidth: Int) {
+        val deadline = android.os.SystemClock.uptimeMillis() + 10_000
+        while (true) {
+            settleLayout()
+            val page = visible(By.res("onboarding")).visibleBounds
+            if (page.width() == displayWidth || android.os.SystemClock.uptimeMillis() > deadline) {
+                assertEquals("Display never resized", displayWidth, page.width())
+                val top = visible(By.text("Unpaged")).visibleBounds.top
+                val bottom = visible(By.textStartsWith("Scroll to continue")).visibleBounds.bottom
+                val offset = kotlin.math.abs((top + bottom) / 2 - page.centerY())
+                assertTrue("Welcome content ${offset}px off center on a ${page.height()}px tablet page", offset < page.height() / 20)
+                return
+            }
+        }
     }
 
     private fun captureOnboardingPage(page: String) {
