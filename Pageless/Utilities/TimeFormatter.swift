@@ -16,6 +16,13 @@ enum TimeFormatter {
         return min(max(seconds, 0), maxPlausibleSeconds)
     }
 
+    /// Wall-clock listening duration remaining when playing `seconds` of audio at `rate`.
+    static func speedAdjustedSeconds(_ seconds: Double, rate: Double) -> Double {
+        let safeSeconds = sanitizedSeconds(seconds)
+        let safeRate = rate.isFinite && rate > 0 ? rate : 1.0
+        return sanitizedSeconds(safeSeconds / safeRate)
+    }
+
     /// Whole percent (0...100) for a fraction; never traps on hostile input.
     static func percentValue(_ fraction: Double) -> Int {
         guard fraction.isFinite else { return fraction > 0 ? 100 : 0 }

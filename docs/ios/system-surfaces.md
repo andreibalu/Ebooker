@@ -20,8 +20,9 @@ The widget extension (`PagelessDownloadActivity/`) holds the download Live Activ
 
 ## Siri and App Intents
 
-- `UnpagedAppShortcuts` (`AppIntents/AudiobookIntents.swift`) exposes "Play Latest Book", backed by `PlayLatestBookIntent` (`AppIntents/PlayLatestBookIntent.swift`, compiled into the app and the widget).
-- The intent can run in the widget process, so `perform()` writes the `intent.playLatestBook` flag to both `UserDefaults.standard` and the app-group suite, and posts a notification for a running app. `PagelessApp` consumes the flag at launch, on the notification and when `scenePhase` becomes `.active`. Each write and the notification serve a different entry path.
+- `UnpagedAppShortcuts` (`AppIntents/AudiobookIntents.swift`) exposes "Play Latest Book" (`PlayLatestBookIntent`, compiled into the app and the widget) and "Save Moment" (`SaveMomentIntent`, app-only, `openAppWhenRun = false` so it works hands-free from the Action Button, Back Tap, Siri or Shortcuts).
+- `PlayLatestBookIntent` can run in the widget process, so `perform()` writes the `intent.playLatestBook` flag to both `UserDefaults.standard` and the app-group suite, and posts a notification for a running app. `PagelessApp` consumes the flag at launch, on the notification and when `scenePhase` becomes `.active`. Each write and the notification serve a different entry path.
+- `SaveMomentIntent` runs in-process through `SaveMomentAction.saveCurrentMoment` when `AppDelegate.shared` is live, applying `momentBacktrackSeconds`, naming via `MomentFallbackNamer`, attaching an optional Shortcut `note`, and falling back to the most recently played active book when nothing is loaded. If `AppDelegate.shared` is absent, it queues `intent.saveMoment` / `intent.saveMomentNote` through the same pending-intent path in `PagelessApp`.
 
 ## Links
 

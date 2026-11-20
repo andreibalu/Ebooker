@@ -9,12 +9,15 @@ Read this before changing `AudioPlayerManager` or anything that reads its state:
 - Each item gets its own `AVAudioMix` from `AudioEqualizerService.makeAudioMix(for:)`; that is how the EQ tap reaches the audio. An asset with no audio track plays without EQ.
 - `PlaybackPersistence` owns progress saves, the high-water mark and the seek penalty. It writes model fields on every call but saves only past a delta, so the model can be dirty between saves.
 - ABS books reconcile with the server before playback; see `audiobookshelf.md`.
+- **Playback speed.** CarPlay and Now Playing cycle/advertise `AudioPlayerManager.supportedPlaybackRates`; the phone player exposes finer presets (`playerPresetPlaybackRates`) plus `PlaybackSpeedSheet` for `0.05×` steps across `minPlaybackRate...maxPlaybackRate` (`0.5×–3.0×`). Remaining-time displays on the player, chapter sleep countdown and book detail scale by `1 / playbackRate` (`TimeFormatter.speedAdjustedSeconds`).
 
 ## Chapters
 
 `PlaybackChapter` is computed, never stored or synced. Sources in order: Audiobookshelf book-wide markers mapped onto track offsets, then markers embedded in each file (`EmbeddedChapterReader`, falling back across title locales including `und`), then one chapter per track. A source counts only with at least two usable markers, so a lone marker is dropped silently, and the first chapter always starts at 0. `ChapterListSheet`, the player's previous/next chapter buttons and CarPlay's chapter list all read this one list.
 
 Chapter navigation steps from pending targets: pause invalidates a queued jump, and periodic time readings never overwrite a pending seek until it lands or times out.
+
+When the current audio file contains sub-track chapters (`AudioPlayerManager.hasSubTrackChapters`), `PlayerView` shows a toggle between track/file scope (default, persisted in `playerScrubberShowsChapter`) and chapter scope (`currentTrackChapterRange`), letting listeners scrub and read elapsed/remaining time within the current chapter.
 
 Progress math in `Audiobook` compares `orderIndex` with the positional index into `sortedTracks`. Merged iCloud records can carry `orderIndex` ties, where the two diverge.
 
@@ -34,11 +37,13 @@ Progress math in `Audiobook` compares `orderIndex` with the positional index int
 - Remote next/previous track commands (AirPods clicks, headphone buttons) map to skip forward/back by the Settings interval, and are disabled when that interval is 0.
 - Artwork falls back to `GeneratedCoverView.renderImage(title:side:)`, cached per title.
 
-## Titles and rename
+## Titles, rename and manual progress management
 
-- Playback surfaces show `AudioTrack.displayTitle`. A single-track book's lone track title is file-metadata noise, so `displayTitle` falls back to `Audiobook.title`; multi-track books keep per-track titles. Chapters built per track take their titles from `displayTitle` too, but `chapters` is a stored snapshot rebuilt only on load, track commit and marker refresh: after a rename, the player's and CarPlay's chapter lists show the old title until the next rebuild.
-- Rename is display-side: `LibraryViewModel.commitRename` writes `Audiobook.title` only, and `AudioTrack.title` rows stay as imported.
+- Playback surfaces show `AudioTrack.displayTitle`. A single-track book's lone track title is file-metadata noise, so `displayTitle` falls back to `Audiobook.title`; multi-track books keep per-track titles. Renaming a book or editing its author (`LibraryViewModel.commitRename` or `AudiobookDetailView`) calls `AudioPlayerManager.refreshMetadataIfCurrent` so the cached chapter list and Now Playing update immediately.
+- Rename is display-side: `AudioTrack.title` rows stay as imported.
 - `MiniPlayerBar` shows the book title and adds a track line only when it differs (`miniSecondaryLine`).
+- **Mark as Finished** (`LibraryViewModel.markFinished` / `AudioPlayerManager.markLoadedBookFinishedManually`) moves position and progress marker to the end of the last track, reports `isFinished: true` for ABS books, and skips `bookFinishedSink` so manual cleanup does not trigger the App Store rating prompt.
+- **Reset Progress** (`LibraryViewModel.resetProgress`) unloads the book if loaded, clears progress, finished state and stored recap, reports `0` (`isFinished: false`) for ABS books, and preserves saved moments.
 
 ## Equalizer
 

@@ -257,3 +257,57 @@ test('chapter sleep stops at a track end, and Play continues with the next file'
   await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
   await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[1-9] of /, { timeout: 10_000 });
 });
+
+test('fine-tuned playback speed persists across relaunch and adjusts remaining time', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openListeningBookPaused(screen);
+  // Multi-file book has one chapter per file, so the chapter scrubber toggle stays hidden.
+  await expect(screen.getByTestId('player.scrubberScope')).toBeHidden();
+
+  await screen.getByTestId('player.speed').tap();
+  await screen.getByRole('button', /Fine-Tune Speed/).tap();
+  await delay(500);
+  await expect(screen.getByTestId('speed.readout')).toHaveText(/^1×$/);
+  await tapVisibleCenter(screen.getByTestId('speed.preset.150'));
+  await tapVisibleCenter(screen.getByTestId('speed.increment'));
+  await expect(screen.getByTestId('speed.readout')).toHaveText(/^1[.,]55×$/);
+  await expect(screen.getByTestId('speed.remaining')).toContainText(/1[.,]55×/);
+  await tapVisibleCenter(screen.getByRole('button', 'Done'));
+
+  await expect(screen.getByTestId('player.speed')).toContainText(/1[.,]55/);
+  await screen.getByRole('button', 'Close player').tap();
+  await expect(screen.getByTestId('book.progressSummary')).toContainText(/left at 1[.,]55×/);
+
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await expect(screen.getByTestId('book.progressSummary')).toContainText(/left at 1[.,]55×/);
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.speed')).toContainText(/1[.,]55/);
+});
+
+test('single-file chaptered book toggles scrubber between full book and current chapter', {
+  timeout: 300_000,
+}, async ({ device, screen }) => {
+  await openChapteredSleepBook(device, screen);
+  // Default scope is the full file (12s); the toggle pill offers chapter-scoped scrubbing.
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:00 of 00:12$/);
+  await expect(screen.getByTestId('player.scrubberScope')).toContainText('Full Book');
+
+  await screen.getByTestId('player.scrubberScope').tap();
+  await expect(screen.getByTestId('player.scrubberScope')).toContainText('Chapter');
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:00 of 00:04$/);
+
+  // Jumping to Chapter 2 keeps chapter-relative bounds (00:00 of 00:05 instead of 00:04 of 00:12).
+  await screen.getByTestId('player.chapters').tap();
+  await screen.getByTestId('chapters.row.1').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[0-2] of 00:05$/);
+
+  // Toggling back returns to file-wide timestamps.
+  await screen.getByTestId('player.scrubberScope').tap();
+  await expect(screen.getByTestId('player.scrubberScope')).toContainText('Full Book');
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[4-6] of 00:12$/);
+});

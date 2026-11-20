@@ -41,6 +41,15 @@ struct AudiobookCardView: View {
                         .padding(.vertical, 6)
                         .background(.ultraThinMaterial, in: Capsule())
                         .padding(10)
+                } else if audiobook.isFinished {
+                    Label("Finished", systemImage: "checkmark")
+                        .font(.caption.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(10)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("book.finished.\(audiobook.folderName)")
                 } else if let last = audiobook.lastPlayedAt {
                     Text(TimeFormatter.relativeDateString(for: last))
                         .font(.caption.weight(.semibold))

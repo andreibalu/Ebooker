@@ -36,6 +36,9 @@ struct PagelessApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: Notification.Name("UnpagedPlayLatestBook"))) { _ in
                     handlePendingIntent()
                 }
+                .onReceive(NotificationCenter.default.publisher(for: SaveMomentAction.notificationName)) { _ in
+                    handlePendingIntent()
+                }
                 .task {
                     _ = await appDelegate.freeBookDownloader.restoreBackgroundSession(
                         modelContext: appDelegate.modelContainer.mainContext
@@ -55,6 +58,22 @@ struct PagelessApp: App {
 
     private func handlePendingIntent() {
         let sharedDefaults = UserDefaults(suiteName: "group.andreibaludev.Pageless")
+
+        if UserDefaults.standard.bool(forKey: SaveMomentAction.intentFlagKey)
+            || sharedDefaults?.bool(forKey: SaveMomentAction.intentFlagKey) == true {
+            let note = UserDefaults.standard.string(forKey: SaveMomentAction.intentNoteKey)
+                ?? sharedDefaults?.string(forKey: SaveMomentAction.intentNoteKey)
+            sharedDefaults?.removeObject(forKey: SaveMomentAction.intentFlagKey)
+            sharedDefaults?.removeObject(forKey: SaveMomentAction.intentNoteKey)
+            UserDefaults.standard.removeObject(forKey: SaveMomentAction.intentFlagKey)
+            UserDefaults.standard.removeObject(forKey: SaveMomentAction.intentNoteKey)
+            SaveMomentAction.saveCurrentMoment(
+                player: appDelegate.audioPlayer,
+                modelContext: appDelegate.modelContainer.mainContext,
+                note: note
+            )
+        }
+
         guard UserDefaults.standard.bool(forKey: "intent.playLatestBook")
             || sharedDefaults?.bool(forKey: "intent.playLatestBook") == true else { return }
         sharedDefaults?.removeObject(forKey: "intent.playLatestBook")

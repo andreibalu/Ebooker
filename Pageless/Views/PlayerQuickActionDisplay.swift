@@ -7,18 +7,26 @@ import Foundation
 
 enum PlayerQuickActionDisplay {
     static func playbackRateTitle(for rate: Double) -> String {
+        "\(formattedRateNumber(rate))x"
+    }
+
+    static func playbackRateSymbolTitle(for rate: Double) -> String {
+        "\(formattedRateNumber(rate))×"
+    }
+
+    private static func formattedRateNumber(_ rate: Double) -> String {
         let rounded = (rate * 100).rounded() / 100
 
         if rounded == rounded.rounded() {
-            return "\(Int(rounded))x"
+            return "\(Int(rounded))"
         }
 
         let oneDecimal = (rounded * 10).rounded() / 10
         if abs(rounded - oneDecimal) < 0.0001 {
-            return String(format: "%.1fx", rounded)
+            return String(format: "%.1f", rounded)
         }
 
-        return String(format: "%.2fx", rounded)
+        return String(format: "%.2f", rounded)
     }
 
     static func sleepTimerTitle(endsAt: Date?, now: Date = Date()) -> String {

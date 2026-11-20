@@ -49,7 +49,15 @@ Add Unpaged’s **Continue Listening** widget from the Home Screen or Lock Scree
 
 ### How do I navigate chapters?
 
-Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata can also come from a saved item detail when the server is unreachable.
+Open the player and tap **Chapters** to jump to a chapter. The previous and next chapter buttons follow chapter markers embedded in supported M4B/M4A/MP3 files, chapter metadata supplied by Audiobookshelf, or individual tracks in a multi-file book. Files without chapter markers use one chapter per track. Audiobookshelf chapter metadata can also come from a saved item detail when the server is unreachable. When a single file contains multiple chapters, tap the **Full Book / Chapter** pill below the scrubber to switch between scrubbing the whole file or just the current chapter.
+
+### Can I fine-tune playback speed or manage book progress?
+
+Open the player's speed menu to pick a preset from **0.8× to 3×**, or choose **Fine-Tune Speed…** to dial any speed from **0.5× to 3×** in **0.05×** steps. Remaining-time readouts in the player and on the book's detail page adjust automatically for the book's speed. To edit a book's title and author, mark a book as finished, or reset its progress (while keeping your saved moments), long-press the book in your library or tap the **⋯** button on its detail screen.
+
+### Can I save a moment hands-free with Siri or the Action Button?
+
+Yes. Unpaged includes a **Save Moment** App Shortcut in the Shortcuts app. You can say *"Save a moment in Unpaged"* to Siri, or assign it to your iPhone's **Action Button** or **Back Tap** to bookmark your current position without opening the app. It uses your **Save Moment Offset** setting and can also accept an optional note from a Shortcut.
 
 ### Can playback stop at the end of a chapter?
 
