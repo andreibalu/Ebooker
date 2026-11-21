@@ -222,10 +222,9 @@ final class LibraryViewModel {
         player: AudioPlayerManager,
         modelContext: ModelContext
     ) throws {
-        if player.currentAudiobook?.id == audiobook.id {
-            player.markLoadedBookFinishedManually()
-            return
-        }
+        // Unload first, as reset does: a book left loaded writes `isFinished = false` back on the
+        // next persist (backgrounding, a periodic tick), and a pending load would do the same.
+        player.unloadIfCurrent(audiobook)
         let tracks = audiobook.sortedTracks
         let lastTrackIndex = max(tracks.count - 1, 0)
         let lastDuration = tracks.last?.duration ?? 0

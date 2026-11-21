@@ -27,6 +27,9 @@ struct PlayerView: View {
     @State private var viewModel = PlayerViewModel()
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
+    /// Chapter range captured when a drag starts. Playback can cross into the next chapter
+    /// mid-drag, and a live range would then clamp the thumb into that chapter.
+    @State private var scrubChapterRange: ClosedRange<Double>?
     @State private var showProgressConfirmation = false
     @State private var showEqualizer = false
     @State private var showChapters = false
@@ -45,7 +48,8 @@ struct PlayerView: View {
     private var presetRates: [Double] { AudioPlayerManager.playerPresetPlaybackRates }
 
     private var activeChapterRange: ClosedRange<Double>? {
-        scrubberShowsChapter ? player.currentTrackChapterRange : nil
+        if isScrubbing { return scrubChapterRange }
+        return scrubberShowsChapter ? player.currentTrackChapterRange : nil
     }
 
     private var scrubberRange: ClosedRange<Double> {
@@ -318,6 +322,7 @@ struct PlayerView: View {
                 displayOffset: chapterOffset,
                 accessibilityScopeLabel: activeChapterRange != nil ? "Chapter playback position" : "Playback position",
                 onEditingChanged: { editing in
+                    if editing { scrubChapterRange = activeChapterRange }
                     isScrubbing = editing
                     if !editing {
                         player.seek(to: scrubValue)
@@ -327,12 +332,15 @@ struct PlayerView: View {
 
             HStack(alignment: .center) {
                 Text(TimeFormatter.clockString(seconds: displayedElapsed))
+                    .lineLimit(1)
                     .contentTransition(.numericText())
                     .accessibilityIdentifier("player.elapsed")
 
                 Spacer(minLength: 8)
 
-                if player.hasSubTrackChapters {
+                // `hasSubTrackChapters` alone is true in a chapter carried over from the previous
+                // file, where no track-local range exists and the toggle would do nothing.
+                if player.currentTrackChapterRange != nil {
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
@@ -341,6 +349,7 @@ struct PlayerView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text(scrubberScopeTitle)
+                                .lineLimit(1)
                             Image(systemName: "arrow.left.arrow.right")
                                 .font(.system(size: 8.5, weight: .semibold))
                         }
@@ -372,11 +381,13 @@ struct PlayerView: View {
                 Spacer(minLength: 8)
 
                 Text("-" + TimeFormatter.clockString(seconds: displayedRemaining))
+                    .lineLimit(1)
                     .contentTransition(.numericText())
                     .accessibilityIdentifier("player.remaining")
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: scrubberShowsChapter)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: player.playbackRate)
         }

@@ -102,14 +102,8 @@ struct SaveMomentIntent: AppIntent {
             return .result(dialog: "No audiobook is playing in Unpaged.")
         }
 
-        let sharedDefaults = UserDefaults(suiteName: "group.andreibaludev.Pageless")
-        UserDefaults.standard.set(true, forKey: SaveMomentAction.intentFlagKey)
-        sharedDefaults?.set(true, forKey: SaveMomentAction.intentFlagKey)
-        if let note, !note.isEmpty {
-            UserDefaults.standard.set(note, forKey: SaveMomentAction.intentNoteKey)
-            sharedDefaults?.set(note, forKey: SaveMomentAction.intentNoteKey)
-        }
-        NotificationCenter.default.post(name: SaveMomentAction.notificationName, object: nil)
-        return .result(dialog: "Saving moment in Unpaged.")
+        // The intent runs in the app process, so the delegate exists. Never queue a save for the
+        // next launch: it would land at whatever position the player has by then.
+        return .result(dialog: "Open Unpaged, then try again.")
     }
 }

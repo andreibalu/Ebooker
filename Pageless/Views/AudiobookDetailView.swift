@@ -224,6 +224,7 @@ struct AudiobookDetailView: View {
                 do {
                     try modelContext.save()
                     player.refreshMetadataIfCurrent(audiobook)
+                    ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
                 } catch {
                     audiobook.title = previousTitle
                     audiobook.author = previousAuthor

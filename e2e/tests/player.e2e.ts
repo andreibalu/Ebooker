@@ -79,7 +79,7 @@ test('renaming a single-track book renames what the player and mini player show'
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
   await screen.getByTestId('libraryTab').tap();
   await screen.getByTestId('book.card.E2E-Another-Book').longPress();
-  await screen.getByRole('button', 'Rename').tap();
+  await screen.getByRole('button', 'Edit Details').tap();
   await screen.getByPlaceholder('Book title').fill('E2E Renamed Single');
   await screen.getByRole('button', 'Save').tap();
   await screen.getByTestId('book.card.E2E-Another-Book').tap();

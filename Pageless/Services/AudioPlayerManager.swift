@@ -728,13 +728,16 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         navigate(toTrack: max(position.trackIndex - 1, 0), time: 0)
     }
 
-    func setPlaybackRate(_ newRate: Double) {
+    /// Pass `persist: false` for live slider drags, then call again with `persist: true` when the
+    /// drag ends, so one gesture makes one SwiftData save and one widget reload.
+    func setPlaybackRate(_ newRate: Double, persist: Bool = true) {
         let rate = Self.normalizedPlaybackRate(newRate)
         playbackRate = rate
-        currentAudiobook?.playbackRate = rate
         if isPlaying {
             player.rate = Float(rate)
         }
+        guard persist else { return }
+        currentAudiobook?.playbackRate = rate
         persistPlayback(force: true)
         updateNowPlayingInfo()
     }
@@ -744,34 +747,6 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard currentAudiobook?.id == audiobook.id else { return }
         rebuildChapters()
         updateNowPlayingInfo()
-    }
-
-    /// Manually marks the loaded book finished without firing the automatic end-of-book rating signal.
-    func markLoadedBookFinishedManually() {
-        guard let audiobook = currentAudiobook else { return }
-        let lastTrackIndex = max(audiobook.sortedTracks.count - 1, 0)
-        if lastTrackIndex == currentTrackIndex {
-            finishCurrentBook(recordRatingSignal: false)
-        } else {
-            let lastTrack = audiobook.sortedTracks.last
-            let lastDuration = lastTrack?.duration ?? 0
-            unloadIfCurrent(audiobook)
-            persistence.markFinished(
-                audiobook: audiobook,
-                trackIndex: lastTrackIndex,
-                duration: lastDuration,
-                context: modelContext
-            )
-            if audiobook.isAudiobookshelfBook,
-               let snapshot = AudiobookshelfLibraryService.progressSnapshot(
-                   for: audiobook,
-                   trackIndex: lastTrackIndex,
-                   timeInTrack: lastDuration,
-                   isFinished: true
-               ) {
-                audiobookshelfProgressSink(snapshot)
-            }
-        }
     }
 
     func setSleepTimer(seconds: Double?) {
@@ -1181,10 +1156,6 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     private func markCurrentBookFinished() {
-        finishCurrentBook(recordRatingSignal: true)
-    }
-
-    private func finishCurrentBook(recordRatingSignal: Bool) {
         guard let audiobook = currentAudiobook else { return }
         setSleepTimer(seconds: nil)
         player.pause()
@@ -1199,9 +1170,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         sessionRecorder.end(context: modelContext)
         currentTime = duration
         reportAudiobookshelfProgress(isFinished: true)
-        if recordRatingSignal {
-            bookFinishedSink()
-        }
+        bookFinishedSink()
         updateNowPlayingInfo()
     }
 

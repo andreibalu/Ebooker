@@ -338,7 +338,7 @@ struct ContentView: View {
                 Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
             }
         }
-        .alert("Rename Audiobook", isPresented: Binding(
+        .alert("Edit Book Details", isPresented: Binding(
             get: { viewModel.renameCandidate != nil },
             set: { if !$0 { viewModel.renameCandidate = nil } }
         )) {
@@ -352,6 +352,7 @@ struct ContentView: View {
                 do {
                     try modelContext.save()
                     if let book { player.refreshMetadataIfCurrent(book) }
+                    ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
                 } catch {
                     if let previousTitle { book?.title = previousTitle }
                     if let previousAuthor { book?.author = previousAuthor }
@@ -861,7 +862,7 @@ struct ContentView: View {
             }
 
             if !audiobook.isFreeBook {
-                Button("Rename", systemImage: "pencil") {
+                Button("Edit Details", systemImage: "pencil") {
                     viewModel.beginRename(audiobook)
                 }
             }

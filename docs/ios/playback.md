@@ -42,7 +42,8 @@ Progress math in `Audiobook` compares `orderIndex` with the positional index int
 - Playback surfaces show `AudioTrack.displayTitle`. A single-track book's lone track title is file-metadata noise, so `displayTitle` falls back to `Audiobook.title`; multi-track books keep per-track titles. Renaming a book or editing its author (`LibraryViewModel.commitRename` or `AudiobookDetailView`) calls `AudioPlayerManager.refreshMetadataIfCurrent` so the cached chapter list and Now Playing update immediately.
 - Rename is display-side: `AudioTrack.title` rows stay as imported.
 - `MiniPlayerBar` shows the book title and adds a track line only when it differs (`miniSecondaryLine`).
-- **Mark as Finished** (`LibraryViewModel.markFinished` / `AudioPlayerManager.markLoadedBookFinishedManually`) moves position and progress marker to the end of the last track, reports `isFinished: true` for ABS books, and skips `bookFinishedSink` so manual cleanup does not trigger the App Store rating prompt.
+- **Mark as Finished** (`LibraryViewModel.markFinished`) unloads the book first, then moves position and progress marker to the end of the last track and reports `isFinished: true` for ABS books. It must unload: `PlaybackPersistence.persist` always writes `isFinished = false`, so a book left loaded loses the flag on the next persist (backgrounding, a periodic tick, a pending load). It skips `bookFinishedSink`, so manual cleanup does not trigger the App Store rating prompt.
+- The fine-tune speed slider applies the rate live with `setPlaybackRate(_:persist: false)` and persists once when the drag ends, so one gesture makes one SwiftData save and one widget reload.
 - **Reset Progress** (`LibraryViewModel.resetProgress`) unloads the book if loaded, clears progress, finished state and stored recap, reports `0` (`isFinished: false`) for ABS books, and preserves saved moments.
 
 ## Equalizer

@@ -11,7 +11,7 @@ struct PlaybackSpeedSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let selectionHaptic = UISelectionFeedbackGenerator()
+    @State private var selectionHaptic = UISelectionFeedbackGenerator()
     private let presets: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0]
 
     var body: some View {
@@ -95,11 +95,14 @@ struct PlaybackSpeedSheet: View {
                             let normalized = AudioPlayerManager.normalizedPlaybackRate(snapped)
                             if abs(normalized - player.playbackRate) >= 0.001 {
                                 selectionHaptic.selectionChanged()
-                                player.setPlaybackRate(normalized)
+                                player.setPlaybackRate(normalized, persist: false)
                             }
                         }
                     ),
-                    in: AudioPlayerManager.minPlaybackRate...AudioPlayerManager.maxPlaybackRate
+                    in: AudioPlayerManager.minPlaybackRate...AudioPlayerManager.maxPlaybackRate,
+                    onEditingChanged: { editing in
+                        if !editing { player.setPlaybackRate(player.playbackRate) }
+                    }
                 )
                 .tint(Color.amber)
                 .accessibilityLabel("Playback speed")
@@ -170,6 +173,8 @@ struct PlaybackSpeedSheet: View {
                 } label: {
                     Text(PlayerQuickActionDisplay.playbackRateSymbolTitle(for: rate))
                         .font(.subheadline.weight(.medium).monospacedDigit())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
                         .background(
