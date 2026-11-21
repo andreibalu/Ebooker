@@ -36,6 +36,11 @@ struct AudiobookDetailView: View {
     @State private var catalogBook: LibriVoxBook?
     @State private var isABSOffline = false
     @State private var cloudAudio = CloudAudioStore.shared
+    @State private var showEditDetails = false
+    @State private var editTitleInput = ""
+    @State private var editAuthorInput = ""
+    @State private var showResetProgressConfirm = false
+    @State private var actionErrorMessage: String?
 
     /// The "Match with iCloud backup" affordance only appears when sync is active, this is a
     /// downloaded own book, and there's at least one cloud-only backup to match against. With sync
@@ -168,6 +173,93 @@ struct AudiobookDetailView: View {
                     .accessibilityLabel("Match with iCloud backup")
                 }
             }
+            if hasBookActions {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if !audiobook.isFreeBook {
+                            Button("Edit Details", systemImage: "pencil") {
+                                editTitleInput = audiobook.title
+                                editAuthorInput = audiobook.author
+                                showEditDetails = true
+                            }
+                        }
+                        if !audiobook.isFinished {
+                            Button("Mark as Finished", systemImage: "checkmark.circle") {
+                                do {
+                                    try LibraryViewModel.markFinished(
+                                        audiobook,
+                                        player: player,
+                                        modelContext: modelContext
+                                    )
+                                } catch {
+                                    actionErrorMessage = error.localizedDescription
+                                }
+                            }
+                        }
+                        if canResetProgress {
+                            Button("Reset Progress", systemImage: "arrow.counterclockwise") {
+                                showResetProgressConfirm = true
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Book options")
+                    .accessibilityIdentifier("book.actions")
+                }
+            }
+        }
+        .alert("Edit Book Details", isPresented: $showEditDetails) {
+            TextField("Book title", text: $editTitleInput)
+            TextField("Author", text: $editAuthorInput)
+            Button("Save") {
+                let previousTitle = audiobook.title
+                let previousAuthor = audiobook.author
+                let trimmedTitle = editTitleInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                let trimmedAuthor = editAuthorInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedTitle.isEmpty {
+                    audiobook.title = trimmedTitle
+                }
+                audiobook.author = trimmedAuthor
+                do {
+                    try modelContext.save()
+                    player.refreshMetadataIfCurrent(audiobook)
+                    ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
+                } catch {
+                    audiobook.title = previousTitle
+                    audiobook.author = previousAuthor
+                    actionErrorMessage = error.localizedDescription
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Reset Progress?",
+            isPresented: $showResetProgressConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Reset Progress", role: .destructive) {
+                do {
+                    try LibraryViewModel.resetProgress(
+                        audiobook,
+                        player: player,
+                        modelContext: modelContext
+                    )
+                } catch {
+                    actionErrorMessage = error.localizedDescription
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Starts ‘\(audiobook.title)’ from the beginning. Your saved moments stay intact.")
+        }
+        .alert("Something Went Wrong", isPresented: Binding(
+            get: { actionErrorMessage != nil },
+            set: { if !$0 { actionErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { actionErrorMessage = nil }
+        } message: {
+            Text(actionErrorMessage ?? "")
         }
         .sheet(isPresented: $showMatchSheet) {
             MatchCloudEntrySheet(localBook: audiobook) {
@@ -319,8 +411,8 @@ struct AudiobookDetailView: View {
                         }
                     } label: {
                         Label(
-                            audiobook.lastPlayedAt == nil ? "Play" : "Continue",
-                            systemImage: "play.fill"
+                            playButtonTitle,
+                            systemImage: audiobook.isFinished ? "arrow.counterclockwise" : "play.fill"
                         )
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 16)
@@ -328,7 +420,7 @@ struct AudiobookDetailView: View {
                         .background(Color.primary, in: Capsule())
                         .foregroundStyle(Color.cream)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(TactileScaleButtonStyle())
                     .accessibilityIdentifier("book.play")
                     .padding(.top, 2)
                 }
@@ -350,6 +442,8 @@ struct AudiobookDetailView: View {
                 Text(progressSummary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .accessibilityIdentifier("book.progressSummary")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -763,9 +857,28 @@ struct AudiobookDetailView: View {
         return "at \(TimeFormatter.clockString(seconds: currentTime))"
     }
 
+    private var canResetProgress: Bool {
+        audiobook.isFinished || audiobook.listenedDuration > 0 || audiobook.hasProgressPosition
+    }
+
+    private var hasBookActions: Bool {
+        !audiobook.isFreeBook || !audiobook.isFinished || canResetProgress
+    }
+
+    private var playButtonTitle: String {
+        if audiobook.isFinished { return "Play Again" }
+        if audiobook.listenedDuration > 0 || audiobook.hasProgressPosition { return "Continue" }
+        return "Play"
+    }
+
     private var progressSummary: String {
         if audiobook.isFinished { return "Finished" }
         let pct = TimeFormatter.percentValue(audiobook.progress)
+        if abs(audiobook.playbackRate - 1.0) > 0.001 {
+            let remaining = TimeFormatter.durationSummary(seconds: audiobook.adjustedRemainingDuration)
+            let rate = PlayerQuickActionDisplay.playbackRateSymbolTitle(for: audiobook.playbackRate)
+            return "\(pct)% · \(remaining) left at \(rate)"
+        }
         let remaining = TimeFormatter.durationSummary(seconds: audiobook.remainingDuration)
         return "\(pct)% · \(remaining) remaining"
     }

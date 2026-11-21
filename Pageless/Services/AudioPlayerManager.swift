@@ -93,8 +93,19 @@ struct PendingPlaybackTarget: Equatable {
 
 @MainActor
 final class AudioPlayerManager: NSObject, ObservableObject {
-    /// Shared with `PlayerView` and CarPlay playback-rate controls.
+    /// Shared with CarPlay cycle controls and Now Playing remote rate command.
     static let supportedPlaybackRates: [Double] = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0]
+    /// Presets shown in the phone player's speed menu.
+    static let playerPresetPlaybackRates: [Double] = [0.8, 1.0, 1.1, 1.2, 1.25, 1.3, 1.5, 1.75, 2.0, 2.5, 3.0]
+    static let minPlaybackRate: Double = 0.5
+    static let maxPlaybackRate: Double = 3.0
+    static let playbackRateStep: Double = 0.05
+
+    static func normalizedPlaybackRate(_ rate: Double) -> Double {
+        let safe = rate.isFinite ? rate : 1.0
+        let rounded = (safe * 100).rounded() / 100
+        return min(max(rounded, minPlaybackRate), maxPlaybackRate)
+    }
     @Published private(set) var currentAudiobook: Audiobook?
     @Published private(set) var currentTrack: AudioTrack?
     @Published private(set) var currentTrackIndex = 0
@@ -504,6 +515,41 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         currentChapterIndex.flatMap { chapters.indices.contains($0) ? chapters[$0] : nil }
     }
 
+    /// True when the current audio file is subdivided into chapters (single-file M4B or
+    /// Audiobookshelf chapters), so chapter-scoped scrubbing covers a narrower range than the file.
+    var hasSubTrackChapters: Bool {
+        guard chapters.count > 1 else { return false }
+        let trackIdx = navigationPosition.trackIndex
+        if chapters.filter({ $0.trackIndex == trackIdx }).count > 1 { return true }
+        guard let chapter = currentChapter, chapter.trackIndex == trackIdx else { return false }
+        return chapter.start > 0.5 || (duration > 1 && chapter.duration < duration - 0.5)
+    }
+
+    /// Track-local time range for the current chapter when `hasSubTrackChapters` is true.
+    var currentTrackChapterRange: ClosedRange<Double>? {
+        guard hasSubTrackChapters,
+              let chapter = currentChapter,
+              chapter.trackIndex == navigationPosition.trackIndex else { return nil }
+        let trackEnd = max(duration, 1)
+        let start = min(max(chapter.start, 0), max(trackEnd - 1, 0))
+        let rawEnd = chapter.duration > 0 ? chapter.start + chapter.duration : trackEnd
+        let end = min(max(rawEnd, start + 1), trackEnd)
+        guard end > start else { return nil }
+        return start...end
+    }
+
+    /// Remaining audio seconds across the loaded book from the live playhead (unadjusted for rate).
+    var currentBookRemainingDuration: Double {
+        guard let book = currentAudiobook else { return 0 }
+        let tracks = book.sortedTracks
+        let pos = navigationPosition
+        let remainingInTrack = max(duration - pos.time, 0)
+        let laterTracks = tracks.enumerated()
+            .filter { $0.offset > pos.trackIndex }
+            .reduce(0.0) { $0 + $1.element.duration }
+        return max(remainingInTrack + laterTracks, 0)
+    }
+
     var canGoToNextChapter: Bool {
         guard let index = currentChapterIndex else { return false }
         return index + 1 < chapters.count
@@ -682,13 +728,24 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         navigate(toTrack: max(position.trackIndex - 1, 0), time: 0)
     }
 
-    func setPlaybackRate(_ newRate: Double) {
-        playbackRate = newRate
-        currentAudiobook?.playbackRate = newRate
+    /// Pass `persist: false` for live slider drags, then call again with `persist: true` when the
+    /// drag ends, so one gesture makes one SwiftData save and one widget reload.
+    func setPlaybackRate(_ newRate: Double, persist: Bool = true) {
+        let rate = Self.normalizedPlaybackRate(newRate)
+        playbackRate = rate
         if isPlaying {
-            player.rate = Float(newRate)
+            player.rate = Float(rate)
         }
+        guard persist else { return }
+        currentAudiobook?.playbackRate = rate
         persistPlayback(force: true)
+        updateNowPlayingInfo()
+    }
+
+    /// Rebuilds the cached chapter list and updates Now Playing after a book's title or author changes.
+    func refreshMetadataIfCurrent(_ audiobook: Audiobook) {
+        guard currentAudiobook?.id == audiobook.id else { return }
+        rebuildChapters()
         updateNowPlayingInfo()
     }
 
@@ -731,7 +788,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             trackIndex: position.trackIndex, timeInTrack: position.time,
             trackDurations: book.sortedTracks.map(\.duration)
         )
-        return max(0, end - globalTime)
+        return TimeFormatter.speedAdjustedSeconds(max(0, end - globalTime), rate: playbackRate)
     }
 
     private func refreshChapterSleepBoundary() {

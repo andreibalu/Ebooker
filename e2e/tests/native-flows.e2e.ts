@@ -27,7 +27,7 @@ test('library favorite mutation survives a native process relaunch', async ({ de
 test('library rename survives relaunch and keeps chapter titles', async ({ device, screen }) => {
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
   await screen.getByTestId('book.card.E2E-Listening-Book').longPress();
-  await screen.getByRole('button', 'Rename').tap();
+  await screen.getByRole('button', 'Edit Details').tap();
   await screen.getByPlaceholder('Book title').fill('E2E Renamed Book');
   await screen.getByRole('button', 'Save').tap();
   await expect(screen.getByText('E2E Renamed Book').first()).toBeVisible();

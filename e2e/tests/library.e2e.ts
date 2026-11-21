@@ -139,3 +139,57 @@ test('the Play Latest Book shortcut plays the most recently played book when the
   // The app consumes the flag, so the next launch does not start playback again.
   expect(appDefaultExists('intent.playLatestBook')).toBe(false);
 });
+
+test('editing title and author, marking finished, and resetting progress preserve saved moments', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.getByTestId('book.actions').tap();
+  await screen.getByRole('button', 'Edit Details').tap();
+  await screen.getByPlaceholder('Book title').fill('E2E Edited Title');
+  await screen.getByPlaceholder('Author').fill('E2E Edited Author');
+  await tapVisibleCenter(screen.getByRole('button', 'Save').last());
+  await expect(screen.getByText('E2E Edited Title').first()).toBeVisible();
+  await expect(screen.getByText('E2E Edited Author').first()).toBeVisible();
+
+  await screen.getByTestId('book.actions').tap();
+  await screen.getByRole('button', 'Mark as Finished').tap();
+  await expect(screen.getByTestId('book.progressSummary')).toHaveText('Finished');
+  await expect(screen.getByTestId('book.play')).toContainText('Play Again');
+
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await expect(screen.getByText('E2E Edited Title').first()).toBeVisible();
+  await expect(screen.getByText('E2E Edited Author').first()).toBeVisible();
+  await expect(screen.getByTestId('book.finished.E2E-Listening-Book')).toBeVisible();
+
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.getByTestId('book.actions').tap();
+  await screen.getByRole('button', 'Reset Progress').tap();
+  await screen.getByRole('button', 'Reset Progress').last().tap();
+  await expect(screen.getByTestId('book.progressSummary')).toContainText(/^0% · .* remaining$/);
+  await expect(screen.getByTestId('book.play')).toContainText('Play');
+  // Saved moments remain intact after resetting progress.
+  await expect(screen.getByText('2 moments').first()).toBeVisible();
+});
+
+test('the Save Moment shortcut saves a moment at the current position and consumes the flag', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await screen.getByLabel('Skip forward').first().tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:3\d of 05:00$/);
+
+  await device.home();
+  writeAppBool('intent.saveMoment', true);
+  await device.openApp(bundle, { launchArguments: fixture });
+  await expect(screen.getByTestId('player.saveMoment')).toBeVisible({ timeout: 15_000 });
+  expect(appDefaultExists('intent.saveMoment')).toBe(false);
+
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await expect(screen.getByText('3 moments').first()).toBeVisible();
+  await screen.getByText('3 moments').first().tap();
+  await screen.scrollUntilVisible(screen.getByText(/^E2E Chapter 1 at 00:3\d$/).first());
+  await expect(screen.getByText(/^E2E Chapter 1 at 00:3\d$/).first()).toBeVisible();
+});

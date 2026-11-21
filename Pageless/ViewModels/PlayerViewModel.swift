@@ -308,17 +308,21 @@ final class PlayerViewModel {
         pendingMood = nil
         pendingSmartSaveNotice = nil
 
-        withAnimation(.spring(duration: 0.2)) { momentSaved = true }
+        flashMomentSavedConfirmation()
+    }
+
+    func flashMomentSavedConfirmation() {
+        withAnimation(.easeOut(duration: 0.18)) { momentSaved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.spring(duration: 0.3)) { self.momentSaved = false }
+            withAnimation(.easeOut(duration: 0.22)) { self.momentSaved = false }
         }
     }
 
     func markProgress(player: AudioPlayerManager) {
         player.setProgressMarker()
-        withAnimation(.spring(duration: 0.2)) { progressMarked = true }
+        withAnimation(.easeOut(duration: 0.18)) { progressMarked = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            withAnimation(.spring(duration: 0.3)) { self.progressMarked = false }
+            withAnimation(.easeOut(duration: 0.22)) { self.progressMarked = false }
         }
     }
 

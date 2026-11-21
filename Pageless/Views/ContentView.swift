@@ -338,24 +338,54 @@ struct ContentView: View {
                 Text("Choose whether to remove this audiobook from Unpaged only, or also delete its imported audio files from local storage.")
             }
         }
-        .alert("Rename Audiobook", isPresented: Binding(
+        .alert("Edit Book Details", isPresented: Binding(
             get: { viewModel.renameCandidate != nil },
             set: { if !$0 { viewModel.renameCandidate = nil } }
         )) {
             TextField("Book title", text: $viewModel.renameTitleInput)
+            TextField("Author", text: $viewModel.renameAuthorInput)
             Button("Save") {
                 let book = viewModel.renameCandidate
                 let previousTitle = book?.title
+                let previousAuthor = book?.author
                 viewModel.commitRename()
-                do { try modelContext.save() }
-                catch {
+                do {
+                    try modelContext.save()
+                    if let book { player.refreshMetadataIfCurrent(book) }
+                    ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
+                } catch {
                     if let previousTitle { book?.title = previousTitle }
+                    if let previousAuthor { book?.author = previousAuthor }
                     viewModel.presentAlert(title: "Could Not Rename Audiobook", message: error.localizedDescription)
                 }
             }
             Button("Cancel", role: .cancel) {
                 viewModel.renameCandidate = nil
             }
+        }
+        .confirmationDialog(
+            "Reset Progress?",
+            isPresented: Binding(
+                get: { viewModel.resetProgressCandidate != nil },
+                set: { if !$0 { viewModel.resetProgressCandidate = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Reset Progress", role: .destructive) {
+                if let book = viewModel.resetProgressCandidate {
+                    do {
+                        try LibraryViewModel.resetProgress(book, player: player, modelContext: modelContext)
+                    } catch {
+                        viewModel.presentAlert(title: "Could Not Reset Progress", message: error.localizedDescription)
+                    }
+                }
+                viewModel.resetProgressCandidate = nil
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.resetProgressCandidate = nil
+            }
+        } message: {
+            Text("Starts ‘\(viewModel.resetProgressCandidate?.title ?? "")’ from the beginning. Your saved moments stay intact.")
         }
         .alert(viewModel.alertTitle, isPresented: $viewModel.isShowingAlert) {
             Button("OK", role: .cancel) {}
@@ -832,8 +862,24 @@ struct ContentView: View {
             }
 
             if !audiobook.isFreeBook {
-                Button("Rename", systemImage: "pencil") {
+                Button("Edit Details", systemImage: "pencil") {
                     viewModel.beginRename(audiobook)
+                }
+            }
+
+            if !audiobook.isFinished {
+                Button("Mark as Finished", systemImage: "checkmark.circle") {
+                    do {
+                        try LibraryViewModel.markFinished(audiobook, player: player, modelContext: modelContext)
+                    } catch {
+                        viewModel.presentAlert(title: "Could Not Mark Finished", message: error.localizedDescription)
+                    }
+                }
+            }
+
+            if audiobook.isFinished || audiobook.listenedDuration > 0 || audiobook.hasProgressPosition {
+                Button("Reset Progress", systemImage: "arrow.counterclockwise") {
+                    viewModel.resetProgressCandidate = audiobook
                 }
             }
 

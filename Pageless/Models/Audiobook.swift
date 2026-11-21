@@ -313,6 +313,11 @@ final class Audiobook: Identifiable {
         max(totalDuration - listenedDuration, 0)
     }
 
+    /// Wall-clock listening time remaining at the book's saved playback speed.
+    var adjustedRemainingDuration: Double {
+        TimeFormatter.speedAdjustedSeconds(remainingDuration, rate: playbackRate)
+    }
+
     var currentTrackTitle: String {
         guard sortedTracks.indices.contains(currentTrackIndex) else { return "Ready to play" }
         return sortedTracks[currentTrackIndex].title

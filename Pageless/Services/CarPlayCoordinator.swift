@@ -196,11 +196,12 @@ final class CarPlayCoordinator: NSObject {
 
     private func cyclePlaybackRateForCarPlay() {
         let rates = AudioPlayerManager.supportedPlaybackRates
-        guard let currentIndex = rates.firstIndex(of: audioPlayer.playbackRate) else {
-            audioPlayer.setPlaybackRate(rates.first ?? 1)
-            return
+        let next: Double
+        if let currentIndex = rates.firstIndex(of: audioPlayer.playbackRate) {
+            next = rates[(currentIndex + 1) % rates.count]
+        } else {
+            next = rates.first(where: { $0 > audioPlayer.playbackRate }) ?? rates.first ?? 1
         }
-        let next = rates[(currentIndex + 1) % rates.count]
         audioPlayer.setPlaybackRate(next)
         nowPlayingTemplate.updateNowPlayingButtons(makeNowPlayingButtons())
     }

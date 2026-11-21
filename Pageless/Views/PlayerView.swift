@@ -12,6 +12,7 @@ struct PlayerView: View {
     var onDragEnded: ((CGFloat, CGFloat) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var player: AudioPlayerManager
     @EnvironmentObject private var plusEntitlement: PlusEntitlementStore
     @EnvironmentObject private var equalizer: AudioEqualizerService
@@ -21,13 +22,18 @@ struct PlayerView: View {
     @AppStorage("momentBacktrackSeconds") private var momentBacktrackSeconds = MomentBacktrackOption.exact.rawValue
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
     @AppStorage("useSmartMomentNaming") private var useSmartMomentNaming = false
+    @AppStorage("playerScrubberShowsChapter") private var scrubberShowsChapter = false
 
     @State private var viewModel = PlayerViewModel()
     @State private var scrubValue: Double = 0
     @State private var isScrubbing = false
+    /// Chapter range captured when a drag starts. Playback can cross into the next chapter
+    /// mid-drag, and a live range would then clamp the thumb into that chapter.
+    @State private var scrubChapterRange: ClosedRange<Double>?
     @State private var showProgressConfirmation = false
     @State private var showEqualizer = false
     @State private var showChapters = false
+    @State private var showPlaybackSpeed = false
 
     private var useSmartSave: Bool {
         #if DEBUG
@@ -39,7 +45,27 @@ struct PlayerView: View {
             && AppleIntelligenceCapability.isSmartNamingAvailable
     }
 
-    private var supportedRates: [Double] { AudioPlayerManager.supportedPlaybackRates }
+    private var presetRates: [Double] { AudioPlayerManager.playerPresetPlaybackRates }
+
+    private var activeChapterRange: ClosedRange<Double>? {
+        if isScrubbing { return scrubChapterRange }
+        return scrubberShowsChapter ? player.currentTrackChapterRange : nil
+    }
+
+    private var scrubberRange: ClosedRange<Double> {
+        if let chapterRange = activeChapterRange {
+            return chapterRange
+        }
+        return 0...max(player.duration, 1)
+    }
+
+    private var scrubberScopeTitle: String {
+        if activeChapterRange != nil {
+            return "Chapter"
+        }
+        let isSingleTrack = (player.currentAudiobook?.sortedTracks.count ?? 1) <= 1
+        return isSingleTrack ? "Full Book" : "File"
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -68,6 +94,12 @@ struct PlayerView: View {
         }
         .sheet(isPresented: $showChapters) {
             ChapterListSheet()
+        }
+        .sheet(isPresented: $showPlaybackSpeed) {
+            PlaybackSpeedSheet()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: SaveMomentAction.savedNotificationName)) { _ in
+            viewModel.flashMomentSavedConfirmation()
         }
         .sheet(isPresented: Binding(
             get: { viewModel.pendingMomentTime != nil },
@@ -276,11 +308,21 @@ struct PlayerView: View {
     // MARK: - Progress
 
     private var progressSection: some View {
-        VStack(spacing: 4) {
+        let range = scrubberRange
+        let chapterOffset = activeChapterRange?.lowerBound ?? 0
+        let clampedScrub = min(max(scrubValue, range.lowerBound), range.upperBound)
+        let displayedElapsed = max(clampedScrub - chapterOffset, 0)
+        let rawRemaining = max(range.upperBound - clampedScrub, 0)
+        let displayedRemaining = TimeFormatter.speedAdjustedSeconds(rawRemaining, rate: player.playbackRate)
+
+        return VStack(spacing: 4) {
             ScrubSlider(
                 value: $scrubValue,
-                range: 0...max(player.duration, 1),
+                range: range,
+                displayOffset: chapterOffset,
+                accessibilityScopeLabel: activeChapterRange != nil ? "Chapter playback position" : "Playback position",
                 onEditingChanged: { editing in
+                    if editing { scrubChapterRange = activeChapterRange }
                     isScrubbing = editing
                     if !editing {
                         player.seek(to: scrubValue)
@@ -288,13 +330,66 @@ struct PlayerView: View {
                 }
             )
 
-            HStack {
-                Text(TimeFormatter.clockString(seconds: scrubValue))
-                Spacer()
-                Text("-" + TimeFormatter.clockString(seconds: max(player.duration - scrubValue, 0)))
+            HStack(alignment: .center) {
+                Text(TimeFormatter.clockString(seconds: displayedElapsed))
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+                    .accessibilityIdentifier("player.elapsed")
+
+                Spacer(minLength: 8)
+
+                // `hasSubTrackChapters` alone is true in a chapter carried over from the previous
+                // file, where no track-local range exists and the toggle would do nothing.
+                if player.currentTrackChapterRange != nil {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+                            scrubberShowsChapter.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(scrubberScopeTitle)
+                                .lineLimit(1)
+                            Image(systemName: "arrow.left.arrow.right")
+                                .font(.system(size: 8.5, weight: .semibold))
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(activeChapterRange != nil ? Color.amber : Color.secondary)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(
+                            activeChapterRange != nil
+                                ? Color.amber.opacity(0.14)
+                                : Color.primary.opacity(0.06),
+                            in: Capsule()
+                        )
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(
+                                    activeChapterRange != nil ? Color.amber.opacity(0.24) : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
+                    }
+                    .buttonStyle(TactileScaleButtonStyle())
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+                    .accessibilityLabel("Scrubber range: \(scrubberScopeTitle)")
+                    .accessibilityHint("Switches scrubber between current chapter and full file")
+                    .accessibilityIdentifier("player.scrubberScope")
+                }
+
+                Spacer(minLength: 8)
+
+                Text("-" + TimeFormatter.clockString(seconds: displayedRemaining))
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+                    .accessibilityIdentifier("player.remaining")
             }
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: scrubberShowsChapter)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: player.playbackRate)
         }
     }
 
@@ -370,7 +465,7 @@ struct PlayerView: View {
             .disabled(!player.canGoToNextChapter)
             .opacity(player.canGoToNextChapter ? 1 : 0.3)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TactileScaleButtonStyle(pressedScale: 0.93))
     }
 
     // MARK: - Quick Actions
@@ -388,6 +483,7 @@ struct PlayerView: View {
                     filled: viewModel.progressMarked
                 )
             }
+            .buttonStyle(TactileScaleButtonStyle())
             .accessibilityIdentifier("player.markProgress")
             .disabled(player.currentAudiobook == nil)
             .confirmationDialog(
@@ -421,22 +517,43 @@ struct PlayerView: View {
                     )
                 }
             }
+            .buttonStyle(TactileScaleButtonStyle())
             .accessibilityIdentifier("player.saveMoment")
             .disabled(player.currentAudiobook == nil || viewModel.isProcessingSmartSave)
         }
     }
 
     private var segmentedQuickActionsRow: some View {
-        HStack(spacing: 0) {
+        let isPresetRate = presetRates.contains { abs($0 - player.playbackRate) < 0.005 }
+        return HStack(spacing: 0) {
             Menu {
-                ForEach(supportedRates, id: \.self) { rate in
+                Button {
+                    DispatchQueue.main.async {
+                        showPlaybackSpeed = true
+                    }
+                } label: {
+                    if isPresetRate {
+                        Label("Fine-Tune Speed…", systemImage: "slider.horizontal.2.square")
+                    } else {
+                        Label(
+                            "Fine-Tune (\(PlayerQuickActionDisplay.playbackRateSymbolTitle(for: player.playbackRate)))…",
+                            systemImage: "checkmark"
+                        )
+                    }
+                }
+                .accessibilityIdentifier("player.speed.custom")
+
+                Divider()
+
+                ForEach(presetRates, id: \.self) { rate in
                     Button {
                         player.setPlaybackRate(rate)
                     } label: {
-                        if rate == player.playbackRate {
-                            Label("\(rate.formatted(.number.precision(.fractionLength(0...2))))×", systemImage: "checkmark")
+                        let label = "\(rate.formatted(.number.precision(.fractionLength(0...2))))×"
+                        if abs(rate - player.playbackRate) < 0.005 {
+                            Label(label, systemImage: "checkmark")
                         } else {
-                            Text("\(rate.formatted(.number.precision(.fractionLength(0...2))))×")
+                            Text(label)
                         }
                     }
                 }
@@ -444,7 +561,7 @@ struct PlayerView: View {
                 compactQuickActionSegment(
                     icon: "speedometer",
                     text: playbackRateLabel,
-                    filled: false,
+                    filled: abs(player.playbackRate - 1.0) >= 0.005,
                     expands: true
                 )
             }
@@ -463,6 +580,7 @@ struct PlayerView: View {
                     expands: true
                 )
             }
+            .buttonStyle(TactileScaleButtonStyle())
             .disabled(player.currentAudiobook == nil)
             .accessibilityIdentifier("player.equalizer")
             .frame(width: 74)
@@ -480,18 +598,28 @@ struct PlayerView: View {
                     .accessibilityIdentifier(option == .endOfChapter ? "player.sleep.endOfChapter" : "player.sleep.\(Int(option.rawValue))")
                 }
             } label: {
-                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                if player.sleepAtChapterEnd || player.sleepTimerEndsAt != nil {
+                    TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                        compactQuickActionSegment(
+                            icon: "moon.zzz.fill",
+                            text: player.sleepAtChapterEnd
+                                ? "End of chapter\n\(TimeFormatter.clockString(seconds: player.chapterSleepRemaining))"
+                                : PlayerQuickActionDisplay.sleepTimerTitle(
+                                    endsAt: player.sleepTimerEndsAt,
+                                    now: timeline.date
+                                ),
+                            filled: true,
+                            expands: true,
+                            accented: true
+                        )
+                    }
+                } else {
                     compactQuickActionSegment(
                         icon: "moon.zzz.fill",
-                        text: player.sleepAtChapterEnd
-                            ? "End of chapter\n\(TimeFormatter.clockString(seconds: player.chapterSleepRemaining))"
-                            : PlayerQuickActionDisplay.sleepTimerTitle(
-                                endsAt: player.sleepTimerEndsAt,
-                                now: timeline.date
-                            ),
-                        filled: player.sleepAtChapterEnd || player.sleepTimerEndsAt != nil,
+                        text: "Sleep Timer",
+                        filled: false,
                         expands: true,
-                        accented: player.sleepAtChapterEnd || player.sleepTimerEndsAt != nil
+                        accented: false
                     )
                 }
             }
@@ -654,6 +782,8 @@ struct PlayerView: View {
 private struct ScrubSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
+    var displayOffset: Double = 0
+    var accessibilityScopeLabel: String = "Playback position"
     let onEditingChanged: (Bool) -> Void
 
     @State private var isDragging = false
@@ -735,7 +865,7 @@ private struct ScrubSlider: View {
             // The drag gesture is invisible to VoiceOver; expose the scrubber as one adjustable
             // element so swipe up/down seeks in fixed steps through the same commit path.
             .accessibilityElement()
-            .accessibilityLabel("Playback position")
+            .accessibilityLabel(accessibilityScopeLabel)
             .accessibilityValue(accessibilityPosition)
             .accessibilityAdjustableAction { direction in
                 switch direction {
@@ -751,7 +881,10 @@ private struct ScrubSlider: View {
     private let accessibilityStep: Double = 15
 
     private var accessibilityPosition: String {
-        "\(TimeFormatter.clockString(seconds: value)) of \(TimeFormatter.clockString(seconds: range.upperBound))"
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        let elapsed = max(clamped - displayOffset, 0)
+        let total = max(range.upperBound - displayOffset, 0)
+        return "\(TimeFormatter.clockString(seconds: elapsed)) of \(TimeFormatter.clockString(seconds: total))"
     }
 
     private func adjust(by delta: Double) {

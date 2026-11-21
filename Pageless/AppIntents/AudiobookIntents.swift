@@ -18,5 +18,15 @@ struct UnpagedAppShortcuts: AppShortcutsProvider {
             shortTitle: "Play Latest Book",
             systemImageName: "headphones"
         )
+        AppShortcut(
+            intent: SaveMomentIntent(),
+            phrases: [
+                "Save a moment in \(.applicationName)",
+                "Save moment in \(.applicationName)",
+                "Bookmark this moment in \(.applicationName)",
+            ],
+            shortTitle: "Save Moment",
+            systemImageName: "bookmark.fill"
+        )
     }
 }

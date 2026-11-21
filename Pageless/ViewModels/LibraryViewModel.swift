@@ -25,11 +25,13 @@ final class LibraryViewModel {
     /// "Restore" vs "Add as new" before committing.
     var restoreMatch: RestoreMatchCandidate?
 
-    // MARK: - Delete / rename
+    // MARK: - Delete / rename / progress
 
     var deleteCandidate: Audiobook?
     var renameCandidate: Audiobook?
     var renameTitleInput: String = ""
+    var renameAuthorInput: String = ""
+    var resetProgressCandidate: Audiobook?
 
     // MARK: - Alert state
 
@@ -197,19 +199,83 @@ final class LibraryViewModel {
         }
     }
 
-    // MARK: - Rename
+    // MARK: - Rename & Progress
 
     func beginRename(_ audiobook: Audiobook) {
         renameTitleInput = audiobook.title
+        renameAuthorInput = audiobook.author
         renameCandidate = audiobook
     }
 
     func commitRename() {
-        let trimmed = renameTitleInput.trimmingCharacters(in: .whitespaces)
-        if !trimmed.isEmpty {
-            renameCandidate?.title = trimmed
+        let trimmedTitle = renameTitleInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedTitle.isEmpty {
+            renameCandidate?.title = trimmedTitle
         }
+        let trimmedAuthor = renameAuthorInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        renameCandidate?.author = trimmedAuthor
         renameCandidate = nil
+    }
+
+    static func markFinished(
+        _ audiobook: Audiobook,
+        player: AudioPlayerManager,
+        modelContext: ModelContext
+    ) throws {
+        // Unload first, as reset does: a book left loaded writes `isFinished = false` back on the
+        // next persist (backgrounding, a periodic tick), and a pending load would do the same.
+        player.unloadIfCurrent(audiobook)
+        let tracks = audiobook.sortedTracks
+        let lastTrackIndex = max(tracks.count - 1, 0)
+        let lastDuration = tracks.last?.duration ?? 0
+        audiobook.clearProgressRecap()
+        audiobook.isFinished = true
+        audiobook.currentTrackIndex = lastTrackIndex
+        audiobook.currentTime = lastDuration
+        audiobook.progressTrackIndex = lastTrackIndex
+        audiobook.progressTime = lastDuration
+        audiobook.progressUpdatedAt = .now
+        if audiobook.isAudiobookshelfBook {
+            audiobook.absProgressWrittenAt = .now
+            if let snapshot = AudiobookshelfLibraryService.progressSnapshot(
+                for: audiobook,
+                trackIndex: lastTrackIndex,
+                timeInTrack: lastDuration,
+                isFinished: true
+            ) {
+                ABSProgressReporter.report(snapshot)
+            }
+        }
+        try modelContext.save()
+        ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
+    }
+
+    static func resetProgress(
+        _ audiobook: Audiobook,
+        player: AudioPlayerManager,
+        modelContext: ModelContext
+    ) throws {
+        player.unloadIfCurrent(audiobook)
+        audiobook.clearProgressRecap()
+        audiobook.isFinished = false
+        audiobook.currentTrackIndex = 0
+        audiobook.currentTime = 0
+        audiobook.progressTrackIndex = nil
+        audiobook.progressTime = nil
+        audiobook.progressUpdatedAt = nil
+        if audiobook.isAudiobookshelfBook {
+            audiobook.absProgressWrittenAt = .now
+            if let snapshot = AudiobookshelfLibraryService.progressSnapshot(
+                for: audiobook,
+                trackIndex: 0,
+                timeInTrack: 0,
+                isFinished: false
+            ) {
+                ABSProgressReporter.report(snapshot)
+            }
+        }
+        try modelContext.save()
+        ContinueListeningSnapshotWriter.shared.refresh(context: modelContext)
     }
 
     // MARK: - Sorting

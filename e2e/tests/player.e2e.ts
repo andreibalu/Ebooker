@@ -79,7 +79,7 @@ test('renaming a single-track book renames what the player and mini player show'
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
   await screen.getByTestId('libraryTab').tap();
   await screen.getByTestId('book.card.E2E-Another-Book').longPress();
-  await screen.getByRole('button', 'Rename').tap();
+  await screen.getByRole('button', 'Edit Details').tap();
   await screen.getByPlaceholder('Book title').fill('E2E Renamed Single');
   await screen.getByRole('button', 'Save').tap();
   await screen.getByTestId('book.card.E2E-Another-Book').tap();
@@ -256,4 +256,72 @@ test('chapter sleep stops at a track end, and Play continues with the next file'
   await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 2', { timeout: 10_000 });
   await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
   await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[1-9] of /, { timeout: 10_000 });
+});
+
+/**
+ * The speed sheet's controls sit in a plain stack under the sheet's full-height Toolbar node, so
+ * the runner's hit test reports them covered and can fall into a slow per-element scan that trips
+ * its watchdog. The sheet draws nothing over them; press at the control's current bounds instead.
+ * Known flaky on iOS 27.0 (passes about 3 runs in 5): the scan can still overrun on the first read.
+ */
+async function pressSpeedControl(target: ReturnType<Screen['getByTestId']>) {
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  if (!box || box.width <= 0 || box.height <= 0) throw new Error('Speed control has no actionable bounds');
+  await createAgentDeviceClient({ session: NATIVE_WORKER_SESSION })
+    .interactions.press({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+}
+
+test('fine-tuned playback speed persists across relaunch and adjusts remaining time', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openListeningBookPaused(screen);
+  // Multi-file book has one chapter per file, so the chapter scrubber toggle stays hidden.
+  await expect(screen.getByTestId('player.scrubberScope')).toBeHidden();
+
+  await screen.getByTestId('player.speed').tap();
+  await screen.getByRole('button', /Fine-Tune Speed/).tap();
+  await delay(500);
+  await expect(screen.getByTestId('speed.readout')).toHaveText(/^1×$/);
+  await pressSpeedControl(screen.getByTestId('speed.preset.150'));
+  await pressSpeedControl(screen.getByTestId('speed.increment'));
+  await expect(screen.getByTestId('speed.readout')).toHaveText(/^1[.,]55×$/);
+  await expect(screen.getByTestId('speed.remaining')).toContainText(/1[.,]55×/);
+  await pressSpeedControl(screen.getByRole('button', 'Done'));
+
+  await expect(screen.getByTestId('player.speed')).toContainText(/1[.,]55/);
+  await screen.getByRole('button', 'Close player').tap();
+  await expect(screen.getByTestId('book.progressSummary')).toContainText(/left at 1[.,]55×/);
+
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await expect(screen.getByTestId('book.progressSummary')).toContainText(/left at 1[.,]55×/);
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.speed')).toContainText(/1[.,]55/);
+});
+
+test('single-file chaptered book toggles scrubber between full book and current chapter', {
+  timeout: 300_000,
+}, async ({ device, screen }) => {
+  await openChapteredSleepBook(device, screen);
+  // Default scope is the full file (12s); the toggle pill offers chapter-scoped scrubbing.
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:00 of 00:12$/);
+  await expect(screen.getByTestId('player.scrubberScope')).toContainText('Full Book');
+
+  await screen.getByTestId('player.scrubberScope').tap();
+  await expect(screen.getByTestId('player.scrubberScope')).toContainText('Chapter');
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:00 of 00:04$/);
+
+  // Jumping to Chapter 2 keeps chapter-relative bounds (00:00 of 00:05 instead of 00:04 of 00:12).
+  await screen.getByTestId('player.chapters').tap();
+  await screen.getByTestId('chapters.row.1').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[0-2] of 00:05$/);
+
+  // Toggling back returns to file-wide timestamps.
+  await screen.getByTestId('player.scrubberScope').tap();
+  await expect(screen.getByTestId('player.scrubberScope')).toContainText('Full Book');
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[4-6] of 00:12$/);
 });

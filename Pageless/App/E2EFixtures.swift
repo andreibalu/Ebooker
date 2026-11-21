@@ -130,6 +130,8 @@ enum E2EFixtures {
             for key in RatingPromptStore.allKeys { UserDefaults.standard.removeObject(forKey: key) }
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
+                        "playerScrubberShowsChapter",
+                        SaveMomentAction.intentFlagKey, SaveMomentAction.intentNoteKey,
                         "absSelectedLibraryID", "abs.progressOutbox",
                         IcloudSyncGate.preferenceKey, CloudAudioStore.preferenceKey,
                         CloudAudioStore.pendingUploadsKey, CloudAudioStore.pendingDeletesKey] {
