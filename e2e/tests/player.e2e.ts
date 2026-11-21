@@ -258,6 +258,20 @@ test('chapter sleep stops at a track end, and Play continues with the next file'
   await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[1-9] of /, { timeout: 10_000 });
 });
 
+/**
+ * The speed sheet's controls sit in a plain stack under the sheet's full-height Toolbar node, so
+ * the runner's hit test reports them covered and can fall into a slow per-element scan that trips
+ * its watchdog. The sheet draws nothing over them; press at the control's current bounds instead.
+ * Known flaky on iOS 27.0 (passes about 3 runs in 5): the scan can still overrun on the first read.
+ */
+async function pressSpeedControl(target: ReturnType<Screen['getByTestId']>) {
+  await expect(target).toBeVisible();
+  const box = await target.boundingBox();
+  if (!box || box.width <= 0 || box.height <= 0) throw new Error('Speed control has no actionable bounds');
+  await createAgentDeviceClient({ session: NATIVE_WORKER_SESSION })
+    .interactions.press({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
+}
+
 test('fine-tuned playback speed persists across relaunch and adjusts remaining time', async ({ device, screen }) => {
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
   await openListeningBookPaused(screen);
@@ -268,11 +282,11 @@ test('fine-tuned playback speed persists across relaunch and adjusts remaining t
   await screen.getByRole('button', /Fine-Tune Speed/).tap();
   await delay(500);
   await expect(screen.getByTestId('speed.readout')).toHaveText(/^1×$/);
-  await tapVisibleCenter(screen.getByTestId('speed.preset.150'));
-  await tapVisibleCenter(screen.getByTestId('speed.increment'));
+  await pressSpeedControl(screen.getByTestId('speed.preset.150'));
+  await pressSpeedControl(screen.getByTestId('speed.increment'));
   await expect(screen.getByTestId('speed.readout')).toHaveText(/^1[.,]55×$/);
   await expect(screen.getByTestId('speed.remaining')).toContainText(/1[.,]55×/);
-  await tapVisibleCenter(screen.getByRole('button', 'Done'));
+  await pressSpeedControl(screen.getByRole('button', 'Done'));
 
   await expect(screen.getByTestId('player.speed')).toContainText(/1[.,]55/);
   await screen.getByRole('button', 'Close player').tap();
