@@ -15,14 +15,19 @@ struct ReadingStatsScreen: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ReadingSession.date, order: .reverse) private var readingSessions: [ReadingSession]
-    // `isFinished` is a stored column, so the store filters and only finished books load.
-    @Query(filter: #Predicate<Audiobook> { $0.isFinished }) private var finishedBooks: [Audiobook]
 
     @AppStorage(HeatmapPalette.storageKey) private var paletteRaw: String = HeatmapPalette.amber.rawValue
     @AppStorage(DailyListeningGoal.storageKey) private var dailyGoalMinutes: Int = 0
 
     @State private var today: Date = .now
     @State private var bookCovers: [UUID: UIImage] = [:]
+
+    /// A COUNT in the store (`isFinished` is a stored column), so no book is loaded. Not a filtered
+    /// `@Query`: that one re-created its predicate on every render and put the screen in a render loop.
+    private var finishedBookCount: Int {
+        let descriptor = FetchDescriptor<Audiobook>(predicate: #Predicate { $0.isFinished })
+        return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
 
     private var paletteBinding: Binding<HeatmapPalette> {
         Binding(
@@ -47,7 +52,7 @@ struct ReadingStatsScreen: View {
         // Computed once per render: compute sorts every session, so the ids and the task share it.
         let stats = ReadingStats.compute(
             sessions: readingSessions,
-            booksFinished: finishedBooks.count,
+            booksFinished: finishedBookCount,
             today: today
         )
         let displayedIDs = Self.displayedBookIDs(for: stats)
