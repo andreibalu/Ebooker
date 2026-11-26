@@ -356,27 +356,55 @@ struct ReadingStatsTests {
         // Catches `date + hour * 3600` bucket math on a 25-hour day: after 02:00 -> 01:00 on
         // 2026-11-01 it lands an hour early, so a chunk started at 08:20 looked 80 min off its
         // bucket (outside the 75 min tolerance) and split from its 08:10 neighbour.
+        // Also catches `bySettingHour` defaulting to the first 01:00 (EDT) when 01:00 repeats:
+        // a 01:30 EST chunk is 90 min after 01:00 EDT and becomes untimed, splitting from 01:10 EST.
         var ny = Calendar(identifier: .gregorian)
         ny.timeZone = try #require(TimeZone(identifier: "America/New_York"))
-        func row(_ minute: Int) -> ReadingSession {
-            let start = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 8, minute: minute))!
+        func row(start: Date, hour: Int, minutes: Int) -> ReadingSession {
             let startOfDay = ny.startOfDay(for: start)
             return ReadingSession(
                 date: startOfDay,
                 dayKey: ReadingSession.makeDayKey(date: startOfDay, calendar: ny),
-                hour: 8,
-                minutes: 5,
+                hour: hour,
+                minutes: minutes,
                 bookID: bookA,
                 bookTitle: "A",
                 bookAuthor: "Author",
                 isFreeBook: false,
-                createdAt: start.addingTimeInterval(300)
+                createdAt: start.addingTimeInterval(Double(minutes) * 60)
             )
         }
+        let eightTen = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 8, minute: 10))!
+        let eightTwenty = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 8, minute: 20))!
         let today = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 12))!
-        let stats = ReadingStats.compute(
-            sessions: [row(10), row(20)], booksFinished: 0, today: today, calendar: ny
+        let morningStats = ReadingStats.compute(
+            sessions: [
+                row(start: eightTen, hour: 8, minutes: 5),
+                row(start: eightTwenty, hour: 8, minutes: 5),
+            ],
+            booksFinished: 0,
+            today: today,
+            calendar: ny
         )
-        #expect(stats.totalSessions == 1)
+        #expect(morningStats.totalSessions == 1)
+
+        // Second 01:xx (EST, standard time): 01:10 EST (20 min) + 01:30 EST (5 min).
+        let dayStart = ny.startOfDay(for: today)
+        let oneEst = ny.date(
+            bySettingHour: 1, minute: 0, second: 0, of: dayStart,
+            matchingPolicy: .nextTime, repeatedTimePolicy: .last, direction: .forward
+        )!
+        let oneTenEst = oneEst.addingTimeInterval(10 * 60)
+        let oneThirtyEst = oneEst.addingTimeInterval(30 * 60)
+        let repeatedHourStats = ReadingStats.compute(
+            sessions: [
+                row(start: oneTenEst, hour: 1, minutes: 20),
+                row(start: oneThirtyEst, hour: 1, minutes: 5),
+            ],
+            booksFinished: 0,
+            today: today,
+            calendar: ny
+        )
+        #expect(repeatedHourStats.totalSessions == 1)
     }
 }

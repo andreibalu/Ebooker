@@ -304,12 +304,18 @@ struct ReadingStats: Equatable {
         for s in sessions {
             // The bucket's wall-clock hour on its day, not `date + hour * 3600` and not
             // `date(byAdding: .hour)`: both add elapsed time, so on a DST day they land an hour off
-            // and can push a real chunk outside the tolerance.
-            let bucketInstant = calendar.date(bySettingHour: s.hour, minute: 0, second: 0, of: s.date)
+            // and can push a real chunk outside the tolerance. On a fall-back day the repeated hour
+            // has two instants; check both the first and `.last` occurrence.
+            let firstInstant = calendar.date(bySettingHour: s.hour, minute: 0, second: 0, of: s.date)
                 ?? s.date.addingTimeInterval(Double(s.hour) * 3600)
+            let lastInstant = calendar.date(
+                bySettingHour: s.hour, minute: 0, second: 0, of: s.date,
+                matchingPolicy: .nextTime, repeatedTimePolicy: .last, direction: .forward
+            )
             let estimatedStart = s.createdAt.addingTimeInterval(-Double(s.minutes) * 60)
-            let isTimed = s.createdAt != .distantPast
-                && abs(estimatedStart.timeIntervalSince(bucketInstant)) <= timedToleranceSeconds
+            let matchesFirst = abs(estimatedStart.timeIntervalSince(firstInstant)) <= timedToleranceSeconds
+            let matchesLast = lastInstant.map { abs(estimatedStart.timeIntervalSince($0)) <= timedToleranceSeconds } ?? false
+            let isTimed = s.createdAt != .distantPast && (matchesFirst || matchesLast)
             if isTimed { timed.append(s) } else { untimed.append(s) }
         }
 
