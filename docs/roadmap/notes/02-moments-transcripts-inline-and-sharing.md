@@ -57,3 +57,25 @@ Owns: `Pageless/Views/MomentQuoteCard.swift` (new), `Pageless/Views/MomentRow.sw
 - **Per-book Markdown export (`AudiobookDetailView.swift`):** Adds `exportMomentsShareLink` (`ShareLink` with `MomentsMarkdownExport(book:)`, `audiobookDetail.exportMoments`) in the moments section header when `!audiobook.moments.isEmpty`. Caps the moments disclosure header row at `.dynamicTypeSize(...DynamicTypeSize.xLarge)` and keeps `Filter` single-line (`fixedSize(horizontal: true, vertical: false)`) so the header stays on one line at accessibility text sizes and Button Shapes.
 - **Visual verification (`/tmp/unpaged-slice02-ui/`):** Verified on iPhone 17 (`82B346D2-A6F4-4CAE-886F-CE293734AF67`) in light, dark, and `accessibility-extra-large` modes, plus expanded Transcript, Moment Share sheet, Export Moments share sheet, and both rendered 3x quote-card PNG variants.
 
+
+## Review round 1
+
+Supersedes the UI-layer and E2E notes above where they differ (export control placement, ids).
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | Eager share/export work in `body` | `313867c` (quote card), `16877c5` (Markdown export): both Transferables hold `PersistentIdentifier` + `ModelContainer` + short strings and resolve cover, tracks, moments and the export date in the transfer closure on the main actor. The edit sheet passes a `MomentQuoteCardDraft` of three strings. |
+| 2 | Snippet ignored book title and author | `54cb549` |
+| 3 | Metadata scored 0 | `54cb549`: metadata scores 2 with notes and quote, transcript stays 1. `docs/ios/system-surfaces.md` updated in `7c0427b`. |
+| 4 | Markdown export emitted user text raw | `16877c5`: line-start markers escaped, hard breaks, inline escapes in headings, chapter line, title, author and tags, filename collapses newlines and drops leading dots. |
+| 5 | Doubled opening quote | `313867c`: `MomentQuoteText` strips double quote marks (straight and curly); the card payload and `MomentRow` share it. Single quotes stay: a trailing one is usually an apostrophe. |
+| 6 | Duplicate chip ids | `2f5904c`: enumerated offsets. |
+| 7 | Large-text failures | `2f5904c`: the disclosure label holds only the count; Filter and Export moved into the first row of the expanded list (`ViewThatFits`, stacked when they don't fit). Tests: the header test was partly wrong (`getByText('Filter')` matched the capsule's icon, 24pt wide), and the row test assumed the quote was on screen at XXXL, where the row outgrows the screen. Both fixed in `393099e`. |
+| 8 | Id collisions | `2f5904c`: transcript id on the disclosure label only (it reaches the button and its text, so the test takes `.first()`); the export ShareLink left the label. Tests use the ids again (`393099e`). |
+| 9 | Truncated chips | `2f5904c`: `ViewThatFits` over three, two, one, zero chips; the rest fold into "+N"; the mood pill is in every variant. |
+| 10 | support.md wording | `7c0427b`: "open the book's moments list and tap Export Moments… at the top". The support Gist needs the same edit. |
+| 11 | COVERAGE section | `7c0427b` |
+
+Decision: Export is visible only when the moments list is expanded (it is collapsed by default). The alternative, an icon inside the disclosure label, brought back both the squeeze and the id collision.
+
+Results: `moments` 8/8, `moment-search` 12/12, `accessibility-layout` 5/5, `extended-flows` 11/12 (the EQ preset test fails on `main` as well). Unit tests: 392 run, one failure (`coffeeTipSucceedsRepeatsAndFinishesEachTransaction`), also failing on `main` in a full run.
