@@ -727,7 +727,7 @@ struct AudiobookDetailView: View {
     /// Exports all moments for this book as Markdown via the system share sheet.
     private var exportMomentsShareLink: some View {
         ShareLink(
-            item: MomentsMarkdownExport(book: audiobook),
+            item: MomentsMarkdownExport(book: audiobook, container: modelContext.container),
             preview: SharePreview("\(audiobook.title) — Moments")
         ) {
             Image(systemName: "square.and.arrow.up")

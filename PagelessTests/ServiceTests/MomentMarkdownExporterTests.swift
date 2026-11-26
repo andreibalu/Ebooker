@@ -132,7 +132,7 @@ struct MomentMarkdownExporterTests {
 
         Chapter 1 · 01:05 · Pinned
 
-        > First quote line
+        > First quote line  
         > Second quote line
 
         Important reflection on #1 *theme* > rest.
@@ -147,9 +147,9 @@ struct MomentMarkdownExporterTests {
         #expect(md == expected)
     }
 
-    @Test func omitsEmptyAuthorAndWhitespaceOnlyFieldsAndPreservesSpecialChars() {
+    @Test func omitsEmptyAuthorAndWhitespaceOnlyFieldsAndEscapesInlineHeadingChars() {
         let entry = MomentMarkdownExporter.Entry(
-            label: "Moment #1 *special* > 🔥",
+            label: "Moment #1 *special* [x] `y` _z_ > 🔥",
             chapterTitle: "Intro",
             time: 5,
             trackIndex: 0,
@@ -176,7 +176,7 @@ struct MomentMarkdownExporterTests {
 
         Exported from Unpaged on November 14, 2023
 
-        ## Moment #1 *special* > 🔥
+        ## Moment #1 \\*special\\* \\[x\\] \\`y\\` \\_z\\_ > 🔥
 
         Intro · 00:05
         """ + "\n"
@@ -203,9 +203,62 @@ struct MomentMarkdownExporterTests {
         let md = MomentMarkdownExporter.markdown(for: book, exportDate: Self.fixedDate)
         #expect(md.contains("Track unavailable · 01:30"))
 
-        let export = MomentsMarkdownExport(book: book, exportDate: Self.fixedDate)
+        let export = MomentsMarkdownExport(book: book, container: container, exportDate: Self.fixedDate)
         #expect(!export.suggestedFilename.contains("/"))
         #expect(!export.suggestedFilename.contains(":"))
         #expect(export.suggestedFilename.hasSuffix("Moments.md"))
+
+        // The transfer closure reads the book when sharing, not when the export value was built.
+        moment.label = "Renamed Before Sharing"
+        let rendered = try export.renderMarkdown()
+        #expect(rendered.contains("## Renamed Before Sharing"))
+        #expect(rendered.contains("2023"))
+    }
+
+    // Failure: user text emitted raw turns a note into a heading, list, quote or rule, and a
+    // multi-line note collapses into one paragraph.
+    @Test func escapesLeadingBlockMarkersAndKeepsLineBreaks() {
+        let notes = "# Not a heading\r\n> not a quote\r- not a list\n+ plus\n* star\n= eq\n3. third\n4) fourth\n---\n===\n\n  indented\nplain #1 mid"
+        let entry = MomentMarkdownExporter.Entry(
+            label: "L", chapterTitle: "Ch", time: 1, trackIndex: 0, isPinned: false,
+            quoteLine: "# q1\n- q2", notes: notes, moodName: nil, categoryNames: [], characters: [],
+            transcript: "first line\n## second\nthird"
+        )
+        let md = MomentMarkdownExporter.markdown(
+            bookTitle: "B", author: "", entries: [entry],
+            exportDate: Self.fixedDate, locale: Self.testLocale, timeZone: Self.testTimeZone
+        )
+        let expectedNotes = [
+            "\\# Not a heading  ", "\\> not a quote  ", "\\- not a list  ", "\\+ plus  ", "\\* star  ",
+            "\\= eq  ", "3\\. third  ", "4\\) fourth  ", "\\---  ", "\\===", "", "indented  ", "plain #1 mid",
+        ].joined(separator: "\n")
+        #expect(md.contains("\n\n" + expectedNotes + "\n\n"))
+        #expect(md.contains("> \\# q1  \n> \\- q2\n"))
+        #expect(md.contains("**Transcript:** first line  \n\\## second  \nthird\n"))
+        #expect(!md.contains("\r"))
+    }
+
+    // Failure: `*`, `_`, backticks and brackets in a label or chapter title restyle or link the heading.
+    @Test func escapesInlineMarkupInHeadingAndChapterLine() {
+        let entry = MomentMarkdownExporter.Entry(
+            label: "A *b* _c_ `d` [e](f)", chapterTitle: "# Part *1* [x]", time: 1, trackIndex: 0,
+            isPinned: false, quoteLine: nil, notes: nil, moodName: nil, categoryNames: [], characters: [],
+            transcript: nil
+        )
+        let md = MomentMarkdownExporter.markdown(
+            bookTitle: "B", author: "", entries: [entry],
+            exportDate: Self.fixedDate, locale: Self.testLocale, timeZone: Self.testTimeZone
+        )
+        #expect(md.contains("## A \\*b\\* \\_c\\_ \\`d\\` \\[e\\](f)\n"))
+        #expect(md.contains("\n\\# Part \\*1\\* \\[x\\] · 00:01\n"))
+    }
+
+    // Failure: a newline or leading dot in the title made a multi-line or hidden file name.
+    @Test func filenameCollapsesNewlinesAndTrimsLeadingDots() {
+        #expect(MomentsMarkdownExport.filename(forBookTitle: "Line one\nLine two") == "Line one Line two Moments.md")
+        #expect(MomentsMarkdownExport.filename(forBookTitle: "Win\r\nLose\rDraw") == "Win Lose Draw Moments.md")
+        #expect(MomentsMarkdownExport.filename(forBookTitle: "..hidden") == "hidden Moments.md")
+        #expect(MomentsMarkdownExport.filename(forBookTitle: " . ..") == "Book Moments.md")
+        #expect(MomentsMarkdownExport.filename(forBookTitle: "Part 1/2: Start") == "Part 1-2- Start Moments.md")
     }
 }

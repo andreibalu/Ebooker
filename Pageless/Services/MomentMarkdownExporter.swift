@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -34,10 +35,11 @@ enum MomentMarkdownExporter {
     ) -> String {
         var blocks: [String] = []
 
-        let cleanTitle = collapsedSingleLine(bookTitle)
+        let cleanTitle = escapedInline(collapsedSingleLine(bookTitle))
         blocks.append("# \(cleanTitle.isEmpty ? "Untitled" : cleanTitle)")
 
-        if let cleanAuthor = trimmed(author) {
+        let cleanAuthor = escapedInline(collapsedSingleLine(author))
+        if !cleanAuthor.isEmpty {
             blocks.append("*by \(cleanAuthor)*")
         }
 
@@ -55,40 +57,36 @@ enum MomentMarkdownExporter {
         }
 
         for entry in sorted {
-            let label = collapsedSingleLine(entry.label)
+            let label = escapedInline(collapsedSingleLine(entry.label))
             blocks.append("## \(label.isEmpty ? "Moment" : label)")
 
-            let chapter = collapsedSingleLine(entry.chapterTitle)
+            let chapter = escapedInline(collapsedSingleLine(entry.chapterTitle))
             let clock = TimeFormatter.clockString(seconds: entry.time)
             let pinSuffix = entry.isPinned ? " · Pinned" : ""
-            blocks.append("\(chapter.isEmpty ? "Track unavailable" : chapter) · \(clock)\(pinSuffix)")
+            // The line starts with the chapter title, so a title like "1. Intro" or "# Part" needs
+            // its leading marker escaped as well.
+            blocks.append(escapedLeadingMarker("\(chapter.isEmpty ? "Track unavailable" : chapter) · \(clock)\(pinSuffix)"))
 
             if let quote = trimmed(entry.quoteLine) {
-                let quotedLines = quote
-                    .replacingOccurrences(of: "\r\n", with: "\n")
-                    .replacingOccurrences(of: "\r", with: "\n")
-                    .split(separator: "\n", omittingEmptySubsequences: false)
-                    .map { "> \($0)" }
-                    .joined(separator: "\n")
-                blocks.append(quotedLines)
+                blocks.append(escapedBlock(quote, linePrefix: "> "))
             }
 
             if let notes = trimmed(entry.notes) {
-                blocks.append(notes)
+                blocks.append(escapedBlock(notes))
             }
 
             let tags = ([trimmed(entry.moodName)].compactMap { $0 }) + entry.categoryNames.compactMap(trimmed)
             if !tags.isEmpty {
-                blocks.append("Tags: \(tags.joined(separator: ", "))")
+                blocks.append("Tags: \(tags.map { escapedInline(collapsedSingleLine($0)) }.joined(separator: ", "))")
             }
 
             let characters = entry.characters.compactMap(trimmed)
             if !characters.isEmpty {
-                blocks.append("Characters: \(characters.joined(separator: ", "))")
+                blocks.append("Characters: \(characters.map { escapedInline(collapsedSingleLine($0)) }.joined(separator: ", "))")
             }
 
             if let transcript = trimmed(entry.transcript) {
-                blocks.append("**Transcript:** \(transcript)")
+                blocks.append(escapedBlock(transcript, firstLinePrefix: "**Transcript:** "))
             }
         }
 
@@ -148,41 +146,100 @@ enum MomentMarkdownExporter {
             .replacingOccurrences(of: "\r", with: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    // MARK: - Markdown escaping
+
+    /// Backslash-escapes the characters that restyle or link a heading, chapter line or tag.
+    private static func escapedInline(_ value: String) -> String {
+        var result = ""
+        for character in value {
+            if "\\*_`[]".contains(character) { result.append("\\") }
+            result.append(character)
+        }
+        return result
+    }
+
+    /// Escapes a block marker at the start of a line (`#`, `>`, lists, rules, setext underlines,
+    /// code fences, `1.` / `1)`), so user text can't become a heading, quote, list or rule.
+    private static func escapedLeadingMarker(_ line: String) -> String {
+        guard let first = line.first else { return line }
+        if "#>-+*=`~".contains(first) { return "\\" + line }
+        if line.allSatisfy({ $0 == "_" }), line.count >= 3 { return "\\" + line }
+        let digits = line.prefix(while: { $0.isASCII && $0.isNumber })
+        if !digits.isEmpty, digits.count <= 9,
+           let marker = line.dropFirst(digits.count).first, marker == "." || marker == ")" {
+            return String(digits) + "\\" + line.dropFirst(digits.count)
+        }
+        return line
+    }
+
+    /// Multi-line user text as Markdown: normalized newlines, indentation dropped, a leading block
+    /// marker escaped on every line, and the user's line breaks kept as hard breaks (two trailing
+    /// spaces) inside a paragraph. `firstLinePrefix` is our own text before the first line, which
+    /// already keeps that line from opening a block. `linePrefix` repeats on every line.
+    private static func escapedBlock(_ text: String, firstLinePrefix: String = "", linePrefix: String = "") -> String {
+        let lines = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        return lines.enumerated().map { index, line in
+            let escaped = (index == 0 && !firstLinePrefix.isEmpty) ? line : escapedLeadingMarker(line)
+            let hasNext = index + 1 < lines.count && !lines[index + 1].isEmpty
+            let hardBreak = !line.isEmpty && hasNext ? "  " : ""
+            let prefix = (index == 0 ? firstLinePrefix : "") + linePrefix
+            return line.isEmpty ? prefix.trimmingCharacters(in: .whitespaces) : prefix + escaped + hardBreak
+        }.joined(separator: "\n")
+    }
 }
 
-/// Renders the per-book Markdown export lazily only when the user actually triggers sharing.
+/// The per-book Markdown export. Cheap to construct, because a `ShareLink` in a view body builds
+/// it on every pass: it holds only the book's identifier and the container. The moments are read,
+/// sorted and rendered on the main actor inside the transfer closure, when the user shares, and
+/// the export date is the time of sharing.
 struct MomentsMarkdownExport: Transferable, Sendable {
+    let bookID: PersistentIdentifier
+    let container: ModelContainer
     let bookTitle: String
-    let author: String
-    let entries: [MomentMarkdownExporter.Entry]
-    let exportDate: Date
+    /// Fixed date for tests; `nil` means the moment of sharing.
+    let exportDate: Date?
 
-    var suggestedFilename: String {
-        let sanitized = bookTitle
+    var suggestedFilename: String { Self.filename(forBookTitle: bookTitle) }
+
+    static func filename(forBookTitle title: String) -> String {
+        let sanitized = title
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: ":", with: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let base = sanitized.isEmpty ? "Book" : sanitized
+            // A leading dot would make the shared file hidden.
+            .drop(while: { $0 == "." || $0.isWhitespace })
+        let base = sanitized.isEmpty ? "Book" : String(sanitized)
         return "\(base) Moments.md"
     }
 
-    @MainActor
-    init(book: Audiobook, exportDate: Date = .now) {
+    init(book: Audiobook, container: ModelContainer, exportDate: Date? = nil) {
+        self.bookID = book.persistentModelID
+        self.container = container
         self.bookTitle = book.title
-        self.author = book.author
-        self.entries = MomentMarkdownExporter.entries(for: book)
         self.exportDate = exportDate
+    }
+
+    /// Reads the book fresh from the main context and renders it. Main actor: SwiftData models
+    /// belong to the context's actor.
+    @MainActor
+    func renderMarkdown() throws -> String {
+        guard let book = container.mainContext.model(for: bookID) as? Audiobook else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        return MomentMarkdownExporter.markdown(for: book, exportDate: exportDate ?? .now)
     }
 
     static var transferRepresentation: some TransferRepresentation {
         DataRepresentation(exportedContentType: UTType("net.daringfireball.markdown") ?? .plainText) { item in
-            let text = MomentMarkdownExporter.markdown(
-                bookTitle: item.bookTitle,
-                author: item.author,
-                entries: item.entries,
-                exportDate: item.exportDate
-            )
-            return Data(text.utf8)
+            Data(try await item.renderMarkdown().utf8)
         }
         .suggestedFileName { item in
             item.suggestedFilename
