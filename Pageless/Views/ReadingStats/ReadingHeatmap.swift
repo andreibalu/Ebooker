@@ -154,6 +154,13 @@ struct HeatmapMonthLabel: Equatable {
 }
 
 struct HeatmapGridModel {
+    private static let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "LLL"   // short month, "Jan"
+        return f
+    }()
+
     let cols: [[HeatmapCellInfo]]      // populated for .grid layout
     let linearDays: [HeatmapCellInfo]  // populated for linear layouts
     let monthLabels: [HeatmapMonthLabel]
@@ -207,10 +214,6 @@ struct HeatmapGridModel {
         var monthLabels: [HeatmapMonthLabel] = []
         var lastMonth = -1
 
-        let monthFmt = DateFormatter()
-        monthFmt.locale = Locale(identifier: "en_US_POSIX")
-        monthFmt.dateFormat = "LLL"   // short month, "Jan"
-
         for w in 0..<nw {
             guard let colStart = calendar.date(byAdding: .day, value: w * 7, to: start) else { continue }
             var days: [HeatmapCellInfo] = []
@@ -234,7 +237,7 @@ struct HeatmapGridModel {
             if let firstOfMonth = days.first(where: { calendar.component(.day, from: $0.date) <= 7 && !$0.isBeforeStart }) {
                 let m = calendar.component(.month, from: firstOfMonth.date)
                 if m != lastMonth {
-                    monthLabels.append(HeatmapMonthLabel(colIdx: w, label: monthFmt.string(from: firstOfMonth.date)))
+                    monthLabels.append(HeatmapMonthLabel(colIdx: w, label: Self.monthFormatter.string(from: firstOfMonth.date)))
                     lastMonth = m
                 }
             }
@@ -256,10 +259,6 @@ struct HeatmapGridModel {
         let n = scale.linearDayCount
         let layout = scale.layout
         let todayKey = ReadingSession.makeDayKey(date: today, calendar: calendar)
-
-        let monthFmt = DateFormatter()
-        monthFmt.locale = Locale(identifier: "en_US_POSIX")
-        monthFmt.dateFormat = "LLL"
 
         var days: [HeatmapCellInfo] = []
         var monthLabels: [HeatmapMonthLabel] = []
@@ -289,7 +288,7 @@ struct HeatmapGridModel {
             if layout == .linearWithMonthLabels && !beforeStart {
                 let m = calendar.component(.month, from: dStart)
                 if m != lastMonth {
-                    monthLabels.append(HeatmapMonthLabel(colIdx: i, label: monthFmt.string(from: dStart)))
+                    monthLabels.append(HeatmapMonthLabel(colIdx: i, label: Self.monthFormatter.string(from: dStart)))
                     lastMonth = m
                 }
             }
