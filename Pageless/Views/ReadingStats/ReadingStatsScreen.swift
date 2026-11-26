@@ -15,21 +15,14 @@ struct ReadingStatsScreen: View {
 
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \ReadingSession.date, order: .reverse) private var readingSessions: [ReadingSession]
-    @Query private var audiobooks: [Audiobook]
+    // `isFinished` is a stored column, so the store filters and only finished books load.
+    @Query(filter: #Predicate<Audiobook> { $0.isFinished }) private var finishedBooks: [Audiobook]
 
     @AppStorage(HeatmapPalette.storageKey) private var paletteRaw: String = HeatmapPalette.amber.rawValue
     @AppStorage(DailyListeningGoal.storageKey) private var dailyGoalMinutes: Int = 0
 
     @State private var today: Date = .now
     @State private var bookCovers: [UUID: UIImage] = [:]
-
-    private var stats: ReadingStats {
-        ReadingStats.compute(
-            sessions: readingSessions,
-            booksFinished: audiobooks.filter(\.isFinished).count,
-            today: today
-        )
-    }
 
     private var paletteBinding: Binding<HeatmapPalette> {
         Binding(
@@ -39,7 +32,7 @@ struct ReadingStatsScreen: View {
     }
 
     /// Only the ≤6 book IDs rendered on screen (best day + top 5 books, which includes longestBook).
-    private var displayedBookIDs: [UUID] {
+    private static func displayedBookIDs(for stats: ReadingStats) -> [UUID] {
         var ids: [UUID] = []
         if let bestID = stats.bestDay?.topBookID {
             ids.append(bestID)
@@ -51,7 +44,14 @@ struct ReadingStatsScreen: View {
     }
 
     var body: some View {
-        ReadingStatsView(
+        // Computed once per render: compute sorts every session, so the ids and the task share it.
+        let stats = ReadingStats.compute(
+            sessions: readingSessions,
+            booksFinished: finishedBooks.count,
+            today: today
+        )
+        let displayedIDs = Self.displayedBookIDs(for: stats)
+        return ReadingStatsView(
             stats: stats,
             palette: paletteBinding,
             dailyGoalMinutes: $dailyGoalMinutes,
@@ -64,8 +64,8 @@ struct ReadingStatsScreen: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             today = .now
         }
-        .task(id: displayedBookIDs) {
-            loadDisplayedCovers(for: displayedBookIDs)
+        .task(id: displayedIDs) {
+            loadDisplayedCovers(for: displayedIDs)
         }
     }
 
