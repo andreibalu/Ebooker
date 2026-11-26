@@ -1,44 +1,6 @@
 import SwiftData
 import SwiftUI
 
-@MainActor
-enum MomentSearch {
-    static func words(_ query: String) -> [String] {
-        query.split(whereSeparator: { $0.isWhitespace }).map { fold(String($0)) }
-    }
-
-    static func fold(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-    }
-
-    static func score(_ moment: Moment, words: [String]) -> Int? {
-        guard let book = moment.audiobook else { return nil }
-        let titles = fold([moment.label, book.title, book.author].joined(separator: " "))
-        let prose = fold([moment.notes ?? "", moment.quoteLine ?? ""].joined(separator: " "))
-        let metadata = fold((moment.characters + moment.categories.map(\.displayName)
-                            + [moment.mood?.displayName].compactMap { $0 }).joined(separator: " "))
-        guard words.allSatisfy({ titles.contains($0) || prose.contains($0) || metadata.contains($0) }) else { return nil }
-        return words.reduce(0) { $0 + (titles.contains($1) ? 10 : prose.contains($1) ? 2 : 0) }
-    }
-
-    static func highlighted(_ value: String, query: String) -> AttributedString {
-        var result = AttributedString(value)
-        for word in words(query) {
-            var start = value.startIndex
-            while start < value.endIndex,
-                  let range = value.range(of: word, options: [.caseInsensitive, .diacriticInsensitive],
-                                          range: start..<value.endIndex, locale: .current) {
-                if let lower = AttributedString.Index(range.lowerBound, within: result),
-                   let upper = AttributedString.Index(range.upperBound, within: result) {
-                    result[lower..<upper].backgroundColor = Color.amber.opacity(0.25)
-                }
-                start = range.upperBound
-            }
-        }
-        return result
-    }
-}
-
 struct MomentSearchView: View {
     let onOpenPlayer: () -> Void
     @Environment(\.dismiss) private var dismiss
