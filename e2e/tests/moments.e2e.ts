@@ -176,19 +176,20 @@ test('the edit sheet has a collapsed Transcript disclosure that expands to selec
   await openMoments(screen);
   await tapVisibleCenter(screen.getByText('E2E Second Moment').first());
   await expandSheet(screen);
-  // Roles and text, not the moment.transcript* ids: a DisclosureGroup's identifier overrides its
-  // children's, so on the device every node inside the group reports "moment.transcript".
-  const disclosure = screen.getByRole('button', 'Transcript', { exact: true });
+  // A disclosure label's id reaches both its button and its text, so take the first node.
+  const disclosure = screen.getByTestId('moment.transcript').first();
   await screen.scrollUntilVisible(disclosure);
   // Collapsed until asked for.
-  const text = screen.getByText(/old lighthouse keeper waved us in/);
+  const text = screen.getByTestId('moment.transcript.text');
   await expect(text).toBeHidden();
   await tapVisibleCenter(disclosure);
   await screen.scrollUntilVisible(text);
   await expect(text).toBeVisible();
-  await screen.scrollUntilVisible(screen.getByRole('button', 'Copy Transcript'));
-  await expect(screen.getByRole('button', 'Copy Transcript')).toBeVisible();
-  await tapVisibleCenter(screen.getByRole('button', 'Copy Transcript'));
+  await expect(text).toContainText('old lighthouse keeper waved us in');
+  const copy = screen.getByTestId('moment.transcript.copy');
+  await screen.scrollUntilVisible(copy);
+  await expect(copy).toBeVisible();
+  await tapVisibleCenter(copy);
   await expect(screen.getByRole('button', 'Copied')).toBeVisible();
   expect(execFileSync('xcrun', ['simctl', 'pbpaste', udid()], { encoding: 'utf8', timeout: 30_000 }))
     .toContain('old lighthouse keeper waved us in');
@@ -200,7 +201,7 @@ test('the edit sheet has a collapsed Transcript disclosure that expands to selec
   await tapVisibleCenter(screen.getByText('E2E First Moment').first());
   await expandSheet(screen);
   await screen.scrollUntilVisible(screen.getByPlaceholder('Add a quote (optional)'));
-  await expect(screen.getByRole('button', 'Transcript', { exact: true })).toBeHidden();
+  await expect(screen.getByTestId('moment.transcript')).toBeHidden();
   await screen.getByRole('button', 'Cancel').tap();
 });
 
@@ -226,10 +227,11 @@ test('Share Moment opens the share sheet from the context menu and from the edit
 test('Export Moments shares the book, and only a book with moments offers it', async ({ device, screen }) => {
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
-  // By label: the disclosure row's identifier also lands on the "N moments" button, so the id
-  // alone matches two nodes.
-  const exportButton = screen.getByRole('button', 'Export Moments…');
+  // The control sits at the top of the expanded moments list.
+  await screen.getByText(/^\d+ moments?$/).first().tap();
+  const exportButton = screen.getByTestId('audiobookDetail.exportMoments');
   await screen.scrollUntilVisible(exportButton);
+  await expect(exportButton).toContainText('Export Moments…');
   await tapVisibleCenter(exportButton);
   await expectShareSheetThenDismiss(screen);
 
@@ -237,5 +239,5 @@ test('Export Moments shares the book, and only a book with moments offers it', a
   await tapVisibleCenter(screen.getByTestId('BackButton').first());
   await openAnotherBook(screen);
   await expect(screen.getByTestId('book.progressSummary')).toBeVisible();
-  await expect(screen.getByRole('button', 'Export Moments…')).toBeHidden();
+  await expect(screen.getByTestId('audiobookDetail.exportMoments')).toBeHidden();
 });
