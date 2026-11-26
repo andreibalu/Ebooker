@@ -34,5 +34,7 @@ The magnifying glass in the library header opens `MomentSearchView` over every m
 
 - Case and diacritics are folded, and every query word must appear (substring match).
 - Moment name, book title and author outrank notes and quotes; ties go to the newest.
+- `Moment.transcript` is searched too, at the lowest weight, so a spoken-word query finds a moment but never outranks a hit in its name, notes or quote. Smart save keeps the transcript even when naming falls back (`docs/ios/ai.md`), so this is what makes those moments findable by words nobody typed.
+- When a query word matches only the transcript (no match in name, notes, quote, characters, categories, tags or mood), the row shows a snippet of at most two lines around the first match, with the match highlighted (`momentSearch.snippet.<label>`). A hit already visible in the row needs no snippet, and a transcript is never dumped whole into the list. The snippet logic is a pure function in `MomentSearch`, so the folding rules stay the same as for scoring.
 - An empty query shows the most recent moments grouped by book.
 - Rows reuse `MomentRow` and play through `playTrack(at:in:time:)`. A row whose audio is missing, whose server is disconnected or which needs the network while offline shows the reason and is disabled.

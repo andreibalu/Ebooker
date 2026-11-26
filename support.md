@@ -171,7 +171,11 @@ Your iCloud Library keeps every book forever — it's only emptied when you swip
 
 ### Search saved moments
 
-Tap the magnifying glass in My Library to search saved moments across every book. Search by moment name, note, quote, character, category, mood, book title, or author. Multiple words must all match, and spelling works without accents. With no search text, you see your recent moments. Tap a result to play from its saved track and time. Moments from removed books or books whose audio is missing remain searchable; restore the audio before playing them. Streaming results need an internet connection.
+Tap the magnifying glass in My Library to search saved moments across every book. Search by moment name, note, quote, character, category, mood, book title, author, or words from the spoken transcript saved with a moment. When only the transcript matches, the result shows a short snippet around the match. Multiple words must all match, and spelling works without accents. With no search text, you see your recent moments. Tap a result to play from its saved track and time. Moments from removed books or books whose audio is missing remain searchable; restore the audio before playing them. Streaming results need an internet connection.
+
+### Share a moment or export a book's moments
+
+On iPhone, touch and hold a moment on a book's page and choose **Share Moment**, or open the moment and tap the share button. Unpaged makes a quote card image from the cover, the quote (or the moment's name and note), the chapter and time, and the book's title and author, and opens the iOS share sheet. To keep every moment from a book, tap **Export Moments…** on the book's page when it has at least one. You get a Markdown file named after the book, with pinned moments first, then the rest in book order, each with its quote, note, tags, characters and spoken transcript. Both are shared only where you send them, and nothing leaves your iPhone until you choose where it goes.
 
 ### Welcome-back recaps
 
