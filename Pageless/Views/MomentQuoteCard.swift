@@ -3,6 +3,7 @@
 //  Pageless
 //
 
+import SwiftData
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -32,8 +33,7 @@ struct MomentQuoteCardPayload: Sendable {
         self.bookTitle = bookTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         self.author = author.trimmingCharacters(in: .whitespacesAndNewlines)
         self.coverArtData = coverArtData
-        let trimmedQuote = quoteLine?.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.quoteLine = (trimmedQuote?.isEmpty ?? true) ? nil : trimmedQuote
+        self.quoteLine = MomentQuoteText.stripped(quoteLine)
         self.label = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.note = (trimmedNote?.isEmpty ?? true) ? nil : trimmedNote
@@ -42,45 +42,54 @@ struct MomentQuoteCardPayload: Sendable {
         self.timestamp = timestamp
     }
 
+    /// Reads the book's cover and chapter, so call it only when the user shares, never from `body`.
     @MainActor
-    init(moment: Moment, audiobook: Audiobook) {
+    init(moment: Moment, audiobook: Audiobook, draft: MomentQuoteCardDraft? = nil) {
         let tracks = audiobook.sortedTracks
         let chapter = tracks.indices.contains(moment.trackIndex)
             ? tracks[moment.trackIndex].displayTitle
             : nil
+        let draftName = draft?.label.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.init(
             bookTitle: audiobook.title,
             author: audiobook.author,
             coverArtData: audiobook.coverArtData,
-            quoteLine: moment.quoteLine,
-            label: moment.label,
-            note: moment.notes,
+            quoteLine: draft == nil ? moment.quoteLine : draft?.quoteLine,
+            label: draftName.isEmpty ? moment.label : draftName,
+            note: draft == nil ? moment.notes : draft?.note,
             chapterTitle: chapter,
             timestamp: TimeFormatter.clockString(seconds: moment.time)
         )
     }
 
-    var previewTitle: String {
-        if !label.isEmpty && !bookTitle.isEmpty {
-            return "\(label) — \(bookTitle)"
-        }
-        return !label.isEmpty ? label : bookTitle
-    }
 }
 
 // MARK: - Lazy Transferable PNG
 
-/// Renders the editorial quote card PNG lazily inside the transfer closure, never during `body`.
+/// What the edit sheet's unsaved fields say; plain strings, cheap to copy on every keystroke.
+struct MomentQuoteCardDraft: Sendable {
+    let label: String
+    let note: String?
+    let quoteLine: String?
+}
+
+/// The quote card as a shareable PNG. A `ShareLink` in a view body builds this on every pass (the
+/// player publishes `currentTime` every second), so it holds only identifiers and short strings.
+/// The cover, the chapter and the render happen on the main actor inside the transfer closure,
+/// when the user actually shares.
 struct MomentQuoteCardImage: Transferable, Sendable {
-    let payload: MomentQuoteCardPayload
+    let momentID: PersistentIdentifier
+    let container: ModelContainer
+    let previewTitle: String
+    let draft: MomentQuoteCardDraft?
 
-    init(payload: MomentQuoteCardPayload) {
-        self.payload = payload
-    }
-
-    @MainActor
-    init(moment: Moment, audiobook: Audiobook) {
-        self.payload = MomentQuoteCardPayload(moment: moment, audiobook: audiobook)
+    init(moment: Moment, container: ModelContainer, draft: MomentQuoteCardDraft? = nil, bookTitle: String? = nil) {
+        self.momentID = moment.persistentModelID
+        self.container = container
+        self.draft = draft
+        let label = draft?.label.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty ?? moment.label
+        let book = (bookTitle ?? moment.audiobook?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        self.previewTitle = book.isEmpty ? label : "\(label) \u{2014} \(book)"
     }
 
     static var transferRepresentation: some TransferRepresentation {
@@ -93,6 +102,11 @@ struct MomentQuoteCardImage: Transferable, Sendable {
 
     @MainActor
     func renderPNGData() throws -> Data {
+        guard let moment = container.mainContext.model(for: momentID) as? Moment,
+              let book = moment.audiobook else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        let payload = MomentQuoteCardPayload(moment: moment, audiobook: book, draft: draft)
         let card = MomentQuoteCardView(payload: payload)
             .environment(\.dynamicTypeSize, .large)
             .environment(\.colorScheme, .light)
@@ -104,6 +118,10 @@ struct MomentQuoteCardImage: Transferable, Sendable {
         }
         return data
     }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }
 
 // MARK: - Editorial Quote Card View (explicit warm-cream light palette, pinned Dynamic Type)

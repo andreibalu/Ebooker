@@ -110,35 +110,19 @@ struct MomentRow: View {
         return tracks[moment.trackIndex].displayTitle
     }
 
-    private var resolvedTrackTitle: String? {
-        let tracks = audiobook.sortedTracks
-        guard tracks.indices.contains(moment.trackIndex) else { return nil }
-        return tracks[moment.trackIndex].displayTitle
-    }
-
+    /// Cheap on purpose: the sheet's body re-runs on every keystroke. It captures the draft strings
+    /// and identifiers; the cover and chapter are resolved only when the user shares.
     private var editShareCard: MomentQuoteCardImage {
-        let trimmedName = editNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        return MomentQuoteCardImage(
-            payload: MomentQuoteCardPayload(
-                bookTitle: audiobook.title,
-                author: audiobook.author,
-                coverArtData: audiobook.coverArtData,
-                quoteLine: editQuoteLine,
-                label: trimmedName.isEmpty ? moment.label : trimmedName,
-                note: editNoteInput,
-                chapterTitle: resolvedTrackTitle,
-                timestamp: TimeFormatter.clockString(seconds: moment.time)
-            )
+        MomentQuoteCardImage(
+            moment: moment,
+            container: modelContext.container,
+            draft: MomentQuoteCardDraft(label: editNameInput, note: editNoteInput, quoteLine: editQuoteLine),
+            bookTitle: audiobook.title
         )
     }
 
     private var formattedQuoteLine: String? {
-        guard let raw = moment.quoteLine?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
-        if raw.hasPrefix("\"") || raw.hasPrefix("\u{201C}") {
-            return raw
-        }
-        return "\u{201C}\(raw)\u{201D}"
+        MomentQuoteText.decorated(moment.quoteLine)
     }
 
     private var metadataChipLabels: [String] {
@@ -248,7 +232,7 @@ struct MomentRow: View {
         }
         .contextMenu {
             ShareLink(
-                item: MomentQuoteCardImage(moment: moment, audiobook: audiobook),
+                item: MomentQuoteCardImage(moment: moment, container: modelContext.container, bookTitle: audiobook.title),
                 preview: SharePreview(moment.label)
             ) {
                 Label("Share Moment", systemImage: "square.and.arrow.up")

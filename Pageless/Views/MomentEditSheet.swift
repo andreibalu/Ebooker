@@ -126,7 +126,7 @@ struct MomentEditSheet: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         ShareLink(
                             item: shareCard,
-                            preview: SharePreview(shareCard.payload.previewTitle)
+                            preview: SharePreview(shareCard.previewTitle)
                         ) {
                             Image(systemName: "square.and.arrow.up")
                         }
