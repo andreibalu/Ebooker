@@ -153,26 +153,38 @@ struct StatsHeroSection: View {
 
     private var scale: HeatmapScale { .pick(daysSinceFirst: stats.daysTracked) }
 
-    private var heroCell: CGFloat {
+    /// Measured width of the section's content column; 0 until the first layout pass.
+    @State private var availableWidth: CGFloat = 0
+
+    /// Preferred cell size, gap and corner radius per scale, before fitting to the width.
+    private static func preferredGeometry(for scale: HeatmapScale) -> (cell: CGFloat, gap: CGFloat, radius: CGFloat) {
         switch scale {
-        case .fourMonth: return 14
-        case .month:     return 10
-        case .week:      return 40
+        case .fourMonth: return (14, 4, 3)
+        case .month:     return (10, 2, 2)
+        case .week:      return (40, 10, 9)
         }
     }
-    private var heroGap: CGFloat {
+
+    /// Scales the preferred geometry down so the interactive grid fits `availableWidth`. Each
+    /// interactive slot is `cell + gap` wide, and the four-month grid adds a 30 pt weekday label
+    /// column. Without this the 30-day row (360 pt) and the four-month grid (354 pt) overflow a
+    /// 335 pt column on a 375 pt phone, and far more at Display Zoom's 320 pt.
+    static func fittedGeometry(
+        scale: HeatmapScale,
+        availableWidth: CGFloat
+    ) -> (cell: CGFloat, gap: CGFloat, radius: CGFloat) {
+        let preferred = preferredGeometry(for: scale)
+        let columns: CGFloat
+        let labelWidth: CGFloat
         switch scale {
-        case .fourMonth: return 4
-        case .month:     return 2
-        case .week:      return 10
+        case .week:      columns = 7;  labelWidth = 0
+        case .month:     columns = 30; labelWidth = 0
+        case .fourMonth: columns = 18; labelWidth = 30
         }
-    }
-    private var heroRad: CGFloat {
-        switch scale {
-        case .fourMonth: return 3
-        case .month:     return 2
-        case .week:      return 9
-        }
+        let needed = columns * (preferred.cell + preferred.gap)
+        guard availableWidth > labelWidth, needed > 0 else { return preferred }
+        let factor = min(1, (availableWidth - labelWidth) / needed)
+        return (preferred.cell * factor, preferred.gap * factor, preferred.radius * factor)
     }
 
     private var eyebrowText: String {
@@ -195,34 +207,31 @@ struct StatsHeroSection: View {
                 return stats.firstDay
             }
         }()
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "MMM d"
-        let from = f.string(from: start)
-        f.dateFormat = "MMM d, yyyy"
-        let to = f.string(from: stats.today)
+        let from = Self.rangeStartFormatter.string(from: start)
+        let to = Self.rangeEndFormatter.string(from: stats.today)
         return "\(from) — \(to)"
     }
 
-    private var gridModel: HeatmapGridModel {
-        HeatmapGridModel.build(
-            scale: scale,
-            today: stats.today,
-            firstDay: stats.firstDay,
-            activityByDay: stats.activityByDay
-        )
+    private static func posixFormatter(_ format: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = format
+        return f
     }
 
-    private var selectedCell: HeatmapCellInfo? {
+    private static let rangeStartFormatter = posixFormatter("MMM d")
+    private static let rangeEndFormatter = posixFormatter("MMM d, yyyy")
+
+    private func selectedCell(in model: HeatmapGridModel) -> HeatmapCellInfo? {
         guard let key = selectedDayKey else { return nil }
-        switch gridModel.layout {
+        switch model.layout {
         case .grid:
-            for col in gridModel.cols {
+            for col in model.cols {
                 if let match = col.first(where: { $0.dayKey == key }) { return match }
             }
             return nil
         case .linearWithDayLabels, .linearWithMonthLabels:
-            return gridModel.linearDays.first(where: { $0.dayKey == key })
+            return model.linearDays.first(where: { $0.dayKey == key })
         }
     }
 
@@ -244,7 +253,21 @@ struct StatsHeroSection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // Built once per body: this view re-renders on every scroll frame (it takes `scrollOffset`).
+        let model = HeatmapGridModel.build(
+            scale: scale,
+            today: stats.today,
+            firstDay: stats.firstDay,
+            activityByDay: stats.activityByDay
+        )
+        let selected = selectedCell(in: model)
+        let geometry = Self.fittedGeometry(scale: scale, availableWidth: availableWidth)
+        return VStack(alignment: .leading, spacing: 0) {
+            // Measures the column. The heatmap itself can't: it reports its own (possibly wider) size.
+            Color.clear
+                .frame(height: 0)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { availableWidth = $0 }
+
             StatsEyebrow(text: eyebrowText)
                 .revealOnAppear(delay: 0.05, y: 12)
 
@@ -257,11 +280,11 @@ struct StatsHeroSection: View {
             HStack {
                 Spacer(minLength: 0)
                 ReadingHeatmapView(
-                    model: gridModel,
+                    model: model,
                     palette: palette,
-                    cellSize: heroCell,
-                    gap: heroGap,
-                    radius: heroRad,
+                    cellSize: geometry.cell,
+                    gap: geometry.gap,
+                    radius: geometry.radius,
                     showLabels: true,
                     stagger: false,
                     emphasizeKey: selectedDayKey,
@@ -271,7 +294,7 @@ struct StatsHeroSection: View {
             }
             .padding(.top, 28)
 
-            if let cell = selectedCell {
+            if let cell = selected {
                 dayDetailBar(for: cell)
                     .padding(.top, 16)
                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -282,7 +305,7 @@ struct StatsHeroSection: View {
                 .foregroundStyle(.secondary)
                 .tracking(0.4)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, selectedCell == nil ? 22 : 14)
+                .padding(.top, selected == nil ? 22 : 14)
                 .revealOnAppear(delay: 0.5, y: 10)
         }
         .padding(.horizontal, 20)
