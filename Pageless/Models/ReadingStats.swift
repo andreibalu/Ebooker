@@ -295,8 +295,9 @@ struct ReadingStats: Equatable {
     /// within 75 minutes of its bucket instant (`date` + `hour`). Timed rows sort by `createdAt`, and a
     /// row joins the previous one when it is the same book and arrived within twice its own length plus
     /// 3 minutes (a wide enough window for old rows credited in book time at 0.5x to 3x, rounding, and
-    /// dropped sub-30 s chunks). *Untimed* rows sort by (dayKey, hour) and join the previous one when
-    /// it is the same book, the same day and the same or the next hour. The two kinds never join.
+    /// dropped sub-30 s chunks). *Untimed* rows sort by (dayKey, book, hour), so another book's row in
+    /// the same hour can't split a book's run, and join the previous one when it is the same book, the
+    /// same day and the same or the next hour. The two kinds never join.
     private static func logicalSessionCount(_ sessions: [ReadingSession]) -> Int {
         var timed: [ReadingSession] = []
         var untimed: [ReadingSession] = []
@@ -321,7 +322,10 @@ struct ReadingStats: Equatable {
         }
 
         previous = nil
-        for s in untimed.sorted(by: { ($0.dayKey, $0.hour, $0.id.uuidString) < ($1.dayKey, $1.hour, $1.id.uuidString) }) {
+        for s in untimed.sorted(by: {
+            ($0.dayKey, $0.bookID.uuidString, $0.hour, $0.id.uuidString)
+                < ($1.dayKey, $1.bookID.uuidString, $1.hour, $1.id.uuidString)
+        }) {
             defer { previous = s }
             if let p = previous,
                p.bookID == s.bookID,
