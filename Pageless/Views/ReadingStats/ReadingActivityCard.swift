@@ -10,6 +10,7 @@ import SwiftUI
 struct ReadingActivityCard: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    var dailyGoalMinutes: Int = 0
     var morphNamespace: Namespace.ID
     var morphID: String
 
@@ -61,12 +62,16 @@ struct ReadingActivityCard: View {
             header
             heatmap
             footer
+            if dailyGoalMinutes > 0 {
+                dailyGoalRow
+            }
         }
         .padding(.horizontal, 18)
         .padding(.top, 16)
         .padding(.bottom, 14)
         .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.07), radius: 12, x: 0, y: 4)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
     }
 
     private var header: some View {
@@ -87,6 +92,7 @@ struct ReadingActivityCard: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
             }
+            .layoutPriority(1)
 
             Spacer(minLength: 8)
 
@@ -120,23 +126,26 @@ struct ReadingActivityCard: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 8) {
             streakChip
-            Spacer()
+            Spacer(minLength: 4)
             HeatmapLegend(palette: palette)
         }
         .padding(.top, 2)
     }
 
     private var streakChip: some View {
-        HStack(spacing: 6) {
+        let accent = palette.accent(forScheme: colorScheme)
+        return HStack(spacing: 6) {
             Circle()
-                .fill(palette.accent)
+                .fill(accent)
                 .frame(width: 6, height: 6)
-                .shadow(color: palette.accent.opacity(0.6), radius: 3)
+                .shadow(color: accent.opacity(0.6), radius: 3)
             Text(streakLabel)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 4)
@@ -144,12 +153,64 @@ struct ReadingActivityCard: View {
             Capsule()
                 .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05))
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("readingActivity.streak")
+    }
+
+    private var dailyGoalRow: some View {
+        let accent = palette.accent(forScheme: colorScheme)
+        let progress = min(1.0, Double(stats.todayMinutes) / Double(max(1, dailyGoalMinutes)))
+        let met = stats.todayMinutes >= dailyGoalMinutes
+
+        return VStack(alignment: .leading, spacing: 6) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 0.5)
+
+            HStack(spacing: 8) {
+                Text("Today")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("\(fmtHoursMins(stats.todayMinutes)) / \(fmtHoursMins(dailyGoalMinutes))")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
+                Spacer(minLength: 4)
+                if met {
+                    HStack(spacing: 3) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("Goal met")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(accent)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.07))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: max(progress > 0 ? 6 : 0, geo.size.width * progress))
+                }
+            }
+            .frame(height: 5)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("readingActivity.goal")
     }
 
     private var streakLabel: String {
-        stats.currentStreak > 0
-            ? "\(stats.currentStreak)-day streak"
-            : "Start a streak today"
+        if stats.currentStreak > 0 {
+            return stats.isStreakActiveToday
+                ? "\(stats.currentStreak)-day streak"
+                : "\(stats.currentStreak)-day streak · listen today"
+        }
+        return "Start a streak today"
     }
 }
 

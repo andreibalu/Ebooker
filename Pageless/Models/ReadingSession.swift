@@ -10,7 +10,9 @@ import SwiftData
 ///
 /// Sessions are emitted by `ReadingSessionRecorder` during playback (one per ~5 minutes of
 /// continuous play, or whenever playback pauses, switches book, or the app backgrounds).
-/// They drive the Reading Activity heatmap and stats screen.
+/// They drive the Reading Activity heatmap and stats screen. A row is a *chunk*, not a sitting:
+/// `ReadingStats.compute` coalesces chunks into logical sessions from the columns below, so this
+/// model carries no session id (and no CloudKit schema change).
 ///
 /// Book metadata is snapshotted so stats remain accurate after a book is removed.
 @Model
@@ -33,6 +35,9 @@ final class ReadingSession {
     var bookAuthor: String = ""
     var isFreeBook: Bool = false
 
+    /// When the chunk ended (the recorder stamps it at flush), so `createdAt − minutes` estimates its
+    /// start. `ReadingStats` trusts it only when that estimate lies near `date` + `hour`; `.distantPast`
+    /// (rows from before the column, or hand-built ones) falls back to hour grouping.
     var createdAt: Date = Date.distantPast
 
     init(

@@ -63,6 +63,10 @@ Yes. Unpaged includes a **Save Moment** App Shortcut in the Shortcuts app. You c
 
 Open the player's **Sleep Timer** menu and choose **End of chapter**, or a 5, 15, 30, or 60 minute timer. The chapter option shows the time remaining and pauses at the current chapter's end without starting the next chapter. Seeking or jumping to another chapter moves the timer to that chapter's end. Pausing manually keeps it armed; choose **Off** to cancel. It works with downloaded and streaming books, including while the app is in the background.
 
+### How do I track my listening activity?
+
+Open **Settings → Reading Activity** (or tap the **Activity** card on **Favorites**) to view your listening streaks, heatmap, and top books, set an optional daily listening goal, and share a summary card (with no book titles).
+
 ### How do I change the app's appearance?
 
 Open **Settings → Appearance** and choose **System**, **Light**, or **Dark**. Light and Dark apply regardless of your iPhone's appearance setting; System follows it. The choice also applies to sheets and onboarding and is remembered across launches.

@@ -843,6 +843,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         guard audiobook.sortedTracks.indices.contains(trackIndex) else { return }
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
 
+        // Switching books: stamp the outgoing book's chunk now, before any await, so its createdAt
+        // is when listening actually ended rather than when the new book finished loading.
+        if let outgoing = currentAudiobook, outgoing.id != audiobook.id {
+            sessionRecorder.end(context: modelContext)
+        }
+
         absResumeGeneration &+= 1
         let loadToken = beginLoad()
         pendingPlaybackTarget = PendingPlaybackTarget(bookID: audiobook.id, trackIndex: trackIndex, time: time)

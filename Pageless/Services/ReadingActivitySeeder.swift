@@ -89,6 +89,10 @@ enum ReadingActivitySeeder {
                 let book = books[chosenIdx]
 
                 let startOfDay = calendar.startOfDay(for: day)
+                // Realistic createdAt (chunk end = bucket start + minutes) so stats coalesce seeded
+                // rows exactly as they would real ones.
+                let bucketStart = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: startOfDay) ?? startOfDay
+                let createdAt = calendar.date(byAdding: .minute, value: minutes, to: bucketStart) ?? bucketStart
                 let session = ReadingSession(
                     date: startOfDay,
                     dayKey: ReadingSession.makeDayKey(date: startOfDay, calendar: calendar),
@@ -97,7 +101,8 @@ enum ReadingActivitySeeder {
                     bookID: book.id,
                     bookTitle: book.title,
                     bookAuthor: book.author,
-                    isFreeBook: book.isFreeBook
+                    isFreeBook: book.isFreeBook,
+                    createdAt: createdAt
                 )
                 context.insert(session)
             }

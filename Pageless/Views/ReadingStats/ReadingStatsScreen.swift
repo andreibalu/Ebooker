@@ -1,0 +1,96 @@
+//
+//  ReadingStatsScreen.swift
+//  Pageless
+//
+
+import SwiftData
+import SwiftUI
+import UIKit
+
+/// Live-data wrapper around `ReadingStatsView`. Owns the SwiftData queries, the midnight-refreshed
+/// `today` reference date, `@AppStorage` palette & daily goal preferences, and targeted cover fetches
+/// for only the displayed books (≤6 IDs). Used by both Favorites and Settings → Reading Activity.
+struct ReadingStatsScreen: View {
+    var backLabel: String = "Library"
+
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ReadingSession.date, order: .reverse) private var readingSessions: [ReadingSession]
+
+    @AppStorage(HeatmapPalette.storageKey) private var paletteRaw: String = HeatmapPalette.amber.rawValue
+    @AppStorage(DailyListeningGoal.storageKey) private var dailyGoalMinutes: Int = 0
+
+    @State private var today: Date = .now
+    @State private var bookCovers: [UUID: UIImage] = [:]
+
+    /// A COUNT in the store (`isFinished` is a stored column), so no book is loaded. Not a filtered
+    /// `@Query`: that one re-created its predicate on every render and put the screen in a render loop.
+    private var finishedBookCount: Int {
+        let descriptor = FetchDescriptor<Audiobook>(predicate: #Predicate { $0.isFinished })
+        return (try? modelContext.fetchCount(descriptor)) ?? 0
+    }
+
+    private var paletteBinding: Binding<HeatmapPalette> {
+        Binding(
+            get: { HeatmapPalette.fromStorage(paletteRaw) },
+            set: { paletteRaw = $0.rawValue }
+        )
+    }
+
+    /// Only the ≤6 book IDs rendered on screen (best day + top 5 books, which includes longestBook).
+    private static func displayedBookIDs(for stats: ReadingStats) -> [UUID] {
+        var ids: [UUID] = []
+        if let bestID = stats.bestDay?.topBookID {
+            ids.append(bestID)
+        }
+        for book in stats.topBooks.prefix(5) where !ids.contains(book.id) {
+            ids.append(book.id)
+        }
+        return ids
+    }
+
+    var body: some View {
+        // Computed once per render: compute sorts every session, so the ids and the task share it.
+        let stats = ReadingStats.compute(
+            sessions: readingSessions,
+            booksFinished: finishedBookCount,
+            today: today
+        )
+        let displayedIDs = Self.displayedBookIDs(for: stats)
+        return ReadingStatsView(
+            stats: stats,
+            palette: paletteBinding,
+            dailyGoalMinutes: $dailyGoalMinutes,
+            bookCovers: bookCovers,
+            backLabel: backLabel
+        )
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            today = .now
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            today = .now
+        }
+        .task(id: displayedIDs) {
+            loadDisplayedCovers(for: displayedIDs)
+        }
+    }
+
+    private func loadDisplayedCovers(for ids: [UUID]) {
+        guard !ids.isEmpty else {
+            bookCovers = [:]
+            return
+        }
+        let descriptor = FetchDescriptor<Audiobook>(
+            predicate: #Predicate<Audiobook> { book in
+                ids.contains(book.id)
+            }
+        )
+        guard let fetched = try? modelContext.fetch(descriptor) else { return }
+        var decoded: [UUID: UIImage] = [:]
+        for book in fetched {
+            if let data = book.coverArtData, let image = UIImage(data: data) {
+                decoded[book.id] = image
+            }
+        }
+        bookCovers = decoded
+    }
+}
