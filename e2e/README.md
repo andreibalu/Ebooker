@@ -87,6 +87,7 @@ DEBUG-only launch hooks:
 | `-e2e-rating-poll-seconds <n>` | Slows the rating prompt's watch (default two seconds; it needs two calm polls). Gives "nothing yet" assertions margin on a slow simulator. |
 | `-e2e-rating-near-end` | On initial seeding, leaves four seconds of the listening book, so one tap on Play finishes it. |
 | `-e2e-rating-seed-listening` | On initial seeding, adds four listening days of an hour each: the prompt's habit signal. |
+| `-e2e-reading-streak-yesterday` | On initial seeding, skips the default today session and seeds a 3-day streak ending yesterday so the Reading Activity card shows streak-grace copy. |
 | `-e2e-sleep-timer-seconds <n>` | Makes every sleep-timer choice last n seconds. |
 | `-guide-clean-library` | On initial seeding, adds only the LibriVox catalog rows and no audiobooks, so the library starts empty. Used for marketing-site screen recordings. |
 | `-e2e-import` | Makes the import button hand a file to the import pipeline instead of opening the Files picker. |

@@ -131,6 +131,7 @@ enum E2EFixtures {
             // Onboarding and the ABS library menu write these; a reset run must see the defaults again.
             for key in ["resumeBacktrackSeconds", "skipBackSeconds", "skipForwardSeconds", "momentBacktrackSeconds",
                         "playerScrubberShowsChapter",
+                        "dailyListeningGoalMinutes", "readingHeatmapPalette",
                         SaveMomentAction.intentFlagKey, SaveMomentAction.intentNoteKey,
                         "absSelectedLibraryID", "abs.progressOutbox",
                         IcloudSyncGate.preferenceKey, CloudAudioStore.preferenceKey,
@@ -212,11 +213,12 @@ enum E2EFixtures {
         if ProcessInfo.processInfo.arguments.contains("-e2e-rating-seed-listening") {
             let calendar = Calendar.current
             for daysAgo in 1...4 {
-                let date = calendar.startOfDay(for: Date.now.addingTimeInterval(-Double(daysAgo) * 86_400))
+                let date = sessionDate(daysAgo: daysAgo, calendar: calendar)
                 context.insert(ReadingSession(
                     date: date, dayKey: ReadingSession.makeDayKey(date: date, calendar: calendar), hour: 20,
                     minutes: 60, bookID: book.id, bookTitle: book.title, bookAuthor: book.author,
-                    isFreeBook: false))
+                    isFreeBook: false,
+                    createdAt: realisticCreatedAt(date: date, hour: 20, minutes: 60, calendar: calendar)))
             }
         }
         let moment = Moment(trackIndex: 0, time: 30, label: "E2E First Moment",
@@ -291,10 +293,25 @@ enum E2EFixtures {
         if ProcessInfo.processInfo.arguments.contains("-e2e-cloud-audio") {
             try seedCloudOnlyBooks(context)
         }
-        let today = Calendar.current.startOfDay(for: .now)
-        context.insert(ReadingSession(date: today, dayKey: ReadingSession.makeDayKey(date: today),
-                                      hour: 10, minutes: 42, bookID: book.id,
-                                      bookTitle: book.title, bookAuthor: book.author, isFreeBook: false))
+        let calendar = Calendar.current
+        if ProcessInfo.processInfo.arguments.contains("-e2e-reading-streak-yesterday") {
+            // Three-day streak ending yesterday with no rows today, exercising the streak grace copy.
+            for daysAgo in 1...3 {
+                let date = sessionDate(daysAgo: daysAgo, calendar: calendar)
+                context.insert(ReadingSession(
+                    date: date, dayKey: ReadingSession.makeDayKey(date: date, calendar: calendar), hour: 20,
+                    minutes: 25, bookID: book.id, bookTitle: book.title, bookAuthor: book.author,
+                    isFreeBook: false,
+                    createdAt: realisticCreatedAt(date: date, hour: 20, minutes: 25, calendar: calendar)))
+            }
+        } else {
+            let today = calendar.startOfDay(for: .now)
+            context.insert(ReadingSession(
+                date: today, dayKey: ReadingSession.makeDayKey(date: today, calendar: calendar),
+                hour: 10, minutes: 42, bookID: book.id,
+                bookTitle: book.title, bookAuthor: book.author, isFreeBook: false,
+                createdAt: realisticCreatedAt(date: today, hour: 10, minutes: 42, calendar: calendar)))
+        }
         for row in catalogRows {
             context.insert(LibriVoxBook(id: row.id, title: row.title, authorDisplay: row.author,
                                         bookDescription: row.description, language: row.language,
@@ -426,6 +443,16 @@ enum E2EFixtures {
         let url = try storeDirectoryWithoutReset().appendingPathComponent("E2E Import.wav")
         try silenceWAV(seconds: 123).write(to: url)
         return url
+    }
+
+    private static func sessionDate(daysAgo: Int, calendar: Calendar = .current) -> Date {
+        let today = calendar.startOfDay(for: .now)
+        return calendar.date(byAdding: .day, value: -daysAgo, to: today) ?? today
+    }
+
+    private static func realisticCreatedAt(date: Date, hour: Int, minutes: Int, calendar: Calendar = .current) -> Date {
+        let atHour = calendar.date(byAdding: .hour, value: hour, to: date) ?? date
+        return calendar.date(byAdding: .minute, value: minutes, to: atHour) ?? atHour
     }
 
     private static func storeDirectoryWithoutReset() throws -> URL {
