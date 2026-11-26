@@ -11,6 +11,8 @@ struct ReadingDayActivity: Equatable {
     let date: Date
     let minutes: Int
     let topBookID: UUID?
+    /// Title snapshot of `topBookID`, for the day-detail summary.
+    let topBookTitle: String?
 }
 
 /// Derived snapshot of all `ReadingSession` rows. Recomputed when the underlying query changes.
@@ -26,20 +28,41 @@ struct ReadingStats: Equatable {
         let topBookAuthor: String?
     }
 
+    /// One book's listening total. `topBooks` sorts these by `ranksBefore`.
+    struct BookTotal: Equatable, Identifiable {
+        let id: UUID
+        let title: String
+        let author: String
+        let minutes: Int
+
+        /// Minutes descending, then title, then id, so equal totals never reorder between recomputes.
+        func ranksBefore(_ other: BookTotal) -> Bool {
+            if minutes != other.minutes { return minutes > other.minutes }
+            if title != other.title { return title < other.title }
+            return id.uuidString < other.id.uuidString
+        }
+    }
+
     let totalMinutes: Int
+    /// Logical listening sessions: contiguous `ReadingSession` chunks coalesced (see `compute`).
     let totalSessions: Int
-    let avgSession: Double            // minutes / session
+    let avgSession: Double            // minutes / logical session
     let bestDay: BestDay?
     let bestHour: Int                 // 0...23
     let bestDow: Int                  // 0...6  (Mon = 0)
     let hourMinutes: [Int]            // count 24
     let dowMinutes: [Int]             // count 7  (Mon = 0)
+    /// Consecutive days with activity ending today, or ending yesterday while today is still empty.
     let currentStreak: Int
+    /// True when today (or a day later than today, after westward time-zone travel) has activity.
+    let isStreakActiveToday: Bool
     let longestStreak: Int
     let booksFinished: Int
     let topAuthor: String?
     let topAuthorMinutes: Int
     let bookMinutes: [UUID: Int]
+    /// Every listened book, most minutes first. `longestBook*` is its first element.
+    let topBooks: [BookTotal]
     let longestBookID: UUID?
     let longestBookTitle: String?
     let longestBookAuthor: String?
@@ -47,38 +70,53 @@ struct ReadingStats: Equatable {
     let freeMinutes: Int
     let freePct: Double               // 0...1
     let activityByDay: [String: ReadingDayActivity]
+    /// Minutes recorded today. Lags by up to the recorder's unflushed chunk (≤5 min).
+    let todayMinutes: Int
     let firstDay: Date                // start-of-day of earliest session, or `today` if none
     let today: Date                   // start-of-day "today"
     let daysTracked: Int              // (today - firstDay) + 1, ≥ 1
 
     var hasAnyActivity: Bool { totalSessions > 0 }
 
-    static let empty: ReadingStats = ReadingStats(
-        totalMinutes: 0,
-        totalSessions: 0,
-        avgSession: 0,
-        bestDay: nil,
-        bestHour: 0,
-        bestDow: 0,
-        hourMinutes: Array(repeating: 0, count: 24),
-        dowMinutes: Array(repeating: 0, count: 7),
-        currentStreak: 0,
-        longestStreak: 0,
-        booksFinished: 0,
-        topAuthor: nil,
-        topAuthorMinutes: 0,
-        bookMinutes: [:],
-        longestBookID: nil,
-        longestBookTitle: nil,
-        longestBookAuthor: nil,
-        longestBookMinutes: 0,
-        freeMinutes: 0,
-        freePct: 0,
-        activityByDay: [:],
-        firstDay: Calendar.current.startOfDay(for: .now),
-        today: Calendar.current.startOfDay(for: .now),
-        daysTracked: 1
-    )
+    static var empty: ReadingStats { empty() }
+
+    static func empty(today refDate: Date = .now, calendar: Calendar = .current) -> ReadingStats {
+        let today = calendar.startOfDay(for: refDate)
+        return ReadingStats(
+            totalMinutes: 0,
+            totalSessions: 0,
+            avgSession: 0,
+            bestDay: nil,
+            bestHour: 0,
+            bestDow: 0,
+            hourMinutes: Array(repeating: 0, count: 24),
+            dowMinutes: Array(repeating: 0, count: 7),
+            currentStreak: 0,
+            isStreakActiveToday: false,
+            longestStreak: 0,
+            booksFinished: 0,
+            topAuthor: nil,
+            topAuthorMinutes: 0,
+            bookMinutes: [:],
+            topBooks: [],
+            longestBookID: nil,
+            longestBookTitle: nil,
+            longestBookAuthor: nil,
+            longestBookMinutes: 0,
+            freeMinutes: 0,
+            freePct: 0,
+            activityByDay: [:],
+            todayMinutes: 0,
+            firstDay: today,
+            today: today,
+            daysTracked: 1
+        )
+    }
+
+    /// Chunk rows within this many minutes of their hour bucket count as timed (see `logicalSessionCount`).
+    private static let timedToleranceSeconds: TimeInterval = 75 * 60
+    /// Slack added to twice a chunk's length when deciding whether it continues the previous chunk.
+    private static let joinSlackSeconds: TimeInterval = 180
 
     static func compute(
         sessions: [ReadingSession],
@@ -89,7 +127,7 @@ struct ReadingStats: Equatable {
         let today = calendar.startOfDay(for: refDate)
 
         guard !sessions.isEmpty else {
-            return ReadingStats.empty
+            return empty(today: refDate, calendar: calendar)
         }
 
         var totalMinutes = 0
@@ -104,7 +142,11 @@ struct ReadingStats: Equatable {
         var dateByDayKey: [String: Date] = [:]
         var earliest: Date = today
 
-        for s in sessions {
+        // Ascending by (createdAt, id): the latest title snapshot of a book wins, whatever the input order.
+        let ordered = sessions.sorted {
+            ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString)
+        }
+        for s in ordered {
             totalMinutes += s.minutes
             if s.isFreeBook { freeMinutes += s.minutes }
 
@@ -116,8 +158,8 @@ struct ReadingStats: Equatable {
             dowMinutes[mondayFirst] += s.minutes
 
             bookMinutes[s.bookID, default: 0] += s.minutes
-            if bookTitleByID[s.bookID] == nil { bookTitleByID[s.bookID] = s.bookTitle }
-            if bookAuthorByID[s.bookID] == nil { bookAuthorByID[s.bookID] = s.bookAuthor }
+            bookTitleByID[s.bookID] = s.bookTitle
+            bookAuthorByID[s.bookID] = s.bookAuthor
 
             minutesByDay[s.dayKey, default: 0] += s.minutes
             bookByDay[s.dayKey, default: [:]][s.bookID, default: 0] += s.minutes
@@ -126,33 +168,38 @@ struct ReadingStats: Equatable {
             if s.date < earliest { earliest = s.date }
         }
 
+        func bookTotal(_ id: UUID, _ minutes: Int) -> BookTotal {
+            BookTotal(id: id, title: bookTitleByID[id] ?? "", author: bookAuthorByID[id] ?? "", minutes: minutes)
+        }
+
         // Per-day aggregate + best day
         var activityByDay: [String: ReadingDayActivity] = [:]
-        var bestDay: BestDay? = nil
         for (dayKey, minutes) in minutesByDay {
             let date = dateByDayKey[dayKey] ?? today
-            var top: UUID? = nil
-            var topMin = 0
-            for (bid, mm) in bookByDay[dayKey] ?? [:] where mm > topMin {
-                top = bid
-                topMin = mm
-            }
+            let top = (bookByDay[dayKey] ?? [:])
+                .map { bookTotal($0.key, $0.value) }
+                .min { $0.ranksBefore($1) }
             activityByDay[dayKey] = ReadingDayActivity(
                 dayKey: dayKey,
                 date: date,
                 minutes: minutes,
-                topBookID: top
+                topBookID: top?.id,
+                topBookTitle: top?.title
             )
-            if bestDay == nil || minutes > (bestDay?.minutes ?? 0) {
-                bestDay = BestDay(
-                    date: date,
-                    dayKey: dayKey,
-                    minutes: minutes,
-                    topBookID: top,
-                    topBookTitle: top.flatMap { bookTitleByID[$0] },
-                    topBookAuthor: top.flatMap { bookAuthorByID[$0] }
-                )
-            }
+        }
+        // Most minutes wins; equal days go to the earlier date.
+        var bestDay: BestDay? = nil
+        if let best = activityByDay.values.min(by: {
+            $0.minutes != $1.minutes ? $0.minutes > $1.minutes : $0.dayKey < $1.dayKey
+        }) {
+            bestDay = BestDay(
+                date: best.date,
+                dayKey: best.dayKey,
+                minutes: best.minutes,
+                topBookID: best.topBookID,
+                topBookTitle: best.topBookID.flatMap { bookTitleByID[$0] },
+                topBookAuthor: best.topBookID.flatMap { bookAuthorByID[$0] }
+            )
         }
 
         // Peak hour / dow
@@ -161,36 +208,42 @@ struct ReadingStats: Equatable {
         var bestDow = 0
         for d in 0..<7 where dowMinutes[d] > dowMinutes[bestDow] { bestDow = d }
 
-        // Longest book + top author by minutes
-        var longestBookID: UUID? = nil
-        var longestBookMins = 0
-        for (id, mm) in bookMinutes where mm > longestBookMins {
-            longestBookID = id
-            longestBookMins = mm
-        }
+        // Books by minutes, then top author (ties go to the alphabetically first name)
+        let topBooks = bookMinutes
+            .map { bookTotal($0.key, $0.value) }
+            .sorted { $0.ranksBefore($1) }
+        let longest = topBooks.first
         var authorMinutes: [String: Int] = [:]
-        for (id, mm) in bookMinutes {
-            if let author = bookAuthorByID[id], !author.isEmpty {
-                authorMinutes[author, default: 0] += mm
-            }
+        for book in topBooks where !book.author.isEmpty {
+            authorMinutes[book.author, default: 0] += book.minutes
         }
-        var topAuthor: String? = nil
-        var topAuthorMins = 0
-        for (a, mm) in authorMinutes where mm > topAuthorMins {
-            topAuthor = a
-            topAuthorMins = mm
+        let topAuthorEntry = authorMinutes.min {
+            $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key
         }
 
-        // Streaks (today backwards for current; full scan for longest)
         let firstDay = calendar.startOfDay(for: earliest)
         let daysTracked = max(1, (calendar.dateComponents([.day], from: firstDay, to: today).day ?? 0) + 1)
 
+        // A dayKey later than today (time zone travel west) counts as today.
+        let todayKey = ReadingSession.makeDayKey(date: today, calendar: calendar)
+        let futureKeys = activityByDay.keys.filter { $0 > todayKey }
+        let isActiveToday = activityByDay[todayKey] != nil || !futureKeys.isEmpty
+        let todayMinutes = (activityByDay[todayKey]?.minutes ?? 0)
+            + futureKeys.reduce(0) { $0 + (activityByDay[$1]?.minutes ?? 0) }
+
+        // Current streak: back from today, or from yesterday while today is still empty. The walk
+        // ends at the first empty day, so it needs no bound.
         var currentStreak = 0
-        for offset in 0..<daysTracked {
-            guard let d = calendar.date(byAdding: .day, value: -offset, to: today) else { break }
-            let key = ReadingSession.makeDayKey(date: d, calendar: calendar)
-            if activityByDay[key] != nil { currentStreak += 1 } else { break }
+        var offset = isActiveToday ? 0 : 1
+        while let d = calendar.date(byAdding: .day, value: -offset, to: today) {
+            let present = offset == 0
+                ? isActiveToday
+                : activityByDay[ReadingSession.makeDayKey(date: d, calendar: calendar)] != nil
+            guard present else { break }
+            currentStreak += 1
+            offset += 1
         }
+
         var longestStreak = 0
         var run = 0
         for offset in 0..<daysTracked {
@@ -198,8 +251,10 @@ struct ReadingStats: Equatable {
             let key = ReadingSession.makeDayKey(date: d, calendar: calendar)
             if activityByDay[key] != nil { run += 1; longestStreak = max(longestStreak, run) } else { run = 0 }
         }
+        // A future-keyed day is outside the scan above but inside the current streak.
+        longestStreak = max(longestStreak, currentStreak)
 
-        let totalSessions = sessions.count
+        let totalSessions = logicalSessionCount(sessions)
         let avgSession = totalSessions > 0 ? Double(totalMinutes) / Double(totalSessions) : 0
 
         return ReadingStats(
@@ -212,21 +267,70 @@ struct ReadingStats: Equatable {
             hourMinutes: hourMinutes,
             dowMinutes: dowMinutes,
             currentStreak: currentStreak,
+            isStreakActiveToday: isActiveToday,
             longestStreak: longestStreak,
             booksFinished: booksFinished,
-            topAuthor: topAuthor,
-            topAuthorMinutes: topAuthorMins,
+            topAuthor: topAuthorEntry?.key,
+            topAuthorMinutes: topAuthorEntry?.value ?? 0,
             bookMinutes: bookMinutes,
-            longestBookID: longestBookID,
-            longestBookTitle: longestBookID.flatMap { bookTitleByID[$0] },
-            longestBookAuthor: longestBookID.flatMap { bookAuthorByID[$0] },
-            longestBookMinutes: longestBookMins,
+            topBooks: topBooks,
+            longestBookID: longest?.id,
+            longestBookTitle: longest?.title,
+            longestBookAuthor: longest?.author,
+            longestBookMinutes: longest?.minutes ?? 0,
             freeMinutes: freeMinutes,
             freePct: totalMinutes > 0 ? Double(freeMinutes) / Double(totalMinutes) : 0,
             activityByDay: activityByDay,
+            todayMinutes: todayMinutes,
             firstDay: firstDay,
             today: today,
             daysTracked: daysTracked
         )
+    }
+
+    /// Coalesces the recorder's chunk rows into logical listening sessions. No stored session id:
+    /// the rule reads only existing columns, so the synced schema is unchanged.
+    ///
+    /// A row is *timed* when `createdAt` is set and its estimated start (`createdAt` − minutes) lies
+    /// within 75 minutes of its bucket instant (`date` + `hour`). Timed rows sort by `createdAt`, and a
+    /// row joins the previous one when it is the same book and arrived within twice its own length plus
+    /// 3 minutes (a wide enough window for old rows credited in book time at 0.5x to 3x, rounding, and
+    /// dropped sub-30 s chunks). *Untimed* rows sort by (dayKey, hour) and join the previous one when
+    /// it is the same book, the same day and the same or the next hour. The two kinds never join.
+    private static func logicalSessionCount(_ sessions: [ReadingSession]) -> Int {
+        var timed: [ReadingSession] = []
+        var untimed: [ReadingSession] = []
+        for s in sessions {
+            let bucketInstant = s.date.addingTimeInterval(Double(s.hour) * 3600)
+            let estimatedStart = s.createdAt.addingTimeInterval(-Double(s.minutes) * 60)
+            let isTimed = s.createdAt != .distantPast
+                && abs(estimatedStart.timeIntervalSince(bucketInstant)) <= timedToleranceSeconds
+            if isTimed { timed.append(s) } else { untimed.append(s) }
+        }
+
+        var count = 0
+        var previous: ReadingSession?
+        for s in timed.sorted(by: { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }) {
+            defer { previous = s }
+            if let p = previous,
+               p.bookID == s.bookID,
+               s.createdAt.timeIntervalSince(p.createdAt) <= 2 * Double(s.minutes) * 60 + joinSlackSeconds {
+                continue
+            }
+            count += 1
+        }
+
+        previous = nil
+        for s in untimed.sorted(by: { ($0.dayKey, $0.hour, $0.id.uuidString) < ($1.dayKey, $1.hour, $1.id.uuidString) }) {
+            defer { previous = s }
+            if let p = previous,
+               p.bookID == s.bookID,
+               p.dayKey == s.dayKey,
+               (0...1).contains(s.hour - p.hour) {
+                continue
+            }
+            count += 1
+        }
+        return count
     }
 }
