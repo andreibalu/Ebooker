@@ -846,7 +846,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         // Switching books: stamp the outgoing book's chunk now, before any await, so its createdAt
         // is when listening actually ended rather than when the new book finished loading.
         if let outgoing = currentAudiobook, outgoing.id != audiobook.id {
-            sessionRecorder.flush(context: modelContext)
+            sessionRecorder.end(context: modelContext)
         }
 
         absResumeGeneration &+= 1

@@ -51,8 +51,10 @@ final class ReadingSessionRecorder {
         context: ModelContext?
     ) {
         // Switching books mid-stream: close out the old session, start a new one.
+        // `end`, not `flush`: flush keeps `active`, so the new book's chunk would be filed under the
+        // old book and dropped as noise on every following tick.
         if let active, active.id != audiobook.id {
-            flush(context: context)
+            end(context: context)
         }
         if active == nil {
             active = ActiveBook(
