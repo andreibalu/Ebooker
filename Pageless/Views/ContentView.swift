@@ -465,6 +465,8 @@ struct ContentView: View {
             // The download Live Activity opens this link, often while the book's detail screen
             // that started the download is still pushed on top of the library.
             selectedLibraryDownloadBook = nil
+            // The stats screen is a boolean destination: leave it set and the rebuilt stack pushes it again.
+            isReadingStatsPresented = false
             navigationStackID &+= 1
             selectedTab = .allBooks
             isDownloadScrollPending = route == .downloads
