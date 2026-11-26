@@ -823,22 +823,22 @@ struct ContentView: View {
         )
         let palette = HeatmapPalette.fromStorage(heatmapPaletteRaw)
         if stats.hasAnyActivity {
-            ReadingActivityCard(
-                stats: stats,
-                palette: palette,
-                dailyGoalMinutes: dailyListeningGoalMinutes,
-                morphNamespace: readingStatsNamespace,
-                morphID: readingStatsMorphID
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .onTapGesture {
+            // A Button combines the card's text into one accessibility element, as the
+            // NavigationLink it replaced did; library.e2e.ts reads the range from it.
+            Button {
                 isReadingStatsPresented = true
+            } label: {
+                ReadingActivityCard(
+                    stats: stats,
+                    palette: palette,
+                    dailyGoalMinutes: dailyListeningGoalMinutes,
+                    morphNamespace: readingStatsNamespace,
+                    morphID: readingStatsMorphID
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
-            .accessibilityElement(children: .contain)
+            .buttonStyle(.plain)
             .accessibilityIdentifier("readingActivity")
-            .accessibilityAction {
-                isReadingStatsPresented = true
-            }
         }
     }
 

@@ -17,7 +17,7 @@ test('reading activity card shows streak grace copy when the latest session was 
     launchArguments: [...fixture, '-e2e-reset-fixture', '-e2e-reading-streak-yesterday'],
   });
   await expect(screen.getByTestId('readingActivity')).toBeVisible();
-  await expect(screen.getByTestId('readingActivity.streak')).toContainText('3-day streak · listen today');
+  await expect(screen.getByTestId('readingActivity')).toContainText('3-day streak · listen today');
 });
 
 test('Settings Reading Activity opens stats with a Settings back button', async ({ device, screen }) => {
@@ -70,11 +70,11 @@ test('heatmap tap shows day detail, goal and palette persist across relaunch, an
   await expect(shareSheet).toBeHidden();
 
   await tapVisibleCenter(screen.getByRole('button', 'Library').last());
-  await expect(screen.getByTestId('readingActivity.goal')).toBeVisible();
+  await expect(screen.getByTestId('readingActivity')).toContainText('30m');
 
   // Relaunch without -e2e-reset-fixture to verify persisted goal and palette.
   await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
-  await expect(screen.getByTestId('readingActivity.goal')).toBeVisible();
+  await expect(screen.getByTestId('readingActivity')).toContainText('30m');
   await screen.getByTestId('readingActivity').tap();
   await expect(screen.getByTestId('readingStats.goalProgress')).toBeVisible();
   const monoAfterRelaunch = screen.getByTestId('readingStats.palette.mono');
