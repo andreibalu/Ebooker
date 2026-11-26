@@ -499,11 +499,15 @@ struct AudiobookDetailView: View {
                         Text(momentsDisclosureLabel(count: saved.count))
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .layoutPriority(1)
                         Spacer(minLength: 0)
                         if momentsExpanded && hasAiAnalyzedMoments {
                             filterSheetCapsuleButton
                         }
+                        exportMomentsShareLink
                     }
+                    .dynamicTypeSize(...DynamicTypeSize.xLarge)
                     .padding(.vertical, 2)
                 }
                 .tint(.primary.opacity(0.55))
@@ -680,6 +684,8 @@ struct AudiobookDetailView: View {
                     .font(.caption.weight(.semibold))
                 Text("Filter")
                     .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -718,11 +724,37 @@ struct AudiobookDetailView: View {
         }
     }
 
+    /// Exports all moments for this book as Markdown via the system share sheet.
+    private var exportMomentsShareLink: some View {
+        ShareLink(
+            item: MomentsMarkdownExport(book: audiobook),
+            preview: SharePreview("\(audiobook.title) — Moments")
+        ) {
+            Image(systemName: "square.and.arrow.up")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 28, height: 28)
+                .background(Color.primary.opacity(0.08), in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Export Moments…")
+        .accessibilityIdentifier("audiobookDetail.exportMoments")
+    }
+
     /// Empty states: still need the Filter control when AI metadata exists (no disclosure row).
     private var momentsHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if hasAiAnalyzedMoments {
-                filterSheetCapsuleButton
+            if hasAiAnalyzedMoments || !audiobook.moments.isEmpty {
+                HStack(spacing: 8) {
+                    if hasAiAnalyzedMoments {
+                        filterSheetCapsuleButton
+                    }
+                    Spacer(minLength: 0)
+                    if !audiobook.moments.isEmpty {
+                        exportMomentsShareLink
+                    }
+                }
             }
             momentsFilterChipsRow
         }
