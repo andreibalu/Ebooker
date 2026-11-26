@@ -4,6 +4,30 @@
 //
 
 import SwiftUI
+import UIKit
+
+// MARK: - Book cover helper
+
+struct ReadingStatsBookCover: View {
+    let title: String
+    let image: UIImage?
+    var size: CGFloat = 52
+    var cornerRadius: CGFloat = 10
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                GeneratedCoverView(title: title)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
 
 // MARK: - Eyebrow / serif helpers
 
@@ -121,6 +145,8 @@ struct StatsHeroSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
     let scrollOffset: CGFloat
+    var selectedDayKey: String? = nil
+    var onSelectDay: ((HeatmapCellInfo) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -178,6 +204,35 @@ struct StatsHeroSection: View {
         return "\(from) — \(to)"
     }
 
+    private var gridModel: HeatmapGridModel {
+        HeatmapGridModel.build(
+            scale: scale,
+            today: stats.today,
+            firstDay: stats.firstDay,
+            activityByDay: stats.activityByDay
+        )
+    }
+
+    private var selectedCell: HeatmapCellInfo? {
+        guard let key = selectedDayKey else { return nil }
+        switch gridModel.layout {
+        case .grid:
+            for col in gridModel.cols {
+                if let match = col.first(where: { $0.dayKey == key }) { return match }
+            }
+            return nil
+        case .linearWithDayLabels, .linearWithMonthLabels:
+            return gridModel.linearDays.first(where: { $0.dayKey == key })
+        }
+    }
+
+    private static let detailDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "EEE, MMM d, yyyy"
+        return f
+    }()
+
     private var parallaxProgress: Double {
         Double(max(0, min(1, scrollOffset / 320)))
     }
@@ -202,36 +257,245 @@ struct StatsHeroSection: View {
             HStack {
                 Spacer(minLength: 0)
                 ReadingHeatmapView(
-                    model: HeatmapGridModel.build(
-                        scale: scale,
-                        today: stats.today,
-                        firstDay: stats.firstDay,
-                        activityByDay: stats.activityByDay
-                    ),
+                    model: gridModel,
                     palette: palette,
                     cellSize: heroCell,
                     gap: heroGap,
                     radius: heroRad,
                     showLabels: true,
-                    stagger: false
+                    stagger: false,
+                    emphasizeKey: selectedDayKey,
+                    onSelectDay: onSelectDay
                 )
                 Spacer(minLength: 0)
             }
             .padding(.top, 28)
+
+            if let cell = selectedCell {
+                dayDetailBar(for: cell)
+                    .padding(.top, 16)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
 
             Text(dateRange)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .tracking(0.4)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.top, 22)
+                .padding(.top, selectedCell == nil ? 22 : 14)
                 .revealOnAppear(delay: 0.5, y: 10)
         }
         .padding(.horizontal, 20)
         .padding(.top, 20)
-        .padding(.bottom, 28)
+        .padding(.bottom, 22)
         .opacity(heroOpacity)
         .offset(y: heroTranslateY)
+    }
+
+    private func dayDetailBar(for cell: HeatmapCellInfo) -> some View {
+        let activity = stats.activityByDay[cell.dayKey]
+        let dateText = Self.detailDateFormatter.string(from: cell.date)
+        let accent = palette.accent(forScheme: colorScheme)
+
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(dateText)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                if let title = activity?.topBookTitle, !title.isEmpty {
+                    Text(title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                }
+            }
+            .layoutPriority(1)
+
+            Spacer(minLength: 8)
+
+            Text(cell.minutes > 0 ? fmtHoursMins(cell.minutes) : "No listening")
+                .font(.system(size: 15, weight: .semibold, design: .serif))
+                .foregroundStyle(cell.minutes > 0 ? accent : .secondary)
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("readingStats.dayDetail")
+    }
+}
+
+// MARK: - Daily goal progress
+
+struct DailyGoalProgressSection: View {
+    let stats: ReadingStats
+    let dailyGoalMinutes: Int
+    var palette: HeatmapPalette = .amber
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let accent = palette.accent(forScheme: colorScheme)
+        let progress = min(1.0, Double(stats.todayMinutes) / Double(max(1, dailyGoalMinutes)))
+        let met = stats.todayMinutes >= dailyGoalMinutes
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                StatsEyebrow(text: "Daily goal", color: accent)
+                Spacer(minLength: 4)
+                if met {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Goal met")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(accent)
+                } else {
+                    let remaining = max(0, dailyGoalMinutes - stats.todayMinutes)
+                    Text("\(fmtHoursMins(remaining)) left")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                }
+            }
+
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                SerifDisplay(text: fmtHoursMins(stats.todayMinutes), size: 28, color: .primary)
+                Text("of \(fmtHoursMins(dailyGoalMinutes)) today")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.07))
+                    Capsule()
+                        .fill(accent)
+                        .frame(width: max(progress > 0 ? 8 : 0, geo.size.width * progress))
+                }
+            }
+            .frame(height: 7)
+        }
+        .padding(16)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 14)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("readingStats.goalProgress")
+    }
+}
+
+// MARK: - Goal & Palette preferences
+
+struct StatsPreferencesSection: View {
+    @Binding var palette: HeatmapPalette
+    @Binding var dailyGoalMinutes: Int
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let accent = palette.accent(forScheme: colorScheme)
+        let chipBG = colorScheme == .dark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)
+
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                StatsEyebrow(text: "Daily goal")
+                HStack(spacing: 6) {
+                    ForEach(DailyListeningGoal.presets, id: \.self) { minutes in
+                        let isSelected = dailyGoalMinutes == minutes
+                        Button {
+                            withAnimation(.snappy(duration: 0.22)) {
+                                dailyGoalMinutes = minutes
+                            }
+                        } label: {
+                            Text(DailyListeningGoal.label(for: minutes))
+                                .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                                .foregroundStyle(isSelected ? selectedForeground : .primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule().fill(isSelected ? accent : chipBG)
+                                )
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("readingStats.goal.\(minutes)")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
+                }
+            }
+
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 0.5)
+
+            VStack(alignment: .leading, spacing: 8) {
+                StatsEyebrow(text: "Palette")
+                HStack(spacing: 6) {
+                    ForEach(HeatmapPalette.allCases, id: \.self) { option in
+                        let isSelected = palette == option
+                        let optionAccent = option.accent(forScheme: colorScheme)
+                        Button {
+                            withAnimation(.snappy(duration: 0.22)) {
+                                palette = option
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(optionAccent)
+                                    .frame(width: 9, height: 9)
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(
+                                                isSelected ? selectedForeground.opacity(0.6) : Color.clear,
+                                                lineWidth: 1
+                                            )
+                                    )
+                                Text(option.displayName)
+                                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .foregroundStyle(isSelected ? selectedForeground : .primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule().fill(isSelected ? optionAccent : chipBG)
+                            )
+                            .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("readingStats.palette.\(option.rawValue)")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 22)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+    }
+
+    private var selectedForeground: Color {
+        if palette == .mono && colorScheme == .dark {
+            return Color(hex: "1C1A17")
+        }
+        return .white
     }
 }
 
@@ -240,6 +504,7 @@ struct StatsHeroSection: View {
 struct TotalTimeSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
@@ -262,7 +527,7 @@ struct TotalTimeSection: View {
                     SerifDisplay(
                         text: value < 10 ? String(format: "%.1f", value) : "\(Int(value))",
                         size: 96,
-                        color: palette.accent
+                        color: palette.accent(forScheme: colorScheme)
                     )
                 }
                 SerifDisplay(text: "hours", size: 36, color: Color.primary.opacity(0.7))
@@ -291,6 +556,7 @@ struct TotalTimeSection: View {
 struct BestDaySection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    var coverImage: UIImage? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
@@ -319,7 +585,7 @@ struct BestDaySection: View {
         }()
 
         VStack(alignment: .leading, spacing: 0) {
-            StatsEyebrow(text: "Your best day", color: palette.accent)
+            StatsEyebrow(text: "Your best day", color: palette.accent(forScheme: colorScheme))
 
             VStack(alignment: .leading, spacing: 0) {
                 SerifDisplay(text: "A long \(dayName)", size: 42)
@@ -333,7 +599,12 @@ struct BestDaySection: View {
 
             // Card
             HStack(alignment: .center, spacing: 16) {
-                bookCover(title: bd.topBookTitle ?? "Reading session", size: 64)
+                ReadingStatsBookCover(
+                    title: bd.topBookTitle ?? "Reading session",
+                    image: coverImage,
+                    size: 64,
+                    cornerRadius: 10
+                )
                 VStack(alignment: .leading, spacing: 3) {
                     Text(dateLabel.uppercased())
                         .font(.system(size: 11))
@@ -363,14 +634,6 @@ struct BestDaySection: View {
         .onAppear {
             withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
         }
-    }
-
-    @ViewBuilder
-    private func bookCover(title: String, size: CGFloat) -> some View {
-        // Use the app's generated cover for visual continuity.
-        GeneratedCoverView(title: title)
-            .frame(width: size, height: size)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder
@@ -502,7 +765,7 @@ struct BestTimeSection: View {
                     length: reduceMotion ? CGFloat(max(2, len)) : (visible ? CGFloat(max(2, len)) : 0)
                 )
                 .stroke(
-                    isBest ? palette.accent : (colorScheme == .dark ? Color.white.opacity(0.45) : Color.black.opacity(0.45)),
+                    isBest ? palette.accent(forScheme: colorScheme) : (colorScheme == .dark ? Color.white.opacity(0.45) : Color.black.opacity(0.45)),
                     style: StrokeStyle(lineWidth: isBest ? 5 : 4, lineCap: .round)
                 )
                 .opacity(isBest ? 1 : 0.55)
@@ -557,6 +820,7 @@ struct Spoke: Shape {
 struct LongestBookSection: View {
     let stats: ReadingStats
     var palette: HeatmapPalette = .amber
+    var coverImage: UIImage? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var visible = false
 
@@ -573,10 +837,13 @@ struct LongestBookSection: View {
             StatsEyebrow(text: "The book you stayed with")
 
             VStack(spacing: 16) {
-                GeneratedCoverView(title: stats.longestBookTitle ?? "")
-                    .frame(width: 160, height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .rotationEffect(.degrees(reduceMotion ? -2 : (visible ? -2 : -8)))
+                ReadingStatsBookCover(
+                    title: stats.longestBookTitle ?? "",
+                    image: coverImage,
+                    size: 160,
+                    cornerRadius: 14
+                )
+                .rotationEffect(.degrees(reduceMotion ? -2 : (visible ? -2 : -8)))
                     .scaleEffect(reduceMotion ? 1 : (visible ? 1 : 0.85))
                     .shadow(
                         color: .black.opacity(reduceMotion || visible ? 0.25 : 0.15),
@@ -619,6 +886,100 @@ struct LongestBookSection: View {
     }
 }
 
+// MARK: - Top books
+
+struct TopBooksSection: View {
+    let stats: ReadingStats
+    var palette: HeatmapPalette = .amber
+    var bookCovers: [UUID: UIImage] = [:]
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var displayedBooks: [ReadingStats.BookTotal] {
+        Array(stats.topBooks.prefix(5))
+    }
+
+    var body: some View {
+        if stats.topBooks.count > 1 {
+            let maxMinutes = max(1, displayedBooks.first?.minutes ?? 1)
+            let accent = palette.accent(forScheme: colorScheme)
+
+            VStack(alignment: .leading, spacing: 0) {
+                StatsEyebrow(text: "Top books")
+
+                SerifDisplay(text: "Most listened.", size: 34)
+                    .padding(.top, 8)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(displayedBooks.enumerated()), id: \.element.id) { index, book in
+                        HStack(alignment: .center, spacing: 12) {
+                            ReadingStatsBookCover(
+                                title: book.title,
+                                image: bookCovers[book.id],
+                                size: 46,
+                                cornerRadius: 8
+                            )
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                    Text(book.title)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(2)
+                                        .layoutPriority(1)
+                                    Spacer(minLength: 4)
+                                    Text(fmtHoursMins(book.minutes))
+                                        .font(.system(size: 13, weight: .semibold, design: .serif))
+                                        .foregroundStyle(index == 0 ? accent : .secondary)
+                                        .monospacedDigit()
+                                        .lineLimit(1)
+                                }
+
+                                if !book.author.isEmpty {
+                                    Text(book.author)
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+
+                                GeometryReader { geo in
+                                    let ratio = CGFloat(book.minutes) / CGFloat(maxMinutes)
+                                    ZStack(alignment: .leading) {
+                                        Capsule()
+                                            .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                                        Capsule()
+                                            .fill(index == 0 ? accent : accent.opacity(0.55))
+                                            .frame(width: max(6, geo.size.width * ratio))
+                                    }
+                                }
+                                .frame(height: 4)
+                                .padding(.top, 2)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+
+                        if index < displayedBooks.count - 1 {
+                            Rectangle()
+                                .fill(Color.primary.opacity(0.08))
+                                .frame(height: 0.5)
+                                .padding(.leading, 72)
+                        }
+                    }
+                }
+                .background(Color.cardWhite, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 3)
+                .padding(.top, 18)
+                .revealOnAppear(delay: 0.2, y: 16)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 40)
+            .padding(.bottom, 30)
+            .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        }
+    }
+}
+
 // MARK: - Streak
 
 struct StreakSection: View {
@@ -641,13 +1002,14 @@ struct StreakSection: View {
     }
 
     var body: some View {
+        let accent = palette.accent(forScheme: colorScheme)
         VStack(alignment: .leading, spacing: 0) {
             StatsEyebrow(text: "On a roll")
 
             HStack(alignment: .lastTextBaseline, spacing: 24) {
                 VStack(alignment: .leading, spacing: 2) {
                     CountUpText(target: Double(stats.currentStreak), duration: 1.2, trigger: visible) { value in
-                        SerifDisplay(text: "\(Int(value.rounded()))", size: 64, color: palette.accent)
+                        SerifDisplay(text: "\(Int(value.rounded()))", size: 64, color: accent)
                     }
                     Text("day streak")
                         .font(.system(size: 12))
@@ -664,6 +1026,13 @@ struct StreakSection: View {
                 Spacer(minLength: 0)
             }
             .padding(.top, 12)
+
+            if stats.currentStreak > 0 && !stats.isStreakActiveToday {
+                Text("\(stats.currentStreak)-day streak · listen today to keep it")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(accent)
+                    .padding(.top, 10)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -828,33 +1197,35 @@ struct FreeBooksSection: View {
     private var hoursTarget: Double { Double(stats.freeMinutes) / 60.0 }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            StatsEyebrow(text: "Public domain, private joy")
+        if stats.freeMinutes > 0 {
+            VStack(alignment: .leading, spacing: 0) {
+                StatsEyebrow(text: "Public domain, private joy")
 
-            HStack(alignment: .center, spacing: 22) {
-                ring
-                    .frame(width: 130, height: 130)
+                HStack(alignment: .center, spacing: 22) {
+                    ring
+                        .frame(width: 130, height: 130)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    CountUpText(target: hoursTarget, duration: 1.5, trigger: visible) { value in
-                        let mins = Int((value * 60).rounded())
-                        SerifDisplay(text: fmtHoursMins(mins), size: 22)
+                    VStack(alignment: .leading, spacing: 6) {
+                        CountUpText(target: hoursTarget, duration: 1.5, trigger: visible) { value in
+                            let mins = Int((value * 60).rounded())
+                            SerifDisplay(text: fmtHoursMins(mins), size: 22)
+                        }
+                        Text("of your listening was from \(Text("free, public-domain").fontWeight(.semibold).foregroundColor(.primary)) recordings.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(2)
                     }
-                    Text("of your listening was from \(Text("free, public-domain").fontWeight(.semibold).foregroundColor(.primary)) recordings.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(2)
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .padding(.top, 18)
+                .revealOnAppear(delay: 0.1, y: 16)
             }
-            .padding(.top, 18)
-            .revealOnAppear(delay: 0.1, y: 16)
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 40)
-        .padding(.bottom, 30)
-        .onAppear {
-            withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
+            .padding(.horizontal, 20)
+            .padding(.top, 40)
+            .padding(.bottom, 30)
+            .onAppear {
+                withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.9)) { visible = true }
+            }
         }
     }
 
@@ -868,7 +1239,7 @@ struct FreeBooksSection: View {
                 )
             Circle()
                 .trim(from: 0, to: reduceMotion ? CGFloat(stats.freePct) : (visible ? CGFloat(stats.freePct) : 0))
-                .stroke(palette.accent, style: StrokeStyle(lineWidth: stroke, lineCap: .round))
+                .stroke(palette.accent(forScheme: colorScheme), style: StrokeStyle(lineWidth: stroke, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .animation(reduceMotion ? nil : .easeOut(duration: 1.5), value: visible)
 
@@ -886,6 +1257,7 @@ struct FreeBooksSection: View {
 // MARK: - Footer
 
 struct StatsFooter: View {
+    var backLabel: String = "Library"
     var onClose: () -> Void
     var body: some View {
         VStack(spacing: 14) {
@@ -897,7 +1269,7 @@ struct StatsFooter: View {
                 .revealOnAppear()
 
             Button(action: onClose) {
-                Text("Back to Library")
+                Text("Back to \(backLabel)")
                     .font(.system(size: 13, weight: .semibold))
                     .padding(.horizontal, 22)
                     .padding(.vertical, 10)
@@ -913,5 +1285,60 @@ struct StatsFooter: View {
         .padding(.horizontal, 20)
         .padding(.top, 24)
         .padding(.bottom, 56)
+    }
+}
+
+// MARK: - Empty state
+
+struct ReadingStatsEmptyState: View {
+    var backLabel: String = "Library"
+    var onClose: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 18) {
+                Spacer(minLength: 88)
+
+                ZStack {
+                    Circle()
+                        .fill(Color.amber.opacity(0.14))
+                        .frame(width: 72, height: 72)
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(Color.amber)
+                }
+                .accessibilityHidden(true)
+
+                StatsEyebrow(text: "Reading activity")
+
+                SerifDisplay(text: "Your story starts here.", size: 32)
+                    .multilineTextAlignment(.center)
+
+                Text("As you listen to audiobooks in Unpaged, your daily heatmap, streaks, favorite hours and top books will appear here.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+                    .frame(maxWidth: 300)
+
+                Button(action: onClose) {
+                    Text("Back to \(backLabel)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 11)
+                        .background(Capsule().fill(Color.primary.opacity(0.07)))
+                        .foregroundStyle(.primary)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+
+                Spacer(minLength: 40)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 24)
+        }
+        .scrollIndicators(.hidden)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("readingStats.emptyState")
     }
 }
