@@ -451,7 +451,7 @@ enum E2EFixtures {
     }
 
     private static func realisticCreatedAt(date: Date, hour: Int, minutes: Int, calendar: Calendar = .current) -> Date {
-        let atHour = calendar.date(byAdding: .hour, value: hour, to: date) ?? date
+        let atHour = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: date) ?? date
         return calendar.date(byAdding: .minute, value: minutes, to: atHour) ?? atHour
     }
 

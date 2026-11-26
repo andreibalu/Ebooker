@@ -302,9 +302,10 @@ struct ReadingStats: Equatable {
         var timed: [ReadingSession] = []
         var untimed: [ReadingSession] = []
         for s in sessions {
-            // Calendar arithmetic, not `+ hour * 3600`: on a DST day the bucket's wall-clock hour is an
-            // hour off in seconds, which would push a real chunk outside the tolerance.
-            let bucketInstant = calendar.date(byAdding: .hour, value: s.hour, to: s.date)
+            // The bucket's wall-clock hour on its day, not `date + hour * 3600` and not
+            // `date(byAdding: .hour)`: both add elapsed time, so on a DST day they land an hour off
+            // and can push a real chunk outside the tolerance.
+            let bucketInstant = calendar.date(bySettingHour: s.hour, minute: 0, second: 0, of: s.date)
                 ?? s.date.addingTimeInterval(Double(s.hour) * 3600)
             let estimatedStart = s.createdAt.addingTimeInterval(-Double(s.minutes) * 60)
             let isTimed = s.createdAt != .distantPast

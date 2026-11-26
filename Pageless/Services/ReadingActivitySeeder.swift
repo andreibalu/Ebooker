@@ -91,7 +91,7 @@ enum ReadingActivitySeeder {
                 let startOfDay = calendar.startOfDay(for: day)
                 // Realistic createdAt (chunk end = bucket start + minutes) so stats coalesce seeded
                 // rows exactly as they would real ones.
-                let bucketStart = calendar.date(byAdding: .hour, value: hour, to: startOfDay) ?? startOfDay
+                let bucketStart = calendar.date(bySettingHour: hour, minute: 0, second: 0, of: startOfDay) ?? startOfDay
                 let createdAt = calendar.date(byAdding: .minute, value: minutes, to: bucketStart) ?? bucketStart
                 let session = ReadingSession(
                     date: startOfDay,
