@@ -60,10 +60,14 @@ test('heatmap tap shows day detail, goal and palette persist across relaunch, an
   const shareButton = screen.getByTestId('readingStats.share');
   await expect(shareButton).toBeVisible();
   await tapVisibleCenter(shareButton);
-  const closeShare = screen.getByRole('button', 'Close').first();
-  if (await expect(closeShare).toBeVisible({ timeout: 5_000 }).then(() => true, () => false)) {
-    await tapVisibleCenter(closeShare);
+  const shareSheet = screen.getByTestId('ActivityListView');
+  await expect(shareSheet).toBeVisible();
+  const dismissRegion = screen.getByTestId('PopoverDismissRegion');
+  const dismissBox = await dismissRegion.boundingBox();
+  if (dismissBox) {
+    await dismissRegion.tap({ position: { x: dismissBox.width / 2, y: 80 } });
   }
+  await expect(shareSheet).toBeHidden();
 
   await tapVisibleCenter(screen.getByRole('button', 'Library').last());
   await expect(screen.getByTestId('readingActivity.goal')).toBeVisible();
