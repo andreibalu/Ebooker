@@ -97,3 +97,4 @@ Fixes for the verified findings on PR #102.
 - **Hero per-frame work.** The grid model is built once per body and the date formatters are static.
 - **Share PNG name.** `.suggestedFileName("Unpaged Reading Activity.png")` on the `DataRepresentation`; rendering stays lazy.
 - **Doc.** `playback.md` states the untimed ordering rule (day, book, hour), the wall-clock bucket rule and the `end`-on-switch rule.
+- **Width check.** Verified on a temporary iPhone SE (3rd generation) simulator, 375 pt wide (no narrower iPhone type exists here, so 320 pt is covered by `StatsHeroGeometryTests` only): the 7-day, 30-day and four-month heroes sit inside the 20 pt gutters. Screenshots: `/tmp/unpaged-s01-shots/fix-r1-se-{7,30,113}.png`.
