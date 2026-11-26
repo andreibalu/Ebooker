@@ -1,6 +1,7 @@
 import { expect, type Screen } from 'e2e';
-import { test, tapVisibleCenter, expectShareSheetThenDismiss } from './native-actions.js';
-import { bundle } from '../support/simulator.js';
+import { test, tapVisibleCenter, expectShareSheetThenDismiss, expandSheet } from './native-actions.js';
+import { execFileSync } from 'node:child_process';
+import { bundle, udid } from '../support/simulator.js';
 
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
 
@@ -10,23 +11,24 @@ async function openMoments(screen: Screen) {
   await screen.scrollUntilVisible(screen.getByText('E2E Second Moment').first());
 }
 
+/** The second fixture book is not a favorite, so it lists only under the Library tab. */
+async function openAnotherBook(screen: Screen) {
+  await screen.getByTestId('libraryTab').tap();
+  await screen.getByTestId('book.card.E2E-Another-Book').tap();
+}
+
 async function rowTop(screen: Screen, label: string): Promise<number> {
   const box = await screen.getByText(label).first().boundingBox();
   if (!box) throw new Error(`${label} has no bounds`);
   return box.y;
 }
 
-/** Edit and filter sheets open at their half-height detent, where the edit form does not scroll. */
-async function expandSheet(screen: Screen) {
-  const grabber = await screen.getByRole('button', 'Sheet Grabber').boundingBox();
-  if (!grabber) throw new Error('Sheet grabber has no bounds');
-  const x = grabber.x + grabber.width / 2;
-  await screen.swipe({ from: { x, y: grabber.y + grabber.height / 2 }, to: { x, y: 80 } });
-}
-
 async function filterBy(screen: Screen, option: string) {
   await screen.scrollUntilVisible(screen.getByLabel('Filter moments').first());
   await screen.getByLabel('Filter moments').first().tap();
+  // The category, character and mood sections together overrun the half-height detent, so the
+  // mood buttons start below the fold.
+  await expandSheet(screen);
   await screen.getByRole('button', option).tap();
   await closeFilterSheet(screen);
 }
@@ -160,7 +162,7 @@ test('book moment rows show the quote and a metadata strip, never the transcript
 test('a moment with no quote, mood, cast or category adds no quote line or strip', async ({ device, screen }) => {
   // The moment-search fixture adds a plain "E2E Café" moment to the second book.
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture', '-e2e-moment-search'] });
-  await screen.getByTestId('book.card.E2E-Another-Book').tap();
+  await openAnotherBook(screen);
   await screen.getByText(/^\d+ moments?$/).first().tap();
   await screen.scrollUntilVisible(screen.getByText('E2E Café').first());
   await expect(screen.getByTestId('moment.quote.E2E Café')).toBeHidden();
@@ -174,15 +176,22 @@ test('the edit sheet has a collapsed Transcript disclosure that expands to selec
   await openMoments(screen);
   await tapVisibleCenter(screen.getByText('E2E Second Moment').first());
   await expandSheet(screen);
-  const disclosure = screen.getByTestId('moment.transcript');
+  // Roles and text, not the moment.transcript* ids: a DisclosureGroup's identifier overrides its
+  // children's, so on the device every node inside the group reports "moment.transcript".
+  const disclosure = screen.getByRole('button', 'Transcript', { exact: true });
   await screen.scrollUntilVisible(disclosure);
   // Collapsed until asked for.
-  await expect(screen.getByTestId('moment.transcript.text')).toBeHidden();
+  const text = screen.getByText(/old lighthouse keeper waved us in/);
+  await expect(text).toBeHidden();
   await tapVisibleCenter(disclosure);
-  const text = screen.getByTestId('moment.transcript.text');
   await screen.scrollUntilVisible(text);
-  await expect(text).toContainText('old lighthouse keeper waved us in');
-  await expect(screen.getByTestId('moment.transcript.copy')).toBeVisible();
+  await expect(text).toBeVisible();
+  await screen.scrollUntilVisible(screen.getByRole('button', 'Copy Transcript'));
+  await expect(screen.getByRole('button', 'Copy Transcript')).toBeVisible();
+  await tapVisibleCenter(screen.getByRole('button', 'Copy Transcript'));
+  await expect(screen.getByRole('button', 'Copied')).toBeVisible();
+  expect(execFileSync('xcrun', ['simctl', 'pbpaste', udid()], { encoding: 'utf8', timeout: 30_000 }))
+    .toContain('old lighthouse keeper waved us in');
   await app.screenshot('moments-transcript-disclosure');
   await screen.getByRole('button', 'Cancel').tap();
   await expect(screen.getByTestId('moment.done')).toBeHidden();
@@ -191,7 +200,7 @@ test('the edit sheet has a collapsed Transcript disclosure that expands to selec
   await tapVisibleCenter(screen.getByText('E2E First Moment').first());
   await expandSheet(screen);
   await screen.scrollUntilVisible(screen.getByPlaceholder('Add a quote (optional)'));
-  await expect(screen.getByTestId('moment.transcript')).toBeHidden();
+  await expect(screen.getByRole('button', 'Transcript', { exact: true })).toBeHidden();
   await screen.getByRole('button', 'Cancel').tap();
 });
 
@@ -217,14 +226,16 @@ test('Share Moment opens the share sheet from the context menu and from the edit
 test('Export Moments shares the book, and only a book with moments offers it', async ({ device, screen }) => {
   await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
-  const exportButton = screen.getByTestId('audiobookDetail.exportMoments');
+  // By label: the disclosure row's identifier also lands on the "N moments" button, so the id
+  // alone matches two nodes.
+  const exportButton = screen.getByRole('button', 'Export Moments…');
   await screen.scrollUntilVisible(exportButton);
   await tapVisibleCenter(exportButton);
   await expectShareSheetThenDismiss(screen);
 
   // The default fixture's second book has no moments. Its page has the moments header but no export.
-  await tapVisibleCenter(screen.getByTestId('BackButton'));
-  await screen.getByTestId('book.card.E2E-Another-Book').tap();
+  await tapVisibleCenter(screen.getByTestId('BackButton').first());
+  await openAnotherBook(screen);
   await expect(screen.getByTestId('book.progressSummary')).toBeVisible();
-  await expect(screen.getByTestId('audiobookDetail.exportMoments')).toBeHidden();
+  await expect(screen.getByRole('button', 'Export Moments…')).toBeHidden();
 });

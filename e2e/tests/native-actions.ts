@@ -122,3 +122,11 @@ export async function expectShareSheetThenDismiss(screen: Screen): Promise<void>
   }
   await expect(shareSheet).toBeHidden();
 }
+
+/** Edit and filter sheets open at their half-height detent, where the edit form does not scroll. */
+export async function expandSheet(screen: Screen) {
+  const grabber = await screen.getByRole('button', 'Sheet Grabber').boundingBox();
+  if (!grabber) throw new Error('Sheet grabber has no bounds');
+  const x = grabber.x + grabber.width / 2;
+  await screen.swipe({ from: { x, y: grabber.y + grabber.height / 2 }, to: { x, y: 80 } });
+}

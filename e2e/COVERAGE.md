@@ -40,7 +40,7 @@ Six code-review rounds on the release branch added these cases, most of them sho
 - Play Latest Book resumes an Audiobookshelf book from its saved marker, after reconciling with the server (`Play Latest Book resumes an ABS book from its saved marker…`).
 - Moment search disables rows for a disconnected Audiobookshelf server and for a missing track file (`moment-search.e2e.ts`).
 - Moment search matches a word that appears only in a moment's transcript, with the match shown as a snippet of at most two lines, and shows no snippet when the name, note or quote already matches. A mixed query (transcript word plus another moment's word) finds nothing (`moment-search.e2e.ts`). The ranking weight of the transcript is covered by `MomentSearch` unit tests, not E2E.
-- At the largest text size, a book page's moment rows, metadata strip and Export Moments control stay readable (`accessibility-layout.e2e.ts`).
+- At the largest text size, a book page's moments header (label and Filter capsule on one line beside the export control) and a moment row's quote line and metadata strip stay readable (`accessibility-layout.e2e.ts`).
 - A cached recap whose anchor is within 60 s of the saved position survives a relaunch (`welcome-back.e2e.ts`).
 - Play after an End of chapter expiry at a file end continues with the next file (`chapter sleep stops at a track end, and Play continues with the next file`).
 

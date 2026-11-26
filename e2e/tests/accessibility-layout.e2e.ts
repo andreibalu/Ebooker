@@ -190,21 +190,43 @@ test('large text with Button Shapes and Bold Text keeps the Plus notice and left
   await app.screenshot('a11y-layout-plus-unsupported');
 });
 
-// The book page's moment rows carry a quote line and a one-line metadata strip, and the moments
-// section a share and an export control. At the largest text size none may squeeze to a sliver.
-test('large text with Button Shapes and Bold Text keeps moment rows, their strip and the export control readable', async ({ device, screen, app }) => {
+// The book page's moments section carries a disclosure row (label, Filter capsule, export control)
+// and rows with a quote line and a one-line metadata strip. At the largest text size none may
+// squeeze to a sliver.
+test('large text with Button Shapes and Bold Text keeps the moments header and its export control on one line', async ({ device, screen, app }) => {
   setAccessibility(true);
-  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture.filter((arg) => arg !== '-e2e-import')] });
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture.filter((arg) => arg !== '-e2e-import') });
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
-  const exportButton = screen.getByTestId('audiobookDetail.exportMoments');
-  await screen.scrollUntilVisible(exportButton);
-  await expectReadable(screen, 'Export Moments…');
+  await screen.scrollUntilVisible(screen.getByRole('button', 'Export Moments…'));
   await app.screenshot('a11y-layout-export-moments');
   await screen.getByText(/^\d+ moments?$/).first().tap();
   await screen.scrollUntilVisible(screen.getByText('E2E Second Moment').first());
+  // A squeezed label ends as "2…", and a squeezed capsule wraps a letter per line.
+  await expectReadable(screen, /^\d+ moments?$/);
+  await expectReadable(screen, 'Filter');
+  await app.screenshot('a11y-layout-moments-header');
+});
+
+test('large text with Button Shapes and Bold Text keeps a moment row, its quote and its strip readable', async ({ device, screen, app }) => {
+  setAccessibility(true);
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture.filter((arg) => arg !== '-e2e-import') });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.scrollUntilVisible(screen.getByRole('button', 'Export Moments…'));
+  await screen.getByText(/^\d+ moments?$/).first().tap();
+  await screen.scrollUntilVisible(screen.getByText('E2E Second Moment').first());
   await expectReadable(screen, 'E2E Second Moment');
-  await expectReadable(screen, 'Every harbour keeps a light for strangers.');
+  // The quote is wrapped in typographic quotes, so find it by id.
+  const quote = screen.getByTestId('moment.quote.E2E Second Moment');
+  await expect(quote).toContainText('Every harbour keeps a light for strangers.');
+  const quoteBox = await quote.boundingBox();
+  if (!quoteBox) throw new Error('Quote line has no bounds');
+  expect(quoteBox.width).toBeGreaterThan(120);
+  // A row at this size outgrows the first screen, so the strip may sit below the fold. The
+  // synthesized scroll can't grab this page, so drag it.
   const meta = screen.getByTestId('moment.meta.E2E Second Moment');
+  for (let drag = 0; drag < 6 && !(await meta.isVisible()); drag += 1) {
+    await screen.swipe({ from: { x: 8, y: 780 }, to: { x: 8, y: 200 } });
+  }
   await expect(meta).toBeVisible();
   const box = await meta.boundingBox();
   if (!box) throw new Error('Metadata strip has no bounds');

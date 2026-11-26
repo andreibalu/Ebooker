@@ -1,5 +1,5 @@
 import { expect } from 'e2e';
-import { test, tapVisibleCenter, expandEqualizerSheet } from './native-actions.js';
+import { test, tapVisibleCenter, expandEqualizerSheet, expandSheet } from './native-actions.js';
 import { setSystemAppearance } from '../support/simulator.js';
 
 const bundle = 'andreibaludev.Pageless';
@@ -43,6 +43,8 @@ test('moment category filters select and clear a real result subset', async ({ d
   await expect(screen.getByText('E2E First Moment').first()).toBeVisible();
   await expect(screen.getByText('E2E Second Moment').first()).toBeHidden();
   await screen.getByLabel('Filter moments').first().tap();
+  // Category, character and mood sections overrun the half-height detent, hiding Clear All.
+  await expandSheet(screen);
   await screen.getByRole('button', 'Clear All').tap();
   await screen.getByRole('button', 'Done').tap();
   await expect(screen.getByText('E2E Second Moment').first()).toBeVisible();
