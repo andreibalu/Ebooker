@@ -56,6 +56,8 @@ struct ReadingStatsShareImage: Transferable, Sendable {
         DataRepresentation(exportedContentType: .png) { item in
             try await item.renderPNGData()
         }
+        // Without a name the share sheet shows the temp file's ".com.apple.Foundation.NSI…" name.
+        .suggestedFileName("Unpaged Reading Activity.png")
     }
 
     @MainActor

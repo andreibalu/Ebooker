@@ -431,6 +431,7 @@ struct StatsPreferencesSection: View {
                                 .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(minutes == 0 ? "Daily goal off" : "Daily goal, \(minutes) minutes")
                         .accessibilityIdentifier("readingStats.goal.\(minutes)")
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
@@ -477,6 +478,7 @@ struct StatsPreferencesSection: View {
                             .contentShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Heatmap palette, \(option.displayName)")
                         .accessibilityIdentifier("readingStats.palette.\(option.rawValue)")
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
