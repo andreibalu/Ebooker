@@ -294,7 +294,9 @@ struct MomentEditSheet: View {
 
     private func transcriptSection(_ text: String) -> some View {
         Section {
-            DisclosureGroup("Transcript", isExpanded: $isTranscriptExpanded) {
+            // The id goes on the label only: an id on the group is inherited by everything inside it
+            // and would replace the text's and the copy button's own ids.
+            DisclosureGroup(isExpanded: $isTranscriptExpanded) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(text)
                         .font(.footnote)
@@ -327,8 +329,10 @@ struct MomentEditSheet: View {
                     .accessibilityIdentifier("moment.transcript.copy")
                 }
                 .padding(.top, 4)
+            } label: {
+                Text("Transcript")
+                    .accessibilityIdentifier("moment.transcript")
             }
-            .accessibilityIdentifier("moment.transcript")
         }
     }
 }

@@ -133,34 +133,53 @@ struct MomentRow: View {
         moment.mood != nil || !metadataChipLabels.isEmpty || moment.aiGeneratedName
     }
 
+    /// One line, never truncated mid-chip: `ViewThatFits` tries all the chips (up to three), then one
+    /// fewer, down to none, and the chips that don't fit fold into the "+N" count. The mood pill
+    /// is in every variant, so it keeps priority.
     private var metadataStrip: some View {
         let allChips = metadataChipLabels
-        let visibleChips = Array(allChips.prefix(3))
-        let overflowCount = max(0, allChips.count - visibleChips.count)
+        let maxVisible = min(3, allChips.count)
+        return ViewThatFits(in: .horizontal) {
+            ForEach(Array(stride(from: maxVisible, through: 0, by: -1)), id: \.self) { visibleCount in
+                metadataStripRow(
+                    visibleChips: Array(allChips.prefix(visibleCount)),
+                    overflowCount: allChips.count - visibleCount
+                )
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(metadataAccessibilityLabel)
+        .accessibilityIdentifier("moment.meta.\(moment.label)")
+    }
 
-        return HStack(spacing: 4) {
+    private var metadataAccessibilityLabel: String {
+        var parts = [moment.mood?.displayName].compactMap { $0 } + metadataChipLabels
+        if moment.aiGeneratedName { parts.append("AI generated") }
+        return parts.joined(separator: ", ")
+    }
+
+    private func metadataStripRow(visibleChips: [String], overflowCount: Int) -> some View {
+        HStack(spacing: 4) {
             if let mood = moment.mood {
                 Text(mood.displayName)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.amber.opacity(0.18), in: Capsule())
-                    .layoutPriority(2)
             }
 
-            ForEach(visibleChips, id: \.self) { chip in
+            // Offsets, not the text: a category and a character can share a name.
+            ForEach(Array(visibleChips.enumerated()), id: \.offset) { _, chip in
                 Text(chip)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.primary.opacity(0.07), in: Capsule())
-                    .layoutPriority(1)
             }
 
             if overflowCount > 0 {
@@ -168,21 +187,16 @@ struct MomentRow: View {
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(2)
             }
 
             if moment.aiGeneratedName {
                 Image(systemName: "sparkles")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .accessibilityLabel("AI generated")
-                    .layoutPriority(2)
             }
         }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("moment.meta.\(moment.label)")
+        // Natural width, so ViewThatFits can tell when a variant doesn't fit.
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private func highlighted(_ value: String, query: String) -> Text {
