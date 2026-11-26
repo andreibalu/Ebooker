@@ -69,6 +69,21 @@ struct MomentRow: View {
                         if !metadata.isEmpty {
                             highlighted(metadata.joined(separator: " · "), query: searchQuery).font(.caption)
                         }
+                        if let snippet = MomentSearch.transcriptSnippet(for: moment, query: searchQuery) {
+                            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                                Image(systemName: "waveform")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
+                                highlighted(snippet, query: searchQuery)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Transcript: \(snippet)")
+                            .accessibilityIdentifier("momentSearch.snippet.\(moment.label)")
+                        }
                         if let unavailableReason {
                             Text(unavailableReason).font(.caption).foregroundStyle(.secondary)
                         }
@@ -93,6 +108,97 @@ struct MomentRow: View {
         let tracks = audiobook.sortedTracks
         guard tracks.indices.contains(moment.trackIndex) else { return "Track unavailable" }
         return tracks[moment.trackIndex].displayTitle
+    }
+
+    private var resolvedTrackTitle: String? {
+        let tracks = audiobook.sortedTracks
+        guard tracks.indices.contains(moment.trackIndex) else { return nil }
+        return tracks[moment.trackIndex].displayTitle
+    }
+
+    private var editShareCard: MomentQuoteCardImage {
+        let trimmedName = editNameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return MomentQuoteCardImage(
+            payload: MomentQuoteCardPayload(
+                bookTitle: audiobook.title,
+                author: audiobook.author,
+                coverArtData: audiobook.coverArtData,
+                quoteLine: editQuoteLine,
+                label: trimmedName.isEmpty ? moment.label : trimmedName,
+                note: editNoteInput,
+                chapterTitle: resolvedTrackTitle,
+                timestamp: TimeFormatter.clockString(seconds: moment.time)
+            )
+        )
+    }
+
+    private var formattedQuoteLine: String? {
+        guard let raw = moment.quoteLine?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        if raw.hasPrefix("\"") || raw.hasPrefix("\u{201C}") {
+            return raw
+        }
+        return "\u{201C}\(raw)\u{201D}"
+    }
+
+    private var metadataChipLabels: [String] {
+        moment.categories.map(\.displayName) + moment.characters
+    }
+
+    private var hasMetadataStrip: Bool {
+        moment.mood != nil || !metadataChipLabels.isEmpty || moment.aiGeneratedName
+    }
+
+    private var metadataStrip: some View {
+        let allChips = metadataChipLabels
+        let visibleChips = Array(allChips.prefix(3))
+        let overflowCount = max(0, allChips.count - visibleChips.count)
+
+        return HStack(spacing: 4) {
+            if let mood = moment.mood {
+                Text(mood.displayName)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.amber.opacity(0.18), in: Capsule())
+                    .layoutPriority(2)
+            }
+
+            ForEach(visibleChips, id: \.self) { chip in
+                Text(chip)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.07), in: Capsule())
+                    .layoutPriority(1)
+            }
+
+            if overflowCount > 0 {
+                Text("+\(overflowCount)")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
+            }
+
+            if moment.aiGeneratedName {
+                Image(systemName: "sparkles")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("AI generated")
+                    .layoutPriority(2)
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("moment.meta.\(moment.label)")
     }
 
     private func highlighted(_ value: String, query: String) -> Text {
@@ -141,6 +247,12 @@ struct MomentRow: View {
             }
         }
         .contextMenu {
+            ShareLink(
+                item: MomentQuoteCardImage(moment: moment, audiobook: audiobook),
+                preview: SharePreview(moment.label)
+            ) {
+                Label("Share Moment", systemImage: "square.and.arrow.up")
+            }
             Button(role: .destructive) {
                 onDelete()
             } label: {
@@ -157,6 +269,8 @@ struct MomentRow: View {
                 quoteLine: $editQuoteLine,
                 characters: $editCharacters,
                 mood: $editMood,
+                transcript: moment.transcript,
+                shareCard: editShareCard,
                 onSave: {
                     let trimmedName = editNameInput.trimmingCharacters(in: .whitespaces)
                     if !trimmedName.isEmpty {
@@ -227,10 +341,20 @@ struct MomentRow: View {
                     .foregroundStyle(.primary)
                     .font(.subheadline)
                     .multilineTextAlignment(.leading)
+                    .layoutPriority(1)
 
                 Text(TimeFormatter.clockString(seconds: moment.time))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if let quote = formattedQuoteLine {
+                    Text(quote)
+                        .font(.system(.caption, design: .serif).italic())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.top, 1)
+                        .accessibilityIdentifier("moment.quote.\(moment.label)")
+                }
 
                 if let note = moment.notes, !note.isEmpty {
                     Text(note)
@@ -239,9 +363,14 @@ struct MomentRow: View {
                         .lineLimit(2)
                         .padding(.top, 1)
                 }
+
+                if hasMetadataStrip {
+                    metadataStrip
+                        .padding(.top, 2)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
