@@ -71,10 +71,17 @@ struct SettingsView: View {
                             onOpenInShelves: onOpenAudiobookshelf,
                             account: absAccount
                         )
+                    case .readingActivity:
+                        ReadingStatsScreen(backLabel: "Settings")
                     }
                 }
         }
         .presentationDetents([.medium, .large], selection: $selectedDetent)
+        .onChange(of: navigationPath) { _, newPath in
+            if newPath.contains(.readingActivity) {
+                selectedDetent = .large
+            }
+        }
     }
 
     // MARK: - Root screen
@@ -86,6 +93,7 @@ struct SettingsView: View {
 
             ScrollView {
                 LazyVStack(spacing: 22) {
+                    readingActivitySection
                     sourcesSection
                     playbackSection
                     appSection
@@ -115,6 +123,24 @@ struct SettingsView: View {
     /// "View Unpaged Plus" from the AI page: show the Plus hub inside Settings.
     private func showPlusCard() {
         navigationPath = [.plus]
+    }
+
+    // MARK: - Reading Activity
+
+    private var readingActivitySection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            SettingsSectionHeader(eyebrow: "Activity", title: "Your listening.")
+
+            SettingsCard {
+                navigationRow(
+                    title: "Reading Activity",
+                    caption: "Streaks, daily goal and listening history",
+                    symbol: "chart.bar.xaxis",
+                    destination: .readingActivity,
+                    identifier: "settings.readingActivity"
+                )
+            }
+        }
     }
 
     // MARK: - Unpaged Plus
@@ -530,6 +556,7 @@ enum SettingsDestination: Hashable {
     case audiobookshelf
     case plus
     case cloudLibrary
+    case readingActivity
 }
 
 // MARK: - Inline expanding option picker (replaces the pushed option list)

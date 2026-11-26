@@ -95,7 +95,10 @@ struct ContentView: View {
     @AppStorage("resumeBacktrackSeconds") private var resumeBacktrackSeconds = ResumeBacktrackOption.oneMinute.rawValue
     @AppStorage("skipBackSeconds") private var skipBackSeconds = SkipIntervalOption.thirty.rawValue
     @AppStorage("skipForwardSeconds") private var skipForwardSeconds = SkipIntervalOption.thirty.rawValue
+    @AppStorage(HeatmapPalette.storageKey) private var heatmapPaletteRaw = HeatmapPalette.amber.rawValue
+    @AppStorage(DailyListeningGoal.storageKey) private var dailyListeningGoalMinutes = 0
 
+    @State private var statsToday: Date = .now
     @State private var viewModel = LibraryViewModel()
     @State private var browseViewModel = BrowseLibriVoxViewModel()
     @State private var absAccount = ABSAccount.shared
@@ -114,6 +117,7 @@ struct ContentView: View {
     @State private var isMomentSearchPresented = false
     @State private var playMomentAfterSearch = false
     @State private var isDownloadScrollPending = false
+    @State private var isReadingStatsPresented = false
     /// Changing this rebuilds the navigation stack. The links push without a path, so a
     /// rebuild is the only way to pop every pushed screen.
     @State private var navigationStackID = 0
@@ -153,6 +157,10 @@ struct ContentView: View {
                     .navigationDestination(for: ABSGroupRoute.self) { route in
                         ABSBookGroupView(libraryID: route.libraryID, kind: route.kind, title: route.title,
                                          groupID: route.groupID, onOpenPlayer: openPlayer, account: absAccount)
+                    }
+                    .navigationDestination(isPresented: $isReadingStatsPresented) {
+                        ReadingStatsScreen(backLabel: "Library")
+                            .navigationTransition(.zoom(sourceID: readingStatsMorphID, in: readingStatsNamespace))
                     }
                 }
                 .id(navigationStackID)
@@ -413,6 +421,12 @@ struct ContentView: View {
             playerTeardownTask?.cancel()
             playerTeardownTask = nil
             playerDismissGeneration &+= 1
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            statsToday = .now
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            statsToday = .now
         }
         .onChange(of: resumeBacktrackSeconds) { _, newValue in
             player.applyPlaybackDefaults(
@@ -804,22 +818,27 @@ struct ContentView: View {
     private var readingActivityHeader: some View {
         let stats = ReadingStats.compute(
             sessions: readingSessions,
-            booksFinished: audiobooks.filter { $0.isFinished }.count
+            booksFinished: audiobooks.filter { $0.isFinished }.count,
+            today: statsToday
         )
+        let palette = HeatmapPalette.fromStorage(heatmapPaletteRaw)
         if stats.hasAnyActivity {
-            NavigationLink {
-                ReadingStatsView(stats: stats, palette: .amber)
-                    .navigationTransition(.zoom(sourceID: readingStatsMorphID, in: readingStatsNamespace))
-            } label: {
-                ReadingActivityCard(
-                    stats: stats,
-                    palette: .amber,
-                    morphNamespace: readingStatsNamespace,
-                    morphID: readingStatsMorphID
-                )
+            ReadingActivityCard(
+                stats: stats,
+                palette: palette,
+                dailyGoalMinutes: dailyListeningGoalMinutes,
+                morphNamespace: readingStatsNamespace,
+                morphID: readingStatsMorphID
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .onTapGesture {
+                isReadingStatsPresented = true
             }
-            .buttonStyle(.plain)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("readingActivity")
+            .accessibilityAction {
+                isReadingStatsPresented = true
+            }
         }
     }
 
