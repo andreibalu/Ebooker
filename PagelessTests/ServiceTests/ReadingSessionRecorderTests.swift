@@ -56,6 +56,7 @@ struct ReadingSessionRecorderTests {
     }
 
     @Test func stallBetweenTicksCreditsAtMostTheCap() throws {
+        // E2E can't produce a long stall while playing; dropping the per-tick cap would credit buffering and background-wake gaps as listening.
         let container = try makeContainer()
         let context = container.mainContext
         let recorder = ReadingSessionRecorder()

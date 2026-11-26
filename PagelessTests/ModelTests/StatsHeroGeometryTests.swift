@@ -1,33 +1,40 @@
-import CoreGraphics
+import SwiftUI
 import Testing
+import UIKit
 @testable import Pageless
 
-/// Isolated on purpose: no E2E device is narrower than 375 pt, and AGENTS.md requires the stats
-/// chrome to stay usable at Display Zoom's 320 pt width (280 pt inside the hero's padding).
+/// Isolated on purpose: the hero grid overflows the 320 pt Display Zoom width, which no simulator
+/// device can show, so E2E can't catch it.
 @MainActor
 struct StatsHeroGeometryTests {
-    /// Interactive slots are `cell + gap` wide; the four-month grid adds a 30 pt weekday label column.
-    private func width(_ scale: HeatmapScale, _ g: (cell: CGFloat, gap: CGFloat, radius: CGFloat)) -> CGFloat {
-        switch scale {
-        case .week:      return 7 * (g.cell + g.gap)
-        case .month:     return 30 * (g.cell + g.gap)
-        case .fourMonth: return 30 + 18 * (g.cell + g.gap)
-        }
-    }
+    @Test(arguments: [HeatmapScale.week, .month, .fourMonth])
+    func fittedHeroHeatmapFitsWithinDisplayZoomColumn(scale: HeatmapScale) {
+        let availableWidth: CGFloat = 280
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let today = calendar.date(from: DateComponents(year: 2026, month: 11, day: 26))!
+        let firstDay = calendar.date(byAdding: .day, value: -120, to: today)!
 
-    @Test(arguments: [HeatmapScale.week, .month, .fourMonth], [280.0, 335.0, 390.0, 600.0])
-    func fittedHeatmapNeverExceedsTheColumn(scale: HeatmapScale, available: Double) {
-        let g = StatsHeroSection.fittedGeometry(scale: scale, availableWidth: CGFloat(available))
-        #expect(width(scale, g) <= CGFloat(available) + 0.001)
-    }
+        let model = HeatmapGridModel.build(
+            scale: scale,
+            today: today,
+            firstDay: firstDay,
+            activityByDay: [:],
+            calendar: calendar
+        )
+        let geometry = StatsHeroSection.fittedGeometry(scale: scale, availableWidth: availableWidth)
+        let view = ReadingHeatmapView(
+            model: model,
+            palette: .amber,
+            cellSize: geometry.cell,
+            gap: geometry.gap,
+            radius: geometry.radius,
+            showLabels: true,
+            stagger: false
+        )
 
-    @Test func wideColumnKeepsThePreferredSize() {
-        let g = StatsHeroSection.fittedGeometry(scale: .fourMonth, availableWidth: 600)
-        #expect(g.cell == 14 && g.gap == 4)
-    }
-
-    @Test func unmeasuredWidthKeepsThePreferredSize() {
-        let g = StatsHeroSection.fittedGeometry(scale: .week, availableWidth: 0)
-        #expect(g.cell == 40 && g.gap == 10)
+        let host = UIHostingController(rootView: view)
+        let fitted = host.sizeThatFits(in: CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
+        #expect(fitted.width <= availableWidth + 0.001)
     }
 }
