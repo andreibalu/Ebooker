@@ -29,7 +29,9 @@ enum MomentSearch {
             titles.contains($0) || prose.contains($0) || metadata.contains($0) || transcript.contains($0)
         }) else { return nil }
         return words.reduce(0) {
-            $0 + (titles.contains($1) ? 10 : prose.contains($1) ? 2 : transcript.contains($1) ? 1 : 0)
+            $0 + (titles.contains($1) ? 10
+                  : prose.contains($1) || metadata.contains($1) ? 2
+                  : transcript.contains($1) ? 1 : 0)
         }
     }
 
@@ -56,7 +58,9 @@ enum MomentSearch {
         let queryWords = words(query)
         guard !queryWords.isEmpty, let transcript = moment.transcript, !transcript.isEmpty else { return nil }
 
-        let visibleParts = [moment.label, moment.notes ?? "", moment.quoteLine ?? ""]
+        // The group header shows (and highlights) the book's title and author, so they count as visible.
+        let visibleParts = [moment.label, moment.notes ?? "", moment.quoteLine ?? "",
+                            moment.audiobook?.title ?? "", moment.audiobook?.author ?? ""]
             + moment.characters
             + moment.categories.map(\.displayName)
             + [moment.mood?.displayName].compactMap { $0 }

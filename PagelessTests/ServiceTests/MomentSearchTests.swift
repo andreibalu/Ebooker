@@ -133,4 +133,41 @@ struct MomentSearchTests {
         let mixed = MomentSearch.transcriptSnippet(for: moment, query: "label lighthouse")
         #expect(mixed == "Visible label and hidden lighthouse in the transcript.")
     }
+
+    // Failure: a spoken mention outranked an explicit tag (metadata scored 0, so it never counted).
+    @Test func metadataScoresLikeNotesAndAboveTranscript() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let book = Audiobook(title: "The Odyssey", author: "Homer", folderName: "odyssey", totalDuration: 600)
+        context.insert(book)
+
+        let tagged = Moment(trackIndex: 0, time: 10, label: "Harbor", audiobook: book,
+                            categories: [.dialogue], characters: ["Marlow"], mood: .tense)
+        let spoken = Moment(trackIndex: 0, time: 20, label: "Coast", audiobook: book,
+                            transcript: "Marlow said dialogue was tense.")
+        context.insert(tagged)
+        context.insert(spoken)
+
+        for word in ["marlow", "dialogue", "tense"] {
+            let words = MomentSearch.words(word)
+            #expect(MomentSearch.score(tagged, words: words) == 2)
+            #expect(MomentSearch.score(spoken, words: words) == 1)
+        }
+    }
+
+    // Failure: the search view shows and highlights the book title and author in the group header,
+    // so a transcript snippet for those words repeats what the reader already sees.
+    @Test func snippetNilWhenWordIsInBookTitleOrAuthor() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let book = Audiobook(title: "The Odyssey", author: "Homer", folderName: "odyssey", totalDuration: 600)
+        context.insert(book)
+        let moment = Moment(trackIndex: 0, time: 5, label: "Coast", audiobook: book,
+                            transcript: "Homer sang of the Odyssey and the lighthouse.")
+        context.insert(moment)
+
+        #expect(MomentSearch.transcriptSnippet(for: moment, query: "odyssey") == nil)
+        #expect(MomentSearch.transcriptSnippet(for: moment, query: "homer") == nil)
+        #expect(MomentSearch.transcriptSnippet(for: moment, query: "homer lighthouse")?.contains("lighthouse") == true)
+    }
 }
