@@ -45,7 +45,21 @@ ACCESSIBILITY IDENTIFIERS (contract between UI and E2E layers):
 
 ## Core layer
 
-_(pending)_
+Commits: reading stats + tests (6dbb3c2), recorder/seeder/player flush (next). No `@Model` change; `SchemaCompatibilityTests` passes.
+
+- `ReadingStats.compute` (`Models/ReadingStats.swift`): D1 coalescing in `logicalSessionCount`, D2 streak grace with an unbounded walk, D3 `topBooks`/`todayMinutes`/deterministic ties. API: `isStreakActiveToday`, `todayMinutes`, `topBooks: [BookTotal]` (`id, title, author, minutes`, `ranksBefore`), `ReadingDayActivity.topBookTitle`, `empty(today:calendar:)` plus `static var empty`.
+- Recorder (D0): `tick(audiobook:uptime:context:)` credits `systemUptime` delta, capped at 3 s, 1 s for the first tick after start/flush. `flush` resets the tick clock. `createdAt` is stamped at flush (chunk end). `AudioPlayerManager.load()` flushes before the first await when the book changes.
+- Seeder: `createdAt` = bucket start (`calendar.date(byAdding:)`) + minutes.
+
+Decisions in gaps:
+- A day-key later than today makes today "active"; its minutes count in `todayMinutes`. `longestStreak` is `max(scan, currentStreak)` so a future-keyed day can never make it smaller than the current streak.
+- Book titles/authors now use the latest snapshot (by `createdAt`, then id) instead of first seen, so recomputes don't depend on input order. Top author ties go to the alphabetically first name.
+- `bestDay` ties go to the earlier day; a day's top book uses the same rule as `topBooks`.
+- Only the immediately previous row is compared when coalescing, so two books alternating within the same hour never merge; untimed rows of two books in the same hour sort by id.
+- Seeded rows are timed, so two seeded rows of one book on one day within ~1 h of each other merge into one logical session.
+- `tick`'s unused `secondsElapsed` parameter was replaced by an injectable `uptime` (no other caller).
+
+Verification: `xcodebuild test -only-testing:PagelessTests/ReadingStatsTests -only-testing:PagelessTests/SchemaCompatibilityTests -parallel-testing-enabled NO` on simulator E6A83627 passed (24 + 1 tests), run from a detached worktree of my commits because the shared checkout's UI files did not compile mid-edit. The recorder is untested by design (covered by reading and E2E).
 
 ## UI layer
 
