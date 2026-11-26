@@ -1,5 +1,5 @@
 import { expect, type Screen } from 'e2e';
-import { test, tapVisibleCenter } from './native-actions.js';
+import { test, tapVisibleCenter, expectShareSheetThenDismiss } from './native-actions.js';
 import { bundle } from '../support/simulator.js';
 
 const fixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'];
@@ -130,4 +130,101 @@ test('swiping a moment left reveals Delete, and the delete survives relaunch', a
   await screen.getByText(/^\d+ moments?$/).first().tap();
   await screen.scrollUntilVisible(screen.getByText('E2E First Moment').first());
   await expect(screen.getByText('E2E Second Moment').first()).toBeHidden();
+});
+
+// The second fixture moment carries every field (quote, mood, cast, categories, an AI-named flag,
+// a transcript); the first has only a note and one category.
+test('book moment rows show the quote and a metadata strip, never the transcript', async ({ device, screen, app }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openMoments(screen);
+  const quote = screen.getByTestId('moment.quote.E2E Second Moment');
+  await expect(quote).toBeVisible();
+  await expect(quote).toContainText('Every harbour keeps a light for strangers.');
+  const meta = screen.getByTestId('moment.meta.E2E Second Moment');
+  await expect(meta).toBeVisible();
+  await expect(meta).toContainText('Peaceful');
+  await expect(meta).toContainText('Marlow');
+  // The strip is one line: it can't grow with its content.
+  const strip = await meta.boundingBox();
+  if (!strip) throw new Error('Metadata strip has no bounds');
+  expect(strip.height).toBeLessThan(60);
+  // Spoken words stay in the edit sheet and the search results.
+  await expect(screen.getByText(/lighthouse/).first()).toBeHidden();
+  // A sparse moment grows no quote line and no mood.
+  await expect(screen.getByTestId('moment.quote.E2E First Moment')).toBeHidden();
+  await expect(screen.getByTestId('moment.meta.E2E First Moment')).toContainText('Dialogue');
+  await expect(screen.getByTestId('moment.meta.E2E First Moment')).not.toContainText('Peaceful');
+  await app.screenshot('moments-inline-metadata');
+});
+
+test('a moment with no quote, mood, cast or category adds no quote line or strip', async ({ device, screen }) => {
+  // The moment-search fixture adds a plain "E2E Café" moment to the second book.
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture', '-e2e-moment-search'] });
+  await screen.getByTestId('book.card.E2E-Another-Book').tap();
+  await screen.getByText(/^\d+ moments?$/).first().tap();
+  await screen.scrollUntilVisible(screen.getByText('E2E Café').first());
+  await expect(screen.getByTestId('moment.quote.E2E Café')).toBeHidden();
+  await expect(screen.getByTestId('moment.meta.E2E Café')).toBeHidden();
+  // The same book's cast moment does get a strip.
+  await expect(screen.getByTestId('moment.meta.E2E Arrival')).toContainText('Ariadne');
+});
+
+test('the edit sheet has a collapsed Transcript disclosure that expands to selectable text', async ({ device, screen, app }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openMoments(screen);
+  await tapVisibleCenter(screen.getByText('E2E Second Moment').first());
+  await expandSheet(screen);
+  const disclosure = screen.getByTestId('moment.transcript');
+  await screen.scrollUntilVisible(disclosure);
+  // Collapsed until asked for.
+  await expect(screen.getByTestId('moment.transcript.text')).toBeHidden();
+  await tapVisibleCenter(disclosure);
+  const text = screen.getByTestId('moment.transcript.text');
+  await screen.scrollUntilVisible(text);
+  await expect(text).toContainText('old lighthouse keeper waved us in');
+  await expect(screen.getByTestId('moment.transcript.copy')).toBeVisible();
+  await app.screenshot('moments-transcript-disclosure');
+  await screen.getByRole('button', 'Cancel').tap();
+  await expect(screen.getByTestId('moment.done')).toBeHidden();
+
+  // A moment saved without a transcript shows no disclosure.
+  await tapVisibleCenter(screen.getByText('E2E First Moment').first());
+  await expandSheet(screen);
+  await screen.scrollUntilVisible(screen.getByPlaceholder('Add a quote (optional)'));
+  await expect(screen.getByTestId('moment.transcript')).toBeHidden();
+  await screen.getByRole('button', 'Cancel').tap();
+});
+
+test('Share Moment opens the share sheet from the context menu and from the edit sheet', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openMoments(screen);
+  await screen.getByText('E2E Second Moment').first().longPress();
+  await screen.getByRole('button', 'Share Moment').tap();
+  await expectShareSheetThenDismiss(screen);
+
+  // Editing an existing moment: the toolbar share button.
+  await tapVisibleCenter(screen.getByText('E2E Second Moment').first());
+  const share = screen.getByTestId('moment.share');
+  await expect(share).toBeVisible();
+  await tapVisibleCenter(share);
+  await expectShareSheetThenDismiss(screen);
+  // Dismissing the share sheet leaves the edit sheet open.
+  await expect(screen.getByTestId('moment.done')).toBeVisible();
+  await screen.getByRole('button', 'Cancel').tap();
+  await expect(screen.getByTestId('moment.done')).toBeHidden();
+});
+
+test('Export Moments shares the book, and only a book with moments offers it', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  const exportButton = screen.getByTestId('audiobookDetail.exportMoments');
+  await screen.scrollUntilVisible(exportButton);
+  await tapVisibleCenter(exportButton);
+  await expectShareSheetThenDismiss(screen);
+
+  // The default fixture's second book has no moments. Its page has the moments header but no export.
+  await tapVisibleCenter(screen.getByTestId('BackButton'));
+  await screen.getByTestId('book.card.E2E-Another-Book').tap();
+  await expect(screen.getByTestId('book.progressSummary')).toBeVisible();
+  await expect(screen.getByTestId('audiobookDetail.exportMoments')).toBeHidden();
 });

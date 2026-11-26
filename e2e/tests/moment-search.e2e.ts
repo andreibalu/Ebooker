@@ -64,3 +64,50 @@ test('moment search: row whose track file is missing is disabled', async ({ devi
   await expect(screen.getByTestId('momentSearch.row.E2E Missing Track')).toBeDisabled();
   await expect(screen.getByTestId('momentSearch.row.E2E Missing Track')).toContainText('Audio is not on this iPhone');
 });
+
+// "lighthouse" appears only in the transcript of the listening book's "E2E Second Moment".
+test('moment search: a transcript-only word finds the moment and shows a snippet', async ({ device, screen, app }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('momentSearchButton').tap();
+  await screen.getByPlaceholder('Search saved moments').fill('lighthouse');
+  await expect(screen.getByTestId('momentSearch.row.E2E Second Moment')).toBeVisible();
+  const snippet = screen.getByTestId('momentSearch.snippet.E2E Second Moment');
+  await expect(snippet).toBeVisible();
+  await expect(snippet).toContainText('lighthouse');
+  // At most two lines: the snippet windows the transcript instead of printing all of it.
+  const box = await snippet.boundingBox();
+  if (!box) throw new Error('Snippet has no bounds');
+  expect(box.height).toBeLessThan(60);
+  await expect(screen.getByTestId('momentSearch.row.E2E Harbor')).toBeHidden();
+  await expect(screen.getByTestId('momentSearch.row.E2E Unrelated')).toBeHidden();
+  await app.screenshot('moment-search-transcript-snippet');
+});
+
+test('moment search: a transcript-only multi-word query matches, and mixed words need all of them', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('momentSearchButton').tap();
+  await screen.getByPlaceholder('Search saved moments').fill('lighthouse keeper');
+  await expect(screen.getByTestId('momentSearch.row.E2E Second Moment')).toBeVisible();
+  // The cast and the transcript each match one word.
+  await screen.getByPlaceholder('Search saved moments').fill('lighthouse Marlow');
+  await expect(screen.getByTestId('momentSearch.row.E2E Second Moment')).toBeVisible();
+  // A word from the transcript and one from another moment never match one row.
+  await screen.getByPlaceholder('Search saved moments').fill('lighthouse lantern');
+  await expect(screen.getByTestId('momentSearch.noResults')).toBeVisible();
+});
+
+test('moment search: a hit in the name, note or quote shows no transcript snippet', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await screen.getByTestId('momentSearchButton').tap();
+  // "fog" is in the note and "strangers" in the quote and the transcript: both are visible
+  // elsewhere on the row, so the row needs no snippet.
+  await screen.getByPlaceholder('Search saved moments').fill('fog');
+  await expect(screen.getByTestId('momentSearch.row.E2E Second Moment')).toBeVisible();
+  await expect(screen.getByTestId('momentSearch.snippet.E2E Second Moment')).toBeHidden();
+  await screen.getByPlaceholder('Search saved moments').fill('strangers');
+  await expect(screen.getByTestId('momentSearch.row.E2E Second Moment')).toBeVisible();
+  await expect(screen.getByTestId('momentSearch.snippet.E2E Second Moment')).toBeHidden();
+  await screen.getByPlaceholder('Search saved moments').fill('lantern');
+  await expect(screen.getByTestId('momentSearch.row.E2E Harbor')).toBeVisible();
+  await expect(screen.getByTestId('momentSearch.snippet.E2E Harbor')).toBeHidden();
+});

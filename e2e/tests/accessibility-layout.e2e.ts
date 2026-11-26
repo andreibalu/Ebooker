@@ -189,3 +189,28 @@ test('large text with Button Shapes and Bold Text keeps the Plus notice and left
   await expectReadable(screen, 'Requires an iPhone with Apple Intelligence');
   await app.screenshot('a11y-layout-plus-unsupported');
 });
+
+// The book page's moment rows carry a quote line and a one-line metadata strip, and the moments
+// section a share and an export control. At the largest text size none may squeeze to a sliver.
+test('large text with Button Shapes and Bold Text keeps moment rows, their strip and the export control readable', async ({ device, screen, app }) => {
+  setAccessibility(true);
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture.filter((arg) => arg !== '-e2e-import')] });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  const exportButton = screen.getByTestId('audiobookDetail.exportMoments');
+  await screen.scrollUntilVisible(exportButton);
+  await expectReadable(screen, 'Export Moments…');
+  await app.screenshot('a11y-layout-export-moments');
+  await screen.getByText(/^\d+ moments?$/).first().tap();
+  await screen.scrollUntilVisible(screen.getByText('E2E Second Moment').first());
+  await expectReadable(screen, 'E2E Second Moment');
+  await expectReadable(screen, 'Every harbour keeps a light for strangers.');
+  const meta = screen.getByTestId('moment.meta.E2E Second Moment');
+  await expect(meta).toBeVisible();
+  const box = await meta.boundingBox();
+  if (!box) throw new Error('Metadata strip has no bounds');
+  // The strip stays inside the screen and keeps a bounded height at accessibility sizes.
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(402);
+  expect(box.height).toBeLessThan(200);
+  await app.screenshot('a11y-layout-moment-rows');
+});

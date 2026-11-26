@@ -1,4 +1,4 @@
-import { expect, type Locator } from 'e2e';
+import { expect, type Locator, type Screen } from 'e2e';
 import { test as base } from '@e2e-dev/mobile';
 import { createAgentDeviceClient } from 'agent-device';
 import { NATIVE_WORKER_SESSION } from '../session.js';
@@ -109,4 +109,16 @@ export async function longPressVisibleTop(target: Locator): Promise<void> {
   if (!box || box.width <= 0 || box.height <= 0) throw new Error('Visible native control has no actionable bounds');
   const client = createAgentDeviceClient({ session: NATIVE_WORKER_SESSION });
   await client.interactions.longPress({ x: box.x + box.width / 2, y: box.y + Math.min(40, box.height / 4), durationMs: 1_000 });
+}
+
+/** Asserts the iOS share sheet is up, then dismisses it by tapping above the sheet. */
+export async function expectShareSheetThenDismiss(screen: Screen): Promise<void> {
+  const shareSheet = screen.getByTestId('ActivityListView');
+  await expect(shareSheet).toBeVisible();
+  const dismissRegion = screen.getByTestId('PopoverDismissRegion');
+  const dismissBox = await dismissRegion.boundingBox();
+  if (dismissBox) {
+    await dismissRegion.tap({ position: { x: dismissBox.width / 2, y: 80 } });
+  }
+  await expect(shareSheet).toBeHidden();
 }
