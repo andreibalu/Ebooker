@@ -175,7 +175,7 @@ Tap the magnifying glass in My Library to search saved moments across every book
 
 ### Share a moment or export a book's moments
 
-On iPhone, touch and hold a moment on a book's page and choose **Share Moment**, or open the moment and tap the share button. Unpaged makes a quote card image from the cover, the quote (or the moment's name and note), the chapter and time, and the book's title and author, and opens the iOS share sheet. To keep every moment from a book, tap **Export Moments…** on the book's page when it has at least one. You get a Markdown file named after the book, with pinned moments first, then the rest in book order, each with its quote, note, tags, characters and spoken transcript. Both are shared only where you send them, and nothing leaves your iPhone until you choose where it goes.
+On iPhone, touch and hold a moment on a book's page and choose **Share Moment**, or open the moment and tap the share button. Unpaged makes a quote card image from the cover, the quote (or the moment's name and note), the chapter and time, and the book's title and author, and opens the iOS share sheet. To keep every moment from a book, open the book's moments list and tap **Export Moments…** at the top of the list (it appears when the book has at least one moment). You get a Markdown file named after the book, with pinned moments first, then the rest in book order, each with its quote, note, tags, characters and spoken transcript. Both are shared only where you send them, and nothing leaves your iPhone until you choose where it goes.
 
 ### Welcome-back recaps
 

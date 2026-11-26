@@ -8,6 +8,16 @@ This matrix covers every iOS feature except Apple Intelligence and CloudKit itse
 - `support/fake-audiobookshelf.ts` serves an Audiobookshelf server on localhost.
 - The local `Products.storekit` configuration stands in for the App Store.
 
+## Validation, 2026-11-26 (slice 02: moment transcripts, inline metadata, sharing)
+
+`Unpaged e2e` (iPhone 18 Pro, iOS 27.0), after review round 1 on branch `feat/02-moments-transcripts-inline-and-sharing`, run serially. Evidence is outside Git.
+
+- `moments` 8 of 8, `moment-search` 12 of 12 and `accessibility-layout` 5 of 5, including the moments header and the moment row at accessibility-XXXL with Button Shapes and Bold Text.
+- `extended-flows` 11 of 12. `EQ preset enabled state persists and reset returns flat` fails on `main` too (the runner's watchdog trips on the equalizer sheet), so it is not from this slice.
+- Swift unit tests: 392 run; the only failure is `coffeeTipSucceedsRepeatsAndFinishesEachTransaction`, which fails the same way on `main` in a full run and passes when its suite runs alone.
+- Not rerun this round: `smart-save`, `native-flows` and `library`. They passed in the first slice 02 run, before the review fixes, and the fixes touch none of their screens.
+- Quote card pixels and the exported Markdown are covered by unit tests only: the share sheet's file isn't readable from the host.
+
 ## Validation, 2026-10-18 (Apple Intelligence reliability)
 
 Branch `ai/reliability`. Moment naming and recaps now ask the model for plain text, because the permissive guardrails cover only `String` output (`docs/ios/ai.md`). `tools/ai-harness/` ran the app's AI sources on the host's on-device model over two sets of 96 public-domain passages, against `main`. On the held-out set, which was never used for tuning, moment naming went from 56 to 96 of 96 and recaps from 47 to 95 of 96. On the set the prompts were tuned on, naming went from 48 to 96 and recaps from 58 to 96. The PR has the run output.
@@ -40,8 +50,7 @@ Six code-review rounds on the release branch added these cases, most of them sho
 - Play Latest Book resumes an Audiobookshelf book from its saved marker, after reconciling with the server (`Play Latest Book resumes an ABS book from its saved marker…`).
 - Moment search disables rows for a disconnected Audiobookshelf server and for a missing track file (`moment-search.e2e.ts`).
 - Moment search matches a word that appears only in a moment's transcript, with the match shown as a snippet of at most two lines, and shows no snippet when the name, note or quote already matches. A mixed query (transcript word plus another moment's word) finds nothing (`moment-search.e2e.ts`). The ranking weight of the transcript is covered by `MomentSearch` unit tests, not E2E.
-- Slice 02 run, 2026-11-26, `Unpaged e2e` (iPhone 18 Pro, iOS 27.0), on HEAD `53523cb` plus the uncommitted UI layer (`MomentRow`, `MomentEditSheet`, `AudiobookDetailView`, `MomentQuoteCard`): `moments` 8 of 8, `moment-search` 12 of 12, `accessibility-layout` 4 of 5. The failure is the new moments-header case: at the largest text size the "N moments" label truncates to "2…" and the Filter capsule wraps. `smart-save` 2 passed (1 skipped), and the moment cases of `native-flows`, `extended-flows` and `library` passed. Evidence is outside Git.
-- At the largest text size, a book page's moments header (label and Filter capsule on one line beside the export control) and a moment row's quote line and metadata strip stay readable (`accessibility-layout.e2e.ts`).
+- At the largest text size, a book page's moments header (the count on its own line, then the Filter and Export capsules, stacked when they don't fit side by side) and a moment row's quote line and metadata strip stay readable (`accessibility-layout.e2e.ts`).
 - A cached recap whose anchor is within 60 s of the saved position survives a relaunch (`welcome-back.e2e.ts`).
 - Play after an End of chapter expiry at a file end continues with the next file (`chapter sleep stops at a track end, and Play continues with the next file`).
 
