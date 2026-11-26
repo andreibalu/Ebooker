@@ -254,7 +254,7 @@ struct ReadingStats: Equatable {
         // A future-keyed day is outside the scan above but inside the current streak.
         longestStreak = max(longestStreak, currentStreak)
 
-        let totalSessions = logicalSessionCount(sessions)
+        let totalSessions = logicalSessionCount(sessions, calendar: calendar)
         let avgSession = totalSessions > 0 ? Double(totalMinutes) / Double(totalSessions) : 0
 
         return ReadingStats(
@@ -298,11 +298,14 @@ struct ReadingStats: Equatable {
     /// dropped sub-30 s chunks). *Untimed* rows sort by (dayKey, book, hour), so another book's row in
     /// the same hour can't split a book's run, and join the previous one when it is the same book, the
     /// same day and the same or the next hour. The two kinds never join.
-    private static func logicalSessionCount(_ sessions: [ReadingSession]) -> Int {
+    private static func logicalSessionCount(_ sessions: [ReadingSession], calendar: Calendar) -> Int {
         var timed: [ReadingSession] = []
         var untimed: [ReadingSession] = []
         for s in sessions {
-            let bucketInstant = s.date.addingTimeInterval(Double(s.hour) * 3600)
+            // Calendar arithmetic, not `+ hour * 3600`: on a DST day the bucket's wall-clock hour is an
+            // hour off in seconds, which would push a real chunk outside the tolerance.
+            let bucketInstant = calendar.date(byAdding: .hour, value: s.hour, to: s.date)
+                ?? s.date.addingTimeInterval(Double(s.hour) * 3600)
             let estimatedStart = s.createdAt.addingTimeInterval(-Double(s.minutes) * 60)
             let isTimed = s.createdAt != .distantPast
                 && abs(estimatedStart.timeIntervalSince(bucketInstant)) <= timedToleranceSeconds

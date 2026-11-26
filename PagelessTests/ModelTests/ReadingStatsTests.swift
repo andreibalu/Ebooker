@@ -351,4 +351,32 @@ struct ReadingStatsTests {
         #expect(stats.activityByDay["2026-11-25"]?.topBookTitle == "A")
         #expect(stats.activityByDay["2026-11-20"] == nil)
     }
+
+    @Test func fallBackDayDoesNotSplitASittingIntoTimedAndUntimed() throws {
+        // Catches `date + hour * 3600` bucket math on a 25-hour day: after 02:00 -> 01:00 on
+        // 2026-11-01 it lands an hour early, so a chunk started at 08:20 looked 80 min off its
+        // bucket (outside the 75 min tolerance) and split from its 08:10 neighbour.
+        var ny = Calendar(identifier: .gregorian)
+        ny.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        func row(_ minute: Int) -> ReadingSession {
+            let start = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 8, minute: minute))!
+            let startOfDay = ny.startOfDay(for: start)
+            return ReadingSession(
+                date: startOfDay,
+                dayKey: ReadingSession.makeDayKey(date: startOfDay, calendar: ny),
+                hour: 8,
+                minutes: 5,
+                bookID: bookA,
+                bookTitle: "A",
+                bookAuthor: "Author",
+                isFreeBook: false,
+                createdAt: start.addingTimeInterval(300)
+            )
+        }
+        let today = ny.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 12))!
+        let stats = ReadingStats.compute(
+            sessions: [row(10), row(20)], booksFinished: 0, today: today, calendar: ny
+        )
+        #expect(stats.totalSessions == 1)
+    }
 }
