@@ -37,6 +37,8 @@ struct StatsHeroGeometryTests {
 
         let host = UIHostingController(rootView: view)
         let fitted = host.sizeThatFits(in: CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
-        #expect(fitted.width <= availableWidth + 0.001)
+        // Layout snaps each slot to the pixel grid, which can add a fraction of a point across 30
+        // slots; a whole point of slack still catches a real overflow (a wider label or extra column).
+        #expect(fitted.width <= availableWidth + 1)
     }
 }
