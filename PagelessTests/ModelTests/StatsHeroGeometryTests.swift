@@ -30,7 +30,9 @@ struct StatsHeroGeometryTests {
             gap: geometry.gap,
             radius: geometry.radius,
             showLabels: true,
-            stagger: false
+            stagger: false,
+            // The hero is interactive, and interactive cells take wider slots; measure that layout.
+            onSelectDay: { _ in }
         )
 
         let host = UIHostingController(rootView: view)

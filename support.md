@@ -65,7 +65,7 @@ Open the player's **Sleep Timer** menu and choose **End of chapter**, or a 5, 15
 
 ### How do I track my listening activity?
 
-Open **Settings → Reading Activity** (or tap the **Reading Activity** card on **Favorites**) to view your listening streaks, heatmap, and top books, set an optional daily listening goal, and share a summary card (with no book titles).
+Open **Settings → Reading Activity** (or tap the **Activity** card on **Favorites**) to view your listening streaks, heatmap, and top books, set an optional daily listening goal, and share a summary card (with no book titles).
 
 ### How do I change the app's appearance?
 
