@@ -4,13 +4,27 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Palette
 
-enum HeatmapPalette: String, CaseIterable {
+enum HeatmapPalette: String, CaseIterable, Sendable {
     case amber, burgundy, mono
 
+    static let storageKey = "readingHeatmapPalette"
     static let levelCount = 5
+
+    static func fromStorage(_ raw: String) -> HeatmapPalette {
+        HeatmapPalette(rawValue: raw) ?? .amber
+    }
+
+    var displayName: String {
+        switch self {
+        case .amber:    return "Amber"
+        case .burgundy: return "Burgundy"
+        case .mono:     return "Mono"
+        }
+    }
 
     private static let amberLight:    [Color] = ["ECE4D2","F3D9A8","E8B36C","CC8632","995510"].map(Color.init(hex:))
     private static let amberDark:     [Color] = ["2A2722","4A3C26","7B5C2A","B07A1F","E59A19"].map(Color.init(hex:))
@@ -28,12 +42,39 @@ enum HeatmapPalette: String, CaseIterable {
         }
     }
 
-    /// Accent for chips, count-up numbers, polar bar highlight, free-books ring.
+    /// Explicit, non-dynamic accent color for a given scheme (safe for off-screen rendering).
+    func accent(forScheme scheme: ColorScheme) -> Color {
+        switch self {
+        case .amber:
+            return scheme == .dark ? Color(hex: "E59A19") : Color(hex: "CC8632")
+        case .burgundy:
+            return scheme == .dark ? Color(hex: "C56163") : Color(hex: "A04A4F")
+        case .mono:
+            return scheme == .dark ? Color(hex: "E7E1CF") : Color(hex: "23201A")
+        }
+    }
+
+    /// Scheme-aware accent for chips, count-up numbers, polar bar highlight, free-books ring.
     var accent: Color {
         switch self {
-        case .amber:    return Color(hex: "CC8632")
-        case .burgundy: return Color(hex: "A04A4F")
-        case .mono:     return Color(hex: "23201A")
+        case .amber:
+            return Color(UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(red: 0xE5/255.0, green: 0x9A/255.0, blue: 0x19/255.0, alpha: 1)
+                    : UIColor(red: 0xCC/255.0, green: 0x86/255.0, blue: 0x32/255.0, alpha: 1)
+            })
+        case .burgundy:
+            return Color(UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(red: 0xC5/255.0, green: 0x61/255.0, blue: 0x63/255.0, alpha: 1)
+                    : UIColor(red: 0xA0/255.0, green: 0x4A/255.0, blue: 0x4F/255.0, alpha: 1)
+            })
+        case .mono:
+            return Color(UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(red: 0xE7/255.0, green: 0xE1/255.0, blue: 0xCF/255.0, alpha: 1)
+                    : UIColor(red: 0x23/255.0, green: 0x20/255.0, blue: 0x1A/255.0, alpha: 1)
+            })
         }
     }
 
@@ -132,7 +173,7 @@ struct HeatmapGridModel {
         switch scale.layout {
         case .grid:
             return buildGrid(
-                scale: scale, today: todayStart, firstDay: firstDay,
+                weekCount: scale.weekCount, scale: scale, today: todayStart, firstDay: firstDay,
                 activityByDay: activityByDay, calendar: calendar
             )
         case .linearWithDayLabels, .linearWithMonthLabels:
@@ -143,23 +184,25 @@ struct HeatmapGridModel {
         }
     }
 
-    private static func buildGrid(
-        scale: HeatmapScale,
+    static func buildGrid(
+        weekCount: Int,
+        scale: HeatmapScale = .fourMonth,
         today: Date,
         firstDay: Date,
         activityByDay: [String: ReadingDayActivity],
-        calendar: Calendar
+        calendar: Calendar = .current
     ) -> HeatmapGridModel {
-        let nw = scale.weekCount
-        let monThis = mondayOf(today, calendar: calendar)
+        let todayStart = calendar.startOfDay(for: today)
+        let nw = max(1, weekCount)
+        let monThis = mondayOf(todayStart, calendar: calendar)
         guard let start = calendar.date(byAdding: .day, value: -(nw - 1) * 7, to: monThis) else {
             return HeatmapGridModel(
                 cols: [], linearDays: [], monthLabels: [],
-                scale: scale, layout: .grid, firstDay: firstDay, today: today
+                scale: scale, layout: .grid, firstDay: firstDay, today: todayStart
             )
         }
 
-        let todayKey = ReadingSession.makeDayKey(date: today, calendar: calendar)
+        let todayKey = ReadingSession.makeDayKey(date: todayStart, calendar: calendar)
         var cols: [[HeatmapCellInfo]] = []
         var monthLabels: [HeatmapMonthLabel] = []
         var lastMonth = -1
@@ -176,7 +219,7 @@ struct HeatmapGridModel {
                 let dStart = calendar.startOfDay(for: d)
                 let key = ReadingSession.makeDayKey(date: dStart, calendar: calendar)
                 let minutes = activityByDay[key]?.minutes ?? 0
-                let isFuture = dStart > today
+                let isFuture = dStart > todayStart
                 let beforeStart = dStart < firstDay
                 days.append(HeatmapCellInfo(
                     date: dStart,
@@ -199,7 +242,7 @@ struct HeatmapGridModel {
         }
         return HeatmapGridModel(
             cols: cols, linearDays: [], monthLabels: monthLabels,
-            scale: scale, layout: .grid, firstDay: firstDay, today: today
+            scale: scale, layout: .grid, firstDay: firstDay, today: todayStart
         )
     }
 
@@ -278,12 +321,24 @@ struct ReadingHeatmapView: View {
     var showLabels: Bool = true
     /// When true, each cell fades + scales in with a (col+row) stagger.
     var stagger: Bool = false
-    /// Optional emphasis ring (e.g. best-day marker).
+    /// Optional emphasis ring (e.g. selected-day marker).
     var emphasizeKey: String? = nil
+    /// Optional explicit color scheme (used by the off-screen share card).
+    var colorSchemeOverride: ColorScheme? = nil
+    /// When non-nil, non-future cells become interactive buttons with expanded hit areas.
+    var onSelectDay: ((HeatmapCellInfo) -> Void)? = nil
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var environmentColorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var didAppear = false
+
+    private var colorScheme: ColorScheme {
+        colorSchemeOverride ?? environmentColorScheme
+    }
+
+    private var isInteractive: Bool {
+        onSelectDay != nil
+    }
 
     var body: some View {
         Group {
@@ -325,18 +380,18 @@ struct ReadingHeatmapView: View {
                 linearMonthLabelsRow(days: days)
             }
             if showLabels && showDayLabels {
-                HStack(spacing: gap) {
+                HStack(spacing: isInteractive ? 0 : gap) {
                     ForEach(Array(days.enumerated()), id: \.offset) { (_, cell) in
                         Text(Self.dayShortLabels[cell.dow])
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(secondaryLabelColor)
-                            .frame(width: cellSize)
+                            .frame(width: isInteractive ? cellSize + gap : cellSize)
                     }
                 }
             }
-            HStack(spacing: gap) {
+            HStack(spacing: isInteractive ? 0 : gap) {
                 ForEach(Array(days.enumerated()), id: \.offset) { (i, cell) in
-                    cellView(cell, col: i, row: 0)
+                    cellSlot(cell, col: i, row: 0, isLinearCompact: !showDayLabels)
                 }
             }
         }
@@ -376,23 +431,23 @@ struct ReadingHeatmapView: View {
     }
 
     private var yAxisLabels: some View {
-        VStack(alignment: .trailing, spacing: gap) {
+        VStack(alignment: .trailing, spacing: isInteractive ? 0 : gap) {
             ForEach(0..<7, id: \.self) { i in
                 Text(dayLabels[i])
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(secondaryLabelColor)
-                    .frame(width: 24, height: cellSize, alignment: .trailing)
+                    .frame(width: 24, height: isInteractive ? cellSize + gap : cellSize, alignment: .trailing)
                     .fixedSize(horizontal: true, vertical: false)
             }
         }
     }
 
     private var cellsGrid: some View {
-        HStack(alignment: .top, spacing: gap) {
+        HStack(alignment: .top, spacing: isInteractive ? 0 : gap) {
             ForEach(Array(model.cols.enumerated()), id: \.offset) { (wi, col) in
-                VStack(spacing: gap) {
+                VStack(spacing: isInteractive ? 0 : gap) {
                     ForEach(Array(col.enumerated()), id: \.offset) { (di, cell) in
-                        cellView(cell, col: wi, row: di)
+                        cellSlot(cell, col: wi, row: di, isLinearCompact: false)
                     }
                 }
             }
@@ -400,7 +455,35 @@ struct ReadingHeatmapView: View {
     }
 
     @ViewBuilder
-    private func cellView(_ cell: HeatmapCellInfo, col: Int, row: Int) -> some View {
+    private func cellSlot(_ cell: HeatmapCellInfo, col: Int, row: Int, isLinearCompact: Bool) -> some View {
+        if let onSelectDay {
+            let slotWidth = cellSize + gap
+            let slotHeight = isLinearCompact ? max(cellSize + gap, 32) : (cellSize + gap)
+            if cell.isFuture {
+                cellShape(cell, col: col, row: row)
+                    .frame(width: slotWidth, height: slotHeight)
+                    .accessibilityHidden(true)
+            } else {
+                let isSelected = (emphasizeKey == cell.dayKey)
+                Button {
+                    onSelectDay(cell)
+                } label: {
+                    cellShape(cell, col: col, row: row)
+                        .frame(width: slotWidth, height: slotHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Self.accessibilityLabel(for: cell))
+                .accessibilityIdentifier("readingStats.heatmap.\(cell.dayKey)")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        } else {
+            cellShape(cell, col: col, row: row)
+        }
+    }
+
+    @ViewBuilder
+    private func cellShape(_ cell: HeatmapCellInfo, col: Int, row: Int) -> some View {
         let fill: Color = {
             if cell.isFuture || cell.isBeforeStart {
                 return colorScheme == .dark
@@ -450,6 +533,21 @@ struct ReadingHeatmapView: View {
             )
     }
 
+    private static let a11yDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.timeStyle = .none
+        return f
+    }()
+
+    private static func accessibilityLabel(for cell: HeatmapCellInfo) -> String {
+        let dateStr = a11yDateFormatter.string(from: cell.date)
+        if cell.minutes > 0 {
+            return "\(dateStr), \(fmtHoursMins(cell.minutes))"
+        }
+        return "\(dateStr), no listening"
+    }
+
     private var secondaryLabelColor: Color {
         colorScheme == .dark
             ? Color(red: 235/255, green: 235/255, blue: 245/255).opacity(0.55)
@@ -466,8 +564,13 @@ struct HeatmapLegend: View {
     var size: CGFloat = 9
     var gap: CGFloat = 3
     var radius: CGFloat = 2
+    var colorSchemeOverride: ColorScheme? = nil
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) private var environmentColorScheme
+
+    private var colorScheme: ColorScheme {
+        colorSchemeOverride ?? environmentColorScheme
+    }
 
     var body: some View {
         HStack(spacing: 6) {
