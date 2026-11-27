@@ -734,6 +734,8 @@ struct AudiobookDetailView: View {
             HStack(spacing: 6) {
                 Image(systemName: "square.and.arrow.up")
                     .font(.caption.weight(.semibold))
+                    // ShareLink already says "Share"; without this VoiceOver reads "Share, Export Moments…".
+                    .accessibilityHidden(true)
                 Text("Export Moments…")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
