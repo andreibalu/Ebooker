@@ -98,8 +98,13 @@ final class CarPlayCoordinator: NSObject {
         guard let interfaceController else { return }
         let chapters = audioPlayer.chapters
         let currentIndex = audioPlayer.currentChapterIndex
+        let rate = audioPlayer.playbackRate
         let items: [CPListItem] = chapters.map { chapter in
-            let item = CPListItem(text: chapter.title, detailText: TimeFormatter.clockString(seconds: chapter.duration))
+            // Speed-adjusted, like the phone's chapter list: what the chapter takes at this speed.
+            let item = CPListItem(
+                text: chapter.title,
+                detailText: TimeFormatter.clockString(seconds: TimeFormatter.speedAdjustedSeconds(chapter.duration, rate: rate))
+            )
             item.isPlaying = chapter.index == currentIndex
             item.handler = { [weak self] _, completion in
                 Task { @MainActor in
