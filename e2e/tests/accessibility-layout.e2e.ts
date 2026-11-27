@@ -193,7 +193,7 @@ test('large text with Button Shapes and Bold Text keeps the Plus notice and left
 // The book page's moments section carries a disclosure row (the count), a Filter and an Export
 // capsule above the rows, and rows with a quote line and a one-line metadata strip. At the largest
 // text size none may squeeze to a sliver.
-test('large text with Button Shapes and Bold Text keeps the moments header and its export control on one line', async ({ device, screen, app }) => {
+test('large text with Button Shapes and Bold Text keeps the moments count and the Filter and Export capsules readable', async ({ device, screen, app }) => {
   setAccessibility(true);
   await device.openApp(bundle, { relaunch: true, launchArguments: fixture.filter((arg) => arg !== '-e2e-import') });
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
