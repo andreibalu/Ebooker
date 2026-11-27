@@ -82,3 +82,26 @@ Adopted after the decision review: Opus 5.5 `high` is the review of record, with
 ## Layer notes
 
 (Each implementer adds a section below.)
+
+### Core layer
+
+Files: `Services/SmartRewindPolicy.swift`, `Services/RewindPosition.swift`, `Services/JumpUndo.swift` (new), `Services/AudioPlayerManager.swift`, `Services/CarPlayCoordinator.swift` (chapter durations), tests `SmartRewindPolicyTests`, `RewindPositionTests`, `AudioPlayerManagerRewindTests`. No model, schema or `PlaybackPersistence` change.
+
+API (as decided; no label changes):
+- `@Published private(set) var jumpUndo: JumpUndo?`, `JumpUndo(bookID, trackIndex, time, chapterIndex: Int?, seekPenaltyRemaining, expiresAt)`.
+- `makeJumpUndoSnapshot() -> JumpUndoSnapshot`, `recordJumpUndo(from:)`, `undoJump()`, `dismissJumpUndo()`, `var isJumpUndoVisible: Bool`.
+- `bookPositionSummary(currentTrackTimeOverride: Double? = nil) -> (fraction: Double, remainingSeconds: Double)?`. The fraction is clamped to 0...1 and not floored; the view floors it and clamps to 99 until `isFinished`.
+- `startPlayback` and `playProgressBookmark` gained a trailing `elapsed: TimeInterval? = nil` (callers that awaited first pass the measured break; nil measures now). Unknown is NaN.
+- `PendingPlaybackTarget` gained `var autoplay: Bool = true`.
+- Pure types: `SmartRewindPolicy.rewindSeconds(elapsed:setting:)` with `instantResumeBelow`, `gentleBreakBelow`, `gentleRewindCap`; `RewindPosition.target(trackIndex:time:seconds:trackDurations:)`; `JumpUndoPolicy` (lifetime 12 s, 5 s floor, 2 s hide).
+
+Choices the decisions left open:
+- **Anchor on non-autoplay loads.** Decision 2 sets the anchor after a load that commits without autoplay, and decision 2 also clears it on every user positioning. A paused skip back or undo across tracks is a non-autoplay load, so it would have re-armed the anchor right after clearing it. `load()` takes `startsRewindBreak` (default true); `navigate()` and the ABS stream recovery pass false, so only fresh loads start a break.
+- **Fresh-load penalty.** Fresh loads keep arming the 180 s penalty as before. The override is used by cross-track skip back, Smart Rewind in `play()` and undo only. A same-track rewind uses `seek(applyProgressPenalty:)` with the `skipBackward()` rule.
+- **Undo penalty.** Undo restores the penalty from the snapshot (0 if progress was saving), after the commit for a cross-track undo.
+- **Duplicate pause.** `lastAudibleAt` follows the same guard as the anchor (only a pause while playing or a load was pending writes it).
+- **Route change.** The handler also counts a stop as playback when the book was audible within 3 s, because AVPlayer may already have flipped `isPlaying` by the time the notification runs.
+- **`play()` rewind guards.** It rewinds only when not already playing, with a loaded item and no pending load. The elapsed is read at the first `play()` call, before the ABS reconcile `Task`; the follow-up checks the anchor is still set, so a seek during the reconcile cancels the rewind.
+- **`skipBackward()`** steps from `navigationPosition`. A same-track step with no pending load still goes straight to `seek(to:applyProgressPenalty:)` (as before, so the existing penalty tests hold); any other case goes through `navigate`.
+- **Test seams.** `seedUnitTestSmartRewindAnchor(_:)` and `hasSmartRewindAnchorForTesting`, because the anchor's age can't be set in a unit test otherwise.
+- **E2E hook.** `-e2e-smart-rewind-elapsed <seconds>` (DEBUG and `-e2e-fixture` only) replaces the anchor's elapsed and every fresh load's elapsed. With no anchor (the user positioned the book) `play()` still rewinds nothing.
