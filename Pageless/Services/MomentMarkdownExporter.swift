@@ -35,7 +35,7 @@ enum MomentMarkdownExporter {
     ) -> String {
         var blocks: [String] = []
 
-        let cleanTitle = escapedInline(collapsedSingleLine(bookTitle))
+        let cleanTitle = escapedHeadingText(collapsedSingleLine(bookTitle))
         blocks.append("# \(cleanTitle.isEmpty ? "Untitled" : cleanTitle)")
 
         let cleanAuthor = escapedInline(collapsedSingleLine(author))
@@ -57,7 +57,7 @@ enum MomentMarkdownExporter {
         }
 
         for entry in sorted {
-            let label = escapedInline(collapsedSingleLine(entry.label))
+            let label = escapedHeadingText(collapsedSingleLine(entry.label))
             blocks.append("## \(label.isEmpty ? "Moment" : label)")
 
             let chapter = escapedInline(collapsedSingleLine(entry.chapterTitle))
@@ -163,14 +163,47 @@ enum MomentMarkdownExporter {
     /// code fences, `1.` / `1)`), so user text can't become a heading, quote, list or rule.
     private static func escapedLeadingMarker(_ line: String) -> String {
         guard let first = line.first else { return line }
-        if "#>-+*=`~".contains(first) { return "\\" + line }
-        if line.allSatisfy({ $0 == "_" }), line.count >= 3 { return "\\" + line }
+        if "#>=`~".contains(first) { return "\\" + line }
+        // A list marker needs whitespace or the end of the line after it; "-5" and "-ish" are text.
+        if "-+*".contains(first) {
+            let next = line.dropFirst().first
+            if next == nil || next == " " || next == "\t" { return "\\" + line }
+        }
+        if isThematicBreakOrSetextUnderline(line) { return "\\" + line }
         let digits = line.prefix(while: { $0.isASCII && $0.isNumber })
         if !digits.isEmpty, digits.count <= 9,
            let marker = line.dropFirst(digits.count).first, marker == "." || marker == ")" {
-            return String(digits) + "\\" + line.dropFirst(digits.count)
+            let after = line.dropFirst(digits.count + 1).first
+            // "3.14" is a number; only "3. x", "3)" or "3." open a list.
+            if after == nil || after == " " || after == "\t" {
+                return String(digits) + "\\" + line.dropFirst(digits.count)
+            }
         }
         return line
+    }
+
+    /// Three or more `-`, `_` or `*` (spaces and tabs between them allowed) draw a rule; one or more
+    /// `-` under a paragraph line turn it into a heading, as `=` does for `===`.
+    private static func isThematicBreakOrSetextUnderline(_ line: String) -> Bool {
+        let marks = line.filter { $0 != " " && $0 != "\t" }
+        guard let mark = marks.first, marks.allSatisfy({ $0 == mark }) else { return false }
+        switch mark {
+        case "-": return true
+        case "_", "*": return marks.count >= 3
+        default: return false
+        }
+    }
+
+    /// Inline escaping for an ATX heading's text. A trailing run of `#` after a space (or the whole
+    /// text being `#`s) is a closing sequence the renderer strips, so its first `#` is escaped.
+    private static func escapedHeadingText(_ value: String) -> String {
+        let escaped = escapedInline(value)
+        let run = escaped.reversed().prefix(while: { $0 == "#" }).count
+        guard run > 0 else { return escaped }
+        let runStart = escaped.index(escaped.endIndex, offsetBy: -run)
+        let before = escaped[..<runStart].last
+        guard before == nil || before == " " || before == "\t" else { return escaped }
+        return String(escaped[..<runStart]) + "\\" + String(escaped[runStart...])
     }
 
     /// Multi-line user text as Markdown: normalized newlines, indentation dropped, a leading block

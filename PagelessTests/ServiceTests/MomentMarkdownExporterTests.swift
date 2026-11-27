@@ -253,6 +253,66 @@ struct MomentMarkdownExporterTests {
         #expect(md.contains("\n\\# Part \\*1\\* \\[x\\] · 00:01\n"))
     }
 
+    // Failure: spaced or underscore/asterisk rules ("_ _ _", "* * *", "- - -", "***") stayed raw
+    // and drew a horizontal rule (or, under a paragraph line, a setext heading) through the notes.
+    @Test func escapesSpacedThematicBreaksAndSetextUnderlines() {
+        let notes = "_ _ _\n* * *\n- - -\n***\n___\n-\t-\t-\n--\n**bold** start"
+        let entry = MomentMarkdownExporter.Entry(
+            label: "L", chapterTitle: "Ch", time: 1, trackIndex: 0, isPinned: false,
+            quoteLine: nil, notes: notes, moodName: nil, categoryNames: [], characters: [], transcript: nil
+        )
+        let md = MomentMarkdownExporter.markdown(
+            bookTitle: "B", author: "", entries: [entry],
+            exportDate: Self.fixedDate, locale: Self.testLocale, timeZone: Self.testTimeZone
+        )
+        let expected = [
+            "\\_ _ _  ", "\\* * *  ", "\\- - -  ", "\\***  ", "\\___  ", "\\-\t-\t-  ", "\\--  ", "**bold** start",
+        ].joined(separator: "\n")
+        #expect(md.contains("\n\n" + expected + "\n"))
+    }
+
+    // Failure: escaping every leading digit, "-", "+" or "*" showed a stray backslash in "3.14",
+    // "-5" or "-ish" in viewers that print unknown escapes, and noised the file.
+    @Test func leavesNonMarkersAsTyped() {
+        let notes = "3.14 is pi\n-5 degrees\n-ish\n+1 vote\n*emphasis* first\n2023 was a year\n7) item\n8.\n-\n*"
+        let entry = MomentMarkdownExporter.Entry(
+            label: "L", chapterTitle: "3.5 Ch", time: 1, trackIndex: 0, isPinned: false,
+            quoteLine: nil, notes: notes, moodName: nil, categoryNames: [], characters: [], transcript: nil
+        )
+        let md = MomentMarkdownExporter.markdown(
+            bookTitle: "B", author: "", entries: [entry],
+            exportDate: Self.fixedDate, locale: Self.testLocale, timeZone: Self.testTimeZone
+        )
+        let expected = [
+            "3.14 is pi  ", "-5 degrees  ", "-ish  ", "+1 vote  ", "*emphasis* first  ",
+            "2023 was a year  ", "7\\) item  ", "8\\.  ", "\\-  ", "\\*",
+        ].joined(separator: "\n")
+        #expect(md.contains("\n\n" + expected + "\n"))
+        #expect(md.contains("\n3.5 Ch · 00:01\n"))
+    }
+
+    // Failure: "## Track 3 #" lost its "#" (the renderer reads it as a closing sequence), and a label
+    // of only "#"s became an empty heading.
+    @Test func escapesClosingHashSequenceInHeadings() {
+        func md(label: String, title: String = "B") -> String {
+            let entry = MomentMarkdownExporter.Entry(
+                label: label, chapterTitle: "Ch", time: 1, trackIndex: 0, isPinned: false,
+                quoteLine: nil, notes: nil, moodName: nil, categoryNames: [], characters: [], transcript: nil
+            )
+            return MomentMarkdownExporter.markdown(
+                bookTitle: title, author: "", entries: [entry],
+                exportDate: Self.fixedDate, locale: Self.testLocale, timeZone: Self.testTimeZone
+            )
+        }
+        #expect(md(label: "Track 3 #").contains("\n## Track 3 \\#\n"))
+        #expect(md(label: "Track 3 ##").contains("\n## Track 3 \\##\n"))
+        #expect(md(label: "###").contains("\n## \\###\n"))
+        #expect(md(label: "Part 1", title: "Book #").hasPrefix("# Book \\#\n"))
+        // Not closing sequences: no space before the run, or the run is not at the end.
+        #expect(md(label: "C#").contains("\n## C#\n"))
+        #expect(md(label: "# one").contains("\n## # one\n"))
+    }
+
     // Failure: a newline or leading dot in the title made a multi-line or hidden file name.
     @Test func filenameCollapsesNewlinesAndTrimsLeadingDots() {
         #expect(MomentsMarkdownExport.filename(forBookTitle: "Line one\nLine two") == "Line one Line two Moments.md")
