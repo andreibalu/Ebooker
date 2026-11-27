@@ -79,3 +79,20 @@ Supersedes the UI-layer and E2E notes above where they differ (export control pl
 Decision: Export is visible only when the moments list is expanded (it is collapsed by default). The alternative, an icon inside the disclosure label, brought back both the squeeze and the id collision.
 
 Results: `moments` 8/8, `moment-search` 12/12, `accessibility-layout` 5/5, `extended-flows` 11/12 (the EQ preset test fails on `main` as well). Unit tests: 392 run, one failure (`coffeeTipSucceedsRepeatsAndFinishesEachTransaction`), also failing on `main` in a full run.
+
+## Review round 2
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | Share on a deleted record crashed (`model(for:)` returns a model for a deleted row) | `9a3dfe1`: `ModelContext.existingModel(_:id:)` (registered model, else a fetch by id, `isDeleted` counts as missing) used by the quote card and by the Markdown export's book lookup; both throw, so the share yields nothing. |
+| 2 | Metadata strip could overflow at 320pt with large text | `b9d4c0a`: the zero-chip variant is not `fixedSize`; the mood pill truncates, "+N" and the sparkles keep their width. |
+| 3 | Third chip hidden while the row had room | `b9d4c0a`: the text column fills the row (`maxWidth: .infinity`), the `Spacer` is gone, so `ViewThatFits` sees the real width. |
+| 4 | VoiceOver read "Share, Export Moments…" | `a63ec4f`: the capsule's icon is hidden from accessibility; the id stays. |
+| 5 | Markdown escaping | `5527683`: spaced `_ _ _` / `* * *` / `- - -` rules and `-` setext underlines are escaped; `3.14`, `-5`, `-ish`, `+1`, `*emphasis*` stay as typed (list and ordered markers need whitespace or the line end after them); a closing `#` run in a heading or title is escaped. `#`, `>`, `=`, backtick and `~` at a line start are still always escaped. |
+| 6 | No test rendered the quote card | `9a3dfe1`: `MomentQuoteCardRenderTests` (PNG data from a saved moment with a draft, payload takes the draft, deleted moment and deleted book throw). COVERAGE lines corrected in `b5d00cb`. |
+| 7 | Slice 02 bullets in the 1.5.0 section | `b5d00cb` |
+| 8 | Misleading test name | `4751209` |
+
+Decisions: the card's own pixels are still only checked by eye (the share file isn't readable from the host). 320pt: no 320pt simulator runtime exists and Display Zoom can't be set from `simctl`, so a throwaway unit test rendered the real `MomentRow` at 320pt width with `.accessibility1`, Bold Text and "Inspirational" plus "+3" and sparkles: the mood pill truncated and the rest stayed whole. That test was not kept.
+
+Results: unit tests 399 run, one failure (`coffeeTipSucceedsRepeatsAndFinishesEachTransaction`, the known flake). `moments` 8/8, `moment-search` 12/12, `accessibility-layout` 5/5 on "Unpaged e2e" (iOS 27.0). Screenshots outside Git in `/tmp/unpaged-slice02-fix2/`.
