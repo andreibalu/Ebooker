@@ -146,12 +146,13 @@ export async function fillSearchWhenSettled(screen: Screen, placeholder: string,
   const deadline = Date.now() + 4_000;
   let previous = '';
   let still = 0;
-  while (still < 3) {
+  // Past the deadline, fill whatever is there: a box that never holds still must not hang the test.
+  while (still < 3 && Date.now() < deadline) {
     const box = await field.boundingBox();
     const current = box ? `${box.x},${box.y},${box.width},${box.height}` : '';
     still = current && current === previous ? still + 1 : 0;
     previous = current;
-    if (still >= 3 && !(await close.isVisible()) && Date.now() < deadline) still = 0;
+    if (still >= 3 && !(await close.isVisible())) still = 0;
     await delay(150);
   }
   await field.fill(text);
