@@ -222,7 +222,7 @@ struct MomentMarkdownExporterTests {
         let entry = MomentMarkdownExporter.Entry(
             label: "L", chapterTitle: "Ch", time: 1, trackIndex: 0, isPinned: false,
             quoteLine: "# q1\n- q2", notes: notes, moodName: nil, categoryNames: [], characters: [],
-            transcript: "first line\n## second\nthird"
+            transcript: "first line\n## second\n<!-- spoiler\nthird"
         )
         let md = MomentMarkdownExporter.markdown(
             bookTitle: "B", author: "", entries: [entry],
@@ -234,7 +234,8 @@ struct MomentMarkdownExporterTests {
         ].joined(separator: "\n")
         #expect(md.contains("\n\n" + expectedNotes + "\n\n"))
         #expect(md.contains("> \\# q1  \n> \\- q2\n"))
-        #expect(md.contains("**Transcript:** first line  \n\\## second  \nthird\n"))
+        // A leading "<" could open a raw HTML block ("<!--") that hides every later moment.
+        #expect(md.contains("**Transcript:** first line  \n\\## second  \n\\<!-- spoiler  \nthird\n"))
         #expect(!md.contains("\r"))
     }
 

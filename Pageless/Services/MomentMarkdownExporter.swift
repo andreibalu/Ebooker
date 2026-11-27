@@ -160,10 +160,11 @@ enum MomentMarkdownExporter {
     }
 
     /// Escapes a block marker at the start of a line (`#`, `>`, lists, rules, setext underlines,
-    /// code fences, `1.` / `1)`), so user text can't become a heading, quote, list or rule.
+    /// code fences, `1.` / `1)`, a leading `<` that could open a raw HTML block), so user text can't become
+    /// a heading, quote, list, rule or hidden HTML.
     private static func escapedLeadingMarker(_ line: String) -> String {
         guard let first = line.first else { return line }
-        if "#>=`~".contains(first) { return "\\" + line }
+        if "#>=`~<".contains(first) { return "\\" + line }
         // A list marker needs whitespace or the end of the line after it; "-5" and "-ish" are text.
         if "-+*".contains(first) {
             let next = line.dropFirst().first
