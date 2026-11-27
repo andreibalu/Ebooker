@@ -135,7 +135,8 @@ struct MomentRow: View {
 
     /// One line, never truncated mid-chip: `ViewThatFits` tries all the chips (up to three), then one
     /// fewer, down to none, and the chips that don't fit fold into the "+N" count. The mood pill
-    /// is in every variant, so it keeps priority.
+    /// is in every variant, so it keeps priority. The last variant (no chips) can shrink: a long mood
+    /// pill truncates before "+N" or the sparkles do, so the strip never outgrows a narrow row.
     private var metadataStrip: some View {
         let allChips = metadataChipLabels
         let maxVisible = min(3, allChips.count)
@@ -143,7 +144,8 @@ struct MomentRow: View {
             ForEach(Array(stride(from: maxVisible, through: 0, by: -1)), id: \.self) { visibleCount in
                 metadataStripRow(
                     visibleChips: Array(allChips.prefix(visibleCount)),
-                    overflowCount: allChips.count - visibleCount
+                    overflowCount: allChips.count - visibleCount,
+                    compressible: visibleCount == 0
                 )
             }
         }
@@ -159,13 +161,14 @@ struct MomentRow: View {
         return parts.joined(separator: ", ")
     }
 
-    private func metadataStripRow(visibleChips: [String], overflowCount: Int) -> some View {
+    private func metadataStripRow(visibleChips: [String], overflowCount: Int, compressible: Bool) -> some View {
         HStack(spacing: 4) {
             if let mood = moment.mood {
                 Text(mood.displayName)
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.amber.opacity(0.18), in: Capsule())
@@ -187,16 +190,21 @@ struct MomentRow: View {
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
             }
 
             if moment.aiGeneratedName {
                 Image(systemName: "sparkles")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .fixedSize()
+                    .layoutPriority(1)
             }
         }
-        // Natural width, so ViewThatFits can tell when a variant doesn't fit.
-        .fixedSize(horizontal: true, vertical: false)
+        // Natural width, so ViewThatFits can tell when a variant doesn't fit. The last variant
+        // keeps the HStack flexible instead, so its mood pill can truncate.
+        .fixedSize(horizontal: !compressible, vertical: false)
     }
 
     private func highlighted(_ value: String, query: String) -> Text {
@@ -367,8 +375,9 @@ struct MomentRow: View {
                         .padding(.top, 2)
                 }
             }
-
-            Spacer(minLength: 0)
+            // Fill the row between the pin and play buttons, so the strip's ViewThatFits sees the
+            // real width instead of the widest text's.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
