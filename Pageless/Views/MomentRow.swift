@@ -69,6 +69,21 @@ struct MomentRow: View {
                         if !metadata.isEmpty {
                             highlighted(metadata.joined(separator: " · "), query: searchQuery).font(.caption)
                         }
+                        if let snippet = MomentSearch.transcriptSnippet(for: moment, query: searchQuery) {
+                            HStack(alignment: .firstTextBaseline, spacing: 5) {
+                                Image(systemName: "waveform")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityHidden(true)
+                                highlighted(snippet, query: searchQuery)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("Transcript: \(snippet)")
+                            .accessibilityIdentifier("momentSearch.snippet.\(moment.label)")
+                        }
                         if let unavailableReason {
                             Text(unavailableReason).font(.caption).foregroundStyle(.secondary)
                         }
@@ -93,6 +108,103 @@ struct MomentRow: View {
         let tracks = audiobook.sortedTracks
         guard tracks.indices.contains(moment.trackIndex) else { return "Track unavailable" }
         return tracks[moment.trackIndex].displayTitle
+    }
+
+    /// Cheap on purpose: the sheet's body re-runs on every keystroke. It captures the draft strings
+    /// and identifiers; the cover and chapter are resolved only when the user shares.
+    private var editShareCard: MomentQuoteCardImage {
+        MomentQuoteCardImage(
+            moment: moment,
+            container: modelContext.container,
+            draft: MomentQuoteCardDraft(label: editNameInput, note: editNoteInput, quoteLine: editQuoteLine),
+            bookTitle: audiobook.title
+        )
+    }
+
+    private var formattedQuoteLine: String? {
+        MomentQuoteText.decorated(moment.quoteLine)
+    }
+
+    private var metadataChipLabels: [String] {
+        moment.categories.map(\.displayName) + moment.characters
+    }
+
+    private var hasMetadataStrip: Bool {
+        moment.mood != nil || !metadataChipLabels.isEmpty || moment.aiGeneratedName
+    }
+
+    /// One line, never truncated mid-chip: `ViewThatFits` tries all the chips (up to three), then one
+    /// fewer, down to none, and the chips that don't fit fold into the "+N" count. The mood pill
+    /// is in every variant, so it keeps priority. The last variant (no chips) can shrink: a long mood
+    /// pill truncates before "+N" or the sparkles do, so the strip never outgrows a narrow row.
+    private var metadataStrip: some View {
+        let allChips = metadataChipLabels
+        let maxVisible = min(3, allChips.count)
+        return ViewThatFits(in: .horizontal) {
+            ForEach(Array(stride(from: maxVisible, through: 0, by: -1)), id: \.self) { visibleCount in
+                metadataStripRow(
+                    visibleChips: Array(allChips.prefix(visibleCount)),
+                    overflowCount: allChips.count - visibleCount,
+                    compressible: visibleCount == 0
+                )
+            }
+        }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(metadataAccessibilityLabel)
+        .accessibilityIdentifier("moment.meta.\(moment.label)")
+    }
+
+    private var metadataAccessibilityLabel: String {
+        var parts = [moment.mood?.displayName].compactMap { $0 } + metadataChipLabels
+        if moment.aiGeneratedName { parts.append("AI generated") }
+        return parts.joined(separator: ", ")
+    }
+
+    private func metadataStripRow(visibleChips: [String], overflowCount: Int, compressible: Bool) -> some View {
+        HStack(spacing: 4) {
+            if let mood = moment.mood {
+                Text(mood.displayName)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.amber.opacity(0.18), in: Capsule())
+            }
+
+            // Offsets, not the text: a category and a character can share a name.
+            ForEach(Array(visibleChips.enumerated()), id: \.offset) { _, chip in
+                Text(chip)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.primary.opacity(0.07), in: Capsule())
+            }
+
+            if overflowCount > 0 {
+                Text("+\(overflowCount)")
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
+            }
+
+            if moment.aiGeneratedName {
+                Image(systemName: "sparkles")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                    .layoutPriority(1)
+            }
+        }
+        // Natural width, so ViewThatFits can tell when a variant doesn't fit. The last variant
+        // keeps the HStack flexible instead, so its mood pill can truncate.
+        .fixedSize(horizontal: !compressible, vertical: false)
     }
 
     private func highlighted(_ value: String, query: String) -> Text {
@@ -141,6 +253,12 @@ struct MomentRow: View {
             }
         }
         .contextMenu {
+            ShareLink(
+                item: MomentQuoteCardImage(moment: moment, container: modelContext.container, bookTitle: audiobook.title),
+                preview: SharePreview(moment.label)
+            ) {
+                Label("Share Moment", systemImage: "square.and.arrow.up")
+            }
             Button(role: .destructive) {
                 onDelete()
             } label: {
@@ -157,6 +275,8 @@ struct MomentRow: View {
                 quoteLine: $editQuoteLine,
                 characters: $editCharacters,
                 mood: $editMood,
+                transcript: moment.transcript,
+                shareCard: editShareCard,
                 onSave: {
                     let trimmedName = editNameInput.trimmingCharacters(in: .whitespaces)
                     if !trimmedName.isEmpty {
@@ -227,10 +347,20 @@ struct MomentRow: View {
                     .foregroundStyle(.primary)
                     .font(.subheadline)
                     .multilineTextAlignment(.leading)
+                    .layoutPriority(1)
 
                 Text(TimeFormatter.clockString(seconds: moment.time))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if let quote = formattedQuoteLine {
+                    Text(quote)
+                        .font(.system(.caption, design: .serif).italic())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.top, 1)
+                        .accessibilityIdentifier("moment.quote.\(moment.label)")
+                }
 
                 if let note = moment.notes, !note.isEmpty {
                     Text(note)
@@ -239,9 +369,15 @@ struct MomentRow: View {
                         .lineLimit(2)
                         .padding(.top, 1)
                 }
-            }
 
-            Spacer()
+                if hasMetadataStrip {
+                    metadataStrip
+                        .padding(.top, 2)
+                }
+            }
+            // Fill the row between the pin and play buttons, so the strip's ViewThatFits sees the
+            // real width instead of the widest text's.
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()

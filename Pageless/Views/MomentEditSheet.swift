@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// A bottom sheet for naming and annotating a moment.
 /// Used both when first saving a moment (PlayerView) and when editing an existing one (AudiobookDetailView).
@@ -22,12 +23,16 @@ struct MomentEditSheet: View {
 
     /// Why a smart-save draft has a fallback name. Informational, not an error.
     let notice: String?
+    let transcript: String?
+    let shareCard: MomentQuoteCardImage?
     let onSave: () -> Void
     let onCancel: () -> Void
 
     @AppStorage("useLocalAIFeatures") private var useLocalAIFeatures = false
 
     @State private var newCharacterInput: String = ""
+    @State private var isTranscriptExpanded = false
+    @State private var didCopyTranscript = false
     @FocusState private var characterFieldFocused: Bool
 
     init(
@@ -40,6 +45,8 @@ struct MomentEditSheet: View {
         characters: Binding<[String]>,
         mood: Binding<MomentMood?>,
         notice: String? = nil,
+        transcript: String? = nil,
+        shareCard: MomentQuoteCardImage? = nil,
         onSave: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -52,6 +59,8 @@ struct MomentEditSheet: View {
         self._characters = characters
         self._mood = mood
         self.notice = notice
+        self.transcript = transcript
+        self.shareCard = shareCard
         self.onSave = onSave
         self.onCancel = onCancel
     }
@@ -106,10 +115,25 @@ struct MomentEditSheet: View {
                 categoriesSection
                 moodSection
                 charactersSection
+                if let transcript = trimmedTranscript {
+                    transcriptSection(transcript)
+                }
             }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if let shareCard {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ShareLink(
+                            item: shareCard,
+                            preview: SharePreview(shareCard.previewTitle)
+                        ) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share Moment")
+                        .accessibilityIdentifier("moment.share")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: onSave)
                         .accessibilityIdentifier("moment.done")
@@ -258,6 +282,58 @@ struct MomentEditSheet: View {
         guard !characters.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { return }
         characters.append(trimmed)
         newCharacterInput = ""
+    }
+
+    // MARK: - Transcript
+
+    private var trimmedTranscript: String? {
+        guard let raw = transcript?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private func transcriptSection(_ text: String) -> some View {
+        Section {
+            // The id goes on the label only: an id on the group is inherited by everything inside it
+            // and would replace the text's and the copy button's own ids.
+            DisclosureGroup(isExpanded: $isTranscriptExpanded) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(text)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("moment.transcript.text")
+
+                    Button {
+                        UIPasteboard.general.string = text
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            didCopyTranscript = true
+                        }
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .seconds(1.5))
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                didCopyTranscript = false
+                            }
+                        }
+                    } label: {
+                        Label(
+                            didCopyTranscript ? "Copied" : "Copy Transcript",
+                            systemImage: didCopyTranscript ? "checkmark" : "doc.on.doc"
+                        )
+                        .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("moment.transcript.copy")
+                }
+                .padding(.top, 4)
+            } label: {
+                Text("Transcript")
+                    .accessibilityIdentifier("moment.transcript")
+            }
+        }
     }
 }
 

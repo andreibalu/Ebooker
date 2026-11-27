@@ -1,4 +1,4 @@
-import { expect, type Locator } from 'e2e';
+import { expect, type Locator, type Screen } from 'e2e';
 import { test as base } from '@e2e-dev/mobile';
 import { createAgentDeviceClient } from 'agent-device';
 import { NATIVE_WORKER_SESSION } from '../session.js';
@@ -109,4 +109,51 @@ export async function longPressVisibleTop(target: Locator): Promise<void> {
   if (!box || box.width <= 0 || box.height <= 0) throw new Error('Visible native control has no actionable bounds');
   const client = createAgentDeviceClient({ session: NATIVE_WORKER_SESSION });
   await client.interactions.longPress({ x: box.x + box.width / 2, y: box.y + Math.min(40, box.height / 4), durationMs: 1_000 });
+}
+
+/** Asserts the iOS share sheet is up, then dismisses it by tapping above the sheet. */
+export async function expectShareSheetThenDismiss(screen: Screen): Promise<void> {
+  const shareSheet = screen.getByTestId('ActivityListView');
+  await expect(shareSheet).toBeVisible();
+  const dismissRegion = screen.getByTestId('PopoverDismissRegion');
+  const dismissBox = await dismissRegion.boundingBox();
+  if (dismissBox) {
+    await dismissRegion.tap({ position: { x: dismissBox.width / 2, y: 80 } });
+  }
+  await expect(shareSheet).toBeHidden();
+}
+
+/** Edit and filter sheets open at their half-height detent, where the edit form does not scroll. */
+export async function expandSheet(screen: Screen) {
+  const grabber = await screen.getByRole('button', 'Sheet Grabber').boundingBox();
+  if (!grabber) throw new Error('Sheet grabber has no bounds');
+  const x = grabber.x + grabber.width / 2;
+  await screen.swipe({ from: { x, y: grabber.y + grabber.height / 2 }, to: { x, y: 80 } });
+}
+
+/**
+ * Fills the moment search field, which moves right after its sheet opens. The sheet focuses the field
+ * on appear, and iOS then morphs the search bar from the drawer (below the title) into the active bar:
+ * higher, narrower, with a Close button, about a second later. `fill` taps the point of the box the
+ * locator read first, so a read taken before the morph finds no text input there ("no text input found
+ * at the provided coordinates to clear"). Wait for the active bar (Close button) with its box held still
+ * for three reads. Under load the autofocus can lag or never land, so after four seconds fill anyway:
+ * its own tap focuses the field.
+ */
+export async function fillSearchWhenSettled(screen: Screen, placeholder: string, text: string): Promise<void> {
+  const field = screen.getByPlaceholder(placeholder);
+  const close = screen.getByRole('button', 'Close');
+  const deadline = Date.now() + 4_000;
+  let previous = '';
+  let still = 0;
+  // Past the deadline, fill whatever is there: a box that never holds still must not hang the test.
+  while (still < 3 && Date.now() < deadline) {
+    const box = await field.boundingBox();
+    const current = box ? `${box.x},${box.y},${box.width},${box.height}` : '';
+    still = current && current === previous ? still + 1 : 0;
+    previous = current;
+    if (still >= 3 && !(await close.isVisible())) still = 0;
+    await delay(150);
+  }
+  await field.fill(text);
 }

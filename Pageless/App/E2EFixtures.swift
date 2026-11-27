@@ -225,8 +225,18 @@ enum E2EFixtures {
                             audiobook: book, notes: "A saved fixture note", categories: [.dialogue])
         context.insert(moment)
         book.moments.append(moment)
-        let secondMoment = Moment(trackIndex: 0, time: 60, label: "E2E Second Moment",
-                                  audiobook: book, categories: [.reflection])
+        // The first moment stays sparse (a note and one category, no quote, mood or cast): the
+        // moments tests edit it, and it shows a row without a quote line. The second carries every
+        // field the book-detail row and the edit sheet surface. "lighthouse" appears only in its
+        // transcript, so a search for it proves transcript matching. Its mood, cast and categories
+        // differ from what the filter tests add to the first moment.
+        let secondMoment = Moment(
+            trackIndex: 0, time: 60, label: "E2E Second Moment", audiobook: book,
+            transcript: "We rounded the point at dusk, and the old lighthouse keeper waved us in, "
+                + "calling out that every harbour keeps a light for strangers.",
+            aiGeneratedName: true, notes: "Said while the fog rolled in.",
+            categories: [.reflection, .quote], quoteLine: "Every harbour keeps a light for strangers.",
+            characters: ["Marlow"], mood: .peaceful)
         context.insert(secondMoment)
         book.moments.append(secondMoment)
         let secondBook = Audiobook(title: "E2E Another Book", author: "Another Fixture Author",

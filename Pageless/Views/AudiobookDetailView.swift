@@ -480,6 +480,7 @@ struct AudiobookDetailView: View {
             } else {
                 DisclosureGroup(isExpanded: $momentsExpanded) {
                     VStack(alignment: .leading, spacing: 10) {
+                        momentsActionsRow
                         momentsFilterChipsRow
                         VStack(spacing: 10) {
                             ForEach(saved) { moment in
@@ -492,6 +493,10 @@ struct AudiobookDetailView: View {
                         .padding(.top, 6)
                     }
                 } label: {
+                    // Only the count lives in the label: a disclosure label shares its row with the
+                    // chevron, and any control inside it squeezes the count at large text sizes (and
+                    // lends its accessibility id to the whole label). Filter and Export sit in the
+                    // content's first row instead.
                     HStack(spacing: 8) {
                         Image(systemName: "bookmark.fill")
                             .font(.caption.weight(.semibold))
@@ -499,11 +504,11 @@ struct AudiobookDetailView: View {
                         Text(momentsDisclosureLabel(count: saved.count))
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .layoutPriority(1)
                         Spacer(minLength: 0)
-                        if momentsExpanded && hasAiAnalyzedMoments {
-                            filterSheetCapsuleButton
-                        }
                     }
+                    .dynamicTypeSize(...DynamicTypeSize.xLarge)
                     .padding(.vertical, 2)
                 }
                 .tint(.primary.opacity(0.55))
@@ -670,7 +675,7 @@ struct AudiobookDetailView: View {
 
     // MARK: - Moments / filters
 
-    /// Opens the moment filter sheet; used in the disclosure header when expanded and in empty-state sections.
+    /// Opens the moment filter sheet; sits in the moments actions row, expanded or in an empty-state section.
     private var filterSheetCapsuleButton: some View {
         Button {
             showFilterSheet = true
@@ -680,6 +685,8 @@ struct AudiobookDetailView: View {
                     .font(.caption.weight(.semibold))
                 Text("Filter")
                     .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -718,12 +725,57 @@ struct AudiobookDetailView: View {
         }
     }
 
-    /// Empty states: still need the Filter control when AI metadata exists (no disclosure row).
+    /// Exports all moments for this book as Markdown via the system share sheet.
+    private var exportMomentsShareLink: some View {
+        ShareLink(
+            item: MomentsMarkdownExport(book: audiobook, container: modelContext.container),
+            preview: SharePreview("\(audiobook.title) — Moments")
+        ) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.caption.weight(.semibold))
+                    // ShareLink already says "Share"; without this VoiceOver reads "Share, Export Moments…".
+                    .accessibilityHidden(true)
+                Text("Export Moments…")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.primary.opacity(0.1), in: Capsule())
+            .foregroundStyle(.primary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("audiobookDetail.exportMoments")
+    }
+
+    /// Filter and Export controls above the moment rows (or the empty state). Fixed-size capsules, so the
+    /// row stacks them when they don't fit side by side instead of squeezing either label.
+    @ViewBuilder
+    private var momentsActionsRow: some View {
+        let showsFilter = hasAiAnalyzedMoments
+        let showsExport = !audiobook.moments.isEmpty
+        if showsFilter || showsExport {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    if showsFilter { filterSheetCapsuleButton }
+                    if showsExport { exportMomentsShareLink }
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    if showsFilter { filterSheetCapsuleButton }
+                    if showsExport { exportMomentsShareLink }
+                }
+            }
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        }
+    }
+
+    /// Empty states: the same controls sit above the filter chips (no disclosure row).
     private var momentsHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if hasAiAnalyzedMoments {
-                filterSheetCapsuleButton
-            }
+            momentsActionsRow
             momentsFilterChipsRow
         }
     }
