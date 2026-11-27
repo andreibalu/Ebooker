@@ -102,7 +102,7 @@ struct MomentQuoteCardImage: Transferable, Sendable {
 
     @MainActor
     func renderPNGData() throws -> Data {
-        guard let moment = container.mainContext.model(for: momentID) as? Moment,
+        guard let moment = container.mainContext.existingModel(Moment.self, id: momentID),
               let book = moment.audiobook else {
             throw CocoaError(.fileNoSuchFile)
         }

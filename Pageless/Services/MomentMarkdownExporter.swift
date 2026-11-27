@@ -231,7 +231,7 @@ struct MomentsMarkdownExport: Transferable, Sendable {
     /// belong to the context's actor.
     @MainActor
     func renderMarkdown() throws -> String {
-        guard let book = container.mainContext.model(for: bookID) as? Audiobook else {
+        guard let book = container.mainContext.existingModel(Audiobook.self, id: bookID) else {
             throw CocoaError(.fileNoSuchFile)
         }
         return MomentMarkdownExporter.markdown(for: book, exportDate: exportDate ?? .now)
