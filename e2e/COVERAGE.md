@@ -8,15 +8,15 @@ This matrix covers every iOS feature except Apple Intelligence and CloudKit itse
 - `support/fake-audiobookshelf.ts` serves an Audiobookshelf server on localhost.
 - The local `Products.storekit` configuration stands in for the App Store.
 
-## Validation, 2026-11-26 (slice 02: moment transcripts, inline metadata, sharing)
+## Validation, 2026-11-27 (slice 02: moment transcripts, inline metadata, sharing)
 
-`Unpaged e2e` (iPhone 18 Pro, iOS 27.0), after review round 1 on branch `feat/02-moments-transcripts-inline-and-sharing`, run serially. Evidence is outside Git.
+`Unpaged e2e` (iPhone 18 Pro, iOS 27.0), branch `feat/02-moments-transcripts-inline-and-sharing` after three review rounds, run serially. Evidence is outside Git.
 
-- `moments` 8 of 8, `moment-search` 12 of 12 and `accessibility-layout` 5 of 5, including the moments header and the moment row at accessibility-XXXL with Button Shapes and Bold Text.
-- `extended-flows` 11 of 12. `EQ preset enabled state persists and reset returns flat` fails on `main` too (the runner's watchdog trips on the equalizer sheet), so it is not from this slice.
-- Swift unit tests: 392 run; the only failure is `coffeeTipSucceedsRepeatsAndFinishesEachTransaction`, which fails the same way on `main` in a full run and passes when its suite runs alone.
-- Not rerun this round: `smart-save`, `native-flows` and `library`. They passed in the first slice 02 run, before the review fixes, and the fixes touch none of their screens.
-- Not asserted by E2E: the quote card's pixels and the exported Markdown text, because the share sheet's file isn't readable from the host. `MomentQuoteCardRenderTests` renders the card to PNG data from a saved moment and a draft (non-empty PNG, draft text taken, a deleted moment or book throws), but nothing compares its pixels or layout; a person looked at the PNGs. `MomentMarkdownExporterTests` own the Markdown format.
+- `moments` 8 of 8, `moment-search` 12 of 12 in three consecutive runs, `accessibility-layout` 5 of 5 (moments header and moment row at accessibility-XXXL with Button Shapes and Bold Text).
+- `moment-search` fills now wait for the search bar to settle (`fillSearchWhenSettled`). The sheet autofocuses its field and iOS then moves the bar from the drawer to the active position; a fill aimed at the first box found no text input. `main` fails the same way under load, so it predates the slice.
+- Full suite: the failures left all fail identically on `main` (one run each, same simulator): `audiobookshelf` storage controls, `cover` crop, `extended-flows` EQ preset, `native-flows` equalizer and reading activity, and `player` chapter sleep. `onboarding` and `purchases` pass on both.
+- Swift unit tests: 399 run. `StoreKitTransactionTests` is flaky (a different test fails from run to run, passes alone, also on `main`); this slice touches no StoreKit code.
+- Not asserted by E2E: the quote card's pixels and the exported Markdown text, because the share sheet's file isn't readable from the host. `MomentQuoteCardRenderTests` renders the card to PNG data (draft text taken, a deleted moment or book throws), and a person looked at the PNGs; `MomentMarkdownExporterTests` own the Markdown format.
 
 ## Validation, 2026-10-18 (Apple Intelligence reliability)
 

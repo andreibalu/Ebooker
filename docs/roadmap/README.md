@@ -14,7 +14,7 @@ dependencies are satisfied, or name a slice explicitly (e.g., `$ship-feature 03`
 | Status | Slice | Summary | Effort | Depends on | PR |
 | --- | --- | --- | --- | --- | --- |
 | [x] | [01 — Reading Stats Accuracy & Habit Loop](slices/01-reading-stats-accuracy-and-habit.md) | Fix midnight streak reset & 5-min avg-session bug; improve discoverability, interactive heatmap, daily goal, palettes, real covers & share card | M | — | [#102](https://github.com/andreibalu/Ebooker/pull/102) |
-| [ ] | [02 — Moments Transcripts, Inline Metadata & Quote Sharing](slices/02-moments-transcripts-inline-and-sharing.md) | Search & display stored transcripts; show quotes/moods/tags inline on `MomentRow`; add quote card sharing & per-book Markdown export | M | — | — |
+| [x] | [02 — Moments Transcripts, Inline Metadata & Quote Sharing](slices/02-moments-transcripts-inline-and-sharing.md) | Search & display stored transcripts; show quotes/moods/tags inline on `MomentRow`; add quote card sharing & per-book Markdown export | M | — | [#105](https://github.com/andreibalu/Ebooker/pull/105) |
 | [ ] | [03 — Smart Rewind, Cross-Track Skip & In-Player Undo Scrub](slices/03-smart-rewind-and-undo-scrub.md) | Pause-duration Smart Rewind (not once-per-launch), cross-track skip back, wire `jumpToSavedProgressMarker` as "Undo scrub", whole-book player context | M | — | — |
 | [ ] | [04 — Sleep Timer Comfort](slices/04-sleep-timer-comfort.md) | Smooth audio fade-out on expiry, quick `+5/+15m` & shake-to-extend, custom duration picker, remember last timer, auto-rewind on expiry | M | — | — |
 
