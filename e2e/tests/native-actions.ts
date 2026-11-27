@@ -130,3 +130,29 @@ export async function expandSheet(screen: Screen) {
   const x = grabber.x + grabber.width / 2;
   await screen.swipe({ from: { x, y: grabber.y + grabber.height / 2 }, to: { x, y: 80 } });
 }
+
+/**
+ * Fills the moment search field, which moves right after its sheet opens. The sheet focuses the field
+ * on appear, and iOS then morphs the search bar from the drawer (below the title) into the active bar:
+ * higher, narrower, with a Close button, about a second later. `fill` taps the point of the box the
+ * locator read first, so a read taken before the morph finds no text input there ("no text input found
+ * at the provided coordinates to clear"). Wait for the active bar (Close button) with its box held still
+ * for three reads. Under load the autofocus can lag or never land, so after four seconds fill anyway:
+ * its own tap focuses the field.
+ */
+export async function fillSearchWhenSettled(screen: Screen, placeholder: string, text: string): Promise<void> {
+  const field = screen.getByPlaceholder(placeholder);
+  const close = screen.getByRole('button', 'Close');
+  const deadline = Date.now() + 4_000;
+  let previous = '';
+  let still = 0;
+  while (still < 3) {
+    const box = await field.boundingBox();
+    const current = box ? `${box.x},${box.y},${box.width},${box.height}` : '';
+    still = current && current === previous ? still + 1 : 0;
+    previous = current;
+    if (still >= 3 && !(await close.isVisible()) && Date.now() < deadline) still = 0;
+    await delay(150);
+  }
+  await field.fill(text);
+}
