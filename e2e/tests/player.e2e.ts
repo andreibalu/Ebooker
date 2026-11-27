@@ -122,14 +122,32 @@ test('skip buttons and the resume offset follow Settings, and the library menu r
   await screen.getByTestId('player.playPause').tap();
   await expect(scrubber).toHaveValue(/^01:[12]\d of 05:00$/);
 
-  await device.openApp(bundle, { relaunch: true, launchArguments: fixture });
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-smart-rewind-elapsed', '600'] });
   await screen.getByTestId('libraryTab').tap();
   await screen.getByTestId('book.card.E2E-Listening-Book').longPress();
   await screen.getByRole('button', 'Resume').tap();
   await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
   await screen.getByTestId('player.playPause').tap();
-  // The first resume after launch starts 15 seconds before the saved position.
+  // A long break (>= 5 min) rewinds the full 15 seconds from the saved position.
   await expect(scrubber).toHaveValue(/^01:0\d of 05:00$/);
+
+  // A short break (< 30 s) resumes in place with no rewind.
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-smart-rewind-elapsed', '10'] });
+  await screen.getByTestId('libraryTab').tap();
+  await screen.getByTestId('book.card.E2E-Listening-Book').longPress();
+  await screen.getByRole('button', 'Resume').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(scrubber).toHaveValue(/^01:0\d of 05:00$/);
+
+  // A medium break (30 s ..< 5 min) rewinds min(15, 10) = 10 seconds.
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-smart-rewind-elapsed', '60'] });
+  await screen.getByTestId('libraryTab').tap();
+  await screen.getByTestId('book.card.E2E-Listening-Book').longPress();
+  await screen.getByRole('button', 'Resume').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(scrubber).toHaveValue(/^00:(4\d|5\d) of 05:00$/);
 });
 
 test('the chapter list marks the current chapter and jumps to another', async ({ device, screen }) => {
@@ -324,4 +342,68 @@ test('single-file chaptered book toggles scrubber between full book and current 
   await screen.getByTestId('player.scrubberScope').tap();
   await expect(screen.getByTestId('player.scrubberScope')).toContainText('Full Book');
   await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0[4-6] of 00:12$/);
+});
+
+test('skip backward crosses from track 2 into the end of track 1', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openListeningBookPaused(screen);
+  await screen.getByTestId('player.chapters').tap();
+  await screen.getByTestId('chapters.row.1').tap();
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 2');
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^00:0\d of 05:00$/);
+
+  await screen.getByLabel('Skip backward').first().tap();
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 1');
+  await expect(screen.getByTestId('player.scrubber')).toHaveValue(/^04:[23]\d of 05:00$/);
+});
+
+test('undo jump pill restores position after scrubbing and chapter jumps', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openListeningBookPaused(screen);
+  const scrubber = screen.getByTestId('player.scrubber');
+  await expect(scrubber).toHaveValue(/^00:0\d of 05:00$/);
+
+  const box = await scrubber.boundingBox();
+  if (!box) throw new Error('Scrubber has no bounds');
+  const y = box.y + box.height * 0.75;
+  await screen.swipe({ from: { x: box.x + box.width * 0.1, y }, to: { x: box.x + box.width * 0.6, y } });
+  await expect(scrubber).toHaveValue(/^(02:[1-5]\d|03:[01]\d) of 05:00$/);
+
+  const undoPill = screen.getByTestId('player.undoJump');
+  await expect(undoPill).toBeVisible();
+  await expect(undoPill).toContainText(/Back to 00:0\d/);
+  await undoPill.tap();
+  await expect(scrubber).toHaveValue(/^00:0\d of 05:00$/);
+  await expect(undoPill).toBeHidden();
+
+  await screen.getByTestId('player.chapters').tap();
+  await screen.getByTestId('chapters.row.1').tap();
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 2');
+  await expect(undoPill).toBeVisible();
+  await expect(undoPill).toContainText(/Back to E2E Chapter 1/);
+  await undoPill.tap();
+  await expect(screen.getByTestId('player.title')).toHaveText('E2E Chapter 1');
+  await expect(undoPill).toBeHidden();
+});
+
+test('whole-book remaining line and chapter list duration halve at 2x speed', async ({ device, screen }) => {
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...fixture, '-e2e-reset-fixture'] });
+  await openListeningBookPaused(screen);
+
+  const remaining = screen.getByTestId('player.bookRemaining');
+  await expect(remaining).toHaveText(/^0% · (9|10)m left$/);
+
+  await screen.getByTestId('player.chapters').tap();
+  await expect(screen.getByText('05:00').first()).toBeVisible();
+  await screen.getByRole('button', 'Done').tap();
+
+  await screen.getByTestId('player.speed').tap();
+  await screen.getByRole('button', /^2([.,]0)?×$/).tap();
+  await expect(remaining).toHaveText(/^0% · [45]m left$/);
+
+  await screen.getByTestId('player.chapters').tap();
+  await expect(screen.getByText('02:30').first()).toBeVisible();
+  await screen.getByRole('button', 'Done').tap();
 });
