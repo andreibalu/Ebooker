@@ -12,13 +12,19 @@ struct MiniPlayerBar: View {
 
     @EnvironmentObject private var player: AudioPlayerManager
 
-    // Secondary chapter line. Single-track books already show the (renamable) book title
-    // on the line above, so the lone "Chapter 1" file-metadata title is dropped to avoid
-    // a duplicate; only distinct multi-track chapter names render here.
+    // Secondary chapter line. Prefers the current chapter title whenever the book has multiple
+    // chapters (including single-file M4B/ABS books with embedded/server chapters) and the title
+    // differs from the book title; otherwise falls back to distinct multi-track titles.
     private var miniSecondaryLine: String? {
+        let bookTitle = player.currentAudiobook?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if player.chapters.count > 1,
+           let chapterTitle = player.currentChapter?.title.trimmingCharacters(in: .whitespacesAndNewlines),
+           !chapterTitle.isEmpty,
+           chapterTitle != bookTitle {
+            return chapterTitle
+        }
         guard let track = player.currentTrack else { return nil }
         guard (player.currentAudiobook?.tracks.count ?? 0) > 1 else { return nil }
-        let bookTitle = player.currentAudiobook?.title.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let trackTitle = track.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if trackTitle.isEmpty || trackTitle == bookTitle { return nil }
         return trackTitle
@@ -53,6 +59,7 @@ struct MiniPlayerBar: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .accessibilityIdentifier("miniPlayer.subtitle")
                     } else if player.isPreparingPlayback {
                         Text("Connecting to stream…")
                             .font(.caption.weight(.medium))
