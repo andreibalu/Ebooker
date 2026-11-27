@@ -116,3 +116,13 @@ Implemented:
 - **Chapter list (`ChapterListSheet`).** Snapshots before `player.playChapter(chapter)` and calls `player.recordJumpUndo(from:)` after. Chapter durations are speed-adjusted with `TimeFormatter.speedAdjustedSeconds(chapter.duration, rate: player.playbackRate)`.
 - **Mini player (`MiniPlayerBar`).** `miniSecondaryLine` checks `player.chapters.count > 1` and trimmed `player.currentChapter?.title` (when non-empty and different from the book title) before the `tracks.count > 1` fallback, with identifier `miniPlayer.subtitle`.
 - **Settings (`SettingsView`).** Updated the "On Resume" caption to `"Rewind after a break; longer breaks rewind more"`.
+
+### E2E & docs layer
+
+Files: `e2e/tests/player.e2e.ts`, `e2e/README.md`, `e2e/COVERAGE.md`, `docs/ios/playback.md`, `docs/ios/audiobookshelf.md`, `support.md`.
+
+Commands and observed results on `Unpaged e2e` (iPhone 18 Pro, iOS 27.0, `E6A83627-2FF5-4EB6-B2EC-EDF23F1A3737`), `E2E_BUILD_DIR=/tmp/unpaged-e2e-build`:
+- `npm --prefix e2e run typecheck && npm --prefix e2e run build:install`: passed (exit 0).
+- `npm --prefix e2e run typecheck && npm --prefix e2e test -- tests/player.e2e.ts` (post-edit run 1): 13 passed, 3 failed (16 total). All 4 new/updated Slice 03 tests passed; 3 pre-existing failures (`an imported M4B...` fill, `chapter sleep retargets...` `Title` locator, `single-file chaptered book...` fill).
+- `npm --prefix e2e test -- tests/player.e2e.ts` (post-edit run 2): 13 passed, 3 failed (16 total). All 4 new/updated Slice 03 tests passed; 3 pre-existing failures (`chapter sleep stops...` `Title` locator, `chapter sleep retargets...` `Title` locator, `fine-tuned playback speed...` iOS 27.0 snapshot watchdog overrun).
+- `npm --prefix e2e test -- tests/accessibility-layout.e2e.ts`: 5 passed, 0 failed (5 total).
