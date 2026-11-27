@@ -30,6 +30,8 @@ struct PlayerView: View {
     /// Chapter range captured when a drag starts. Playback can cross into the next chapter
     /// mid-drag, and a live range would then clamp the thumb into that chapter.
     @State private var scrubChapterRange: ClosedRange<Double>?
+    @State private var scrubUndoSnapshot: JumpUndoSnapshot?
+    @State private var undoHapticTrigger = 0
     @State private var showProgressConfirmation = false
     @State private var showEqualizer = false
     @State private var showChapters = false
@@ -78,11 +80,20 @@ struct PlayerView: View {
             .padding(.horizontal, 28)
             .padding(.top, 6)
 
-            Spacer(minLength: 0)
+            Color.clear
+                .frame(minHeight: 20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .overlay {
+                    if player.isJumpUndoVisible, let undo = player.jumpUndo {
+                        undoJumpPill(for: undo)
+                            .transition(.opacity)
+                    }
+                }
+                .animation(AppMotion.stateChangeAnimation(reduceMotion: reduceMotion), value: player.isJumpUndoVisible)
+                .zIndex(1)
 
             quickActionsSection
                 .padding(.horizontal, 28)
-                .padding(.top, 20)
                 .padding(.bottom, max(24, windowSafeAreaInsets.bottom + 12))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -131,6 +142,16 @@ struct PlayerView: View {
                 scrubValue = newValue
             }
         }
+        .onChange(of: player.isJumpUndoVisible) { wasVisible, isVisible in
+            if !wasVisible, isVisible, let undo = player.jumpUndo {
+                let label = undoAccessibilityLabel(
+                    chapterTitle: undoChapterTitle(for: undo),
+                    timeString: undoTimeString(for: undo)
+                )
+                UIAccessibility.post(notification: .announcement, argument: "Undo jump available, \(label)")
+            }
+        }
+        .sensoryFeedback(.impact(weight: .light), trigger: undoHapticTrigger)
     }
 
     // MARK: - Cover
@@ -322,10 +343,17 @@ struct PlayerView: View {
                 displayOffset: chapterOffset,
                 accessibilityScopeLabel: activeChapterRange != nil ? "Chapter playback position" : "Playback position",
                 onEditingChanged: { editing in
-                    if editing { scrubChapterRange = activeChapterRange }
+                    if editing {
+                        scrubChapterRange = activeChapterRange
+                        scrubUndoSnapshot = player.makeJumpUndoSnapshot()
+                    }
                     isScrubbing = editing
                     if !editing {
                         player.seek(to: scrubValue)
+                        if let snapshot = scrubUndoSnapshot {
+                            scrubUndoSnapshot = nil
+                            player.recordJumpUndo(from: snapshot)
+                        }
                     }
                 }
             )
@@ -390,7 +418,125 @@ struct PlayerView: View {
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: scrubberShowsChapter)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: player.playbackRate)
+
+            if let summary = player.bookPositionSummary(
+                currentTrackTimeOverride: isScrubbing ? scrubValue : nil
+            ) {
+                Text(TimeFormatter.bookRemainingSummary(
+                    fraction: summary.fraction,
+                    remainingSeconds: summary.remainingSeconds,
+                    rate: player.playbackRate,
+                    isFinished: player.currentAudiobook?.isFinished ?? false
+                ))
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .contentTransition(.numericText())
+                .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                .padding(.top, 2)
+                .accessibilityIdentifier("player.bookRemaining")
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: player.playbackRate)
+            }
         }
+    }
+
+    // MARK: - Undo Jump Pill
+
+    private func undoJumpPill(for undo: JumpUndo) -> some View {
+        let chapterTitle = undoChapterTitle(for: undo)
+        let timeString = undoTimeString(for: undo)
+
+        return HStack(spacing: 4) {
+            Button {
+                undoHapticTrigger += 1
+                player.undoJump()
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.uturn.backward")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.amber)
+                        .accessibilityHidden(true)
+
+                    HStack(spacing: 0) {
+                        Text("Back to ")
+                            .fixedSize(horizontal: true, vertical: false)
+                        if let chapterTitle {
+                            Text(chapterTitle)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Text(" · ")
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        Text(timeString)
+                            .monospacedDigit()
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.primary)
+                }
+                .padding(.leading, 14)
+                .padding(.trailing, 6)
+                .padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(TactileScaleButtonStyle())
+            .accessibilityLabel(undoAccessibilityLabel(chapterTitle: chapterTitle, timeString: timeString))
+            .accessibilityIdentifier("player.undoJump")
+
+            Divider()
+                .frame(height: 14)
+                .overlay(Color.primary.opacity(0.12))
+
+            Button {
+                player.dismissJumpUndo()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 4)
+            .accessibilityLabel("Dismiss undo jump")
+            .accessibilityIdentifier("player.undoJump.dismiss")
+        }
+        .background(Color.cardWhite, in: Capsule())
+        .overlay(
+            Capsule()
+                .strokeBorder(Color.amber.opacity(0.28), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 3)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .padding(.horizontal, 20)
+    }
+
+    private func undoChapterTitle(for undo: JumpUndo) -> String? {
+        guard let undoChapterIndex = undo.chapterIndex,
+              undoChapterIndex != player.currentChapterIndex,
+              player.chapters.indices.contains(undoChapterIndex) else {
+            return nil
+        }
+        let title = player.chapters[undoChapterIndex].title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? nil : title
+    }
+
+    private func undoTimeString(for undo: JumpUndo) -> String {
+        if activeChapterRange != nil,
+           let undoChapterIndex = undo.chapterIndex,
+           player.chapters.indices.contains(undoChapterIndex) {
+            let chapter = player.chapters[undoChapterIndex]
+            let relativeTime = max(undo.time - chapter.start, 0)
+            return TimeFormatter.clockString(seconds: relativeTime)
+        }
+        return TimeFormatter.clockString(seconds: undo.time)
+    }
+
+    private func undoAccessibilityLabel(chapterTitle: String?, timeString: String) -> String {
+        if let chapterTitle {
+            return "Back to \(chapterTitle), \(timeString)"
+        }
+        return "Back to \(timeString)"
     }
 
     // MARK: - Controls

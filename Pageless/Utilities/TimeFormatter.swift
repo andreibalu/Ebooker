@@ -58,6 +58,31 @@ enum TimeFormatter {
         return "\(hours)h \(minutes)m"
     }
 
+    /// Formats whole-book progress and speed-adjusted remaining time (e.g. `42% · 4h 12m left`).
+    /// Floors the percentage and clamps it to 99% until the book is finished; shows `< 1m left`
+    /// once less than a minute remains at the current playback rate.
+    static func bookRemainingSummary(
+        fraction: Double,
+        remainingSeconds: Double,
+        rate: Double,
+        isFinished: Bool
+    ) -> String {
+        let safeFraction: Double
+        if fraction.isFinite {
+            safeFraction = min(max(fraction, 0), 1)
+        } else {
+            safeFraction = fraction > 0 ? 1 : 0
+        }
+        let flooredPercent = Int(floor(safeFraction * 100))
+        let percent = isFinished ? min(flooredPercent, 100) : min(flooredPercent, 99)
+
+        let adjustedRemaining = speedAdjustedSeconds(remainingSeconds, rate: rate)
+        let remainingLabel = adjustedRemaining < 60
+            ? "< 1m left"
+            : "\(durationSummary(seconds: adjustedRemaining)) left"
+        return "\(percent)% · \(remainingLabel)"
+    }
+
     static func relativeDateString(for date: Date?) -> String {
         guard let date else { return "Not started" }
 
