@@ -39,7 +39,9 @@ struct ChapterListSheet: View {
     private func row(for chapter: PlaybackChapter) -> some View {
         let isCurrent = player.currentChapterIndex == chapter.index
         return Button {
+            let snapshot = player.makeJumpUndoSnapshot()
             player.playChapter(chapter)
+            player.recordJumpUndo(from: snapshot)
             dismiss()
         } label: {
             HStack(spacing: 14) {
@@ -61,7 +63,9 @@ struct ChapterListSheet: View {
                         .accessibilityHidden(true)
                 }
 
-                Text(TimeFormatter.clockString(seconds: chapter.duration))
+                Text(TimeFormatter.clockString(
+                    seconds: TimeFormatter.speedAdjustedSeconds(chapter.duration, rate: player.playbackRate)
+                ))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }

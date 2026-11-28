@@ -8,6 +8,7 @@ import { bundle, terminate, udid } from '../support/simulator.js';
 // letter per line, and the header stretched a third of the way down the screen.
 const fixture = ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-e2e-import'];
 const shelvesFixture = ['-e2e-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'YES', '-shelvesSource', 'librivox'];
+const screenWidth = 402;
 const screenHeight = 874;
 
 // iOS 27 labels a sheet's dismiss button "Close" even when the app titles it "Done".
@@ -245,4 +246,69 @@ test('large text with Button Shapes and Bold Text keeps a moment row, its quote 
   expect(box.x + box.width).toBeLessThanOrEqual(402);
   expect(box.height).toBeLessThan(200);
   await app.screenshot('a11y-layout-moment-rows');
+});
+
+type Frame = { x: number; y: number; width: number; height: number };
+const intersects = (a: Frame, b: Frame): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+// The "Back to 03:01" pill after a scrub used to be an unclipped overlay on a spacer that shrank
+// to 20 pt at accessibility sizes, so the 40-46 pt pill sat on the Play button and the quick
+// actions and taps meant for Play hit undo. The slot now reserves the pill's height.
+test('large text with Button Shapes and Bold Text keeps the Undo jump pill off Play and the quick actions', async ({ device, screen, app }) => {
+  setAccessibility(true);
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'],
+  });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Play playback');
+
+  const playBefore = await screen.getByTestId('player.playPause').boundingBox();
+  if (!playBefore) throw new Error('Play has no bounds');
+
+  const scrubber = screen.getByTestId('player.scrubber');
+  const box = await scrubber.boundingBox();
+  if (!box) throw new Error('Scrubber has no bounds');
+  const y = box.y + box.height * 0.75;
+  await screen.swipe({ from: { x: box.x + box.width * 0.1, y }, to: { x: box.x + box.width * 0.6, y } });
+
+  const pill = screen.getByTestId('player.undoJump');
+  await expect(pill).toBeVisible();
+  const pillBox = await pill.boundingBox();
+  if (!pillBox) throw new Error('Undo pill has no bounds');
+  await app.screenshot('a11y-layout-undo-pill');
+
+  // Showing the pill moves nothing: Play stays where it was.
+  const playAfter = await screen.getByTestId('player.playPause').boundingBox();
+  if (!playAfter) throw new Error('Play has no bounds after the scrub');
+  expect(Math.abs(playAfter.y - playBefore.y)).toBeLessThan(1);
+  expect(intersects(pillBox, playAfter)).toBe(false);
+
+  // The speed/EQ/sleep row and Mark Progress must stay visible, inside the screen bounds, and
+  // clear of the undo pill — otherwise the reserved pill slot pushed them off screen.
+  for (const id of ['player.speed', 'player.equalizer', 'player.sleep', 'player.markProgress']) {
+    const control = screen.getByTestId(id);
+    await expect(control).toBeVisible();
+    const controlBox = await control.boundingBox();
+    if (!controlBox) throw new Error(`${id} has no bounds`);
+    expect(controlBox.x, `${id} starts off screen left`).toBeGreaterThanOrEqual(0);
+    expect(controlBox.x + controlBox.width, `${id} extends off screen right`).toBeLessThanOrEqual(screenWidth);
+    expect(controlBox.y, `${id} starts off screen top`).toBeGreaterThanOrEqual(0);
+    expect(controlBox.y + controlBox.height, `${id} pushed off screen bottom`).toBeLessThanOrEqual(screenHeight);
+    expect(intersects(pillBox, controlBox), `${id} overlaps the undo pill`).toBe(false);
+  }
+
+  // Save Moment sits at the bottom of the non-scrolling player stack, which can already overflow
+  // 874 pt at accessibility-XXXL text; when it is visible, verify it still clears the pill.
+  const saveMoment = screen.getByTestId('player.saveMoment');
+  if (await saveMoment.isVisible()) {
+    const saveBox = await saveMoment.boundingBox();
+    if (saveBox) {
+      expect(intersects(pillBox, saveBox), 'player.saveMoment overlaps the undo pill').toBe(false);
+    }
+  }
 });

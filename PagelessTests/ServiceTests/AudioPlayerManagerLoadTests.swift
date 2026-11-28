@@ -214,6 +214,36 @@ struct AudioPlayerManagerLoadTests {
         assertCurrentPlayback(player, book: b, time: 57)
     }
 
+    // Catches: a second cross-track navigation made while the first load is still suspended being
+    // dropped. The suspended load's resumption was already queued ahead of the second navigation's
+    // Task, so it resumed first, took the NEW target's play intent, cleared the pending target and
+    // committed the superseded track; the second Task then found no target and exited.
+    @Test func secondNavigationDuringAnInFlightLoadWinsEvenWhenTheStaleLoadResumesFirst() async {
+        let gate = LoadGate()
+        let book = makeBook(title: "Book", trackNames: ["a.m4a", "b.m4a", "c.m4a"])
+        let player = AudioPlayerManager(loadPreparation: preparation(mixGates: ["b.m4a": gate]))
+        await player.playTrack(at: 2, in: book, time: 2, autoplay: false)
+
+        player.previousTrack() // track 1: its load suspends in makeAudioMix
+        await waitUntilStarted(gate)
+        gate.release() // queues the stale load's resumption before the next navigation's Task
+        player.previousTrack() // track 0, from the pending target
+
+        // The superseded load is still "loading" with its spinner until the new load takes over.
+        #expect(player.loadingPlaybackBookID == book.id)
+        #expect(player.pendingPlaybackTarget == PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 0, time: 0, autoplay: true
+        ))
+        for _ in 0..<500 where player.pendingPlaybackTarget != nil {
+            await Task.yield()
+        }
+
+        assertCurrentPlayback(player, book: book, trackIndex: 0, time: 0)
+        #expect(player.pendingPlaybackTarget == nil)
+        #expect(player.isPlaying)
+        #expect(player.playerErrorMessage == nil)
+    }
+
     private func preparation(
         mixGate: LoadGate? = nil,
         mixGates: [String: LoadGate] = [:],

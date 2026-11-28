@@ -48,6 +48,30 @@ struct AudioSessionInterruptionTests {
         #expect(player.isPlaying == false)
     }
 
+    // Catches: an interruption whose notification arrives after AVPlayer paused itself (so
+    // `isPlaying` is already false) recording no break, so Play after it resumes with no rewind.
+    @Test func interruptionBeganRightAfterPlaybackStoppedStillRecordsTheBreak() async throws {
+        let player = AudioPlayerManager()
+        player.seedUnitTestPlayingObserved(at: Date().addingTimeInterval(-1))
+        #expect(!player.isPlaying)
+        #expect(!player.hasSmartRewindAnchorForTesting)
+
+        postInterruption(type: .began)
+        try await settle()
+
+        #expect(player.hasSmartRewindAnchorForTesting)
+    }
+
+    @Test func interruptionBeganOnASilentBookRecordsNoBreak() async throws {
+        let player = AudioPlayerManager()
+        player.seedUnitTestPlayingObserved(at: Date().addingTimeInterval(-60))
+
+        postInterruption(type: .began)
+        try await settle()
+
+        #expect(!player.hasSmartRewindAnchorForTesting)
+    }
+
     // MARK: - .ended
 
     @Test func interruptionEndedResumesWhenShouldResumeSet() {

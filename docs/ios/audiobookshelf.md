@@ -56,7 +56,7 @@ Tokens live only in the Keychain (`ABSKeychainCredentialStore`).
 - Before sending an entry it reads the server position and drops the entry when the server's `lastUpdate` is newer. A failed read keeps it queued; a permanent 4xx on send drops it. Disconnecting, or switching server or user, clears the outbox.
 - Resume adopts the server position only when its `lastUpdate` is newer than both `Audiobook.absProgressWrittenAt` (or `lastPlayedAt` for rows saved before that field existed) and any pending report, and differs by more than a threshold. The check runs on a fresh load, or on resume after a long pause, with a short timeout and no token refresh; any failure counts as "nothing newer". Thresholds live in `AudiobookshelfLibraryService` and `AudioPlayerManager`.
 - Re-adding a book that was removed creates a new row seeded from server progress.
-- Local writes stamp the nullable `_absProgressWrittenAt` backing field, so a deliberate rewind wins by timestamp. Finish reports send `isFinished`.
+- Local writes stamp the nullable `_absProgressWrittenAt` backing field, so a deliberate rewind wins by timestamp. A Smart Rewind on resume is reported as progress like any other play/pause position; only a rewind larger than the adoption threshold (>30 s) changes what other devices adopt. Finish reports send `isFinished`.
 
 ## Plain-http servers
 

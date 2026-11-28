@@ -353,7 +353,7 @@ struct SettingsView: View {
 
                     SettingsInlinePicker(
                         title: "On Resume",
-                        caption: "Rewind a bit when you press play after a break",
+                        caption: "Rewind after a break; longer breaks rewind more",
                         selection: $resumeBacktrackSeconds,
                         options: Array(ResumeBacktrackOption.allCases),
                         rowTitle: \.title,

@@ -89,6 +89,7 @@ DEBUG-only launch hooks:
 | `-e2e-rating-seed-listening` | On initial seeding, adds four listening days of an hour each: the prompt's habit signal. |
 | `-e2e-reading-streak-yesterday` | On initial seeding, skips the default today session and seeds a 3-day streak ending yesterday so the Reading Activity card shows streak-grace copy. |
 | `-e2e-sleep-timer-seconds <n>` | Makes every sleep-timer choice last n seconds. |
+| `-e2e-smart-rewind-elapsed <seconds>` | Replaces every measured Smart Rewind break (in-session anchor and fresh load) on fixture launches. |
 | `-guide-clean-library` | On initial seeding, adds only the LibriVox catalog rows and no audiobooks, so the library starts empty. Used for marketing-site screen recordings. |
 | `-e2e-import` | Makes the import button hand a file to the import pipeline instead of opening the Files picker. |
 | `-e2e-import-file <name>` | Picks `<name>` from the fixture folder for `-e2e-import`. Without it, the app generates a 123-second WAV. |

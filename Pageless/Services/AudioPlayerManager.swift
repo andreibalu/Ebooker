@@ -80,6 +80,10 @@ struct AudioPlayerLoadPreparation {
     var loadChapterMarkers: @MainActor (AVAsset) async -> [ChapterMarker] = { _ in [] }
     /// Server-side chapters of an Audiobookshelf item (book-global times).
     var loadAudiobookshelfChapters: @MainActor (String) async throws -> [ABSChapter] = { _ in [] }
+    /// Reconciles an Audiobookshelf book's progress with the server before resuming playback.
+    var reconcileAudiobookshelfBeforeResume: @MainActor (Audiobook, ModelContext?) async -> Bool = { book, context in
+        await AudiobookshelfLibraryService.reconcileBeforeResume(book, context: context)
+    }
 }
 
 /// Target of a track load that has been requested but not committed yet. Chapter and track
@@ -89,6 +93,9 @@ struct PendingPlaybackTarget: Equatable {
     let bookID: UUID
     let trackIndex: Int
     let time: Double
+    /// Whether the load starts playing once it commits. Skip back and undo on a paused book load
+    /// without autoplay, so they stay paused.
+    var autoplay: Bool = true
 }
 
 @MainActor
@@ -117,12 +124,30 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     @Published var sleepTimerEndsAt: Date?
     @Published private(set) var sleepAtChapterEnd = false
     private var sleepChapterEnd: Double?
-    /// The item a chapter sleep timer stopped at its end; Play continues with the next file.
+    /// An item left loaded at its end: a chapter sleep timer stopped there, or a natural track end
+    /// whose next-file load a pause cancelled. Play continues with the next file.
     private weak var chapterSleepEndedItem: AVPlayerItem?
+    /// True when `chapterSleepEndedItem` is a natural track end, not a chapter sleep stop: Smart
+    /// Rewind may still replay its tail after a break, where a chapter sleep end never rewinds.
+    private var endedItemIsNaturalEnd = false
     @Published var playerErrorMessage: String?
     /// Chapters of the current book: embedded/server chapters when the files carry them,
     /// otherwise one per track.
     @Published private(set) var chapters: [PlaybackChapter] = []
+    /// The point the last scrub or chapter jump left, while "Back to 14:22" is on offer.
+    @Published private(set) var jumpUndo: JumpUndo?
+    private var jumpUndoExpiryTask: Task<Void, Never>?
+
+    /// When the current break in listening began; see `docs/ios/playback.md`. Set by `pause()` and
+    /// by a load that commits without autoplay; cleared by autoplaying loads and any user
+    /// positioning. `play()` consumes it. Not `lastPlayedAt`, which saves also stamp.
+    private var smartRewindAnchor: Date?
+    /// In-memory last moment each book was audible, for the break measured by a fresh load.
+    private var lastAudibleAt: [UUID: Date] = [:]
+    /// When the periodic observer last saw the current item actually playing. Unlike `lastAudibleAt`
+    /// it is cleared as soon as playback is stopped on purpose, so a duplicate pause is not mistaken
+    /// for a stop AVPlayer made on its own (interruption, route loss) before the manager heard of it.
+    private var lastPlayingObservedAt: Date?
 
     private let player = AVPlayer()
     private var timeObserverToken: Any?
@@ -132,12 +157,12 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var resumeBacktrackSeconds: Double = ResumeBacktrackOption.oneMinute.rawValue
     private var skipBackSeconds: Double = SkipIntervalOption.thirty.rawValue
     private var skipForwardSeconds: Double = SkipIntervalOption.thirty.rawValue
-    /// When true, the next Continue / library Resume / progress bookmark play may apply On Resume backtrack. Resets each app launch.
-    private var resumeBacktrackAvailableThisLaunch = true
     private var sleepTimerTask: Task<Void, Never>?
     private var isLoadingItem = false
     private var loadGeneration = PlaybackLoadGeneration()
+    private var navigationGeneration: UInt64 = 0
     private var absResumeGeneration: UInt64 = 0
+    private var isAwaitingPlayReconcile = false
     @Published private var absResumeWaiters = 0
     /// Set on pause. Resuming an ABS book after a long pause — or with no pause this session, i.e. a
     /// book restored after relaunch — checks the server for progress made on another device; a quick
@@ -148,6 +173,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var timeControlStatusObservation: NSKeyValueObservation?
     private var backgroundObserver: NSObjectProtocol?
     private var interruptionObserver: NSObjectProtocol?
+    private var routeChangeObserver: NSObjectProtocol?
     private var interruptionController = AudioSessionInterruptionController()
     private var loadPreparation: AudioPlayerLoadPreparation
 
@@ -245,7 +271,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 switch self.interruptionController.action(
                     for: type,
                     options: options,
-                    isPlaying: self.isPlaying
+                    isPlaying: self.isPlaybackActiveForInterruption
                 ) {
                 case .pause:
                     self.pause()
@@ -254,6 +280,21 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 case .none:
                     break
                 }
+            }
+        }
+
+        // AVPlayer pauses itself when headphones are unplugged, which saves nothing and sets no
+        // break anchor. Pausing here makes it a normal pause.
+        routeChangeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let reasonValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+                  AVAudioSession.RouteChangeReason(rawValue: reasonValue) == .oldDeviceUnavailable else { return }
+            Task { @MainActor in
+                self.pauseAfterRouteLoss()
             }
         }
     }
@@ -293,6 +334,39 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         pendingPlaybackTarget = target
     }
 
+    /// Starts a break at `date`, as `pause()` would have; nil means no break is recorded.
+    func seedUnitTestSmartRewindAnchor(_ date: Date?) {
+        smartRewindAnchor = date
+    }
+
+    /// Marks the loaded item as the one a chapter sleep timer stopped at its end.
+    func seedUnitTestChapterSleepEndedCurrentItem() {
+        chapterSleepEndedItem = player.currentItem
+    }
+
+    /// Marks the loaded item as a natural track end whose next-file load was cancelled.
+    func seedUnitTestNaturalEndedCurrentItem() {
+        chapterSleepEndedItem = player.currentItem
+        endedItemIsNaturalEnd = true
+    }
+
+    var isPlaybackActiveForInterruptionForTesting: Bool {
+        isPlaybackActiveForInterruption
+    }
+
+    /// Pretends the periodic observer saw the item playing at `date`, as it does once a second.
+    func seedUnitTestPlayingObserved(at date: Date?) {
+        lastPlayingObservedAt = date
+    }
+
+    func lastAudibleAtForTesting(_ bookID: UUID) -> Date? {
+        lastAudibleAt[bookID]
+    }
+
+    var hasSmartRewindAnchorForTesting: Bool {
+        smartRewindAnchor != nil
+    }
+
     func applyPlaybackDefaults(resumeBacktrack: Double, skipBack: Double, skipForward: Double) {
         resumeBacktrackSeconds = resumeBacktrack
         skipBackSeconds = skipBack
@@ -319,7 +393,16 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     /// `adoptedServerProgress` is nil when the Audiobookshelf position still needs reconciling.
-    func startPlayback(for audiobook: Audiobook, autoplay: Bool = true, adoptedServerProgress: Bool? = nil) async {
+    /// `elapsed` is the break already measured by a caller that awaited first (nil: measure now).
+    func startPlayback(
+        for audiobook: Audiobook,
+        autoplay: Bool = true,
+        adoptedServerProgress: Bool? = nil,
+        elapsed: TimeInterval? = nil
+    ) async {
+        clearJumpUndo()
+        // Measured before the reconcile await, so the server round trip isn't counted as a break.
+        let elapsed = elapsed ?? measuredFreshLoadElapsed(for: audiobook)
         var adopted = adoptedServerProgress ?? false
         if adoptedServerProgress == nil {
             guard let reconciled = await reconcileAudiobookshelfBeforeResume(audiobook) else { return }
@@ -327,49 +410,64 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
         let trackIndex = audiobook.isFinished ? 0 : audiobook.currentTrackIndex
         let baseTime = audiobook.isFinished ? 0 : audiobook.currentTime
-        let applyBacktrack = !adopted && resumeBacktrackAvailableThisLaunch && !audiobook.isFinished
-        let resumeTime = max(baseTime - (applyBacktrack ? resumeBacktrackSeconds : 0), 0)
-        resumeBacktrackAvailableThisLaunch = false
-        await load(audiobook: audiobook, trackIndex: trackIndex, time: resumeTime, autoplay: autoplay)
+        // Opening paused rewinds nothing yet: the break starts where it really did, and the Play
+        // that ends it applies the tier once.
+        let rewind = adopted || audiobook.isFinished || !autoplay
+            ? 0
+            : SmartRewindPolicy.rewindSeconds(elapsed: elapsed, setting: resumeBacktrackSeconds)
+        let target = RewindPosition.target(
+            trackIndex: trackIndex,
+            time: baseTime,
+            seconds: rewind,
+            trackDurations: audiobook.sortedTracks.map(\.duration)
+        )
+        await load(
+            audiobook: audiobook,
+            trackIndex: target.trackIndex,
+            time: target.time,
+            autoplay: autoplay,
+            breakStart: adopted || audiobook.isFinished ? nil : Self.breakStart(elapsed: elapsed)
+        )
     }
 
-    /// Starts like tapping “Your progress” on the book detail: uses the saved progress marker when set (with On Resume backtrack), otherwise last playback position.
+    /// When a break measured as `elapsed` began; unknown (NaN, negative, infinite) is as old as can be,
+    /// which the policy reads as a full rewind.
+    private static func breakStart(elapsed: TimeInterval, now: Date = .now) -> Date {
+        guard elapsed.isFinite, elapsed >= 0 else { return .distantPast }
+        return now.addingTimeInterval(-elapsed)
+    }
+
+    /// Starts like tapping “Your progress” on the book detail: uses the saved progress marker when set (with Smart Rewind), otherwise last playback position.
     /// Audiobookshelf books reconcile with the server first; an adopted server position wins,
     /// otherwise the saved marker is honored like any other book.
     func startPlaybackFromSavedProgress(for audiobook: Audiobook, autoplay: Bool = true) async {
+        let elapsed = measuredFreshLoadElapsed(for: audiobook)
         guard let adopted = await reconcileAudiobookshelfBeforeResume(audiobook) else { return }
         if adopted {
-            await startPlayback(for: audiobook, autoplay: autoplay, adoptedServerProgress: true)
+            await startPlayback(for: audiobook, autoplay: autoplay, adoptedServerProgress: true, elapsed: elapsed)
             return
         }
         switch AudiobookSavedProgressResume.startChoice(for: audiobook) {
         case .useProgressBookmark(let idx, let t):
-            await playProgressBookmark(at: idx, in: audiobook, time: t, autoplay: autoplay)
+            await playProgressBookmark(at: idx, in: audiobook, time: t, autoplay: autoplay, elapsed: elapsed)
         case .useStandardStartPlayback:
-            await startPlayback(for: audiobook, autoplay: autoplay, adoptedServerProgress: false)
+            await startPlayback(for: audiobook, autoplay: autoplay, adoptedServerProgress: false, elapsed: elapsed)
         }
     }
 
     /// Whether a newer server position was adopted, or nil when a later start superseded this one.
     private func reconcileAudiobookshelfBeforeResume(_ audiobook: Audiobook) async -> Bool? {
         absResumeGeneration &+= 1
+        isAwaitingPlayReconcile = false
         let resumeToken = absResumeGeneration
         absResumeWaiters += 1
         defer { absResumeWaiters -= 1 }
-        let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(audiobook, context: modelContext)
+        let adopted = await loadPreparation.reconcileAudiobookshelfBeforeResume(audiobook, modelContext)
         return resumeToken == absResumeGeneration ? adopted : nil
     }
 
-    /// Seeks to the saved progress marker time exactly (no resume backtrack). Use when the user scrubbed away and wants to snap back.
-    func jumpToSavedProgressMarker(in audiobook: Audiobook) async {
-        guard audiobook.hasProgressPosition,
-              let idx = audiobook.progressTrackIndex,
-              let t = audiobook.progressTime
-        else { return }
-        await playTrack(at: idx, in: audiobook, time: t, autoplay: true)
-    }
-
     func restart(_ audiobook: Audiobook) async {
+        clearJumpUndo()
         audiobook.currentTrackIndex = 0
         audiobook.currentTime = 0
         audiobook.isFinished = false
@@ -378,15 +476,36 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func playTrack(at index: Int, in audiobook: Audiobook, time: Double = 0, autoplay: Bool = true) async {
-        await load(audiobook: audiobook, trackIndex: index, time: time, autoplay: autoplay)
+        clearJumpUndo()
+        await load(audiobook: audiobook, trackIndex: index, time: time, autoplay: autoplay, breakStart: .now)
     }
 
-    /// Like `playTrack`, but shares session-scoped On Resume backtrack with `startPlayback` (Your progress row).
-    func playProgressBookmark(at index: Int, in audiobook: Audiobook, time: Double, autoplay: Bool = true) async {
-        let back = resumeBacktrackAvailableThisLaunch ? resumeBacktrackSeconds : 0
-        let t = max(time - back, 0)
-        resumeBacktrackAvailableThisLaunch = false
-        await load(audiobook: audiobook, trackIndex: index, time: t, autoplay: autoplay)
+    /// Like `playTrack`, but applies Smart Rewind like `startPlayback` (Your progress row).
+    func playProgressBookmark(
+        at index: Int,
+        in audiobook: Audiobook,
+        time: Double,
+        autoplay: Bool = true,
+        elapsed: TimeInterval? = nil
+    ) async {
+        clearJumpUndo()
+        let elapsed = elapsed ?? measuredFreshLoadElapsed(for: audiobook)
+        let rewind = audiobook.isFinished || !autoplay
+            ? 0
+            : SmartRewindPolicy.rewindSeconds(elapsed: elapsed, setting: resumeBacktrackSeconds)
+        let target = RewindPosition.target(
+            trackIndex: index,
+            time: time,
+            seconds: rewind,
+            trackDurations: audiobook.sortedTracks.map(\.duration)
+        )
+        await load(
+            audiobook: audiobook,
+            trackIndex: target.trackIndex,
+            time: target.time,
+            autoplay: autoplay,
+            breakStart: audiobook.isFinished ? nil : Self.breakStart(elapsed: elapsed)
+        )
     }
 
     func togglePlayback() {
@@ -394,45 +513,166 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func play(reconcileABS: Bool = true) {
+        // A paused skip back or undo is still loading: Play turns that load into an autoplaying one
+        // instead of starting the old item (whose position would be briefly audible and then paused
+        // by the commit) and skips the ABS reconcile, since the user just picked the spot.
+        if let pending = pendingPlaybackTarget, !pending.autoplay {
+            pendingPlaybackTarget?.autoplay = true
+            if let book = currentAudiobook, book.id == pending.bookID, !book.isDownloaded {
+                loadingPlaybackBookID = book.id
+            }
+            chapterSleepEndedItem = nil
+            smartRewindAnchor = nil
+            return
+        }
+        // After that promotion (or any autoplaying load of this book already pending) a second Play
+        // must not start the old item or an ABS reconcile that could override the user's skip or undo.
+        if let pending = pendingPlaybackTarget, pending.autoplay, pending.bookID == currentAudiobook?.id {
+            return
+        }
+        // Read before the ABS reconcile below, so the server round trip isn't counted as a break.
+        let elapsed = measuredAnchorElapsed()
         if reconcileABS, !isPlaying, let book = currentAudiobook, book.isAudiobookshelfBook,
            pausedAt.map({ Date.now.timeIntervalSince($0) >= Self.absReconcileAfterPause }) ?? true,
-           NetworkMonitor.shared.isConnected {
+           loadPreparation.isNetworkAvailable() {
             absResumeGeneration &+= 1
             let resumeToken = absResumeGeneration
             absResumeWaiters += 1
+            isAwaitingPlayReconcile = true
             Task {
                 // Held through the follow-up load, so no gap opens before `loadingPlaybackBookID` is set.
                 defer { absResumeWaiters -= 1 }
-                let adopted = await AudiobookshelfLibraryService.reconcileBeforeResume(book, context: modelContext)
-                guard resumeToken == absResumeGeneration, currentAudiobook === book else { return }
+                let adopted = await loadPreparation.reconcileAudiobookshelfBeforeResume(book, modelContext)
+                guard resumeToken == absResumeGeneration else { return }
+                isAwaitingPlayReconcile = false
+                guard currentAudiobook === book else { return }
                 if adopted {
+                    // The server position is the user's place now; no rewind on top of it.
+                    smartRewindAnchor = nil
+                    clearJumpUndo()
                     currentTrackIndex = book.currentTrackIndex
                     currentTime = book.currentTime
                     await load(audiobook: book, trackIndex: book.currentTrackIndex, time: book.currentTime, autoplay: true)
                 } else {
-                    play(reconcileABS: false)
+                    resumePlayback(elapsedSinceBreak: elapsed)
                 }
             }
             return
         }
-        // A chapter sleep timer that expired at the end of a file leaves the ended item loaded;
-        // playing it again does nothing, so continue with the next file instead.
+        resumePlayback(elapsedSinceBreak: elapsed)
+    }
+
+    /// The tail of `play()` once any server reconcile is settled. `elapsedSinceBreak` is nil when no
+    /// break was recorded; a user positioning since (anchor cleared) cancels the rewind too.
+    private func resumePlayback(elapsedSinceBreak: TimeInterval?) {
+        // An item left loaded at its end (a chapter sleep stop, or a natural end whose next-file
+        // load a pause cancelled) does nothing when played again, so continue with the next file
+        // at 0. A chapter sleep end drops the anchor, so a rewind can't cross back into the chapter
+        // that ended; after a natural end, a break long enough to rewind replays the ended file's
+        // tail instead (the rewind below), and playback then flows into the next file as usual.
         if let ended = chapterSleepEndedItem, ended === player.currentItem,
            pendingSeek == nil, pendingPlaybackTarget == nil, !isLoadingItem, canGoToNextTrack {
+            let rewindsIntoEndedFile = endedItemIsNaturalEnd && smartRewindAnchor != nil && !isPlaying
+                && elapsedSinceBreak.map {
+                    SmartRewindPolicy.rewindSeconds(elapsed: $0, setting: resumeBacktrackSeconds) > 0
+                } ?? false
             chapterSleepEndedItem = nil
-            navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
-            return
+            endedItemIsNaturalEnd = false
+            if !rewindsIntoEndedFile {
+                smartRewindAnchor = nil
+                navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
+                return
+            }
         }
         chapterSleepEndedItem = nil
+        endedItemIsNaturalEnd = false
+        let hadBreak = smartRewindAnchor != nil
+        smartRewindAnchor = nil
+        if hadBreak, !isPlaying, let elapsedSinceBreak, applySmartRewind(elapsed: elapsedSinceBreak) {
+            return
+        }
         player.play()
         player.rate = Float(playbackRate)
         isPlaying = true
         updateNowPlayingInfo()
     }
 
+    /// Steps the position back by the tier for `elapsed`. Returns true when it started a track load
+    /// that autoplays (so the caller must not also start the current item).
+    private func applySmartRewind(elapsed: TimeInterval) -> Bool {
+        guard let book = currentAudiobook, !book.isFinished, player.currentItem != nil,
+              pendingPlaybackTarget == nil else { return false }
+        let rewind = SmartRewindPolicy.rewindSeconds(elapsed: elapsed, setting: resumeBacktrackSeconds)
+        guard rewind > 0 else { return false }
+        let target = RewindPosition.target(
+            trackIndex: currentTrackIndex,
+            time: currentTime,
+            seconds: rewind,
+            trackDurations: book.sortedTracks.map(\.duration)
+        )
+        let isSavingProgress = persistence.seekPenaltyRemaining == 0
+        if target.trackIndex != currentTrackIndex {
+            navigate(
+                toTrack: target.trackIndex,
+                time: target.time,
+                autoplay: true,
+                seekPenaltyOverride: Self.rewindPenalty(isSavingProgress: isSavingProgress)
+            )
+            return true
+        }
+        guard target.time < currentTime else { return false }
+        seek(to: target.time, applyProgressPenalty: !isSavingProgress)
+        return false
+    }
+
+    /// A rewind keeps a running seek penalty and starts none, like `skipBackward()`: while progress
+    /// is saving it stays saving, and the high-water marker never moves backward either way.
+    private static func rewindPenalty(isSavingProgress: Bool) -> Double {
+        isSavingProgress ? 0 : PlaybackPersistence.progressSeekPenalty
+    }
+
     func pause() {
+        let wasAudible = isPlaybackActive
+        pauseInternal(
+            wasActive: wasAudible || isLoadingItem || pendingPlaybackTarget != nil || isAwaitingPlayReconcile,
+            wasAudible: wasAudible
+        )
+    }
+
+    /// True while the book is playing or buffering to play (`timeControlStatus` is not paused), or the
+    /// periodic observer saw it playing within 3 s, which covers AVPlayer pausing itself for an
+    /// interruption or a route change before the manager's notification handler runs.
+    /// `isPlaybackActive`, or a load of this book that will start playing (the next file loading
+    /// after a natural track end, a skip) or Play's ABS reconcile: a call arriving then must pause,
+    /// record the break and resume afterwards. A pending load of another book doesn't count, since
+    /// resuming would play the old book.
+    private var isPlaybackActiveForInterruption: Bool {
+        isPlaybackActive
+            || isAwaitingPlayReconcile
+            || (pendingPlaybackTarget.map { $0.autoplay && $0.bookID == currentAudiobook?.id } ?? false)
+    }
+
+    private var isPlaybackActive: Bool {
+        if isPlaying || player.timeControlStatus != .paused { return true }
+        return lastPlayingObservedAt.map { Date.now.timeIntervalSince($0) < 3 } ?? false
+    }
+
+    /// `wasActive` is false for a duplicate pause command, which must not move the break's start
+    /// later. `wasAudible` says the book itself was playing (not just a load pending).
+    private func pauseInternal(wasActive: Bool, wasAudible: Bool) {
         absResumeGeneration &+= 1
+        isAwaitingPlayReconcile = false
         pausedAt = .now
+        if wasActive {
+            // A pause that only abandons a load leaves the book as it was: `currentAudiobook` is not
+            // the loading book yet, so it must not turn an old break into "now".
+            if wasAudible {
+                smartRewindAnchor = .now
+                if let id = currentAudiobook?.id { lastAudibleAt[id] = .now }
+            } else {
+                smartRewindAnchor = smartRewindAnchor ?? .now
+            }
+        }
         // Only an uncommitted load is abandoned. Invalidating a committed item also cancelled its
         // in-flight seek, so pausing while a stream was still buffering a chapter jump (or the
         // resume position) left the item at 0 and the next play started from the wrong place.
@@ -440,6 +680,15 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             invalidateCurrentLoad()
         }
         pauseCurrentItemWithoutInvalidatingLoad()
+    }
+
+    /// Headphones or another output went away. AVPlayer has usually paused already, so `isPlaying`
+    /// may be false; the periodic observer's last audible stamp says whether this was playback.
+    private func pauseAfterRouteLoss() {
+        guard currentAudiobook != nil else { return }
+        let wasAudible = isPlaybackActive
+        guard wasAudible || isLoadingItem || pendingPlaybackTarget != nil || isAwaitingPlayReconcile else { return }
+        pauseInternal(wasActive: true, wasAudible: wasAudible)
     }
 
     /// Stops and forgets `audiobook` if it is loaded, before its row is deleted. Otherwise the
@@ -453,6 +702,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         // Pausing first saves the position, flushes the reading session and reports ABS progress.
         pause()
         invalidateCurrentLoad()
+        clearJumpUndo()
+        smartRewindAnchor = nil
+        lastAudibleAt[audiobook.id] = nil
         setSleepTimer(seconds: nil)
         player.replaceCurrentItem(with: nil)
         currentAudiobook = nil
@@ -466,6 +718,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func pauseCurrentItemWithoutInvalidatingLoad() {
         player.pause()
+        lastPlayingObservedAt = nil
         loadingPlaybackBookID = nil
         isPlaying = false
         updateProgressMarkerIfNeeded()
@@ -477,6 +730,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func seek(to seconds: Double, applyProgressPenalty: Bool = true) {
         chapterSleepEndedItem = nil
+        // The user picked the spot, so the next play() doesn't rewind from it.
+        smartRewindAnchor = nil
         if applyProgressPenalty {
             persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
         }
@@ -489,6 +744,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         // navigation (a second "next chapter" tap) must step from where the user asked to be.
         currentTime = boundedTime
         pendingSeek = (boundedTime, Date())
+        latchJumpUndoOnReturn()
         refreshChapterSleepBoundary()
         player.seek(to: target) { [weak self] finished in
             guard let self else { return }
@@ -550,6 +806,27 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         return max(remainingInTrack + laterTracks, 0)
     }
 
+    /// Whole-book position for the player's progress line, from the same positional sums as
+    /// `currentBookRemainingDuration` (stored durations of the other tracks, the live `duration` for
+    /// the current one), never `Audiobook.progress`. `fraction` is 0...1 and unadjusted; the view
+    /// floors it and holds it under 100% until the book is finished. `remainingSeconds` is unadjusted
+    /// for playback speed. Nil when the total is 0. `currentTrackTimeOverride` follows a scrub.
+    func bookPositionSummary(currentTrackTimeOverride: Double? = nil) -> (fraction: Double, remainingSeconds: Double)? {
+        guard let book = currentAudiobook else { return nil }
+        let durations = book.sortedTracks.map(\.duration)
+        let position = navigationPosition
+        guard durations.indices.contains(position.trackIndex) else { return nil }
+        // `duration` is the committed track's live length; a pending target uses its stored one.
+        let trackLength = position.trackIndex == currentTrackIndex ? duration : durations[position.trackIndex]
+        let before = durations.prefix(position.trackIndex).reduce(0, +)
+        let after = durations.suffix(from: position.trackIndex + 1).reduce(0, +)
+        let total = before + trackLength + after
+        guard total.isFinite, total > 0 else { return nil }
+        let time = min(max(currentTrackTimeOverride ?? position.time, 0), max(trackLength, 0))
+        let listened = before + time
+        return (min(max(listened / total, 0), 1), max(total - listened, 0))
+    }
+
     var canGoToNextChapter: Bool {
         guard let index = currentChapterIndex else { return false }
         return index + 1 < chapters.count
@@ -601,24 +878,54 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     /// Seeks inside the committed item when the target is in it; otherwise loads the target track.
-    /// Track loads always autoplay (as track navigation always has); in-item seeks keep the
-    /// play/pause state unless `startPlaying`.
-    private func navigate(toTrack trackIndex: Int, time: Double, startPlaying: Bool = false) {
+    /// Track loads autoplay unless `autoplay` says otherwise (skip back and undo pass the current
+    /// play intent); in-item seeks keep the play/pause state unless `startPlaying`.
+    /// `seekPenaltyOverride` replaces the usual seek penalty, applied after a load commits.
+    private func navigate(
+        toTrack trackIndex: Int,
+        time: Double,
+        startPlaying: Bool = false,
+        autoplay: Bool = true,
+        seekPenaltyOverride: Double? = nil
+    ) {
         guard let audiobook = currentAudiobook,
               audiobook.sortedTracks.indices.contains(trackIndex) else { return }
+        smartRewindAnchor = nil
         if pendingPlaybackTarget == nil, trackIndex == currentTrackIndex, player.currentItem != nil {
-            seek(to: time)
+            seek(to: time, applyProgressPenalty: seekPenaltyOverride == nil)
+            if let seekPenaltyOverride { persistence.seekPenaltyRemaining = seekPenaltyOverride }
             if startPlaying, !isPlaying { play(reconcileABS: false) }
             return
         }
+        // A load still suspended in one of its awaits would resume ahead of this request's Task, read
+        // THIS target's play intent, clear it and commit the superseded track. Invalidate it so it
+        // exits at its next check; it leaves `isLoadingItem` and the spinner as they are (the load
+        // this request starts takes them over), and the new target is recorded just below.
+        if isLoadingItem { loadGeneration.invalidate() }
         // Record the target synchronously so a second tap before the load task runs steps from it.
-        let target = PendingPlaybackTarget(bookID: audiobook.id, trackIndex: trackIndex, time: time)
+        navigationGeneration &+= 1
+        let navToken = navigationGeneration
+        let target = PendingPlaybackTarget(bookID: audiobook.id, trackIndex: trackIndex, time: time, autoplay: autoplay)
         pendingPlaybackTarget = target
+        latchJumpUndoOnReturn()
         Task { [weak self] in
-            // Pause or a newer chapter request can cancel this before its task starts.
-            guard let self, self.pendingPlaybackTarget == target else { return }
-            await self.load(audiobook: audiobook, trackIndex: trackIndex, time: time, autoplay: true)
+            // Pause or a newer navigation request invalidates this token before the task starts.
+            // Play may have turned the target into an autoplaying one meanwhile without bumping it.
+            guard let self, self.navigationGeneration == navToken,
+                  let pending = self.pendingPlaybackTarget else { return }
+            await self.load(
+                audiobook: audiobook,
+                trackIndex: trackIndex,
+                time: time,
+                autoplay: pending.autoplay,
+                seekPenaltyOverride: seekPenaltyOverride
+            )
         }
+    }
+
+    /// True while the player is playing, waiting on Play's ABS reconcile, or a load that will start playing is pending.
+    private var hasPlayIntent: Bool {
+        isPlaying || isAwaitingPlayReconcile || (pendingPlaybackTarget?.autoplay ?? false)
     }
 
     private static func chapterCacheKey(for track: AudioTrack) -> String {
@@ -685,9 +992,27 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
     }
 
+    /// Steps back from the navigation position (so taps during a pending load stack) and crosses
+    /// into earlier tracks. A paused book stays paused.
     func skipBackward() {
         let isSavingProgress = persistence.seekPenaltyRemaining == 0
-        seek(to: currentTime - skipBackSeconds, applyProgressPenalty: !isSavingProgress)
+        let position = navigationPosition
+        let target = RewindPosition.target(
+            trackIndex: position.trackIndex,
+            time: position.time,
+            seconds: skipBackSeconds,
+            trackDurations: currentAudiobook?.sortedTracks.map(\.duration) ?? []
+        )
+        if pendingPlaybackTarget == nil, target.trackIndex == currentTrackIndex {
+            seek(to: target.time, applyProgressPenalty: !isSavingProgress)
+            return
+        }
+        navigate(
+            toTrack: target.trackIndex,
+            time: target.time,
+            autoplay: hasPlayIntent,
+            seekPenaltyOverride: Self.rewindPenalty(isSavingProgress: isSavingProgress)
+        )
     }
 
     func skipForward() {
@@ -814,6 +1139,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     func setProgressMarker() {
         guard let audiobook = currentAudiobook else { return }
+        clearJumpUndo()
         let oldTrack = audiobook.progressTrackIndex
         let oldTime = audiobook.progressTime
         let newTrack = currentTrackIndex
@@ -831,6 +1157,135 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         try? modelContext?.save()
     }
 
+    // MARK: - Smart Rewind
+
+    /// Seconds since the current break began, or nil when no break is recorded (the user
+    /// positioned the book, or it is playing). Unmeasurable values read as "unknown" in the policy.
+    private func measuredAnchorElapsed(now: Date = .now) -> TimeInterval? {
+        guard let anchor = smartRewindAnchor else { return nil }
+        return Self.e2eSmartRewindElapsedOverride ?? now.timeIntervalSince(anchor)
+    }
+
+    /// Seconds since `audiobook` was last audible, for a fresh load. Falls back to the saved
+    /// `lastPlayedAt` on a cold start, and to NaN (unknown, so a full rewind) with neither.
+    private func measuredFreshLoadElapsed(for audiobook: Audiobook, now: Date = .now) -> TimeInterval {
+        if let override = Self.e2eSmartRewindElapsedOverride { return override }
+        guard let last = lastAudibleAt[audiobook.id] ?? audiobook.lastPlayedAt else { return .nan }
+        return now.timeIntervalSince(last)
+    }
+
+    /// E2E fixture launches replace every measured break with `-e2e-smart-rewind-elapsed <seconds>`.
+    private static var e2eSmartRewindElapsedOverride: TimeInterval? {
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-e2e-fixture"),
+           let index = arguments.firstIndex(of: "-e2e-smart-rewind-elapsed"),
+           arguments.indices.contains(index + 1),
+           let override = Double(arguments[index + 1]) {
+            return override
+        }
+        #endif
+        return nil
+    }
+
+    // MARK: - Undo jump
+
+    /// Whether the "Back to 14:22" pill should show: an undo point exists for this book and the
+    /// playhead has left it.
+    var isJumpUndoVisible: Bool {
+        guard let undo = jumpUndo, let book = currentAudiobook, book.id == undo.bookID else { return false }
+        let durations = book.sortedTracks.map(\.duration)
+        let position = navigationPosition
+        let playhead = AudiobookshelfLibraryService.globalTime(
+            trackIndex: position.trackIndex, timeInTrack: position.time, trackDurations: durations
+        )
+        let point = AudiobookshelfLibraryService.globalTime(
+            trackIndex: undo.trackIndex, timeInTrack: undo.time, trackDurations: durations
+        )
+        return !JumpUndoPolicy.isNearUndoPoint(playhead: playhead, undoPoint: point)
+    }
+
+    /// Drops the undo the first time the playhead is back at its point, so the pill never returns
+    /// (and VoiceOver never re-announces it) once the playhead moves on again.
+    private func latchJumpUndoOnReturn() {
+        guard jumpUndo != nil, !isJumpUndoVisible else { return }
+        clearJumpUndo()
+    }
+
+    /// Where the player is now. Take it before a scrub starts or a chapter is tapped.
+    func makeJumpUndoSnapshot() -> JumpUndoSnapshot {
+        let position = navigationPosition
+        return JumpUndoSnapshot(
+            bookID: currentAudiobook?.id,
+            trackIndex: position.trackIndex,
+            time: position.time,
+            chapterIndex: currentChapterIndex,
+            seekPenaltyRemaining: persistence.seekPenaltyRemaining
+        )
+    }
+
+    /// Call after the seek or chapter jump. Records nothing for a jump of 5 s or less. While an
+    /// undo for this book is live it keeps the original point and only extends its lifetime, so
+    /// several drags undo back to where the user started.
+    func recordJumpUndo(from snapshot: JumpUndoSnapshot) {
+        guard let book = currentAudiobook, snapshot.bookID == book.id else { return }
+        let durations = book.sortedTracks.map(\.duration)
+        let position = navigationPosition
+        let before = AudiobookshelfLibraryService.globalTime(
+            trackIndex: snapshot.trackIndex, timeInTrack: snapshot.time, trackDurations: durations
+        )
+        let after = AudiobookshelfLibraryService.globalTime(
+            trackIndex: position.trackIndex, timeInTrack: position.time, trackDurations: durations
+        )
+        guard JumpUndoPolicy.isWorthRecording(from: before, to: after) else { return }
+        let expiresAt = Date.now.addingTimeInterval(JumpUndoPolicy.lifetime)
+        if let existing = jumpUndo, existing.bookID == book.id {
+            jumpUndo = JumpUndo(
+                bookID: existing.bookID, trackIndex: existing.trackIndex, time: existing.time,
+                chapterIndex: existing.chapterIndex, seekPenaltyRemaining: existing.seekPenaltyRemaining,
+                expiresAt: expiresAt
+            )
+        } else {
+            jumpUndo = JumpUndo(
+                bookID: book.id, trackIndex: snapshot.trackIndex, time: snapshot.time,
+                chapterIndex: snapshot.chapterIndex, seekPenaltyRemaining: snapshot.seekPenaltyRemaining,
+                expiresAt: expiresAt
+            )
+        }
+        jumpUndoExpiryTask?.cancel()
+        jumpUndoExpiryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(JumpUndoPolicy.lifetime))
+            guard !Task.isCancelled else { return }
+            self?.jumpUndo = nil
+            self?.jumpUndoExpiryTask = nil
+        }
+    }
+
+    /// Returns to the undo point and clears the pill. Plays only if the book was playing (or a
+    /// playing load was pending), and restores the seek penalty the jump replaced.
+    func undoJump() {
+        guard let undo = jumpUndo else { return }
+        let resumesPlaying = hasPlayIntent
+        clearJumpUndo()
+        guard let book = currentAudiobook, book.id == undo.bookID else { return }
+        navigate(
+            toTrack: undo.trackIndex,
+            time: undo.time,
+            autoplay: resumesPlaying,
+            seekPenaltyOverride: undo.seekPenaltyRemaining
+        )
+    }
+
+    func dismissJumpUndo() {
+        clearJumpUndo()
+    }
+
+    private func clearJumpUndo() {
+        jumpUndoExpiryTask?.cancel()
+        jumpUndoExpiryTask = nil
+        if jumpUndo != nil { jumpUndo = nil }
+    }
+
     // MARK: - Private
 
     private func load(
@@ -838,7 +1293,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         trackIndex: Int,
         time: Double,
         autoplay: Bool,
-        isAudiobookshelfRecovery: Bool = false
+        isAudiobookshelfRecovery: Bool = false,
+        breakStart: Date? = nil,
+        seekPenaltyOverride: Double? = nil
     ) async {
         guard audiobook.sortedTracks.indices.contains(trackIndex) else { return }
         guard let track = audiobook.sortedTracks[safe: trackIndex] else { return }
@@ -850,10 +1307,16 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         }
 
         absResumeGeneration &+= 1
+        isAwaitingPlayReconcile = false
         let loadToken = beginLoad()
-        pendingPlaybackTarget = PendingPlaybackTarget(bookID: audiobook.id, trackIndex: trackIndex, time: time)
+        pendingPlaybackTarget = PendingPlaybackTarget(
+            bookID: audiobook.id, trackIndex: trackIndex, time: time, autoplay: autoplay
+        )
         audiobookshelfRecoveryLoadToken = isAudiobookshelfRecovery ? loadToken : nil
-        persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
+        // An override waits for the commit: a load that is superseded must not leave its penalty behind.
+        if seekPenaltyOverride == nil {
+            persistence.seekPenaltyRemaining = PlaybackPersistence.progressSeekPenalty
+        }
         let showsStreamLoading = !audiobook.isDownloaded && autoplay
         loadingPlaybackBookID = showsStreamLoading ? audiobook.id : nil
         isLoadingItem = true
@@ -917,11 +1380,14 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             reportAudiobookshelfProgress()
             player.pause()
             isPlaying = false
+            lastPlayingObservedAt = nil
             player.replaceCurrentItem(with: item)
             if currentAudiobook !== audiobook {
                 equalizer.bind(to: audiobook)
             }
 
+            // Play may have promoted a paused load while it was in flight; the current target says so.
+            let startsPlaying = pendingPlaybackTarget?.autoplay ?? autoplay
             pendingPlaybackTarget = nil
             currentAudiobook = audiobook
             currentTrack = track
@@ -937,6 +1403,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 track.duration = loadedDuration.seconds
             }
             persistence.lastPersistedTime = startTime
+            if let seekPenaltyOverride {
+                persistence.seekPenaltyRemaining = seekPenaltyOverride
+            }
             rebuildChapters()
             loadChapters(for: audiobook, track: track, asset: asset)
 
@@ -985,11 +1454,17 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             isLoadingItem = false
             persistPlayback(force: true)
 
-            if autoplay {
+            if startsPlaying {
+                // Playing from here: no break to measure, and no rewind on top of the target.
+                smartRewindAnchor = nil
                 play(reconcileABS: false)
             } else {
                 pauseCurrentItemWithoutInvalidatingLoad()
                 clearLoadingPlayback(for: audiobook.id)
+                // A book that opens paused (restored, or Play Later) starts its break where it began
+                // (`breakStart`); a load that only positions a book the user is already in passes
+                // none and must not restart it.
+                if let breakStart { smartRewindAnchor = breakStart }
             }
 
             updateNowPlayingInfo()
@@ -1003,6 +1478,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     private func beginLoad() -> UInt64 {
+        navigationGeneration &+= 1
         seekGeneration &+= 1
         pendingSeek = nil
         player.currentItem?.cancelPendingSeeks()
@@ -1013,6 +1489,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func invalidateCurrentLoad() {
         loadGeneration.invalidate()
+        navigationGeneration &+= 1
+        isAwaitingPlayReconcile = false
         seekGeneration &+= 1
         pendingSeek = nil
         pendingPlaybackTarget = nil
@@ -1055,6 +1533,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 self.isPlaying = self.player.timeControlStatus == .playing
                 if self.isPlaying, let bookID = self.currentAudiobook?.id {
                     self.clearLoadingPlayback(for: bookID)
+                    self.lastAudibleAt[bookID] = Date()
+                    self.lastPlayingObservedAt = Date()
                 }
                 if self.isPlaying, self.persistence.seekPenaltyRemaining > 0 {
                     self.persistence.seekPenaltyRemaining = max(0, self.persistence.seekPenaltyRemaining - 1)
@@ -1081,6 +1561,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             pendingSeek = nil
         }
         currentTime = observed
+        latchJumpUndoOnReturn()
     }
 
     private func observeTrackEnd() {
@@ -1108,6 +1589,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                         if endInTrack >= self.duration - 0.05 {
                             if self.canGoToNextTrack {
                                 self.chapterSleepEndedItem = endedItem
+                                self.endedItemIsNaturalEnd = false
                             } else {
                                 self.markCurrentBookFinished()
                             }
@@ -1117,6 +1599,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                     if endInTrack <= self.duration + 0.05 { return }
                 }
                 if self.canGoToNextTrack {
+                    // If a pause (a call, say) cancels the next file's load, the ended item stays
+                    // loaded; marking it lets the next Play continue with the next file, as after a
+                    // chapter sleep end, instead of "playing" an item that is already at its end.
+                    self.chapterSleepEndedItem = endedItem
+                    self.endedItemIsNaturalEnd = true
                     self.nextTrack()
                 } else {
                     self.markCurrentBookFinished()
@@ -1163,9 +1650,15 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func markCurrentBookFinished() {
         guard let audiobook = currentAudiobook else { return }
+        clearJumpUndo()
+        // A finished book has no break to rewind from, even if a pause just stamped one.
+        smartRewindAnchor = nil
         setSleepTimer(seconds: nil)
         player.pause()
         isPlaying = false
+        // A deliberate stop: a route change or call right after the finish must not read as audible
+        // and pause (un-finish) the book.
+        lastPlayingObservedAt = nil
         let trackIndex = max(audiobook.sortedTracks.count - 1, 0)
         persistence.markFinished(
             audiobook: audiobook,
