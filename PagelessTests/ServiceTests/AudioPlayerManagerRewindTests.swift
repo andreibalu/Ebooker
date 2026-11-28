@@ -249,6 +249,77 @@ struct AudioPlayerManagerRewindTests {
         #expect(player.currentTime == 20)
     }
 
+    // Catches: a pause that follows AVPlayer pausing itself (interruption, or a stream that was still
+    // buffering) deciding the book was not playing, so no break was recorded and the next Play
+    // resumed in place with no rewind.
+    @Test func pauseJustAfterAVPlayerStoppedItselfStillRecordsTheBreak() async {
+        let (player, book) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
+        player.seedUnitTestSmartRewindAnchor(nil)
+        player.seedUnitTestPlayingObserved(at: Date().addingTimeInterval(-1))
+
+        player.pause()
+
+        #expect(player.hasSmartRewindAnchorForTesting)
+        #expect(player.lastAudibleAtForTesting(book.id) != nil)
+    }
+
+    // Catches: the widened check making every pause on a long-paused book count as a break start
+    // (an hour-old break becoming "now") or a duplicate pause moving a break later.
+    @Test func pauseOnABookThatHasBeenSilentForAWhileKeepsTheOldBreak() async {
+        let (player, book) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-600))
+        player.seedUnitTestPlayingObserved(at: Date().addingTimeInterval(-60))
+
+        player.pause()
+        player.pause()
+
+        #expect(player.lastAudibleAtForTesting(book.id) == nil)
+        player.play(reconcileABS: false)
+        #expect(player.currentTime == 20)
+    }
+
+    // Catches: a second pause right after a real one counting as a fresh stop (the pause's own
+    // stamp read as "audible within 3 s") and moving the break's start later.
+    @Test func aDuplicatePauseRightAfterARealOneDoesNotMoveTheBreak() async {
+        let (player, _) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
+        player.seedUnitTestPlayingObserved(at: Date().addingTimeInterval(-1))
+        player.pause()
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-600))
+
+        player.pause()
+
+        player.play(reconcileABS: false)
+        #expect(player.currentTime == 20)
+    }
+
+    // Catches: a second Play on a downloaded or already-loading book, after Play promoted a paused
+    // skip back's load, starting the OLD item (or an ABS reconcile that can override the user's
+    // skip) while the promoted load is still pending.
+    @Test func aSecondPlayWhileThePromotedLoadIsPendingChangesNothing() async {
+        var reconcileCalls = 0
+        let player = makePlayer(reconcileABS: { _, _ in
+            reconcileCalls += 1
+            return true
+        })
+        let book = makeBook(trackCount: 2, absItemID: "abs-3")
+        await player.playTrack(at: 1, in: book, time: 10, autoplay: false)
+        player.persistence.seekPenaltyRemaining = 0
+        player.skipBackward()
+        player.play()
+        let promoted = player.pendingPlaybackTarget
+        #expect(promoted?.autoplay == true)
+
+        player.play()
+
+        #expect(reconcileCalls == 0)
+        #expect(player.pendingPlaybackTarget == promoted)
+        #expect(!player.isPlaying)
+        await settle(player)
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.currentTime == 40)
+        #expect(reconcileCalls == 0)
+    }
+
     // Catches: a cross-track skip back during Play's in-flight ABS reconcile seeing `hasPlayIntent == false`
     // and committing paused after load() invalidates the reconcile.
     @Test func skipBackDuringPlayABSReconcileKeepsPlayIntentAndAutoplays() async {

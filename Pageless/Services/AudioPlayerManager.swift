@@ -140,6 +140,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private var smartRewindAnchor: Date?
     /// In-memory last moment each book was audible, for the break measured by a fresh load.
     private var lastAudibleAt: [UUID: Date] = [:]
+    /// When the periodic observer last saw the current item actually playing. Unlike `lastAudibleAt`
+    /// it is cleared as soon as playback is stopped on purpose, so a duplicate pause is not mistaken
+    /// for a stop AVPlayer made on its own (interruption, route loss) before the manager heard of it.
+    private var lastPlayingObservedAt: Date?
 
     private let player = AVPlayer()
     private var timeObserverToken: Any?
@@ -263,7 +267,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 switch self.interruptionController.action(
                     for: type,
                     options: options,
-                    isPlaying: self.isPlaying
+                    isPlaying: self.isPlaybackActive
                 ) {
                 case .pause:
                     self.pause()
@@ -334,6 +338,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// Marks the loaded item as the one a chapter sleep timer stopped at its end.
     func seedUnitTestChapterSleepEndedCurrentItem() {
         chapterSleepEndedItem = player.currentItem
+    }
+
+    /// Pretends the periodic observer saw the item playing at `date`, as it does once a second.
+    func seedUnitTestPlayingObserved(at date: Date?) {
+        lastPlayingObservedAt = date
     }
 
     func lastAudibleAtForTesting(_ bookID: UUID) -> Date? {
@@ -502,6 +511,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             smartRewindAnchor = nil
             return
         }
+        // After that promotion (or any autoplaying load of this book already pending) a second Play
+        // must not start the old item or an ABS reconcile that could override the user's skip or undo.
+        if let pending = pendingPlaybackTarget, pending.autoplay, pending.bookID == currentAudiobook?.id {
+            return
+        }
         // Read before the ABS reconcile below, so the server round trip isn't counted as a break.
         let elapsed = measuredAnchorElapsed()
         if reconcileABS, !isPlaying, let book = currentAudiobook, book.isAudiobookshelfBook,
@@ -594,18 +608,31 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     }
 
     func pause() {
-        pauseInternal(wasActive: isPlaying || isLoadingItem || pendingPlaybackTarget != nil || isAwaitingPlayReconcile)
+        let wasAudible = isPlaybackActive
+        pauseInternal(
+            wasActive: wasAudible || isLoadingItem || pendingPlaybackTarget != nil || isAwaitingPlayReconcile,
+            wasAudible: wasAudible
+        )
     }
 
-    /// `wasActive` is false for a duplicate pause command, which must not move the break's start later.
-    private func pauseInternal(wasActive: Bool) {
+    /// True while the book is playing or buffering to play (`timeControlStatus` is not paused), or the
+    /// periodic observer saw it playing within 3 s, which covers AVPlayer pausing itself for an
+    /// interruption or a route change before the manager's notification handler runs.
+    private var isPlaybackActive: Bool {
+        if isPlaying || player.timeControlStatus != .paused { return true }
+        return lastPlayingObservedAt.map { Date.now.timeIntervalSince($0) < 3 } ?? false
+    }
+
+    /// `wasActive` is false for a duplicate pause command, which must not move the break's start
+    /// later. `wasAudible` says the book itself was playing (not just a load pending).
+    private func pauseInternal(wasActive: Bool, wasAudible: Bool) {
         absResumeGeneration &+= 1
         isAwaitingPlayReconcile = false
         pausedAt = .now
         if wasActive {
             // A pause that only abandons a load leaves the book as it was: `currentAudiobook` is not
             // the loading book yet, so it must not turn an old break into "now".
-            if isPlaying {
+            if wasAudible {
                 smartRewindAnchor = .now
                 if let id = currentAudiobook?.id { lastAudibleAt[id] = .now }
             } else {
@@ -624,11 +651,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// Headphones or another output went away. AVPlayer has usually paused already, so `isPlaying`
     /// may be false; the periodic observer's last audible stamp says whether this was playback.
     private func pauseAfterRouteLoss() {
-        guard let id = currentAudiobook?.id else { return }
-        let recentlyAudible = lastAudibleAt[id].map { Date.now.timeIntervalSince($0) < 3 } ?? false
-        let wasActive = isPlaying || isLoadingItem || pendingPlaybackTarget != nil || recentlyAudible
-        guard wasActive else { return }
-        pauseInternal(wasActive: true)
+        guard currentAudiobook != nil else { return }
+        let wasAudible = isPlaybackActive
+        guard wasAudible || isLoadingItem || pendingPlaybackTarget != nil else { return }
+        pauseInternal(wasActive: true, wasAudible: wasAudible)
     }
 
     /// Stops and forgets `audiobook` if it is loaded, before its row is deleted. Otherwise the
@@ -658,6 +684,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
 
     private func pauseCurrentItemWithoutInvalidatingLoad() {
         player.pause()
+        lastPlayingObservedAt = nil
         loadingPlaybackBookID = nil
         isPlaying = false
         updateProgressMarkerIfNeeded()
@@ -836,6 +863,11 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             if startPlaying, !isPlaying { play(reconcileABS: false) }
             return
         }
+        // A load still suspended in one of its awaits would resume ahead of this request's Task, read
+        // THIS target's play intent, clear it and commit the superseded track. Invalidate it so it
+        // exits at its next check; it leaves `isLoadingItem` and the spinner as they are (the load
+        // this request starts takes them over), and the new target is recorded just below.
+        if isLoadingItem { loadGeneration.invalidate() }
         // Record the target synchronously so a second tap before the load task runs steps from it.
         navigationGeneration &+= 1
         let navToken = navigationGeneration
@@ -1314,6 +1346,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
             reportAudiobookshelfProgress()
             player.pause()
             isPlaying = false
+            lastPlayingObservedAt = nil
             player.replaceCurrentItem(with: item)
             if currentAudiobook !== audiobook {
                 equalizer.bind(to: audiobook)
@@ -1467,6 +1500,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 if self.isPlaying, let bookID = self.currentAudiobook?.id {
                     self.clearLoadingPlayback(for: bookID)
                     self.lastAudibleAt[bookID] = Date()
+                    self.lastPlayingObservedAt = Date()
                 }
                 if self.isPlaying, self.persistence.seekPenaltyRemaining > 0 {
                     self.persistence.seekPenaltyRemaining = max(0, self.persistence.seekPenaltyRemaining - 1)
