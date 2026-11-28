@@ -124,7 +124,8 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     @Published var sleepTimerEndsAt: Date?
     @Published private(set) var sleepAtChapterEnd = false
     private var sleepChapterEnd: Double?
-    /// The item a chapter sleep timer stopped at its end; Play continues with the next file.
+    /// An item left loaded at its end: a chapter sleep timer stopped there, or a natural track end
+    /// whose next-file load a pause cancelled. Play continues with the next file.
     private weak var chapterSleepEndedItem: AVPlayerItem?
     @Published var playerErrorMessage: String?
     /// Chapters of the current book: embedded/server chapters when the files carry them,
@@ -1564,6 +1565,10 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                     if endInTrack <= self.duration + 0.05 { return }
                 }
                 if self.canGoToNextTrack {
+                    // If a pause (a call, say) cancels the next file's load, the ended item stays
+                    // loaded; marking it lets the next Play continue with the next file, as after a
+                    // chapter sleep end, instead of "playing" an item that is already at its end.
+                    self.chapterSleepEndedItem = endedItem
                     self.nextTrack()
                 } else {
                     self.markCurrentBookFinished()
@@ -1616,6 +1621,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
         setSleepTimer(seconds: nil)
         player.pause()
         isPlaying = false
+        // A deliberate stop: a route change or call right after the finish must not read as audible
+        // and pause (un-finish) the book.
+        lastPlayingObservedAt = nil
         let trackIndex = max(audiobook.sortedTracks.count - 1, 0)
         persistence.markFinished(
             audiobook: audiobook,

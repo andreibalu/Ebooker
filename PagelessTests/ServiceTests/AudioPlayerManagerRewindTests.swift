@@ -92,6 +92,21 @@ struct AudioPlayerManagerRewindTests {
 
     // Catches: a finished book rewinding on Play. The end-of-chapter sleep timer pauses (stamping the
     // anchor) and then finishes the book, and the anchor used to survive the finish.
+    // Catches: finishing a book leaving the "seen playing" stamp, so a route change or call within
+    // 3 s reads as audible, pauses the finished book (persist writes isFinished = false) and stamps
+    // a break on it.
+    @Test func finishingTheBookStopsCountingAsAudible() async {
+        let (player, book) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
+        player.bookFinishedSink = {}
+        player.seedUnitTestPlayingObserved(at: Date().addingTimeInterval(-1))
+
+        player.nextTrack() // last track: finishes the book
+        player.pause()
+
+        #expect(!player.hasSmartRewindAnchorForTesting)
+        #expect(player.lastAudibleAtForTesting(book.id) == nil)
+    }
+
     @Test func finishingTheBookDropsTheBreakAnchor() async {
         let (player, book) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
         player.bookFinishedSink = {}
