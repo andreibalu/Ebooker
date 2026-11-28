@@ -246,3 +246,53 @@ test('large text with Button Shapes and Bold Text keeps a moment row, its quote 
   expect(box.height).toBeLessThan(200);
   await app.screenshot('a11y-layout-moment-rows');
 });
+
+type Frame = { x: number; y: number; width: number; height: number };
+const intersects = (a: Frame, b: Frame): boolean =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+// The "Back to 03:01" pill after a scrub used to be an unclipped overlay on a spacer that shrank
+// to 20 pt at accessibility sizes, so the 40-46 pt pill sat on the Play button and the quick
+// actions and taps meant for Play hit undo. The slot now reserves the pill's height.
+test('large text with Button Shapes and Bold Text keeps the Undo jump pill off Play and the quick actions', async ({ device, screen, app }) => {
+  setAccessibility(true);
+  await device.openApp(bundle, {
+    relaunch: true,
+    launchArguments: ['-e2e-fixture', '-e2e-reset-fixture', '-onboardingComplete', 'YES', '-startOnFreeBooks', 'NO', '-shelvesSource', 'librivox'],
+  });
+  await screen.getByTestId('book.card.E2E-Listening-Book').tap();
+  await screen.getByTestId('book.play').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Pause playback');
+  await screen.getByTestId('player.playPause').tap();
+  await expect(screen.getByTestId('player.playPause')).toHaveAccessibleName('Play playback');
+
+  const playBefore = await screen.getByTestId('player.playPause').boundingBox();
+  if (!playBefore) throw new Error('Play has no bounds');
+
+  const scrubber = screen.getByTestId('player.scrubber');
+  const box = await scrubber.boundingBox();
+  if (!box) throw new Error('Scrubber has no bounds');
+  const y = box.y + box.height * 0.75;
+  await screen.swipe({ from: { x: box.x + box.width * 0.1, y }, to: { x: box.x + box.width * 0.6, y } });
+
+  const pill = screen.getByTestId('player.undoJump');
+  await expect(pill).toBeVisible();
+  const pillBox = await pill.boundingBox();
+  if (!pillBox) throw new Error('Undo pill has no bounds');
+  await app.screenshot('a11y-layout-undo-pill');
+
+  // Showing the pill moves nothing: Play stays where it was.
+  const playAfter = await screen.getByTestId('player.playPause').boundingBox();
+  if (!playAfter) throw new Error('Play has no bounds after the scrub');
+  expect(Math.abs(playAfter.y - playBefore.y)).toBeLessThan(1);
+  expect(intersects(pillBox, playAfter)).toBe(false);
+
+  // Neither does it cover any quick action that is in the tree at this size.
+  for (const id of ['player.speed', 'player.equalizer', 'player.sleep', 'player.markProgress', 'player.saveMoment']) {
+    const control = screen.getByTestId(id);
+    if (!(await control.isVisible())) continue;
+    const controlBox = await control.boundingBox();
+    if (!controlBox) continue;
+    expect(intersects(pillBox, controlBox), `${id} overlaps the undo pill`).toBe(false);
+  }
+});
