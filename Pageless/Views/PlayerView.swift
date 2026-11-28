@@ -80,17 +80,21 @@ struct PlayerView: View {
             .padding(.horizontal, 28)
             .padding(.top, 6)
 
-            Color.clear
-                .frame(minHeight: 20)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay {
-                    if player.isJumpUndoVisible, let undo = player.jumpUndo {
-                        undoJumpPill(for: undo)
-                            .transition(.opacity)
-                    }
+            // The slot always reserves the pill's height through a hidden sizing copy (same
+            // Dynamic Type cap), so the pill never overlaps Play or the quick actions at accessibility
+            // sizes or 320 pt, and showing or hiding it never moves the transport controls.
+            ZStack {
+                undoJumpPill(chapterTitle: nil, timeString: "00:00:00", isInteractive: false)
+                    .hidden()
+                    .accessibilityHidden(true)
+                if player.isJumpUndoVisible, let undo = player.jumpUndo {
+                    undoJumpPill(for: undo)
+                        .transition(.opacity)
                 }
-                .animation(AppMotion.stateChangeAnimation(reduceMotion: reduceMotion), value: player.isJumpUndoVisible)
-                .zIndex(1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(AppMotion.stateChangeAnimation(reduceMotion: reduceMotion), value: player.isJumpUndoVisible)
+            .zIndex(1)
 
             quickActionsSection
                 .padding(.horizontal, 28)
@@ -443,10 +447,16 @@ struct PlayerView: View {
     // MARK: - Undo Jump Pill
 
     private func undoJumpPill(for undo: JumpUndo) -> some View {
-        let chapterTitle = undoChapterTitle(for: undo)
-        let timeString = undoTimeString(for: undo)
+        undoJumpPill(
+            chapterTitle: undoChapterTitle(for: undo),
+            timeString: undoTimeString(for: undo),
+            isInteractive: true
+        )
+    }
 
-        return HStack(spacing: 4) {
+    /// `isInteractive` is false for the hidden sizing copy, which must not carry the identifiers.
+    private func undoJumpPill(chapterTitle: String?, timeString: String, isInteractive: Bool) -> some View {
+        HStack(spacing: 4) {
             Button {
                 undoHapticTrigger += 1
                 player.undoJump()
@@ -481,7 +491,7 @@ struct PlayerView: View {
             }
             .buttonStyle(TactileScaleButtonStyle())
             .accessibilityLabel(undoAccessibilityLabel(chapterTitle: chapterTitle, timeString: timeString))
-            .accessibilityIdentifier("player.undoJump")
+            .accessibilityIdentifier(isInteractive ? "player.undoJump" : "")
 
             Divider()
                 .frame(height: 14)
@@ -499,7 +509,7 @@ struct PlayerView: View {
             .buttonStyle(.plain)
             .padding(.trailing, 4)
             .accessibilityLabel("Dismiss undo jump")
-            .accessibilityIdentifier("player.undoJump.dismiss")
+            .accessibilityIdentifier(isInteractive ? "player.undoJump.dismiss" : "")
         }
         .background(Color.cardWhite, in: Capsule())
         .overlay(
@@ -522,9 +532,11 @@ struct PlayerView: View {
     }
 
     private func undoTimeString(for undo: JumpUndo) -> String {
+        // A chapter's start is a time in its own file, so the offset only applies on that file.
         if activeChapterRange != nil,
            let undoChapterIndex = undo.chapterIndex,
-           player.chapters.indices.contains(undoChapterIndex) {
+           player.chapters.indices.contains(undoChapterIndex),
+           player.chapters[undoChapterIndex].trackIndex == undo.trackIndex {
             let chapter = player.chapters[undoChapterIndex]
             let relativeTime = max(undo.time - chapter.start, 0)
             return TimeFormatter.clockString(seconds: relativeTime)
