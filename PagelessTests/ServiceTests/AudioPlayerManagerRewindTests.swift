@@ -149,6 +149,48 @@ struct AudioPlayerManagerRewindTests {
         #expect(!player.hasSmartRewindAnchorForTesting)
     }
 
+    // Catches: a pause (a call) that cancelled the next file's load after a natural track end
+    // leaving Play "playing" an item already at its end, so nothing is heard.
+    @Test func playAfterANaturalEndWhoseNextLoadWasCancelledStartsTheNextFile() async {
+        let (player, book) = await loadedPlayer(trackCount: 2, trackIndex: 0, time: 59)
+        player.applyObservedTime(59)
+        player.seedUnitTestNaturalEndedCurrentItem()
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-10)) // under 30 s: no rewind
+
+        player.play(reconcileABS: false)
+
+        #expect(player.pendingPlaybackTarget == PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 1, time: 0, autoplay: true
+        ))
+    }
+
+    // Catches: a long call at a file boundary resuming at 0:00 of the next file with no Smart
+    // Rewind, because the natural end was treated like a chapter-sleep end (which drops the anchor).
+    @Test func playAfterANaturalEndAndALongBreakRewindsIntoTheEndedFile() async {
+        let (player, _) = await loadedPlayer(trackCount: 2, trackIndex: 0, time: 59)
+        player.applyObservedTime(59)
+        player.seedUnitTestNaturalEndedCurrentItem()
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-600))
+
+        player.play(reconcileABS: false)
+
+        #expect(player.pendingPlaybackTarget == nil)
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.currentTime == 29) // 59 − the 30 s setting
+    }
+
+    // Catches: a call that arrives while the next file is still loading (more than 3 s after the
+    // last "playing" tick) not counting as playback, so no pause, no break and no auto-resume.
+    @Test func interruptionDuringAnAutoplayingLoadOfTheSameBookCountsAsPlaying() async {
+        let (player, book) = await loadedPlayer(trackCount: 2, trackIndex: 0, time: 59)
+        player.seedUnitTestPendingPlaybackTarget(
+            PendingPlaybackTarget(bookID: book.id, trackIndex: 1, time: 0, autoplay: true)
+        )
+        player.seedUnitTestPlayingObserved(at: nil)
+
+        #expect(player.isPlaybackActiveForInterruptionForTesting)
+    }
+
     // MARK: - Fresh loads
 
     // Catches: a paused fresh load rewinding at load AND leaving a fresh anchor, so the following

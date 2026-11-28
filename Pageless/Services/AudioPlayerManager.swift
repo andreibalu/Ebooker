@@ -127,6 +127,9 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// An item left loaded at its end: a chapter sleep timer stopped there, or a natural track end
     /// whose next-file load a pause cancelled. Play continues with the next file.
     private weak var chapterSleepEndedItem: AVPlayerItem?
+    /// True when `chapterSleepEndedItem` is a natural track end, not a chapter sleep stop: Smart
+    /// Rewind may still replay its tail after a break, where a chapter sleep end never rewinds.
+    private var endedItemIsNaturalEnd = false
     @Published var playerErrorMessage: String?
     /// Chapters of the current book: embedded/server chapters when the files carry them,
     /// otherwise one per track.
@@ -268,7 +271,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                 switch self.interruptionController.action(
                     for: type,
                     options: options,
-                    isPlaying: self.isPlaybackActive
+                    isPlaying: self.isPlaybackActiveForInterruption
                 ) {
                 case .pause:
                     self.pause()
@@ -339,6 +342,16 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// Marks the loaded item as the one a chapter sleep timer stopped at its end.
     func seedUnitTestChapterSleepEndedCurrentItem() {
         chapterSleepEndedItem = player.currentItem
+    }
+
+    /// Marks the loaded item as a natural track end whose next-file load was cancelled.
+    func seedUnitTestNaturalEndedCurrentItem() {
+        chapterSleepEndedItem = player.currentItem
+        endedItemIsNaturalEnd = true
+    }
+
+    var isPlaybackActiveForInterruptionForTesting: Bool {
+        isPlaybackActiveForInterruption
     }
 
     /// Pretends the periodic observer saw the item playing at `date`, as it does once a second.
@@ -552,17 +565,27 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// The tail of `play()` once any server reconcile is settled. `elapsedSinceBreak` is nil when no
     /// break was recorded; a user positioning since (anchor cleared) cancels the rewind too.
     private func resumePlayback(elapsedSinceBreak: TimeInterval?) {
-        // A chapter sleep timer that expired at the end of a file leaves the ended item loaded;
-        // playing it again does nothing, so continue with the next file instead. It starts the
-        // file at 0 and drops the anchor, so a rewind can't cross back into the chapter that ended.
+        // An item left loaded at its end (a chapter sleep stop, or a natural end whose next-file
+        // load a pause cancelled) does nothing when played again, so continue with the next file
+        // at 0. A chapter sleep end drops the anchor, so a rewind can't cross back into the chapter
+        // that ended; after a natural end, a break long enough to rewind replays the ended file's
+        // tail instead (the rewind below), and playback then flows into the next file as usual.
         if let ended = chapterSleepEndedItem, ended === player.currentItem,
            pendingSeek == nil, pendingPlaybackTarget == nil, !isLoadingItem, canGoToNextTrack {
+            let rewindsIntoEndedFile = endedItemIsNaturalEnd && smartRewindAnchor != nil && !isPlaying
+                && elapsedSinceBreak.map {
+                    SmartRewindPolicy.rewindSeconds(elapsed: $0, setting: resumeBacktrackSeconds) > 0
+                } ?? false
             chapterSleepEndedItem = nil
-            smartRewindAnchor = nil
-            navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
-            return
+            endedItemIsNaturalEnd = false
+            if !rewindsIntoEndedFile {
+                smartRewindAnchor = nil
+                navigate(toTrack: navigationPosition.trackIndex + 1, time: 0)
+                return
+            }
         }
         chapterSleepEndedItem = nil
+        endedItemIsNaturalEnd = false
         let hadBreak = smartRewindAnchor != nil
         smartRewindAnchor = nil
         if hadBreak, !isPlaying, let elapsedSinceBreak, applySmartRewind(elapsed: elapsedSinceBreak) {
@@ -619,6 +642,16 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     /// True while the book is playing or buffering to play (`timeControlStatus` is not paused), or the
     /// periodic observer saw it playing within 3 s, which covers AVPlayer pausing itself for an
     /// interruption or a route change before the manager's notification handler runs.
+    /// `isPlaybackActive`, or a load of this book that will start playing (the next file loading
+    /// after a natural track end, a skip) or Play's ABS reconcile: a call arriving then must pause,
+    /// record the break and resume afterwards. A pending load of another book doesn't count, since
+    /// resuming would play the old book.
+    private var isPlaybackActiveForInterruption: Bool {
+        isPlaybackActive
+            || isAwaitingPlayReconcile
+            || (pendingPlaybackTarget.map { $0.autoplay && $0.bookID == currentAudiobook?.id } ?? false)
+    }
+
     private var isPlaybackActive: Bool {
         if isPlaying || player.timeControlStatus != .paused { return true }
         return lastPlayingObservedAt.map { Date.now.timeIntervalSince($0) < 3 } ?? false
@@ -1556,6 +1589,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                         if endInTrack >= self.duration - 0.05 {
                             if self.canGoToNextTrack {
                                 self.chapterSleepEndedItem = endedItem
+                                self.endedItemIsNaturalEnd = false
                             } else {
                                 self.markCurrentBookFinished()
                             }
@@ -1569,6 +1603,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
                     // loaded; marking it lets the next Play continue with the next file, as after a
                     // chapter sleep end, instead of "playing" an item that is already at its end.
                     self.chapterSleepEndedItem = endedItem
+                    self.endedItemIsNaturalEnd = true
                     self.nextTrack()
                 } else {
                     self.markCurrentBookFinished()
