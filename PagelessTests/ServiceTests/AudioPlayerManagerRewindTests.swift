@@ -89,6 +89,184 @@ struct AudioPlayerManagerRewindTests {
         #expect(player.currentTime == 20)
     }
 
+    // Catches: a finished book rewinding on Play. The end-of-chapter sleep timer pauses (stamping the
+    // anchor) and then finishes the book, and the anchor used to survive the finish.
+    @Test func finishingTheBookDropsTheBreakAnchor() async {
+        let (player, book) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
+        player.bookFinishedSink = {}
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-600))
+
+        player.nextTrack() // last track: finishes the book
+
+        #expect(book.isFinished)
+        #expect(!player.hasSmartRewindAnchorForTesting)
+    }
+
+    // Catches: an anchor stamped after the finish (a later pause) still rewinding the finished
+    // book from its end.
+    @Test func aFinishedBookNeverRewindsOnPlay() async {
+        let (player, book) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 50)
+        player.bookFinishedSink = {}
+        player.nextTrack()
+        #expect(book.isFinished)
+        let end = player.currentTime
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-600))
+
+        player.play(reconcileABS: false)
+
+        #expect(player.currentTime == end)
+    }
+
+    // Catches: the chapter-sleep-ended item rewinding back into the chapter that ended instead of
+    // starting the next file at 0.
+    @Test func playAfterChapterSleepEndStartsTheNextFileWithoutRewinding() async {
+        let (player, book) = await loadedPlayer(trackCount: 2, trackIndex: 0, time: 59)
+        player.applyObservedTime(59) // lands the load's own seek, as the periodic observer would
+        player.seedUnitTestChapterSleepEndedCurrentItem()
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-600))
+
+        player.play(reconcileABS: false)
+
+        #expect(player.pendingPlaybackTarget == PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 1, time: 0, autoplay: true
+        ))
+        #expect(!player.hasSmartRewindAnchorForTesting)
+    }
+
+    // MARK: - Fresh loads
+
+    // Catches: a paused fresh load rewinding at load AND leaving a fresh anchor, so the following
+    // Play rewinds a second time (or, with the anchor at "now", never measures the real break).
+    @Test func pausedFreshLoadDefersTheRewindToPlayAndAppliesItOnce() async {
+        let player = makePlayer()
+        let book = makeBook(trackCount: 1)
+        book.currentTime = 50
+        book.lastPlayedAt = Date().addingTimeInterval(-600)
+
+        await player.startPlayback(for: book, autoplay: false)
+
+        #expect(player.currentTime == 50)
+        #expect(player.hasSmartRewindAnchorForTesting)
+        player.persistence.seekPenaltyRemaining = 0
+        player.play(reconcileABS: false)
+        #expect(player.currentTime == 20)
+        player.pause()
+        player.play(reconcileABS: false)
+        // The second Play is a quick pause, not another long break.
+        #expect(player.currentTime == 20)
+    }
+
+    // Catches: an unknown break (no history at all) on a paused load measuring as "now" and
+    // skipping the full rewind the policy gives an unmeasurable break.
+    @Test func pausedFreshLoadWithUnknownBreakRewindsFullyOnPlay() async {
+        let player = makePlayer()
+        let book = makeBook(trackCount: 1)
+        book.currentTime = 50
+
+        await player.startPlayback(for: book, autoplay: false)
+        #expect(player.currentTime == 50)
+        player.play(reconcileABS: false)
+
+        #expect(player.currentTime == 20)
+    }
+
+    // Catches: the same deferral applying to "Your progress" (`playProgressBookmark`).
+    @Test func pausedProgressBookmarkLoadDefersTheRewindToo() async {
+        let player = makePlayer()
+        let book = makeBook(trackCount: 1)
+        book.lastPlayedAt = Date().addingTimeInterval(-600)
+
+        await player.playProgressBookmark(at: 0, in: book, time: 50, autoplay: false)
+        #expect(player.currentTime == 50)
+        player.play(reconcileABS: false)
+
+        #expect(player.currentTime == 20)
+    }
+
+    // Catches: autoplaying fresh loads changing behavior: they still rewind at load and leave no anchor.
+    @Test func autoplayingFreshLoadStillRewindsAtLoadAndLeavesNoAnchor() async {
+        let player = makePlayer()
+        let book = makeBook(trackCount: 1)
+        book.currentTime = 50
+        book.lastPlayedAt = Date().addingTimeInterval(-600)
+
+        await player.startPlayback(for: book, autoplay: true)
+
+        #expect(player.currentTime == 20)
+        #expect(!player.hasSmartRewindAnchorForTesting)
+    }
+
+    // MARK: - Play during a paused load
+
+    // Catches: Play pressed while a paused skip back is still loading starting the OLD item
+    // (old position briefly audible), after which the commit pauses it and the tap is lost.
+    @Test func playDuringAPausedCrossTrackSkipBackPromotesTheLoadToAutoplay() async {
+        let (player, book) = await loadedPlayer(trackCount: 2, trackIndex: 1, time: 10)
+        player.persistence.seekPenaltyRemaining = 0
+        player.skipBackward()
+        #expect(player.pendingPlaybackTarget?.autoplay == false)
+
+        player.play(reconcileABS: false)
+
+        #expect(player.pendingPlaybackTarget == PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 0, time: 40, autoplay: true
+        ))
+        #expect(!player.isPlaying) // the old item was not started
+        await settle(player)
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.isPlaying)
+    }
+
+    // Catches: a Pause after that Play (still before the commit) not leaving the book paused.
+    @Test func pauseAfterPromotingThePausedLoadLeavesItPaused() async {
+        let (player, _) = await loadedPlayer(trackCount: 2, trackIndex: 1, time: 10)
+        player.skipBackward()
+        player.play(reconcileABS: false)
+
+        player.pause()
+        await settle(player)
+        for _ in 0..<50 { await Task.yield() }
+
+        #expect(player.pendingPlaybackTarget == nil)
+        #expect(!player.isPlaying)
+        #expect(player.currentTrackIndex == 1)
+    }
+
+    // Catches: a pause that only abandons a load stamping the OLD, already-paused book's break as
+    // "now" (an hour-old break becoming no break), and its lastAudibleAt too.
+    @Test func pausingAnAbandonedLoadKeepsTheExistingBreak() async {
+        let (player, book) = await loadedPlayer(trackCount: 2, trackIndex: 0, time: 50)
+        player.seedUnitTestSmartRewindAnchor(Date().addingTimeInterval(-3600))
+        player.seedUnitTestPendingPlaybackTarget(PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 1, time: 0, autoplay: false
+        ))
+
+        player.pause()
+
+        #expect(player.lastAudibleAtForTesting(book.id) == nil)
+        player.play(reconcileABS: false)
+        #expect(player.currentTime == 20)
+    }
+
+    // MARK: - Undo latch
+
+    // Catches: the pill reappearing (and VoiceOver announcing again) once the playhead has been
+    // back at the undo point and moved on.
+    @Test func theUndoStaysGoneAfterThePlayheadHasBeenBackAtItsPoint() async {
+        let (player, _) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 20)
+        let snapshot = player.makeJumpUndoSnapshot()
+        player.seek(to: 50)
+        player.recordJumpUndo(from: snapshot)
+        #expect(player.isJumpUndoVisible)
+
+        player.seek(to: 21.5)
+        player.applyObservedTime(21.5) // the periodic observer's tick
+        player.seek(to: 40)
+
+        #expect(player.jumpUndo == nil)
+        #expect(!player.isJumpUndoVisible)
+    }
+
     // MARK: - Skip back
 
     // Catches: skip back clamping at 0:00 of the current track, and a paused book starting to play
@@ -230,7 +408,7 @@ struct AudioPlayerManagerRewindTests {
 
     // MARK: - Helpers
 
-    private func loadedPlayer(trackCount: Int, trackIndex: Int, time: Double) async -> (AudioPlayerManager, Audiobook) {
+    private func makePlayer() -> AudioPlayerManager {
         let player = AudioPlayerManager(loadPreparation: AudioPlayerLoadPreparation(
             isNetworkAvailable: { true },
             makeAudioMix: { _ in nil },
@@ -238,6 +416,11 @@ struct AudioPlayerManagerRewindTests {
             prepareSeek: { _, _ in true }
         ))
         player.applyPlaybackDefaults(resumeBacktrack: 30, skipBack: 30, skipForward: 30)
+        return player
+    }
+
+    private func loadedPlayer(trackCount: Int, trackIndex: Int, time: Double) async -> (AudioPlayerManager, Audiobook) {
+        let player = makePlayer()
         let book = makeBook(trackCount: trackCount)
         await player.playTrack(at: trackIndex, in: book, time: time, autoplay: false)
         player.persistence.seekPenaltyRemaining = 0
