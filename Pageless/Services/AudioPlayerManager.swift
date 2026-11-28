@@ -687,7 +687,7 @@ final class AudioPlayerManager: NSObject, ObservableObject {
     private func pauseAfterRouteLoss() {
         guard currentAudiobook != nil else { return }
         let wasAudible = isPlaybackActive
-        guard wasAudible || isLoadingItem || pendingPlaybackTarget != nil else { return }
+        guard wasAudible || isLoadingItem || pendingPlaybackTarget != nil || isAwaitingPlayReconcile else { return }
         pauseInternal(wasActive: true, wasAudible: wasAudible)
     }
 
