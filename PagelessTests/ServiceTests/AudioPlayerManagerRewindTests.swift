@@ -5,6 +5,7 @@
 
 import AVFoundation
 import Foundation
+import SwiftData
 import Testing
 @testable import Pageless
 
@@ -248,6 +249,102 @@ struct AudioPlayerManagerRewindTests {
         #expect(player.currentTime == 20)
     }
 
+    // Catches: a cross-track skip back during Play's in-flight ABS reconcile seeing `hasPlayIntent == false`
+    // and committing paused after load() invalidates the reconcile.
+    @Test func skipBackDuringPlayABSReconcileKeepsPlayIntentAndAutoplays() async {
+        let reconcileGate = RewindTestGate()
+        let player = makePlayer(reconcileABS: { _, _ in
+            await reconcileGate.wait()
+            return false
+        })
+        let book = makeBook(trackCount: 2, absItemID: "abs-1")
+        await player.playTrack(at: 1, in: book, time: 10, autoplay: false)
+        player.persistence.seekPenaltyRemaining = 0
+
+        player.play()
+        while !reconcileGate.started { await Task.yield() }
+
+        player.skipBackward()
+        #expect(player.pendingPlaybackTarget == PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 0, time: 40, autoplay: true
+        ))
+
+        reconcileGate.release()
+        await settle(player)
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.currentTime == 40)
+        #expect(player.isPlaying)
+        #expect(player.persistence.seekPenaltyRemaining == 0)
+    }
+
+    // Catches: Play pressed while a paused cross-track skip back on an ABS book is still pending
+    // entering the ABS reconcile branch instead of promoting the pending target, dropping Play.
+    @Test func playDuringPausedCrossTrackSkipBackOnABSBookPromotesLoadAndSkipsReconcile() async {
+        var reconcileCalls = 0
+        let player = makePlayer(reconcileABS: { book, _ in
+            reconcileCalls += 1
+            book.currentTrackIndex = 1
+            book.currentTime = 55
+            return true
+        })
+        let book = makeBook(trackCount: 2, absItemID: "abs-2")
+        await player.playTrack(at: 1, in: book, time: 10, autoplay: false)
+        player.persistence.seekPenaltyRemaining = 0
+
+        player.skipBackward()
+        #expect(player.pendingPlaybackTarget?.autoplay == false)
+
+        player.play()
+
+        #expect(reconcileCalls == 0)
+        #expect(player.pendingPlaybackTarget == PendingPlaybackTarget(
+            bookID: book.id, trackIndex: 0, time: 40, autoplay: true
+        ))
+        #expect(!player.isPlaying)
+        await settle(player)
+        #expect(reconcileCalls == 0)
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.currentTime == 40)
+        #expect(player.isPlaying)
+    }
+
+    // Catches: a pause-cancelled navigate() Task whose (bookID, trackIndex, time) matches a later
+    // navigate() still entering load() with its stale seekPenaltyOverride (nil -> 180 s).
+    @Test func cancelledNavigationTaskWithSameTargetCannotEnterLoadWithStalePenalty() async {
+        var loadCallsForTrackZero = 0
+        var penaltiesSeenOnLoad: [Double] = []
+        var playerRef: AudioPlayerManager?
+        let player = makePlayer(onMakeAudioMix: { asset in
+            if (asset as? AVURLAsset)?.url.lastPathComponent == "t0.m4a" {
+                loadCallsForTrackZero += 1
+                if let p = playerRef {
+                    penaltiesSeenOnLoad.append(p.persistence.seekPenaltyRemaining)
+                }
+            }
+        })
+        playerRef = player
+        player.applyPlaybackDefaults(resumeBacktrack: 30, skipBack: 120, skipForward: 30)
+        let book = makeBook(trackCount: 2)
+        await player.playTrack(at: 1, in: book, time: 2, autoplay: false)
+        player.persistence.seekPenaltyRemaining = 0
+
+        // Previous Track queues (0, 0) with seekPenaltyOverride: nil; pause cancels it;
+        // Skip Back clamps to (0, 0) with autoplay: false and seekPenaltyOverride: 0.
+        player.previousTrack()
+        player.pause()
+        player.skipBackward()
+
+        await settle(player)
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(loadCallsForTrackZero == 1)
+        #expect(penaltiesSeenOnLoad == [0])
+        #expect(player.currentTrackIndex == 0)
+        #expect(player.currentTime == 0)
+        #expect(!player.isPlaying)
+        #expect(player.persistence.seekPenaltyRemaining == 0)
+    }
+
     // MARK: - Undo latch
 
     // Catches: the pill reappearing (and VoiceOver announcing again) once the playhead has been
@@ -265,6 +362,36 @@ struct AudioPlayerManagerRewindTests {
 
         #expect(player.jumpUndo == nil)
         #expect(!player.isJumpUndoVisible)
+    }
+
+    // Catches: returning to the undo point while paused (when the periodic time observer isn't
+    // ticking) leaving `jumpUndo` alive so a later skip makes the pill reappear.
+    @Test func pausedReturnToUndoPointLatchesOnSeekAndNavigate() async {
+        // Same-track return via seek (skipBackward while paused)
+        let (player, _) = await loadedPlayer(trackCount: 1, trackIndex: 0, time: 20)
+        let snapshot = player.makeJumpUndoSnapshot()
+        player.seek(to: 50)
+        player.recordJumpUndo(from: snapshot)
+        #expect(player.isJumpUndoVisible)
+
+        player.skipBackward()
+        #expect(player.jumpUndo == nil)
+        #expect(!player.isJumpUndoVisible)
+
+        player.skipForward()
+        #expect(player.jumpUndo == nil)
+        #expect(!player.isJumpUndoVisible)
+
+        // Cross-track return via navigate (skipBackward while paused)
+        let (crossPlayer, crossBook) = await loadedPlayer(trackCount: 2, trackIndex: 0, time: 40)
+        let crossSnapshot = crossPlayer.makeJumpUndoSnapshot()
+        await crossPlayer.playTrack(at: 1, in: crossBook, time: 10, autoplay: false)
+        crossPlayer.recordJumpUndo(from: crossSnapshot)
+        #expect(crossPlayer.isJumpUndoVisible)
+
+        crossPlayer.skipBackward()
+        #expect(crossPlayer.jumpUndo == nil)
+        #expect(!crossPlayer.isJumpUndoVisible)
     }
 
     // MARK: - Skip back
@@ -408,13 +535,23 @@ struct AudioPlayerManagerRewindTests {
 
     // MARK: - Helpers
 
-    private func makePlayer() -> AudioPlayerManager {
-        let player = AudioPlayerManager(loadPreparation: AudioPlayerLoadPreparation(
+    private func makePlayer(
+        onMakeAudioMix: (@MainActor (AVAsset) -> Void)? = nil,
+        reconcileABS: (@MainActor (Audiobook, ModelContext?) async -> Bool)? = nil
+    ) -> AudioPlayerManager {
+        var prep = AudioPlayerLoadPreparation(
             isNetworkAvailable: { true },
-            makeAudioMix: { _ in nil },
+            makeAudioMix: { asset in
+                onMakeAudioMix?(asset)
+                return nil
+            },
             loadDuration: { _ in CMTime(seconds: 60, preferredTimescale: 600) },
             prepareSeek: { _, _ in true }
-        ))
+        )
+        if let reconcileABS {
+            prep.reconcileAudiobookshelfBeforeResume = reconcileABS
+        }
+        let player = AudioPlayerManager(loadPreparation: prep)
         player.applyPlaybackDefaults(resumeBacktrack: 30, skipBack: 30, skipForward: 30)
         return player
     }
@@ -427,7 +564,7 @@ struct AudioPlayerManagerRewindTests {
         return (player, book)
     }
 
-    private func makeBook(trackCount: Int, trackDuration: Double = 60) -> Audiobook {
+    private func makeBook(trackCount: Int, trackDuration: Double = 60, absItemID: String? = nil) -> Audiobook {
         let tracks = (0..<trackCount).map { index in
             let track = AudioTrack(
                 title: "T\(index)",
@@ -439,7 +576,9 @@ struct AudioPlayerManagerRewindTests {
             track.remoteURLString = "https://example.com/t\(index).m4a"
             return track
         }
-        return Audiobook(title: "Rewind", folderName: "rewind", isFreeBook: true, isDownloaded: false, tracks: tracks)
+        let book = Audiobook(title: "Rewind", folderName: "rewind", isFreeBook: absItemID == nil, isDownloaded: false, tracks: tracks)
+        book.absItemID = absItemID
+        return book
     }
 
     /// Lets a navigate-created load run to its commit.
@@ -447,5 +586,21 @@ struct AudioPlayerManagerRewindTests {
         for _ in 0..<500 where player.pendingPlaybackTarget != nil {
             await Task.yield()
         }
+    }
+}
+
+@MainActor
+private final class RewindTestGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var started = false
+
+    func wait() async {
+        started = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
     }
 }
