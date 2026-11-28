@@ -177,7 +177,9 @@ test('progress marker persists and resumes the marked chapter', async ({ device,
   await screen.getByTestId('player.markProgress').tap();
   await screen.getByRole('button', 'Mark Progress').tap();
   await expect(screen.getByTestId('player.markProgress')).toContainText('Progress Marked!');
-  await device.openApp(bundle, { relaunch: true, launchArguments: args });
+  // The marker can sit under ten seconds into chapter 2, and Smart Rewind after a 30 s break would cross
+  // back into chapter 1. Pin the break to an instant resume so this test checks only the marker.
+  await device.openApp(bundle, { relaunch: true, launchArguments: [...args, '-e2e-smart-rewind-elapsed', '0'] });
   await screen.getByTestId('book.card.E2E-Listening-Book').tap();
   await screen.scrollUntilVisible(screen.getByTestId('book.playProgress'));
   await screen.getByTestId('book.playProgress').tap();
